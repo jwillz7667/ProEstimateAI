@@ -1,0 +1,90 @@
+import Foundation
+
+// MARK: - Protocol
+
+protocol AuthServiceProtocol: Sendable {
+    func login(request: LoginRequest) async throws -> LoginResponse
+    func signUp(request: SignUpRequest) async throws -> SignUpResponse
+    func signInWithApple(request: AppleSignInRequest) async throws -> LoginResponse
+    func forgotPassword(request: ForgotPasswordRequest) async throws -> ForgotPasswordResponse
+}
+
+// MARK: - Mock Implementation
+
+struct MockAuthService: AuthServiceProtocol {
+    func login(request: LoginRequest) async throws -> LoginResponse {
+        // Simulate network delay
+        try await Task.sleep(for: .seconds(1))
+
+        return LoginResponse(
+            user: User.sample,
+            company: Company.sample,
+            accessToken: "mock-access-token-\(UUID().uuidString)",
+            refreshToken: "mock-refresh-token-\(UUID().uuidString)"
+        )
+    }
+
+    func signUp(request: SignUpRequest) async throws -> SignUpResponse {
+        try await Task.sleep(for: .seconds(1.2))
+
+        let user = User(
+            id: "u-\(UUID().uuidString.prefix(8))",
+            companyId: "c-\(UUID().uuidString.prefix(8))",
+            email: request.email,
+            fullName: request.fullName,
+            role: .owner,
+            avatarURL: nil,
+            phone: nil,
+            isActive: true,
+            createdAt: Date()
+        )
+
+        let company = Company(
+            id: user.companyId,
+            name: request.companyName,
+            phone: nil,
+            email: request.email,
+            address: nil,
+            city: nil,
+            state: nil,
+            zip: nil,
+            logoURL: nil,
+            primaryColor: "#F97316",
+            secondaryColor: "#1E293B",
+            defaultTaxRate: 8.25,
+            defaultMarkupPercent: 20,
+            estimatePrefix: "EST",
+            invoicePrefix: "INV",
+            nextEstimateNumber: 1001,
+            nextInvoiceNumber: 2001,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        return SignUpResponse(
+            user: user,
+            company: company,
+            accessToken: "mock-access-token-\(UUID().uuidString)",
+            refreshToken: "mock-refresh-token-\(UUID().uuidString)"
+        )
+    }
+
+    func signInWithApple(request: AppleSignInRequest) async throws -> LoginResponse {
+        try await Task.sleep(for: .seconds(0.8))
+
+        return LoginResponse(
+            user: User.sample,
+            company: Company.sample,
+            accessToken: "mock-apple-access-token-\(UUID().uuidString)",
+            refreshToken: "mock-apple-refresh-token-\(UUID().uuidString)"
+        )
+    }
+
+    func forgotPassword(request: ForgotPasswordRequest) async throws -> ForgotPasswordResponse {
+        try await Task.sleep(for: .seconds(0.8))
+
+        return ForgotPasswordResponse(
+            message: "If an account with that email exists, a reset link has been sent."
+        )
+    }
+}

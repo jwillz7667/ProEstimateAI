@@ -1,0 +1,160 @@
+{
+  "identifier" : "C3F8A1B2-5D4E-4F6A-8B9C-0E1D2F3A4B5C",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6504000000",
+    "_developerTeamID" : "487LC4H9U4",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 764042400,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "proestimate_pro",
+      "localizations" : [
+        {
+          "description" : "Unlock unlimited AI previews, quotes, invoices, and branding",
+          "displayName" : "ProEstimate Pro",
+          "locale" : "en_US"
+        },
+        {
+          "description" : "Desbloquea previsualizaciones AI ilimitadas, cotizaciones, facturas y marca",
+          "displayName" : "ProEstimate Pro",
+          "locale" : "es_MX"
+        }
+      ],
+      "name" : "ProEstimate Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "19.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+          "introductoryOffer" : {
+            "displayPrice" : "0",
+            "internalID" : "D4E5F6A7-B8C9-0D1E-2F3A-4B5C6D7E8F90",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Full access to all Pro features, billed monthly",
+              "displayName" : "Pro Monthly",
+              "locale" : "en_US"
+            },
+            {
+              "description" : "Acceso completo a todas las funciones Pro, facturado mensualmente",
+              "displayName" : "Pro Mensual",
+              "locale" : "es_MX"
+            }
+          ],
+          "productID" : "proestimate.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Pro Monthly",
+          "subscriptionGroupID" : "proestimate_pro",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "149.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "B2C3D4E5-F6A7-8901-BCDE-F12345678901",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Full access to all Pro features, billed annually — save 37%",
+              "displayName" : "Pro Annual",
+              "locale" : "en_US"
+            },
+            {
+              "description" : "Acceso completo a todas las funciones Pro, facturado anualmente — ahorra 37%",
+              "displayName" : "Pro Anual",
+              "locale" : "es_MX"
+            }
+          ],
+          "productID" : "proestimate.pro.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Pro Annual",
+          "subscriptionGroupID" : "proestimate_pro",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

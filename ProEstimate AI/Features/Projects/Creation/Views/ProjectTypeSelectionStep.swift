@@ -1,0 +1,47 @@
+import SwiftUI
+
+/// Step 0: Select the project type from a 3-column grid of cards.
+/// Each card shows an icon and label; the selected card gets an
+/// orange border and checkmark.
+struct ProjectTypeSelectionStep: View {
+    @Bindable var viewModel: ProjectCreationViewModel
+
+    private let columns = [
+        GridItem(.flexible(), spacing: SpacingTokens.sm),
+        GridItem(.flexible(), spacing: SpacingTokens.sm),
+        GridItem(.flexible(), spacing: SpacingTokens.sm),
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: SpacingTokens.md) {
+                Text("What type of project is this?")
+                    .font(TypographyTokens.title3)
+
+                Text("Select the category that best describes the work.")
+                    .font(TypographyTokens.subheadline)
+                    .foregroundStyle(.secondary)
+
+                LazyVGrid(columns: columns, spacing: SpacingTokens.sm) {
+                    ForEach(Project.ProjectType.allCases, id: \.self) { type in
+                        ProjectTypeCard(
+                            projectType: type,
+                            isSelected: viewModel.selectedProjectType == type
+                        ) {
+                            viewModel.selectedProjectType = type
+                        }
+                    }
+                }
+                .padding(.top, SpacingTokens.xs)
+            }
+            .padding(.horizontal, SpacingTokens.md)
+            .padding(.vertical, SpacingTokens.sm)
+        }
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    ProjectTypeSelectionStep(viewModel: ProjectCreationViewModel())
+}

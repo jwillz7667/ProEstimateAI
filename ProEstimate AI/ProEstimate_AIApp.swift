@@ -1,32 +1,16 @@
-//
-//  ProEstimate_AIApp.swift
-//  ProEstimate AI
-//
-//  Created by Justin Williams on 3/26/26.
-//
-
 import SwiftUI
-import SwiftData
 
 @main
 struct ProEstimate_AIApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @State private var appState = AppState()
+    @State private var appRouter = AppRouter()
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AuthGateView()
+                .environment(appState)
+                .environment(appRouter)
+                .tint(ColorTokens.primaryOrange)
         }
-        .modelContainer(sharedModelContainer)
     }
 }

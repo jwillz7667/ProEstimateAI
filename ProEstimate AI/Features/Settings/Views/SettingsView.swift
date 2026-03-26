@@ -1,0 +1,232 @@
+import SwiftUI
+
+struct SettingsView: View {
+    @State private var viewModel = SettingsViewModel()
+    @Environment(AppState.self) private var appState: AppState
+    @State private var showingSignOutConfirmation = false
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if viewModel.isLoading && viewModel.company == nil {
+                    LoadingStateView(message: "Loading settings...")
+                } else {
+                    settingsList
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationDestination(for: AppDestination.self) { destination in
+                switch destination {
+                case .companyBranding:
+                    CompanyBrandingView(viewModel: viewModel)
+                case .taxSettings:
+                    TaxSettingsView(viewModel: viewModel)
+                case .numberingSettings:
+                    NumberingSettingsView(viewModel: viewModel)
+                case .pricingProfiles:
+                    PricingProfilesView(viewModel: viewModel)
+                case .languageSettings:
+                    LanguageSettingsView(viewModel: viewModel)
+                default:
+                    EmptyView()
+                }
+            }
+            .task {
+                await viewModel.loadSettings()
+            }
+            .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+                Button("OK") { viewModel.errorMessage = nil }
+            } message: {
+                if let error = viewModel.errorMessage {
+                    Text(error)
+                }
+            }
+            .confirmationDialog(
+                "Sign Out",
+                isPresented: $showingSignOutConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Sign Out", role: .destructive) {
+                    appState.signOut()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Are you sure you want to sign out?")
+            }
+        }
+    }
+
+    // MARK: - Settings List
+
+    private var settingsList: some View {
+        List {
+            // Account Section
+            Section("Account") {
+                if let user = appState.currentUser {
+                    HStack(spacing: SpacingTokens.sm) {
+                        Image(systemName: "person.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(ColorTokens.primaryOrange.opacity(0.5))
+
+                        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                            Text(user.fullName)
+                                .font(TypographyTokens.headline)
+                            Text(user.email)
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, SpacingTokens.xxs)
+                }
+
+                Button(role: .destructive) {
+                    showingSignOutConfirmation = true
+                } label: {
+                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+            }
+
+            // Company Section
+            Section("Company") {
+                NavigationLink(value: AppDestination.companyBranding) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Branding")
+                            Text(viewModel.companyName.isEmpty ? "Not configured" : viewModel.companyName)
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "paintbrush")
+                            .foregroundStyle(ColorTokens.primaryOrange)
+                    }
+                }
+
+                NavigationLink(value: AppDestination.taxSettings) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Tax Settings")
+                            Text("\(NSDecimalNumber(decimal: viewModel.defaultTaxRate).doubleValue, specifier: "%.2f")%")
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "building.columns")
+                            .foregroundStyle(.blue)
+                    }
+                }
+
+                NavigationLink(value: AppDestination.numberingSettings) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Document Numbering")
+                            Text("\(viewModel.nextEstimateDisplay) / \(viewModel.nextInvoiceDisplay)")
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "number")
+                            .foregroundStyle(.purple)
+                    }
+                }
+
+                NavigationLink(value: AppDestination.pricingProfiles) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Pricing Profiles")
+                            Text("\(viewModel.pricingProfiles.count) profile\(viewModel.pricingProfiles.count == 1 ? "" : "s")")
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "dollarsign.gauge.chart.lefthalf.righthalf")
+                            .foregroundStyle(.green)
+                    }
+                }
+            }
+
+            // App Section
+            Section("App") {
+                NavigationLink(value: AppDestination.languageSettings) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Language")
+                            Text(viewModel.selectedLanguage.displayName)
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "globe")
+                            .foregroundStyle(.teal)
+                    }
+                }
+
+                Label {
+                    Toggle("Push Notifications", isOn: .constant(true))
+                } icon: {
+                    Image(systemName: "bell.badge")
+                        .foregroundStyle(.red)
+                }
+            }
+
+            // Subscription Section
+            Section("Subscription") {
+                HStack {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Current Plan")
+                            Text("Free")
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "crown")
+                            .foregroundStyle(ColorTokens.primaryOrange)
+                    }
+
+                    Spacer()
+
+                    Button("Upgrade") {
+                        // Navigate to paywall
+                    }
+                    .font(TypographyTokens.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, SpacingTokens.sm)
+                    .padding(.vertical, SpacingTokens.xxs)
+                    .background(ColorTokens.primaryOrange, in: Capsule())
+                }
+            }
+
+            // About Section
+            Section("About") {
+                HStack {
+                    Text("Version")
+                    Spacer()
+                    Text("1.0.0 (1)")
+                        .foregroundStyle(.secondary)
+                }
+
+                Link(destination: URL(string: "https://proestimate.ai/terms")!) {
+                    Label("Terms of Service", systemImage: "doc.text")
+                }
+
+                Link(destination: URL(string: "https://proestimate.ai/privacy")!) {
+                    Label("Privacy Policy", systemImage: "lock.shield")
+                }
+
+                Link(destination: URL(string: "mailto:support@proestimate.ai")!) {
+                    Label("Contact Support", systemImage: "envelope")
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    SettingsView()
+        .environment(AppState())
+}

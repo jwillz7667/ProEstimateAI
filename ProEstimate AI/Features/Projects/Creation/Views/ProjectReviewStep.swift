@@ -1,0 +1,249 @@
+import SwiftUI
+
+/// Step 5 (final): Review all selected options before creating the project.
+/// Shows a summary of type, client, photo count, prompt preview, and details.
+struct ProjectReviewStep: View {
+    @Bindable var viewModel: ProjectCreationViewModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: SpacingTokens.md) {
+                Text("Review & Create")
+                    .font(TypographyTokens.title3)
+
+                Text("Please confirm the details below before creating your project.")
+                    .font(TypographyTokens.subheadline)
+                    .foregroundStyle(.secondary)
+
+                // Generated title
+                GlassCard {
+                    VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                        Text("Project Title")
+                            .font(TypographyTokens.caption)
+                            .foregroundStyle(.secondary)
+                        Text(viewModel.generatedTitle)
+                            .font(TypographyTokens.headline)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                // Project type
+                reviewRow(
+                    icon: projectTypeIcon,
+                    label: "Project Type",
+                    value: projectTypeLabel
+                )
+
+                // Client
+                reviewRow(
+                    icon: "person",
+                    label: "Client",
+                    value: viewModel.selectedClient?.name ?? "Not assigned"
+                )
+
+                // Photos
+                reviewRow(
+                    icon: "photo.on.rectangle",
+                    label: "Photos",
+                    value: "\(viewModel.selectedImageData.count) photo\(viewModel.selectedImageData.count == 1 ? "" : "s")"
+                )
+
+                // Photo thumbnails
+                if !viewModel.selectedImageData.isEmpty {
+                    photoThumbnails
+                }
+
+                // Prompt
+                if !viewModel.prompt.isEmpty {
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                            HStack(spacing: SpacingTokens.xxs) {
+                                Image(systemName: "text.quote")
+                                    .font(.caption)
+                                    .foregroundStyle(ColorTokens.primaryOrange)
+                                Text("Description")
+                                    .font(TypographyTokens.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(viewModel.prompt)
+                                .font(TypographyTokens.body)
+                                .lineLimit(4)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+
+                // Details
+                detailsSummary
+
+                // Submission error
+                if let error = viewModel.submissionError {
+                    HStack(spacing: SpacingTokens.xs) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(ColorTokens.error)
+                        Text(error)
+                            .font(TypographyTokens.caption)
+                            .foregroundStyle(ColorTokens.error)
+                    }
+                    .padding(SpacingTokens.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(ColorTokens.error.opacity(0.1), in: RoundedRectangle(cornerRadius: RadiusTokens.small))
+                }
+            }
+            .padding(.horizontal, SpacingTokens.md)
+            .padding(.vertical, SpacingTokens.sm)
+        }
+    }
+
+    // MARK: - Subviews
+
+    private func reviewRow(icon: String, label: String, value: String) -> some View {
+        GlassCard {
+            HStack(spacing: SpacingTokens.sm) {
+                Image(systemName: icon)
+                    .font(.body)
+                    .foregroundStyle(ColorTokens.primaryOrange)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                    Text(label)
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                    Text(value)
+                        .font(TypographyTokens.body)
+                }
+
+                Spacer()
+            }
+        }
+    }
+
+    private var photoThumbnails: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: SpacingTokens.xs) {
+                ForEach(Array(viewModel.selectedImageData.prefix(5).enumerated()), id: \.offset) { _, data in
+                    if let uiImage = UIImage(data: data) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 64, height: 64)
+                            .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.small))
+                    }
+                }
+
+                if viewModel.selectedImageData.count > 5 {
+                    Text("+\(viewModel.selectedImageData.count - 5)")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 64, height: 64)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: RadiusTokens.small))
+                }
+            }
+            .padding(.horizontal, SpacingTokens.md)
+        }
+    }
+
+    @ViewBuilder
+    private var detailsSummary: some View {
+        let hasDetails = viewModel.budgetMin != nil
+            || viewModel.budgetMax != nil
+            || viewModel.squareFootage != nil
+            || !viewModel.dimensions.isEmpty
+
+        if hasDetails {
+            GlassCard {
+                VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+                    HStack(spacing: SpacingTokens.xxs) {
+                        Image(systemName: "list.bullet.rectangle")
+                            .font(.caption)
+                            .foregroundStyle(ColorTokens.primaryOrange)
+                        Text("Details")
+                            .font(TypographyTokens.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let min = viewModel.budgetMin, let max = viewModel.budgetMax {
+                        detailLine(label: "Budget", value: "$\(min) – $\(max)")
+                    } else if let min = viewModel.budgetMin {
+                        detailLine(label: "Budget", value: "From $\(min)")
+                    } else if let max = viewModel.budgetMax {
+                        detailLine(label: "Budget", value: "Up to $\(max)")
+                    }
+
+                    detailLine(label: "Quality", value: tierLabel(viewModel.qualityTier))
+
+                    if let sqft = viewModel.squareFootage {
+                        detailLine(label: "Area", value: "\(sqft) sq ft")
+                    }
+
+                    if !viewModel.dimensions.isEmpty {
+                        detailLine(label: "Dimensions", value: viewModel.dimensions)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func detailLine(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(TypographyTokens.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .font(TypographyTokens.subheadline)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var projectTypeIcon: String {
+        guard let type = viewModel.selectedProjectType else { return "questionmark.circle" }
+        switch type {
+        case .kitchen: return "fork.knife"
+        case .bathroom: return "shower"
+        case .flooring: return "square.grid.3x3.fill"
+        case .roofing: return "house"
+        case .painting: return "paintbrush"
+        case .siding: return "building.2"
+        case .roomRemodel: return "bed.double"
+        case .exterior: return "tree"
+        case .custom: return "wrench.and.screwdriver"
+        }
+    }
+
+    private var projectTypeLabel: String {
+        guard let type = viewModel.selectedProjectType else { return "Not selected" }
+        switch type {
+        case .kitchen: return "Kitchen"
+        case .bathroom: return "Bathroom"
+        case .flooring: return "Flooring"
+        case .roofing: return "Roofing"
+        case .painting: return "Painting"
+        case .siding: return "Siding"
+        case .roomRemodel: return "Room Remodel"
+        case .exterior: return "Exterior"
+        case .custom: return "Custom"
+        }
+    }
+
+    private func tierLabel(_ tier: Project.QualityTier) -> String {
+        switch tier {
+        case .standard: "Standard"
+        case .premium: "Premium"
+        case .luxury: "Luxury"
+        }
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    ProjectReviewStep(viewModel: {
+        let vm = ProjectCreationViewModel()
+        vm.selectedProjectType = .kitchen
+        vm.prompt = "Modern kitchen with white shaker cabinets and quartz countertops"
+        return vm
+    }())
+}
