@@ -299,9 +299,12 @@ model AIGeneration {
   id                   String           @id @default(cuid())
   projectId            String
   prompt               String
+  systemPrompt         String?
   status               GenerationStatus @default(QUEUED)
   previewUrl           String?
   thumbnailUrl         String?
+  imageData            String?          @db.Text
+  imageMimeType        String?
   generationDurationMs Int?
   errorMessage         String?
   createdAt            DateTime         @default(now())

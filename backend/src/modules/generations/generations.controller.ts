@@ -19,6 +19,7 @@ export async function listByProjectHandler(req: Request, res: Response) {
 /**
  * POST /projects/:projectId/generations
  * Create a new AI generation for a project (with entitlement check).
+ * Returns immediately with QUEUED status; image generates asynchronously.
  */
 export async function createHandler(req: Request, res: Response) {
   const generation = await generationsService.create(
@@ -32,9 +33,37 @@ export async function createHandler(req: Request, res: Response) {
 
 /**
  * GET /v1/generations/:id
- * Get a single generation by ID.
+ * Get a single generation by ID (includes status polling).
  */
 export async function getByIdHandler(req: Request, res: Response) {
   const generation = await generationsService.getById(param(req.params.id), req.companyId!);
   sendSuccess(res, toGenerationDto(generation));
+}
+
+/**
+ * GET /v1/generations/:id/preview
+ * Serve the generated preview image as binary data.
+ * Returns the raw image (PNG/JPEG) with proper Content-Type.
+ */
+export async function getPreviewImageHandler(req: Request, res: Response) {
+  const imageResult = await generationsService.getImageData(
+    param(req.params.id),
+    req.companyId!
+  );
+
+  if (!imageResult) {
+    res.status(404).json({
+      ok: false,
+      error: {
+        code: 'IMAGE_NOT_READY',
+        message: 'Image is not yet available. The generation may still be processing.',
+        retryable: true,
+      },
+    });
+    return;
+  }
+
+  res.set('Content-Type', imageResult.mimeType);
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  res.send(imageResult.data);
 }

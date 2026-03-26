@@ -1,5 +1,8 @@
 import { prisma } from '../../config/database';
+import { logger } from '../../config/logger';
 import { NotFoundError, PaywallError } from '../../lib/errors';
+import { generatePreviewImage, getSystemPrompt, ImageGenContext } from '../../lib/image-gen';
+import { env } from '../../config/env';
 import { CreateGenerationInput } from './generations.validators';
 
 /**
@@ -21,6 +24,7 @@ const GENERATION_LIMIT_PAYWALL = {
 
 /**
  * Verifies that a project exists and belongs to the given company.
+ * Returns the full project for context building.
  */
 async function verifyProjectOwnership(projectId: string, companyId: string) {
   const project = await prisma.project.findFirst({
@@ -32,6 +36,103 @@ async function verifyProjectOwnership(projectId: string, companyId: string) {
   }
 
   return project;
+}
+
+/**
+ * Build image generation context from the project data.
+ */
+function buildImageContext(project: {
+  projectType: string;
+  qualityTier: string;
+  title: string;
+  description: string | null;
+  squareFootage: unknown;
+  dimensions: string | null;
+}): ImageGenContext {
+  return {
+    projectType: project.projectType,
+    qualityTier: project.qualityTier,
+    projectTitle: project.title,
+    projectDescription: project.description ?? undefined,
+    squareFootage: project.squareFootage ? String(project.squareFootage) : undefined,
+    dimensions: project.dimensions ?? undefined,
+  };
+}
+
+/**
+ * Fire-and-forget: call Nano Banana 2 and update the generation record.
+ * Runs outside the request transaction so the API responds immediately
+ * while the image generates in the background.
+ */
+async function processGeneration(generationId: string, prompt: string, context: ImageGenContext) {
+  try {
+    // Mark as PROCESSING
+    await prisma.aIGeneration.update({
+      where: { id: generationId },
+      data: { status: 'PROCESSING' },
+    });
+
+    // Check if API key is configured
+    if (!env.GOOGLE_AI_API_KEY) {
+      logger.warn({ generationId }, 'GOOGLE_AI_API_KEY not configured — marking generation as failed');
+      await prisma.aIGeneration.update({
+        where: { id: generationId },
+        data: {
+          status: 'FAILED',
+          errorMessage: 'Image generation service is not configured. Contact support.',
+        },
+      });
+      return;
+    }
+
+    // Call Nano Banana 2
+    const result = await generatePreviewImage(prompt, context);
+
+    if (!result) {
+      await prisma.aIGeneration.update({
+        where: { id: generationId },
+        data: {
+          status: 'FAILED',
+          errorMessage: 'Image generation returned no result. Please try again.',
+        },
+      });
+      return;
+    }
+
+    // Store the image data and mark as COMPLETED
+    const previewUrl = `/v1/generations/${generationId}/preview`;
+    const thumbnailUrl = previewUrl; // Same endpoint, iOS can resize client-side
+
+    await prisma.aIGeneration.update({
+      where: { id: generationId },
+      data: {
+        status: 'COMPLETED',
+        imageData: result.base64Data,
+        imageMimeType: result.mimeType,
+        previewUrl,
+        thumbnailUrl,
+        generationDurationMs: result.durationMs,
+      },
+    });
+
+    logger.info(
+      { generationId, durationMs: result.durationMs },
+      'Generation completed successfully'
+    );
+  } catch (err) {
+    logger.error({ err, generationId }, 'Generation processing failed');
+    try {
+      await prisma.aIGeneration.update({
+        where: { id: generationId },
+        data: {
+          status: 'FAILED',
+          errorMessage: 'An unexpected error occurred during image generation.',
+        },
+      });
+    } catch (updateErr) {
+      logger.error({ updateErr, generationId }, 'Failed to update generation status to FAILED');
+    }
+  }
 }
 
 /**
@@ -67,6 +168,30 @@ export async function getById(generationId: string, companyId: string) {
 }
 
 /**
+ * Serve the generated image binary for a generation.
+ * Returns { data: Buffer, mimeType: string } or null if not available.
+ */
+export async function getImageData(generationId: string, companyId: string) {
+  const generation = await prisma.aIGeneration.findUnique({
+    where: { id: generationId },
+    include: { project: { select: { companyId: true } } },
+  });
+
+  if (!generation || generation.project.companyId !== companyId) {
+    throw new NotFoundError('Generation', generationId);
+  }
+
+  if (!generation.imageData || !generation.imageMimeType) {
+    return null;
+  }
+
+  return {
+    data: Buffer.from(generation.imageData, 'base64'),
+    mimeType: generation.imageMimeType,
+  };
+}
+
+/**
  * Create a new AI generation for a project.
  *
  * Entitlement check flow:
@@ -77,6 +202,7 @@ export async function getById(generationId: string, companyId: string) {
  *    - If remaining <= 0 -> throw PaywallError
  * 4. Create the generation with status QUEUED
  * 5. Log activity: GENERATION_STARTED
+ * 6. Fire-and-forget: call Nano Banana 2 to generate the image asynchronously
  */
 export async function create(
   projectId: string,
@@ -84,7 +210,9 @@ export async function create(
   userId: string,
   data: CreateGenerationInput
 ) {
-  await verifyProjectOwnership(projectId, companyId);
+  const project = await verifyProjectOwnership(projectId, companyId);
+  const imageContext = buildImageContext(project);
+  const systemPrompt = getSystemPrompt(imageContext);
 
   // ── Entitlement check ──────────────────────────────────────────────
   const entitlement = await prisma.userEntitlement.findUnique({
@@ -156,6 +284,7 @@ export async function create(
           data: {
             projectId,
             prompt: data.prompt,
+            systemPrompt,
             status: 'QUEUED',
           },
         });
@@ -173,6 +302,9 @@ export async function create(
         return gen;
       });
 
+      // Fire-and-forget: process the generation asynchronously
+      processGeneration(generation.id, data.prompt, imageContext).catch(() => {});
+
       return generation;
     }
 
@@ -189,6 +321,7 @@ export async function create(
       data: {
         projectId,
         prompt: data.prompt,
+        systemPrompt,
         status: 'QUEUED',
       },
     });
@@ -205,6 +338,9 @@ export async function create(
 
     return gen;
   });
+
+  // Fire-and-forget: process the generation asynchronously
+  processGeneration(generation.id, data.prompt, imageContext).catch(() => {});
 
   return generation;
 }
