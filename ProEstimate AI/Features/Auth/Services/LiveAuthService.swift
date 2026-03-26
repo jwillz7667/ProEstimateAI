@@ -29,9 +29,7 @@ final class LiveAuthService: AuthServiceProtocol, Sendable {
     }
 
     func signInWithApple(request: AppleSignInRequest) async throws -> LoginResponse {
-        // Apple Sign-In requires a dedicated backend endpoint that is not yet available.
-        // This will be wired up once the /auth/apple endpoint is implemented on the server.
-        throw APIError.unknown("Sign in with Apple is not yet implemented.")
+        try await apiClient.request(.authAppleSignIn(body: request))
     }
 
     func forgotPassword(request: ForgotPasswordRequest) async throws -> ForgotPasswordResponse {

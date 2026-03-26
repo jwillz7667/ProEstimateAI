@@ -23,6 +23,26 @@ final class FeatureGateCoordinator {
     private var usageMeterStore: UsageMeterStore?
     private let logger = Logger(subsystem: AppConstants.bundleID, category: "FeatureGate")
 
+    // MARK: - Cached Products
+
+    var cachedProducts: [StoreProductModel] = []
+
+    /// Fetch real products from the backend and cache them.
+    /// Falls back to sample data if the fetch fails.
+    func loadProducts() async {
+        do {
+            let commerceClient = CommerceAPIClient()
+            cachedProducts = try await commerceClient.fetchProducts()
+        } catch {
+            logger.warning("Failed to load products: \(error.localizedDescription)")
+        }
+    }
+
+    /// Returns cached products if available, otherwise sample fallbacks.
+    private var products: [StoreProductModel] {
+        cachedProducts.isEmpty ? [.sampleMonthly, .sampleAnnual] : cachedProducts
+    }
+
     // MARK: - Init
 
     init() {}
@@ -69,7 +89,7 @@ final class FeatureGateCoordinator {
             showContinueFree: false,
             showRestorePurchases: true,
             recommendedProductId: AppConstants.monthlyProductID,
-            availableProducts: [.sampleMonthly, .sampleAnnual]
+            availableProducts: products
         ))
     }
 
@@ -101,7 +121,7 @@ final class FeatureGateCoordinator {
             showContinueFree: false,
             showRestorePurchases: true,
             recommendedProductId: AppConstants.monthlyProductID,
-            availableProducts: [.sampleMonthly, .sampleAnnual]
+            availableProducts: products
         ))
     }
 
@@ -129,7 +149,7 @@ final class FeatureGateCoordinator {
             showContinueFree: false,
             showRestorePurchases: true,
             recommendedProductId: AppConstants.monthlyProductID,
-            availableProducts: [.sampleMonthly, .sampleAnnual]
+            availableProducts: products
         ))
     }
 
@@ -157,7 +177,7 @@ final class FeatureGateCoordinator {
             showContinueFree: false,
             showRestorePurchases: true,
             recommendedProductId: AppConstants.monthlyProductID,
-            availableProducts: [.sampleMonthly, .sampleAnnual]
+            availableProducts: products
         ))
     }
 
@@ -185,7 +205,7 @@ final class FeatureGateCoordinator {
             showContinueFree: false,
             showRestorePurchases: true,
             recommendedProductId: AppConstants.monthlyProductID,
-            availableProducts: [.sampleMonthly, .sampleAnnual]
+            availableProducts: products
         ))
     }
 
@@ -213,7 +233,7 @@ final class FeatureGateCoordinator {
             showContinueFree: false,
             showRestorePurchases: true,
             recommendedProductId: AppConstants.monthlyProductID,
-            availableProducts: [.sampleMonthly, .sampleAnnual]
+            availableProducts: products
         ))
     }
 }

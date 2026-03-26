@@ -13,6 +13,7 @@ final class ProjectDetailViewModel {
     var estimates: [Estimate] = []
     var activityLog: [ActivityLogEntry] = []
     var client: Client?
+    var assets: [Asset] = []
 
     var isLoading: Bool = false
     var errorMessage: String?
@@ -71,9 +72,11 @@ final class ProjectDetailViewModel {
             // Load data from real API in parallel
             async let gensTask = generationService.listGenerations(projectId: id)
             async let estimatesTask = estimateService.listByProject(projectId: id)
+            async let assetsTask: [Asset] = APIClient.shared.request(.listAssets(projectId: id))
 
             generations = try await gensTask
             estimates = try await estimatesTask
+            assets = (try? await assetsTask) ?? []
 
             // Load client if project has one
             if let clientId = project?.clientId {

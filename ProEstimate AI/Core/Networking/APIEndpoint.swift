@@ -7,6 +7,7 @@ enum APIEndpoint: Sendable {
     // MARK: - Auth
     case authLogin(email: String, password: String)
     case authSignup(email: String, password: String, fullName: String, companyName: String)
+    case authAppleSignIn(body: Encodable & Sendable)
     case authRefreshToken(refreshToken: String)
     case authLogout
 
@@ -102,6 +103,9 @@ enum APIEndpoint: Sendable {
     // MARK: - Usage
     case getUsage
     case checkUsage(body: Encodable & Sendable)
+
+    // MARK: - Dashboard
+    case getDashboardSummary
 }
 
 // MARK: - Computed Properties
@@ -113,6 +117,7 @@ extension APIEndpoint {
         // Auth
         case .authLogin: return "/auth/login"
         case .authSignup: return "/auth/signup"
+        case .authAppleSignIn: return "/auth/apple-signin"
         case .authRefreshToken: return "/auth/refresh"
         case .authLogout: return "/auth/logout"
 
@@ -208,13 +213,16 @@ extension APIEndpoint {
         // Usage
         case .getUsage: return "/usage"
         case .checkUsage: return "/usage/check"
+
+        // Dashboard
+        case .getDashboardSummary: return "/dashboard/summary"
         }
     }
 
     /// The HTTP method for this endpoint.
     var method: HTTPMethod {
         switch self {
-        case .authLogin, .authSignup, .authRefreshToken, .authLogout,
+        case .authLogin, .authSignup, .authAppleSignIn, .authRefreshToken, .authLogout,
              .createClient, .createProject, .uploadAsset, .createGeneration,
              .createEstimate, .createEstimateLineItem,
              .createProposal, .sendProposal,
@@ -245,7 +253,7 @@ extension APIEndpoint {
     /// Whether this endpoint requires an Authorization header with a bearer token.
     var requiresAuth: Bool {
         switch self {
-        case .authLogin, .authSignup, .authRefreshToken:
+        case .authLogin, .authSignup, .authAppleSignIn, .authRefreshToken:
             return false
         default:
             return true
@@ -279,6 +287,8 @@ extension APIEndpoint {
             return LoginBody(email: email, password: password)
         case .authSignup(let email, let password, let fullName, let companyName):
             return SignupBody(email: email, password: password, fullName: fullName, companyName: companyName)
+        case .authAppleSignIn(let body):
+            return body
         case .authRefreshToken(let refreshToken):
             return RefreshBody(refreshToken: refreshToken)
         case .updateCompany(let body),

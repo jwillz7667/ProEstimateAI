@@ -206,10 +206,37 @@ final class ProjectCreationViewModel {
         do {
             let project = try await projectService.createProject(request: request)
             createdProject = project
+
+            // Upload photos as assets
+            await uploadPhotos(projectId: project.id)
         } catch {
             submissionError = error.localizedDescription
         }
 
         isSubmitting = false
+    }
+
+    private func uploadPhotos(projectId: String) async {
+        for imageData in selectedImageData {
+            let base64 = imageData.base64EncodedString()
+            let body = AssetUploadBody(url: "data:image/jpeg;base64,\(base64)", assetType: "ORIGINAL")
+            do {
+                let _: Asset = try await APIClient.shared.request(.uploadAsset(projectId: projectId, body: body))
+            } catch {
+                // Non-critical: project was created, photo upload failed silently
+            }
+        }
+    }
+}
+
+// MARK: - Asset Upload Body
+
+private struct AssetUploadBody: Encodable, Sendable {
+    let url: String
+    let assetType: String
+
+    enum CodingKeys: String, CodingKey {
+        case url
+        case assetType = "asset_type"
     }
 }

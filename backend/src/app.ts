@@ -26,6 +26,7 @@ import laborRatesRoutes from './modules/labor-rates/labor-rates.routes';
 import activityRoutes from './modules/activity/activity.routes';
 import commerceRoutes from './modules/commerce/commerce.routes';
 import usageRoutes from './modules/usage/usage.routes';
+import dashboardRoutes from './modules/dashboard/dashboard.routes';
 
 export function createApp() {
   const app = express();
@@ -59,6 +60,7 @@ export function createApp() {
   v1.use('/activity', requireAuth, activityRoutes);
   v1.use('/commerce', requireAuth, commerceRoutes);
   v1.use('/usage', requireAuth, usageRoutes);
+  v1.use('/dashboard', requireAuth, dashboardRoutes);
   app.use('/v1', v1);
 
   // Global error handler

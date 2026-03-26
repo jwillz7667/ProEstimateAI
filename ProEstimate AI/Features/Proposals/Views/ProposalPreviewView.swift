@@ -217,9 +217,9 @@ struct ProposalPreviewView: View {
     }
 
     private var companyLogoPlaceholder: some View {
-        Image(systemName: "building.2")
-            .font(.system(size: 32))
-            .foregroundStyle(ColorTokens.primaryOrange.opacity(0.5))
+        Image("housd-icon-light")
+            .resizable()
+            .aspectRatio(contentMode: .fit)
             .frame(width: 48, height: 48)
     }
 

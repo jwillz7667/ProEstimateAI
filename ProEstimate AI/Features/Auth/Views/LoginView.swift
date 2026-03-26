@@ -82,9 +82,10 @@ struct LoginView: View {
 
     private var logoSection: some View {
         VStack(spacing: SpacingTokens.sm) {
-            Image(systemName: "house.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(ColorTokens.primaryOrange)
+            Image("housd-icon-light")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 72)
 
             Text("ProEstimate")
                 .font(TypographyTokens.largeTitle)

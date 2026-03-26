@@ -205,10 +205,10 @@ struct InvoicePreviewView: View {
     }
 
     private var companyLogoPlaceholder: some View {
-        Image(systemName: "building.2")
-            .font(.system(size: 28))
-            .foregroundStyle(ColorTokens.primaryOrange.opacity(0.5))
-            .frame(width: 40, height: 40)
+        Image("housd-icon-light")
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: 48, height: 48)
     }
 
     private var invoiceInfoBlock: some View {

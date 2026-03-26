@@ -28,9 +28,10 @@ struct AuthGateView: View {
 
     private var splashView: some View {
         VStack(spacing: SpacingTokens.lg) {
-            Image(systemName: "hammer.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(ColorTokens.primaryOrange)
+            Image("housd-icon-light")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 72)
 
             Text("ProEstimate AI")
                 .font(TypographyTokens.largeTitle)
@@ -43,20 +44,29 @@ struct AuthGateView: View {
 
     private func restoreSession() async {
         if TokenStore.shared.hasTokens {
-            // Tokens exist — restore session with mock user data for now.
-            // When the backend exists, we'd validate the token here.
-            appState.currentUser = AppState.CurrentUser(
-                id: "restored-user",
-                email: "user@proestimate.ai",
-                fullName: "Restored User",
-                avatarURL: nil
-            )
-            appState.currentCompany = AppState.CurrentCompany(
-                id: "restored-company",
-                name: "My Company",
-                logoURL: nil
-            )
-            appState.isAuthenticated = true
+            do {
+                async let userTask: User = APIClient.shared.request(.getMe)
+                async let companyTask: Company = APIClient.shared.request(.getCompany)
+
+                let user = try await userTask
+                let company = try await companyTask
+
+                appState.currentUser = AppState.CurrentUser(
+                    id: user.id,
+                    email: user.email,
+                    fullName: user.fullName,
+                    avatarURL: user.avatarURL
+                )
+                appState.currentCompany = AppState.CurrentCompany(
+                    id: company.id,
+                    name: company.name,
+                    logoURL: company.logoURL
+                )
+                appState.isAuthenticated = true
+            } catch {
+                // Token refresh failed or network error — clear tokens, show login
+                TokenStore.shared.clearTokens()
+            }
         }
 
         // Brief delay so splash is visible even on fast restore

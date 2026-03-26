@@ -66,5 +66,6 @@ struct ProEstimate_AIApp: App {
 
         await entitlementStore.refresh()
         await usageMeterStore.refresh()
+        await featureGateCoordinator.loadProducts()
     }
 }

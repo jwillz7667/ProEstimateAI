@@ -8,6 +8,7 @@ struct AIPreviewSection: View {
     let isGenerating: Bool
     let currentGenerationStage: Int
     let onGenerate: () -> Void
+    var assets: [Asset] = []
 
     @State private var selectedGenerationIndex: Int = 0
 
@@ -75,7 +76,7 @@ struct AIPreviewSection: View {
                 let gen = completedGenerations[selectedGenerationIndex]
 
                 BeforeAfterSlider(
-                    beforeImageURL: URL(string: "https://cdn.proestimate.ai/assets/kitchen-before-1.jpg"),
+                    beforeImageURL: assets.first(where: { $0.assetType == .original })?.url,
                     afterImageURL: gen.previewURL
                 )
                 .padding(.horizontal, SpacingTokens.md)

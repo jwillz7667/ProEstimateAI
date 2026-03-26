@@ -77,7 +77,7 @@ struct ProjectDetailView: View {
                 .padding(.horizontal, SpacingTokens.md)
 
                 // Images
-                ProjectImagesSection(assets: ProjectImagesSection.mockAssets)
+                ProjectImagesSection(assets: viewModel.assets)
 
                 // AI Preview
                 AIPreviewSection(
@@ -86,7 +86,8 @@ struct ProjectDetailView: View {
                     currentGenerationStage: viewModel.currentGenerationStage,
                     onGenerate: {
                         handleGenerate()
-                    }
+                    },
+                    assets: viewModel.assets
                 )
 
                 // Materials

@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { sendSuccess } from '../../lib/envelope';
 import { toUserDto, toCompanyDto } from './auth.dto';
 import type { AuthResponseDto, TokenPairDto } from './auth.dto';
-import type { SignupInput, LoginInput, RefreshInput, LogoutInput } from './auth.validators';
+import type { SignupInput, LoginInput, AppleSignInInput, RefreshInput, LogoutInput } from './auth.validators';
 import * as authService from './auth.service';
 
 // ─── Async handler ───────────────────────────────────────────────────────────
@@ -43,6 +43,25 @@ export const loginHandler = asyncHandler(
     const input = req.body as LoginInput;
 
     const result = await authService.login(input);
+
+    const data: AuthResponseDto = {
+      user: toUserDto(result.user),
+      company: toCompanyDto(result.company),
+      access_token: result.accessToken,
+      refresh_token: result.refreshToken,
+    };
+
+    sendSuccess(res, data);
+  },
+);
+
+// ─── POST /v1/auth/apple-signin ─────────────────────────────────────────────
+
+export const appleSignInHandler = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const input = req.body as AppleSignInInput;
+
+    const result = await authService.appleSignIn(input);
 
     const data: AuthResponseDto = {
       user: toUserDto(result.user),

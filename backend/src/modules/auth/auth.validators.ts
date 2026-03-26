@@ -55,6 +55,31 @@ export const refreshSchema = z.object({
 
 export type RefreshInput = z.infer<typeof refreshSchema>;
 
+// ─── Apple Sign In ──────────────────────────────────────────────────────────
+export const appleSignInSchema = z.object({
+  identity_token: z
+    .string()
+    .min(1, 'Identity token is required'),
+  authorization_code: z
+    .string()
+    .min(1, 'Authorization code is required'),
+  full_name: z
+    .string()
+    .trim()
+    .max(100)
+    .optional()
+    .nullable(),
+  email: z
+    .string()
+    .email()
+    .max(255)
+    .optional()
+    .nullable()
+    .transform((v) => v?.toLowerCase()),
+});
+
+export type AppleSignInInput = z.infer<typeof appleSignInSchema>;
+
 // ─── Logout ──────────────────────────────────────────────────────────────────
 export const logoutSchema = z.object({
   refresh_token: z

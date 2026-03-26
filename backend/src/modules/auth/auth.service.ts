@@ -8,8 +8,9 @@ import {
 } from '../../lib/jwt';
 import { generateId } from '../../lib/id';
 import { AuthenticationError, ConflictError } from '../../lib/errors';
+import { verifyAppleIdentityToken } from '../../lib/apple-auth';
 import type { User, Company } from '@prisma/client';
-import type { SignupInput, LoginInput } from './auth.validators';
+import type { SignupInput, LoginInput, AppleSignInInput } from './auth.validators';
 
 // ─── Result types ────────────────────────────────────────────────────────────
 
@@ -135,7 +136,12 @@ export async function login(input: LoginInput): Promise<AuthResult> {
     throw new AuthenticationError('Invalid email or password');
   }
 
-  // 2. Verify password
+  // 2. Verify password (Apple-only users have no password)
+  if (!user.passwordHash) {
+    throw new AuthenticationError(
+      'This account uses Sign in with Apple. Please sign in with Apple instead.',
+    );
+  }
   const passwordValid = await verifyPassword(input.password, user.passwordHash);
   if (!passwordValid) {
     throw new AuthenticationError('Invalid email or password');
@@ -161,6 +167,152 @@ export async function login(input: LoginInput): Promise<AuthResult> {
   });
 
   return { user, company: user.company, accessToken, refreshToken };
+}
+
+// ─── Apple Sign In ──────────────────────────────────────────────────────────
+
+export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> {
+  // 1. Verify the identity token with Apple's JWKS
+  const claims = await verifyAppleIdentityToken(input.identity_token);
+  const appleUserId = claims.sub;
+  const email = input.email || claims.email;
+
+  // 2. Look for existing user by appleUserId
+  let user = await prisma.user.findUnique({
+    where: { appleUserId },
+    include: { company: true },
+  });
+
+  if (user) {
+    // Existing Apple user — issue tokens (login flow)
+    if (!user.isActive) {
+      throw new AuthenticationError('Account is deactivated');
+    }
+
+    const jwtPayload: JwtPayload = { userId: user.id, companyId: user.companyId };
+    const accessToken = signAccessToken(jwtPayload);
+    const refreshToken = signRefreshToken(jwtPayload);
+
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        token: refreshToken,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    return { user, company: user.company, accessToken, refreshToken };
+  }
+
+  // 3. Check by email — link appleUserId to existing account
+  if (email) {
+    const existingUser = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: { company: true },
+    });
+
+    if (existingUser) {
+      // Link Apple ID to existing user
+      const updated = await prisma.user.update({
+        where: { id: existingUser.id },
+        data: { appleUserId },
+        include: { company: true },
+      });
+
+      const jwtPayload: JwtPayload = { userId: updated.id, companyId: updated.companyId };
+      const accessToken = signAccessToken(jwtPayload);
+      const refreshToken = signRefreshToken(jwtPayload);
+
+      await prisma.refreshToken.create({
+        data: {
+          userId: updated.id,
+          token: refreshToken,
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      return { user: updated, company: updated.company, accessToken, refreshToken };
+    }
+  }
+
+  // 4. Brand new user — create Company + User + Entitlement + UsageBuckets
+  const fullName = input.full_name || email?.split('@')[0] || 'Apple User';
+  const userEmail = email?.toLowerCase() || `apple_${appleUserId.substring(0, 8)}@proestimate.app`;
+
+  const freePlan = await prisma.plan.findUniqueOrThrow({
+    where: { code: 'FREE_STARTER' },
+  });
+
+  const userId = generateId();
+  const companyId = generateId();
+
+  const { user: newUser, company } = await prisma.$transaction(async (tx) => {
+    const createdCompany = await tx.company.create({
+      data: {
+        id: companyId,
+        name: `${fullName}'s Company`,
+      },
+    });
+
+    const createdUser = await tx.user.create({
+      data: {
+        id: userId,
+        companyId: createdCompany.id,
+        email: userEmail,
+        fullName,
+        appleUserId,
+        role: 'OWNER',
+      },
+    });
+
+    await tx.userEntitlement.create({
+      data: {
+        userId: createdUser.id,
+        companyId: createdCompany.id,
+        planId: freePlan.id,
+        status: 'FREE',
+      },
+    });
+
+    await tx.usageBucket.createMany({
+      data: [
+        {
+          userId: createdUser.id,
+          companyId: createdCompany.id,
+          metricCode: 'AI_GENERATION',
+          includedQuantity: 3,
+          consumedQuantity: 0,
+          resetPolicy: 'NEVER',
+          source: 'STARTER_CREDITS',
+        },
+        {
+          userId: createdUser.id,
+          companyId: createdCompany.id,
+          metricCode: 'QUOTE_EXPORT',
+          includedQuantity: 3,
+          consumedQuantity: 0,
+          resetPolicy: 'NEVER',
+          source: 'STARTER_CREDITS',
+        },
+      ],
+    });
+
+    return { user: createdUser, company: createdCompany };
+  });
+
+  const jwtPayload: JwtPayload = { userId: newUser.id, companyId: company.id };
+  const accessToken = signAccessToken(jwtPayload);
+  const refreshToken = signRefreshToken(jwtPayload);
+
+  await prisma.refreshToken.create({
+    data: {
+      userId: newUser.id,
+      token: refreshToken,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  return { user: newUser, company, accessToken, refreshToken };
 }
 
 // ─── Refresh ─────────────────────────────────────────────────────────────────

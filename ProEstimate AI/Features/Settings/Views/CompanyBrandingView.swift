@@ -21,10 +21,10 @@ struct CompanyBrandingView: View {
                             .frame(height: 80)
                             .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.small))
                     } else {
-                        Image(systemName: "building.2")
-                            .font(.system(size: 48))
-                            .foregroundStyle(ColorTokens.primaryOrange.opacity(0.3))
-                            .frame(height: 80)
+                        Image("housd-icon-light")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(height: 48)
                     }
 
                     PhotosPicker(
@@ -118,9 +118,10 @@ struct CompanyBrandingView: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(height: 32)
                 } else {
-                    Image(systemName: "building.2")
-                        .font(.system(size: 24))
-                        .foregroundStyle(viewModel.primaryColor)
+                    Image("housd-icon-light")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: 48)
                 }
 
                 Text(viewModel.companyName.isEmpty ? "Your Company" : viewModel.companyName)

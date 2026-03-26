@@ -4,12 +4,14 @@ import { authRateLimit } from '../../middleware/rate-limit.middleware';
 import {
   signupSchema,
   loginSchema,
+  appleSignInSchema,
   refreshSchema,
   logoutSchema,
 } from './auth.validators';
 import {
   signupHandler,
   loginHandler,
+  appleSignInHandler,
   refreshHandler,
   logoutHandler,
 } from './auth.controller';
@@ -24,6 +26,9 @@ router.post('/signup', validate(signupSchema), signupHandler);
 
 // POST /v1/auth/login
 router.post('/login', validate(loginSchema), loginHandler);
+
+// POST /v1/auth/apple-signin
+router.post('/apple-signin', validate(appleSignInSchema), appleSignInHandler);
 
 // POST /v1/auth/refresh
 router.post('/refresh', validate(refreshSchema), refreshHandler);
