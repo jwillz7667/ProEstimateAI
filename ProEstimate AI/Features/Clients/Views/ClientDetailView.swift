@@ -10,7 +10,7 @@ struct ClientDetailView: View {
     @State private var errorMessage: String?
     @State private var showingEditSheet = false
 
-    private let clientService: ClientServiceProtocol = MockClientService()
+    private let clientService: ClientServiceProtocol = LiveClientService()
 
     var body: some View {
         Group {

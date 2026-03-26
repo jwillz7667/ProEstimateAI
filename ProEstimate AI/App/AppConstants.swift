@@ -2,7 +2,7 @@ import Foundation
 
 enum AppConstants {
     // MARK: - API
-    static let apiBaseURL = "https://api.proestimate.ai/v1"
+    static let apiBaseURL = "https://proestimate-api-production.up.railway.app/v1"
 
     // MARK: - StoreKit Product IDs
     static let subscriptionGroupID = "proestimate_pro"
@@ -23,11 +23,7 @@ enum AppConstants {
     }
 
     static var useMockData: Bool {
-        #if DEBUG
-        return true
-        #else
         return false
-        #endif
     }
 
     // MARK: - Keychain

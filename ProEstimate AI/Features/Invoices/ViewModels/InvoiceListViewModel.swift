@@ -52,7 +52,7 @@ final class InvoiceListViewModel {
 
     // MARK: - Init
 
-    init(service: InvoiceServiceProtocol = MockInvoiceService()) {
+    init(service: InvoiceServiceProtocol = LiveInvoiceService()) {
         self.service = service
     }
 

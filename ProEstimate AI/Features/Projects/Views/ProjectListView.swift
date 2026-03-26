@@ -8,14 +8,7 @@ struct ProjectListView: View {
     @State private var showCreation = false
     @Environment(AppRouter.self) private var router
 
-    /// Maps client IDs to names for display in rows.
-    private let clientLookup: [String: String] = {
-        var map: [String: String] = [:]
-        for client in MockProjectService.sampleClients {
-            map[client.id] = client.name
-        }
-        return map
-    }()
+    /// Client names are loaded from the API by the view model.
 
     var body: some View {
         NavigationStack {
@@ -118,7 +111,7 @@ struct ProjectListView: View {
                     } label: {
                         ProjectRowView(
                             project: project,
-                            clientName: project.clientId.flatMap { clientLookup[$0] }
+                            clientName: project.clientId.flatMap { viewModel.clientLookup[$0] }
                         )
                     }
                     .buttonStyle(.plain)

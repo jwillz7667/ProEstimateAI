@@ -24,7 +24,7 @@ final class ProjectCreationViewModel {
 
     var selectedClient: Client?
     var clientSearchText: String = ""
-    var availableClients: [Client] = MockProjectService.sampleClients
+    var availableClients: [Client] = []
 
     var filteredClients: [Client] {
         guard !clientSearchText.isEmpty else { return availableClients }
@@ -84,11 +84,24 @@ final class ProjectCreationViewModel {
     // MARK: - Dependencies
 
     private let projectService: ProjectServiceProtocol
+    private let clientService: ClientServiceProtocol
 
     // MARK: - Init
 
-    init(projectService: ProjectServiceProtocol = MockProjectService()) {
+    init(
+        projectService: ProjectServiceProtocol = LiveProjectService(),
+        clientService: ClientServiceProtocol = LiveClientService()
+    ) {
         self.projectService = projectService
+        self.clientService = clientService
+    }
+
+    func loadClients() async {
+        do {
+            availableClients = try await clientService.listClients()
+        } catch {
+            availableClients = []
+        }
     }
 
     // MARK: - Computed Validation

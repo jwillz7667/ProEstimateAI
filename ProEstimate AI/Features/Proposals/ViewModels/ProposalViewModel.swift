@@ -86,7 +86,7 @@ final class ProposalViewModel {
 
     // MARK: - Init
 
-    init(service: ProposalServiceProtocol = MockProposalService()) {
+    init(service: ProposalServiceProtocol = LiveProposalService()) {
         self.service = service
     }
 

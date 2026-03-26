@@ -1,7 +1,7 @@
 import { prisma } from '../../config/database';
 import { logger } from '../../config/logger';
 import { NotFoundError, PaywallError } from '../../lib/errors';
-import { generatePreviewImage, getSystemPrompt, ImageGenContext } from '../../lib/image-gen';
+import { generatePreviewImage, getSystemPrompt, ImageGenContext, MaterialSpec } from '../../lib/image-gen';
 import { env } from '../../config/env';
 import { CreateGenerationInput } from './generations.validators';
 
@@ -57,6 +57,19 @@ function buildImageContext(project: {
     squareFootage: project.squareFootage ? String(project.squareFootage) : undefined,
     dimensions: project.dimensions ?? undefined,
   };
+}
+
+/**
+ * Convert input materials array to MaterialSpec for prompt injection.
+ */
+function toMaterialSpecs(materials?: Array<{ name: string; category?: string; quantity?: number; unit?: string }>): MaterialSpec[] | undefined {
+  if (!materials || materials.length === 0) return undefined;
+  return materials.map((m) => ({
+    name: m.name,
+    category: m.category,
+    quantity: m.quantity,
+    unit: m.unit,
+  }));
 }
 
 /**
@@ -212,6 +225,7 @@ export async function create(
 ) {
   const project = await verifyProjectOwnership(projectId, companyId);
   const imageContext = buildImageContext(project);
+  imageContext.materials = toMaterialSpecs(data.materials);
   const systemPrompt = getSystemPrompt(imageContext);
 
   // ── Entitlement check ──────────────────────────────────────────────

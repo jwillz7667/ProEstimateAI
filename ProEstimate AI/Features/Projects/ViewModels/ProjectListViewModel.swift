@@ -7,6 +7,7 @@ final class ProjectListViewModel {
     // MARK: - Published State
 
     var projects: [Project] = []
+    var clientLookup: [String: String] = [:]
     var searchText: String = ""
     var selectedFilter: ProjectStatusFilter = .all
     var isLoading: Bool = false
@@ -15,11 +16,16 @@ final class ProjectListViewModel {
     // MARK: - Dependencies
 
     private let projectService: ProjectServiceProtocol
+    private let clientService: ClientServiceProtocol
 
     // MARK: - Init
 
-    init(projectService: ProjectServiceProtocol = MockProjectService()) {
+    init(
+        projectService: ProjectServiceProtocol = LiveProjectService(),
+        clientService: ClientServiceProtocol = LiveClientService()
+    ) {
         self.projectService = projectService
+        self.clientService = clientService
     }
 
     // MARK: - Computed
@@ -67,7 +73,16 @@ final class ProjectListViewModel {
         errorMessage = nil
 
         do {
-            projects = try await projectService.listProjects()
+            async let projectsTask = projectService.listProjects()
+            async let clientsTask = clientService.listClients()
+
+            projects = try await projectsTask
+            let clients = try await clientsTask
+            var lookup: [String: String] = [:]
+            for client in clients {
+                lookup[client.id] = client.name
+            }
+            clientLookup = lookup
         } catch {
             errorMessage = error.localizedDescription
         }

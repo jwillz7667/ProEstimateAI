@@ -46,7 +46,7 @@ final class EstimateListViewModel {
 
     // MARK: - Init
 
-    init(service: EstimateServiceProtocol = MockEstimateService()) {
+    init(service: EstimateServiceProtocol = LiveEstimateService()) {
         self.service = service
     }
 

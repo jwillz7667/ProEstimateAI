@@ -25,7 +25,7 @@ final class AuthViewModel {
 
     // MARK: - Init
 
-    init(authService: AuthServiceProtocol = MockAuthService()) {
+    init(authService: AuthServiceProtocol = LiveAuthService()) {
         self.authService = authService
     }
 
@@ -65,7 +65,7 @@ final class AuthViewModel {
         do {
             let request = LoginRequest(email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password)
             let response = try await authService.login(request: request)
-            applyAuthResponse(user: response.user, company: response.company, appState: appState)
+            applyAuthResponse(user: response.user, company: response.company, accessToken: response.accessToken, refreshToken: response.refreshToken, appState: appState)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -90,7 +90,7 @@ final class AuthViewModel {
                 password: password
             )
             let response = try await authService.signUp(request: request)
-            applyAuthResponse(user: response.user, company: response.company, appState: appState)
+            applyAuthResponse(user: response.user, company: response.company, accessToken: response.accessToken, refreshToken: response.refreshToken, appState: appState)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -111,7 +111,7 @@ final class AuthViewModel {
                 email: appleResult.email
             )
             let response = try await authService.signInWithApple(request: request)
-            applyAuthResponse(user: response.user, company: response.company, appState: appState)
+            applyAuthResponse(user: response.user, company: response.company, accessToken: response.accessToken, refreshToken: response.refreshToken, appState: appState)
         } catch let error as AppleSignInError where error == .cancelled {
             // User cancelled — no error message needed
         } catch {
@@ -157,7 +157,14 @@ final class AuthViewModel {
 
     // MARK: - Private
 
-    private func applyAuthResponse(user: User, company: Company, appState: AppState) {
+    private func applyAuthResponse(
+        user: User,
+        company: Company,
+        accessToken: String,
+        refreshToken: String,
+        appState: AppState
+    ) {
+        TokenStore.shared.storeTokens(accessToken: accessToken, refreshToken: refreshToken)
         appState.currentUser = AppState.CurrentUser(
             id: user.id,
             email: user.email,

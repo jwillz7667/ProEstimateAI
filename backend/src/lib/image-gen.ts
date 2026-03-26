@@ -22,6 +22,13 @@ export interface GeneratedImage {
   durationMs: number;
 }
 
+export interface MaterialSpec {
+  name: string;
+  category?: string;
+  quantity?: number;
+  unit?: string;
+}
+
 export interface ImageGenContext {
   projectType: string;
   qualityTier: string;
@@ -29,6 +36,7 @@ export interface ImageGenContext {
   dimensions?: string;
   projectTitle: string;
   projectDescription?: string;
+  materials?: MaterialSpec[];
 }
 
 /**
@@ -92,6 +100,11 @@ PROJECT CONTEXT:
 ${context.projectDescription ? `- Description: ${context.projectDescription}` : ''}
 ${context.squareFootage ? `- Approximate area: ${context.squareFootage} sq ft` : ''}
 ${context.dimensions ? `- Dimensions: ${context.dimensions}` : ''}
+${context.materials && context.materials.length > 0 ? `
+EXACT MATERIALS TO RENDER (MANDATORY — use these specific materials in the image):
+${context.materials.map((m, i) => `${i + 1}. ${m.name}${m.category ? ` [${m.category}]` : ''}${m.quantity && m.unit ? ` — ${m.quantity} ${m.unit}` : ''}`).join('\n')}
+
+CRITICAL: The image MUST visually depict ALL of the materials listed above. Each material should be clearly visible and rendered with photorealistic accuracy. The contractor will show this image to their customer alongside the estimate — the materials in the image must match what is being quoted. Do NOT substitute, omit, or replace any listed material.` : ''}
 
 STYLE GUIDELINES BY QUALITY TIER:
 - BUDGET: Clean, functional, cost-effective materials. Builder-grade fixtures, laminate counters, basic tile. Still looks professional and well-executed.

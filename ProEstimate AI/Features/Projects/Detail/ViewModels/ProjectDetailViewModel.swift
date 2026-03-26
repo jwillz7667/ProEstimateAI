@@ -12,6 +12,7 @@ final class ProjectDetailViewModel {
     var materials: [MaterialSuggestion] = []
     var estimates: [Estimate] = []
     var activityLog: [ActivityLogEntry] = []
+    var client: Client?
 
     var isLoading: Bool = false
     var errorMessage: String?
@@ -41,15 +42,21 @@ final class ProjectDetailViewModel {
 
     private let projectService: ProjectServiceProtocol
     private let generationService: GenerationServiceProtocol
+    private let estimateService: EstimateServiceProtocol
+    private let clientService: ClientServiceProtocol
 
     // MARK: - Init
 
     init(
-        projectService: ProjectServiceProtocol = MockProjectService(),
-        generationService: GenerationServiceProtocol = MockGenerationService()
+        projectService: ProjectServiceProtocol = LiveProjectService(),
+        generationService: GenerationServiceProtocol = LiveGenerationService(),
+        estimateService: EstimateServiceProtocol = LiveEstimateService(),
+        clientService: ClientServiceProtocol = LiveClientService()
     ) {
         self.projectService = projectService
         self.generationService = generationService
+        self.estimateService = estimateService
+        self.clientService = clientService
     }
 
     // MARK: - Loading
@@ -60,13 +67,18 @@ final class ProjectDetailViewModel {
 
         do {
             project = try await projectService.getProject(id: id)
-            async let gens = generationService.listGenerations(projectId: id)
-            generations = try await gens
 
-            // Load mock materials and estimates
-            materials = MockGenerationService.sampleMaterials.filter { $0.projectId == id }
-            estimates = MockGenerationService.sampleEstimates.filter { $0.projectId == id }
-            activityLog = ActivityLogEntry.samples.filter { $0.projectId == id }
+            // Load data from real API in parallel
+            async let gensTask = generationService.listGenerations(projectId: id)
+            async let estimatesTask = estimateService.listByProject(projectId: id)
+
+            generations = try await gensTask
+            estimates = try await estimatesTask
+
+            // Load client if project has one
+            if let clientId = project?.clientId {
+                client = try? await clientService.getClient(id: clientId)
+            }
 
             // Initialize selection state from server values
             for material in materials {
@@ -87,19 +99,30 @@ final class ProjectDetailViewModel {
         isGenerating = true
         currentGenerationStage = 0
 
-        // Start the timer to simulate progress through stages
+        // Start the timer to animate progress stages
         startProgressSimulation()
 
         do {
             let generation = try await generationService.startGeneration(
                 projectId: project.id,
-                prompt: project.description ?? "Generate a remodel preview"
+                prompt: project.description ?? "Generate a remodel preview for \(project.title)"
             )
 
-            // Poll for completion (mock completes quickly)
-            try await Task.sleep(nanoseconds: 3_000_000_000)
-            let completed = try await generationService.getGenerationStatus(id: generation.id)
+            // Poll for completion — Nano Banana 2 typically takes 15-35 seconds
+            var completed = generation
+            for _ in 0..<24 {
+                try await Task.sleep(nanoseconds: 2_000_000_000) // 2 second intervals
+                completed = try await generationService.getGenerationStatus(id: generation.id)
+                if completed.status == .completed || completed.status == .failed {
+                    break
+                }
+            }
+
             generations.insert(completed, at: 0)
+
+            if completed.status == .failed {
+                errorMessage = completed.errorMessage ?? "Image generation failed. Please try again."
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -126,10 +149,9 @@ final class ProjectDetailViewModel {
 
     // MARK: - Computed Helpers
 
-    /// The client name for display, derived from mock data.
+    /// The client name for display.
     var clientName: String? {
-        guard let clientId = project?.clientId else { return nil }
-        return MockProjectService.sampleClients.first(where: { $0.id == clientId })?.name
+        client?.name
     }
 
     /// Whether the project has completed AI generations.

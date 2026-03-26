@@ -35,7 +35,7 @@ final class ClientFormViewModel {
     /// - Parameters:
     ///   - client: Pass an existing `Client` to enter edit mode, or `nil` for create mode.
     ///   - clientService: The service used to persist changes.
-    init(client: Client? = nil, clientService: ClientServiceProtocol = MockClientService()) {
+    init(client: Client? = nil, clientService: ClientServiceProtocol = LiveClientService()) {
         self.clientService = clientService
         self.isEditMode = client != nil
         self.existingClientId = client?.id

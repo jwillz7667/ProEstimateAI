@@ -35,7 +35,7 @@ final class ClientListViewModel {
 
     // MARK: - Init
 
-    init(clientService: ClientServiceProtocol = MockClientService()) {
+    init(clientService: ClientServiceProtocol = LiveClientService()) {
         self.clientService = clientService
     }
 

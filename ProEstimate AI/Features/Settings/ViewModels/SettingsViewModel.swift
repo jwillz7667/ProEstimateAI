@@ -70,7 +70,7 @@ final class SettingsViewModel {
 
     // MARK: - Init
 
-    init(service: SettingsServiceProtocol = MockSettingsService()) {
+    init(service: SettingsServiceProtocol = LiveSettingsService()) {
         self.service = service
     }
 
