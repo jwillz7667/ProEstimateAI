@@ -7,9 +7,11 @@ struct InvoiceListView: View {
     @State private var showCreateInvoice = false
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
-        NavigationStack {
+        @Bindable var router = router
+        NavigationStack(path: $router.invoicesPath) {
             Group {
                 if viewModel.isLoading && viewModel.invoices.isEmpty {
                     LoadingStateView(message: "Loading invoices...")

@@ -4,9 +4,11 @@ struct EstimateListView: View {
     @State private var viewModel = EstimateListViewModel()
     @State private var showingDeleteConfirmation = false
     @State private var estimateToDelete: String?
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
-        NavigationStack {
+        @Bindable var router = router
+        NavigationStack(path: $router.estimatesPath) {
             Group {
                 if viewModel.isLoading && viewModel.estimates.isEmpty {
                     LoadingStateView(message: "Loading estimates...")

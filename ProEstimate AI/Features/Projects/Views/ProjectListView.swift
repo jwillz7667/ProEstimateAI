@@ -12,7 +12,8 @@ struct ProjectListView: View {
     /// Client names are loaded from the API by the view model.
 
     var body: some View {
-        NavigationStack {
+        @Bindable var router = router
+        NavigationStack(path: $router.projectsPath) {
             VStack(spacing: 0) {
                 // Status filter
                 filterBar
@@ -46,7 +47,7 @@ struct ProjectListView: View {
                 Task { await viewModel.loadProjects() }
                 if let projectId = navigateToProjectId {
                     navigateToProjectId = nil
-                    router.navigate(to: .projectDetail(id: projectId))
+                    router.projectsPath.append(AppDestination.projectDetail(id: projectId))
                 }
             } content: {
                 ProjectCreationFlowView { projectId in

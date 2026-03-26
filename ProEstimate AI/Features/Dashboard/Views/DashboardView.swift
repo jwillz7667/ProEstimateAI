@@ -12,7 +12,8 @@ struct DashboardView: View {
     @State private var navigateToProjectId: String?
 
     var body: some View {
-        NavigationStack {
+        @Bindable var router = router
+        NavigationStack(path: $router.dashboardPath) {
             Group {
                 if viewModel.isLoading && viewModel.summary == nil {
                     LoadingStateView(message: "Loading dashboard...")
@@ -35,7 +36,7 @@ struct DashboardView: View {
                 Task { await viewModel.loadDashboard() }
                 if let projectId = navigateToProjectId {
                     navigateToProjectId = nil
-                    router.navigate(to: .projectDetail(id: projectId))
+                    router.dashboardPath.append(AppDestination.projectDetail(id: projectId))
                 }
             } content: {
                 ProjectCreationFlowView { projectId in

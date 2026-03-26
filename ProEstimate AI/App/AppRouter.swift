@@ -34,6 +34,14 @@ enum AppDestination: Hashable {
 
 @Observable
 final class AppRouter {
+    var dashboardPath = NavigationPath()
+    var projectsPath = NavigationPath()
+    var estimatesPath = NavigationPath()
+    var invoicesPath = NavigationPath()
+    var clientsPath = NavigationPath()
+    var settingsPath = NavigationPath()
+
+    /// Legacy single path — unused, kept for compile compatibility.
     var path = NavigationPath()
 
     func navigate(to destination: AppDestination) {
