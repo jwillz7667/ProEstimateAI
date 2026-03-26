@@ -9,6 +9,7 @@ struct DashboardView: View {
     @State private var viewModel = DashboardViewModel()
     @State private var showProjectCreation = false
     @State private var showClientForm = false
+    @State private var navigateToProjectId: String?
 
     var body: some View {
         NavigationStack {
@@ -30,10 +31,16 @@ struct DashboardView: View {
                 }
             }
             .fullScreenCover(isPresented: $showProjectCreation) {
-                // Refresh dashboard after project creation
+                // Refresh dashboard and navigate to newly created project
                 Task { await viewModel.loadDashboard() }
+                if let projectId = navigateToProjectId {
+                    navigateToProjectId = nil
+                    router.navigate(to: .projectDetail(id: projectId))
+                }
             } content: {
-                ProjectCreationFlowView()
+                ProjectCreationFlowView { projectId in
+                    navigateToProjectId = projectId
+                }
             }
             .sheet(isPresented: $showClientForm) {
                 NavigationStack {

@@ -6,6 +6,7 @@ import SwiftUI
 struct ProjectListView: View {
     @State private var viewModel = ProjectListViewModel()
     @State private var showCreation = false
+    @State private var navigateToProjectId: String?
     @Environment(AppRouter.self) private var router
 
     /// Client names are loaded from the API by the view model.
@@ -43,8 +44,14 @@ struct ProjectListView: View {
             }
             .fullScreenCover(isPresented: $showCreation) {
                 Task { await viewModel.loadProjects() }
+                if let projectId = navigateToProjectId {
+                    navigateToProjectId = nil
+                    router.navigate(to: .projectDetail(id: projectId))
+                }
             } content: {
-                ProjectCreationFlowView()
+                ProjectCreationFlowView { projectId in
+                    navigateToProjectId = projectId
+                }
             }
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {

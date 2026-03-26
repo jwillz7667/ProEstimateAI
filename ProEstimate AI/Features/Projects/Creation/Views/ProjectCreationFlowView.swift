@@ -4,6 +4,7 @@ import SwiftUI
 /// Shows a progress indicator, step content, and Back/Next navigation
 /// buttons. Dismisses on successful creation or explicit cancel.
 struct ProjectCreationFlowView: View {
+    var onProjectCreated: ((String) -> Void)?
     @State private var viewModel = ProjectCreationViewModel()
     @Environment(\.dismiss) private var dismiss
 
@@ -54,7 +55,8 @@ struct ProjectCreationFlowView: View {
                 }
             }
             .onChange(of: viewModel.createdProject) { _, newValue in
-                if newValue != nil {
+                if let project = newValue {
+                    onProjectCreated?(project.id)
                     dismiss()
                 }
             }
