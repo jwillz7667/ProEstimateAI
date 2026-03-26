@@ -51,6 +51,12 @@ enum PaywallPlacement: String, Codable, CaseIterable, Sendable {
     case settingsUpgrade = "SETTINGS_UPGRADE"
 }
 
+// MARK: - Identifiable
+
+extension PaywallDecision: Identifiable {
+    var id: String { placement.rawValue }
+}
+
 // MARK: - Convenience
 
 extension PaywallPlacement {
@@ -83,6 +89,21 @@ extension PaywallDecision {
         subheadline: "Create AI remodel previews, polished quotes, and branded proposals.",
         primaryCtaTitle: "Start Free Trial",
         secondaryCtaTitle: "Continue with Free Plan",
+        showContinueFree: true,
+        showRestorePurchases: true,
+        recommendedProductId: AppConstants.monthlyProductID,
+        availableProducts: [.sampleMonthly, .sampleAnnual]
+    )
+
+    /// Sample soft-gate decision shown from settings/dashboard upgrade.
+    static let settingsUpgrade = PaywallDecision(
+        placement: .settingsUpgrade,
+        triggerReason: "User tapped upgrade in settings",
+        blocking: false,
+        headline: "Unlock the full power of ProEstimate",
+        subheadline: "Get unlimited AI previews, branded proposals, invoicing, and more.",
+        primaryCtaTitle: "Start Free Trial",
+        secondaryCtaTitle: "Not Now",
         showContinueFree: true,
         showRestorePurchases: true,
         recommendedProductId: AppConstants.monthlyProductID,

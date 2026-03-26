@@ -5,6 +5,8 @@ struct CompanyBrandingView: View {
     @Bindable var viewModel: SettingsViewModel
     @State private var selectedLogoItem: PhotosPickerItem?
     @State private var logoImage: Image?
+    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
+    @Environment(PaywallPresenter.self) private var paywallPresenter
 
     var body: some View {
         Form {
@@ -88,7 +90,13 @@ struct CompanyBrandingView: View {
                     icon: "checkmark.circle",
                     isLoading: viewModel.isSaving
                 ) {
-                    Task { await viewModel.saveCompanyBranding() }
+                    let result = featureGateCoordinator.guardUseBranding()
+                    switch result {
+                    case .allowed:
+                        Task { await viewModel.saveCompanyBranding() }
+                    case .blocked(let decision):
+                        paywallPresenter.present(decision)
+                    }
                 }
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)

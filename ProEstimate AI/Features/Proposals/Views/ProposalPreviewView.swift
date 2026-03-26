@@ -3,6 +3,11 @@ import SwiftUI
 struct ProposalPreviewView: View {
     let proposalId: String
     @State private var viewModel = ProposalViewModel()
+    @State private var exportPDFURL: URL?
+    @State private var showShareSheet = false
+    @State private var shareItems: [Any] = []
+    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
+    @Environment(PaywallPresenter.self) private var paywallPresenter
 
     var body: some View {
         Group {
@@ -34,20 +39,22 @@ struct ProposalPreviewView: View {
 
                     Menu {
                         if let shareURL = viewModel.shareURL {
-                            ShareLink(item: shareURL) {
+                            Button {
+                                handleShareApprovalLink(shareURL)
+                            } label: {
                                 Label("Share Link", systemImage: "link")
                             }
                         }
 
                         Button {
-                            // PDF export placeholder
+                            handleExportPDF()
                         } label: {
                             Label("Export PDF", systemImage: "arrow.down.doc")
                         }
 
                         if viewModel.canSend {
                             Button {
-                                Task { await viewModel.sendProposal() }
+                                handleSendProposal()
                             } label: {
                                 Label("Send to Client", systemImage: "paperplane")
                             }
@@ -60,6 +67,65 @@ struct ProposalPreviewView: View {
         }
         .task {
             await viewModel.loadProposal(id: proposalId)
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if !shareItems.isEmpty {
+                ActivityViewRepresentable(activityItems: shareItems)
+            }
+        }
+    }
+
+    // MARK: - Feature-Gated Actions
+
+    private func handleExportPDF() {
+        let result = featureGateCoordinator.guardExportQuote()
+        switch result {
+        case .allowed:
+            let allItems = viewModel.lineItems
+            let lineItemTuples: [(name: String, qty: Decimal, unit: String, unitCost: Decimal, total: Decimal)] =
+                allItems.map { ($0.name, $0.quantity, $0.unit, $0.unitCost, $0.lineTotal) }
+
+            if let url = PDFGenerator.generateProposalPDF(
+                companyName: viewModel.company?.name ?? "Company",
+                projectTitle: viewModel.project?.title ?? "Project",
+                clientName: viewModel.client?.name,
+                proposalDate: viewModel.proposal?.createdAt ?? Date(),
+                expiresAt: viewModel.proposal?.expiresAt,
+                clientMessage: viewModel.proposal?.clientMessage,
+                lineItems: lineItemTuples,
+                subtotalMaterials: viewModel.estimate?.subtotalMaterials ?? 0,
+                subtotalLabor: viewModel.estimate?.subtotalLabor ?? 0,
+                subtotalOther: viewModel.estimate?.subtotalOther ?? 0,
+                taxAmount: viewModel.estimate?.taxAmount ?? 0,
+                totalAmount: viewModel.estimate?.totalAmount ?? 0,
+                termsAndConditions: viewModel.proposal?.termsAndConditions
+            ) {
+                shareItems = [url]
+                showShareSheet = true
+            }
+        case .blocked(let decision):
+            paywallPresenter.present(decision)
+        }
+    }
+
+    private func handleShareApprovalLink(_ url: URL) {
+        let result = featureGateCoordinator.guardShareApprovalLink()
+        switch result {
+        case .allowed:
+            shareItems = [url]
+            showShareSheet = true
+        case .blocked(let decision):
+            paywallPresenter.present(decision)
+        }
+    }
+
+    private func handleSendProposal() {
+        let result = featureGateCoordinator.guardShareApprovalLink()
+        switch result {
+        case .allowed:
+            Task { await viewModel.sendProposal() }
+        case .blocked(let decision):
+            paywallPresenter.present(decision)
         }
     }
 
@@ -230,7 +296,7 @@ struct ProposalPreviewView: View {
                 icon: "paperplane",
                 isLoading: viewModel.isSending
             ) {
-                Task { await viewModel.sendProposal() }
+                handleSendProposal()
             }
 
             if let expiryDate = viewModel.formattedExpiryDate {
@@ -272,4 +338,6 @@ struct ProposalPreviewView: View {
     NavigationStack {
         ProposalPreviewView(proposalId: "prop-001")
     }
+    .environment(FeatureGateCoordinator.preview())
+    .environment(PaywallPresenter())
 }

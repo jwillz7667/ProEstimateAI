@@ -25,7 +25,7 @@ final class FeatureGateCoordinator {
 
     // MARK: - Init
 
-    private init() {}
+    init() {}
 
     /// Configure the coordinator with its dependencies.
     /// Call once during app initialization.

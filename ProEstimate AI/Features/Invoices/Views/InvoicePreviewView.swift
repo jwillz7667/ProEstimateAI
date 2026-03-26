@@ -4,6 +4,8 @@ struct InvoicePreviewView: View {
     let invoiceId: String
     @State private var viewModel = InvoiceViewModel()
     @State private var showingMarkPaidConfirmation = false
+    @State private var exportPDFURL: URL?
+    @State private var showShareSheet = false
 
     var body: some View {
         Group {
@@ -39,7 +41,7 @@ struct InvoicePreviewView: View {
                         }
 
                         Button {
-                            // PDF export placeholder
+                            handleExportPDF()
                         } label: {
                             Label("Export PDF", systemImage: "arrow.down.doc")
                         }
@@ -79,6 +81,39 @@ struct InvoicePreviewView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will record the full remaining balance as paid.")
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let url = exportPDFURL {
+                ActivityViewRepresentable(activityItems: [url])
+            }
+        }
+    }
+
+    // MARK: - PDF Export
+
+    private func handleExportPDF() {
+        guard let invoice = viewModel.invoice else { return }
+
+        let lineItemTuples: [(name: String, qty: Decimal, unit: String, unitCost: Decimal, total: Decimal)] =
+            viewModel.lineItems.map { ($0.name, $0.quantity, $0.unit, $0.unitCost, $0.lineTotal) }
+
+        if let url = PDFGenerator.generateInvoicePDF(
+            companyName: viewModel.company?.name ?? "Company",
+            invoiceNumber: invoice.invoiceNumber,
+            date: invoice.createdAt,
+            dueDate: invoice.dueDate,
+            status: invoice.status.rawValue.capitalized,
+            clientName: viewModel.client?.name,
+            lineItems: lineItemTuples,
+            subtotal: invoice.subtotal,
+            taxAmount: invoice.taxAmount,
+            totalAmount: invoice.totalAmount,
+            amountPaid: invoice.amountPaid,
+            amountDue: invoice.amountDue,
+            notes: invoice.notes
+        ) {
+            exportPDFURL = url
+            showShareSheet = true
         }
     }
 

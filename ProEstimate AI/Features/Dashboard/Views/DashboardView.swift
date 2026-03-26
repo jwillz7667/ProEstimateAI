@@ -3,6 +3,9 @@ import SwiftUI
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
+    @Environment(EntitlementStore.self) private var entitlementStore
+    @Environment(UsageMeterStore.self) private var usageMeterStore
+    @Environment(PaywallPresenter.self) private var paywallPresenter
     @State private var viewModel = DashboardViewModel()
 
     var body: some View {
@@ -67,9 +70,16 @@ struct DashboardView: View {
 
                 // MARK: - Subscription Card
                 DashboardSubscriptionCard(
-                    generationsRemaining: viewModel.summary?.generationsRemaining ?? AppConstants.freeGenerationCredits,
-                    quotesRemaining: viewModel.summary?.quotesRemaining ?? AppConstants.freeQuoteExportCredits,
-                    isPro: false // Will be wired to EntitlementStore in Phase 11
+                    generationsRemaining: entitlementStore.hasProAccess
+                        ? Int.max
+                        : usageMeterStore.generationsRemaining,
+                    quotesRemaining: entitlementStore.hasProAccess
+                        ? Int.max
+                        : usageMeterStore.quotesRemaining,
+                    isPro: entitlementStore.hasProAccess,
+                    onUpgrade: {
+                        paywallPresenter.present(.settingsUpgrade)
+                    }
                 )
                 .padding(.horizontal, SpacingTokens.md)
                 .padding(.bottom, SpacingTokens.xxl)
@@ -138,10 +148,8 @@ struct DashboardView: View {
         case .newClient:
             router.navigate(to: .clientForm(id: nil))
         case .scanReceipt:
-            // Will be implemented in a future phase
             break
         case .viewReports:
-            // Will be implemented in a future phase
             break
         }
     }

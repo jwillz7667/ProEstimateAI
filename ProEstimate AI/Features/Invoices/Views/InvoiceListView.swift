@@ -4,6 +4,9 @@ struct InvoiceListView: View {
     @State private var viewModel = InvoiceListViewModel()
     @State private var showingDeleteConfirmation = false
     @State private var invoiceToDelete: String?
+    @State private var showCreateInvoice = false
+    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
+    @Environment(PaywallPresenter.self) private var paywallPresenter
 
     var body: some View {
         NavigationStack {
@@ -21,7 +24,7 @@ struct InvoiceListView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        // Create new invoice action
+                        handleCreateInvoice()
                     } label: {
                         Image(systemName: "plus")
                             .fontWeight(.semibold)
@@ -66,6 +69,23 @@ struct InvoiceListView: View {
             } message: {
                 Text("This action cannot be undone.")
             }
+            .sheet(isPresented: $showCreateInvoice) {
+                Task { await viewModel.loadInvoices() }
+            } content: {
+                InvoiceCreationSheet()
+            }
+        }
+    }
+
+    // MARK: - Feature-Gated Actions
+
+    private func handleCreateInvoice() {
+        let result = featureGateCoordinator.guardCreateInvoice()
+        switch result {
+        case .allowed:
+            showCreateInvoice = true
+        case .blocked(let decision):
+            paywallPresenter.present(decision)
         }
     }
 
@@ -82,7 +102,7 @@ struct InvoiceListView: View {
                     ? "Create your first invoice from an approved estimate."
                     : "No invoices match your search.",
                 ctaTitle: viewModel.searchText.isEmpty ? "Create Invoice" : nil,
-                ctaAction: viewModel.searchText.isEmpty ? {} : nil
+                ctaAction: viewModel.searchText.isEmpty ? { handleCreateInvoice() } : nil
             )
             Spacer()
         }
@@ -263,4 +283,6 @@ private struct InvoiceRowView: View {
 
 #Preview {
     InvoiceListView()
+        .environment(FeatureGateCoordinator.preview())
+        .environment(PaywallPresenter())
 }

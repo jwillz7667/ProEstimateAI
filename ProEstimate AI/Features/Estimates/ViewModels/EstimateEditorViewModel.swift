@@ -256,6 +256,34 @@ final class EstimateEditorViewModel {
         isSaving = false
     }
 
+    // MARK: - PDF Generation
+
+    /// Renders the current estimate data to a PDF and returns a temporary file URL.
+    func generatePDF() -> URL? {
+        guard let estimate else { return nil }
+
+        let allItems = (materialItems + laborItems + otherItems)
+        let lineItemTuples: [(name: String, qty: Decimal, unit: String, unitCost: Decimal, total: Decimal)] =
+            allItems.map { item in
+                (name: item.name, qty: item.quantity, unit: item.unit.rawValue, unitCost: item.unitCost, total: item.lineTotal)
+            }
+
+        return PDFGenerator.generateEstimatePDF(
+            companyName: "ProEstimate AI",
+            estimateNumber: estimate.estimateNumber,
+            date: estimate.createdAt,
+            status: estimate.status.rawValue.capitalized,
+            lineItems: lineItemTuples,
+            subtotalMaterials: subtotalMaterials,
+            subtotalLabor: subtotalLabor,
+            subtotalOther: subtotalOther,
+            taxAmount: taxAmount,
+            discountAmount: discountAmount,
+            totalAmount: grandTotal,
+            notes: notes.isEmpty ? nil : notes
+        )
+    }
+
     // MARK: - Compute
 
     func computeLineTotal(for item: LineItemDraft) -> Decimal {

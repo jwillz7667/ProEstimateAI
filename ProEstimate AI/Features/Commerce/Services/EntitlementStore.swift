@@ -33,7 +33,7 @@ final class EntitlementStore {
 
     // MARK: - Init
 
-    private init() {}
+    init() {}
 
     /// Configure the store with its API dependency.
     /// Call once during app initialization before any entitlement checks.

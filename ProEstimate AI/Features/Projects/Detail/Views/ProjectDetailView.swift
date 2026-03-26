@@ -7,7 +7,11 @@ struct ProjectDetailView: View {
     let projectId: String
 
     @State private var viewModel = ProjectDetailViewModel()
+    @State private var hasCompletedFirstGeneration = false
+    @State private var showEditSheet = false
     @Environment(AppRouter.self) private var router
+    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
+    @Environment(PaywallPresenter.self) private var paywallPresenter
 
     var body: some View {
         Group {
@@ -26,7 +30,7 @@ struct ProjectDetailView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    // Edit action placeholder
+                    showEditSheet = true
                 } label: {
                     Image(systemName: "pencil")
                 }
@@ -47,6 +51,11 @@ struct ProjectDetailView: View {
             if viewModel.project == nil {
                 await viewModel.loadProject(id: projectId)
             }
+        }
+        .fullScreenCover(isPresented: $showEditSheet) {
+            Task { await viewModel.loadProject(id: projectId) }
+        } content: {
+            ProjectCreationFlowView()
         }
     }
 
@@ -76,7 +85,7 @@ struct ProjectDetailView: View {
                     isGenerating: viewModel.isGenerating,
                     currentGenerationStage: viewModel.currentGenerationStage,
                     onGenerate: {
-                        Task { await viewModel.startGeneration() }
+                        handleGenerate()
                     }
                 )
 
@@ -101,6 +110,25 @@ struct ProjectDetailView: View {
             .padding(.vertical, SpacingTokens.sm)
         }
     }
+
+    // MARK: - Feature-Gated Actions
+
+    private func handleGenerate() {
+        let result = featureGateCoordinator.guardGeneratePreview()
+        switch result {
+        case .allowed:
+            Task {
+                await viewModel.startGeneration()
+                // After first successful generation, show soft upsell
+                if !hasCompletedFirstGeneration {
+                    hasCompletedFirstGeneration = true
+                    paywallPresenter.present(.sampleSoftGate)
+                }
+            }
+        case .blocked(let decision):
+            paywallPresenter.present(decision)
+        }
+    }
 }
 
 // MARK: - Preview
@@ -110,4 +138,6 @@ struct ProjectDetailView: View {
         ProjectDetailView(projectId: "p-001")
     }
     .environment(AppRouter())
+    .environment(FeatureGateCoordinator.preview())
+    .environment(PaywallPresenter())
 }

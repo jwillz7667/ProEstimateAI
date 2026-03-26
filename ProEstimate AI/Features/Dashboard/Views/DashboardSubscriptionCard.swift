@@ -1,23 +1,24 @@
 import SwiftUI
 
 /// Shows the user's subscription status on the dashboard.
-/// For free-tier users, displays remaining AI generation credits.
+/// For free-tier users, displays remaining AI generation credits and an upgrade CTA.
 /// For Pro subscribers, shows the active badge.
-/// Placeholder that will be wired to EntitlementStore in Phase 11.
 struct DashboardSubscriptionCard: View {
     let generationsRemaining: Int
     let quotesRemaining: Int
     let isPro: Bool
+    var onUpgrade: (() -> Void)?
 
-    // Default to free tier for now — will be driven by EntitlementStore later
     init(
         generationsRemaining: Int = AppConstants.freeGenerationCredits,
         quotesRemaining: Int = AppConstants.freeQuoteExportCredits,
-        isPro: Bool = false
+        isPro: Bool = false,
+        onUpgrade: (() -> Void)? = nil
     ) {
         self.generationsRemaining = generationsRemaining
         self.quotesRemaining = quotesRemaining
         self.isPro = isPro
+        self.onUpgrade = onUpgrade
     }
 
     var body: some View {
@@ -91,7 +92,7 @@ struct DashboardSubscriptionCard: View {
             )
 
             PrimaryCTAButton(title: "Upgrade to Pro", icon: "crown") {
-                // Will navigate to paywall — placeholder action
+                onUpgrade?()
             }
         }
     }

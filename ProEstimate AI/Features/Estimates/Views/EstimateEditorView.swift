@@ -3,7 +3,12 @@ import SwiftUI
 struct EstimateEditorView: View {
     let estimateId: String
     @State private var viewModel = EstimateEditorViewModel()
+    @State private var exportPDFURL: URL?
+    @State private var showShareSheet = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
+    @Environment(PaywallPresenter.self) private var paywallPresenter
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -56,10 +61,19 @@ struct EstimateEditorView: View {
 
                     Menu {
                         ShareLink(item: "Estimate \(viewModel.estimate?.estimateNumber ?? "")")
+
                         Button {
-                            // Export action placeholder
+                            handleExportPDF()
                         } label: {
                             Label("Export PDF", systemImage: "arrow.down.doc")
+                        }
+
+                        Button {
+                            if let estimate = viewModel.estimate {
+                                router.navigate(to: .proposalPreview(id: estimate.id))
+                            }
+                        } label: {
+                            Label("Create Proposal", systemImage: "doc.richtext")
                         }
                     } label: {
                         Image(systemName: "square.and.arrow.up")
@@ -91,6 +105,26 @@ struct EstimateEditorView: View {
             if let error = viewModel.errorMessage {
                 Text(error)
             }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let url = exportPDFURL {
+                ActivityViewRepresentable(activityItems: [url])
+            }
+        }
+    }
+
+    // MARK: - Feature-Gated Actions
+
+    private func handleExportPDF() {
+        let result = featureGateCoordinator.guardExportQuote()
+        switch result {
+        case .allowed:
+            if let url = viewModel.generatePDF() {
+                exportPDFURL = url
+                showShareSheet = true
+            }
+        case .blocked(let decision):
+            paywallPresenter.present(decision)
         }
     }
 
@@ -231,4 +265,7 @@ struct EstimateEditorView: View {
     NavigationStack {
         EstimateEditorView(estimateId: "e-001")
     }
+    .environment(FeatureGateCoordinator.preview())
+    .environment(PaywallPresenter())
+    .environment(AppRouter())
 }

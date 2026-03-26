@@ -38,6 +38,16 @@ enum PlanCode: String, Codable, CaseIterable, Sendable {
     case proAnnual = "PRO_ANNUAL"
 }
 
+extension PlanCode {
+    var displayName: String {
+        switch self {
+        case .freeStarter: "Free"
+        case .proMonthly: "Pro Monthly"
+        case .proAnnual: "Pro Annual"
+        }
+    }
+}
+
 // MARK: - Usage Metric Code
 
 /// Identifies the type of metered usage. Matches the backend `UsageMetricCode` enum.

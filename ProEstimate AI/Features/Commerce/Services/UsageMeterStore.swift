@@ -39,7 +39,7 @@ final class UsageMeterStore {
 
     // MARK: - Init
 
-    private init() {}
+    init() {}
 
     /// Configure the store with its dependencies.
     /// Call once during app initialization.

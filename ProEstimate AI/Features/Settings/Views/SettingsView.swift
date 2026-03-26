@@ -3,6 +3,9 @@ import SwiftUI
 struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @Environment(AppState.self) private var appState: AppState
+    @Environment(EntitlementStore.self) private var entitlementStore
+    @Environment(UsageMeterStore.self) private var usageMeterStore
+    @Environment(PaywallPresenter.self) private var paywallPresenter
     @State private var showingSignOutConfirmation = false
 
     var body: some View {
@@ -47,7 +50,10 @@ struct SettingsView: View {
                 titleVisibility: .visible
             ) {
                 Button("Sign Out", role: .destructive) {
-                    appState.signOut()
+                    appState.signOut(
+                        entitlementStore: entitlementStore,
+                        usageMeterStore: usageMeterStore
+                    )
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
@@ -175,26 +181,28 @@ struct SettingsView: View {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Current Plan")
-                            Text("Free")
+                            subscriptionDetailText
                                 .font(TypographyTokens.caption)
                                 .foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: "crown")
+                        Image(systemName: entitlementStore.hasProAccess ? "crown.fill" : "crown")
                             .foregroundStyle(ColorTokens.primaryOrange)
                     }
 
                     Spacer()
 
-                    Button("Upgrade") {
-                        // Navigate to paywall
+                    if !entitlementStore.hasProAccess {
+                        Button("Upgrade") {
+                            paywallPresenter.present(.settingsUpgrade)
+                        }
+                        .font(TypographyTokens.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, SpacingTokens.sm)
+                        .padding(.vertical, SpacingTokens.xxs)
+                        .background(ColorTokens.primaryOrange, in: Capsule())
                     }
-                    .font(TypographyTokens.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, SpacingTokens.sm)
-                    .padding(.vertical, SpacingTokens.xxs)
-                    .background(ColorTokens.primaryOrange, in: Capsule())
                 }
             }
 
@@ -222,6 +230,25 @@ struct SettingsView: View {
         }
         .listStyle(.insetGrouped)
     }
+
+    // MARK: - Subscription Detail
+
+    @ViewBuilder
+    private var subscriptionDetailText: some View {
+        let state = entitlementStore.subscriptionState
+        switch state {
+        case .trialActive:
+            if let days = entitlementStore.trialDaysRemaining {
+                Text("\(state.displayLabel) — \(days) day\(days == 1 ? "" : "s") remaining")
+            } else {
+                Text(state.displayLabel)
+            }
+        case .gracePeriod, .billingRetry:
+            Text("\(state.displayLabel) — Update payment method")
+        default:
+            Text(entitlementStore.currentPlanCode.displayName)
+        }
+    }
 }
 
 // MARK: - Preview
@@ -229,4 +256,7 @@ struct SettingsView: View {
 #Preview {
     SettingsView()
         .environment(AppState())
+        .environment(EntitlementStore.preview())
+        .environment(UsageMeterStore.preview())
+        .environment(PaywallPresenter())
 }

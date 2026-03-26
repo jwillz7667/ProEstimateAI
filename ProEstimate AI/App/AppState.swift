@@ -21,7 +21,13 @@ final class AppState {
         let logoURL: URL?
     }
 
-    func signOut() {
+    func signOut(
+        entitlementStore: EntitlementStore? = nil,
+        usageMeterStore: UsageMeterStore? = nil
+    ) {
+        TokenStore.shared.clearTokens()
+        entitlementStore?.reset()
+        usageMeterStore?.reset()
         isAuthenticated = false
         currentUser = nil
         currentCompany = nil
