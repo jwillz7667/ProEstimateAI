@@ -3,12 +3,15 @@ import SwiftUI
 /// Displays AI-suggested materials for a project.
 /// Each material has a selection checkbox; a summary shows the
 /// total cost of selected materials and an "Add to Estimate" CTA.
+/// Includes a DIY/Professional toggle that affects labor cost inclusion.
 struct MaterialSuggestionsSection: View {
     let materials: [MaterialSuggestion]
     let selectionState: [String: Bool]
     let selectedCount: Int
     let selectedTotal: Decimal
+    let isDIY: Bool
     let onToggle: (String) -> Void
+    var onToggleDIY: (() -> Void)?
     var onAddToEstimate: (() -> Void)?
 
     var body: some View {
@@ -21,6 +24,9 @@ struct MaterialSuggestionsSection: View {
             if materials.isEmpty {
                 emptyView
             } else {
+                // DIY / Professional toggle
+                diyToggle
+
                 materialsList
                 selectionSummary
             }
@@ -28,6 +34,38 @@ struct MaterialSuggestionsSection: View {
     }
 
     // MARK: - Subviews
+
+    private var diyToggle: some View {
+        GlassCard {
+            HStack(spacing: SpacingTokens.sm) {
+                Image(systemName: isDIY ? "wrench.and.screwdriver" : "person.badge.shield.checkmark")
+                    .font(.title3)
+                    .foregroundStyle(isDIY ? ColorTokens.primaryOrange : .blue)
+                    .frame(width: 32)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isDIY ? "DIY Project" : "Professional Job")
+                        .font(TypographyTokens.headline)
+
+                    Text(isDIY
+                        ? "Materials only — no labor costs included"
+                        : "Includes labor costs for professional installation")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: Binding(
+                    get: { !isDIY },
+                    set: { _ in onToggleDIY?() }
+                ))
+                .labelsHidden()
+                .tint(.blue)
+            }
+        }
+        .padding(.horizontal, SpacingTokens.md)
+    }
 
     private var materialsList: some View {
         VStack(spacing: SpacingTokens.xs) {
@@ -55,9 +93,21 @@ struct MaterialSuggestionsSection: View {
                     CurrencyText(amount: selectedTotal, font: TypographyTokens.moneyMedium)
                 }
 
+                if !isDIY {
+                    HStack {
+                        Image(systemName: "hammer")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                        Text("Labor costs will be added automatically")
+                            .font(TypographyTokens.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
+
                 if selectedCount > 0 {
                     PrimaryCTAButton(
-                        title: "Add to Estimate",
+                        title: isDIY ? "Create DIY Estimate" : "Create Professional Estimate",
                         icon: "doc.text.fill"
                     ) {
                         onAddToEstimate?()
@@ -102,6 +152,7 @@ struct MaterialSuggestionsSection: View {
             ],
             selectedCount: 3,
             selectedTotal: 7142,
+            isDIY: false,
             onToggle: { _ in }
         )
     }

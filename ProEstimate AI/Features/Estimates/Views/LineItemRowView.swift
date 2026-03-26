@@ -16,10 +16,29 @@ struct LineItemRowView: View {
                         .lineLimit(2)
 
                     if !item.description.isEmpty {
-                        Text(item.description)
-                            .font(TypographyTokens.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        if let url = extractURL(from: item.description) {
+                            HStack(spacing: 4) {
+                                Text(cleanDescription(item.description))
+                                    .font(TypographyTokens.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+
+                                Link(destination: url) {
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "arrow.up.right.square")
+                                            .font(.caption2)
+                                        Text("Source")
+                                            .font(TypographyTokens.caption2)
+                                    }
+                                    .foregroundStyle(ColorTokens.primaryOrange)
+                                }
+                            }
+                        } else {
+                            Text(item.description)
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                 }
 
@@ -89,6 +108,25 @@ struct LineItemRowView: View {
                 .font(TypographyTokens.caption2)
                 .foregroundStyle(.tertiary)
         }
+    }
+
+    /// Extracts the first URL from a description string.
+    private func extractURL(from text: String) -> URL? {
+        let parts = text.components(separatedBy: " · ")
+        for part in parts {
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("http"), let url = URL(string: trimmed) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    /// Removes the URL component from the description for clean display.
+    private func cleanDescription(_ text: String) -> String {
+        text.components(separatedBy: " · ")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("http") }
+            .joined(separator: " · ")
     }
 
     private var formattedQuantity: String {

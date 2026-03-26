@@ -2,12 +2,14 @@ import SwiftUI
 
 /// Card displaying a single AI-suggested material.
 /// Shows name, category, estimated cost, quantity + unit, and supplier.
-/// Includes a checkbox for selection and swipe actions for remove/replace.
+/// Includes a checkbox for selection, tappable supplier link, and context menu actions.
 struct MaterialSuggestionCard: View {
     let material: MaterialSuggestion
     let isSelected: Bool
     let onToggle: () -> Void
     var onRemove: (() -> Void)?
+
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         GlassCard {
@@ -30,9 +32,24 @@ struct MaterialSuggestionCard: View {
                         categoryBadge
 
                         if let supplierName = material.supplierName {
-                            Text(supplierName)
-                                .font(TypographyTokens.caption)
-                                .foregroundStyle(.secondary)
+                            if let supplierURL = material.supplierURL {
+                                Button {
+                                    openURL(supplierURL)
+                                } label: {
+                                    HStack(spacing: 2) {
+                                        Text(supplierName)
+                                            .font(TypographyTokens.caption)
+                                        Image(systemName: "arrow.up.right.square")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(ColorTokens.primaryOrange)
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                Text(supplierName)
+                                    .font(TypographyTokens.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
 
@@ -59,7 +76,7 @@ struct MaterialSuggestionCard: View {
                     CurrencyText(amount: material.lineTotal, font: TypographyTokens.moneySmall)
 
                     if material.supplierURL != nil {
-                        Image(systemName: "link")
+                        Text("View Source")
                             .font(.caption2)
                             .foregroundStyle(ColorTokens.primaryOrange)
                     }
@@ -73,10 +90,12 @@ struct MaterialSuggestionCard: View {
                 }
             }
 
-            Button {
-                // Replace action placeholder
-            } label: {
-                Label("Replace", systemImage: "arrow.triangle.2.circlepath")
+            if let supplierURL = material.supplierURL {
+                Button {
+                    openURL(supplierURL)
+                } label: {
+                    Label("View at \(material.supplierName ?? "Supplier")", systemImage: "safari")
+                }
             }
         }
     }

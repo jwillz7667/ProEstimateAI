@@ -12,9 +12,9 @@ struct MetricCard: View {
 
         var color: Color {
             switch self {
-            case .up: ColorTokens.success
-            case .down: ColorTokens.error
-            case .neutral: .secondary
+            case .up: .white.opacity(0.9)
+            case .down: .white.opacity(0.9)
+            case .neutral: .white.opacity(0.7)
             }
         }
 
@@ -37,10 +37,11 @@ struct MetricCard: View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
             Text(label)
                 .font(TypographyTokens.metricLabel)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.85))
 
             Text(value)
                 .font(TypographyTokens.metricValue)
+                .foregroundStyle(.white)
 
             if let trend {
                 HStack(spacing: SpacingTokens.xxs) {
@@ -54,6 +55,14 @@ struct MetricCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(SpacingTokens.md)
-        .glassCard()
+        .background(
+            LinearGradient(
+                colors: [ColorTokens.primaryOrange, ColorTokens.primaryOrange.opacity(0.85)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: RadiusTokens.card)
+        )
+        .shadow(color: ColorTokens.primaryOrange.opacity(0.25), radius: 4, x: 0, y: 2)
     }
 }

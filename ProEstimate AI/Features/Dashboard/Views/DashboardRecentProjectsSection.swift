@@ -31,36 +31,45 @@ struct DashboardRecentProjectsSection: View {
 
     private func projectRow(_ project: Project) -> some View {
         NavigationLink(value: AppDestination.projectDetail(id: project.id)) {
-            GlassCard {
-                HStack(spacing: SpacingTokens.sm) {
-                    // Project type icon
-                    Image(systemName: iconForProjectType(project.projectType))
-                        .font(.system(size: 20))
-                        .foregroundStyle(ColorTokens.primaryOrange)
-                        .frame(width: 40, height: 40)
-                        .background(
-                            ColorTokens.primaryOrange.opacity(0.1),
-                            in: RoundedRectangle(cornerRadius: RadiusTokens.small)
-                        )
+            HStack(spacing: SpacingTokens.sm) {
+                // Project type icon
+                Image(systemName: iconForProjectType(project.projectType))
+                    .font(.system(size: 20))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        Color.white.opacity(0.2),
+                        in: RoundedRectangle(cornerRadius: RadiusTokens.small)
+                    )
 
-                    // Title and details
-                    VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                        Text(project.title)
-                            .font(TypographyTokens.subheadline)
-                            .fontWeight(.medium)
-                            .lineLimit(1)
+                // Title and details
+                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                    Text(project.title)
+                        .font(TypographyTokens.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
 
-                        Text(project.updatedAt.formatted(as: .relative))
-                            .font(TypographyTokens.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    // Status badge
-                    statusBadge(for: project.status)
+                    Text(project.updatedAt.formatted(as: .relative))
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.white.opacity(0.75))
                 }
+
+                Spacer()
+
+                // Status badge
+                statusBadge(for: project.status)
             }
+            .padding(SpacingTokens.md)
+            .background(
+                LinearGradient(
+                    colors: [ColorTokens.primaryOrange, ColorTokens.primaryOrange.opacity(0.85)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: RadiusTokens.card)
+            )
+            .shadow(color: ColorTokens.primaryOrange.opacity(0.2), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(.plain)
     }
@@ -97,30 +106,29 @@ struct DashboardRecentProjectsSection: View {
         }
     }
 
-    private func statusBadge(for status: Project.Status) -> StatusBadge {
-        switch status {
-        case .draft:
-            StatusBadge(text: "Draft", style: .neutral)
-        case .photosUploaded:
-            StatusBadge(text: "Photos", style: .info)
-        case .generating:
-            StatusBadge(text: "Generating", style: .info)
-        case .generationComplete:
-            StatusBadge(text: "Generated", style: .info)
-        case .estimateCreated:
-            StatusBadge(text: "Estimated", style: .warning)
-        case .proposalSent:
-            StatusBadge(text: "Proposed", style: .warning)
-        case .approved:
-            StatusBadge(text: "Approved", style: .success)
-        case .declined:
-            StatusBadge(text: "Declined", style: .error)
-        case .invoiced:
-            StatusBadge(text: "Invoiced", style: .info)
-        case .completed:
-            StatusBadge(text: "Complete", style: .success)
-        case .archived:
-            StatusBadge(text: "Archived", style: .neutral)
-        }
+    private func statusBadge(for status: Project.Status) -> some View {
+        let text: String = {
+            switch status {
+            case .draft: "Draft"
+            case .photosUploaded: "Photos"
+            case .generating: "Generating"
+            case .generationComplete: "Generated"
+            case .estimateCreated: "Estimated"
+            case .proposalSent: "Proposed"
+            case .approved: "Approved"
+            case .declined: "Declined"
+            case .invoiced: "Invoiced"
+            case .completed: "Complete"
+            case .archived: "Archived"
+            }
+        }()
+
+        return Text(text)
+            .font(TypographyTokens.caption2)
+            .fontWeight(.medium)
+            .padding(.horizontal, SpacingTokens.xs)
+            .padding(.vertical, 3)
+            .background(Color.white.opacity(0.25), in: Capsule())
+            .foregroundStyle(.white)
     }
 }

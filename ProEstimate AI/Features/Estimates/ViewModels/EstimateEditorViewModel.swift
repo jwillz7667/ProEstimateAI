@@ -22,6 +22,9 @@ final class EstimateEditorViewModel {
     var errorMessage: String?
     var successMessage: String?
 
+    /// Whether this is a DIY estimate (no labor costs).
+    var isDIY: Bool = false
+
     // MARK: - Section Collapse State
 
     var isMaterialsSectionExpanded: Bool = true
@@ -64,6 +67,20 @@ final class EstimateEditorViewModel {
             + laborItems.reduce(Decimal.zero) { $0 + $1.baseCost + $1.markupAmount }
             + otherItems.reduce(Decimal.zero) { $0 + $1.baseCost + $1.markupAmount }
         return preTaxTotal + taxAmount - discountAmount
+    }
+
+    /// Tax on materials + other only (excludes labor), for DIY mode.
+    var materialsTaxOnly: Decimal {
+        let materialsTax = materialItems.reduce(Decimal.zero) { $0 + $1.taxAmount }
+        let otherTax = otherItems.reduce(Decimal.zero) { $0 + $1.taxAmount }
+        return materialsTax + otherTax
+    }
+
+    /// Grand total in DIY mode (no labor costs).
+    var diyGrandTotal: Decimal {
+        let preTaxTotal = materialItems.reduce(Decimal.zero) { $0 + $1.baseCost + $1.markupAmount }
+            + otherItems.reduce(Decimal.zero) { $0 + $1.baseCost + $1.markupAmount }
+        return preTaxTotal + materialsTaxOnly - discountAmount
     }
 
     var totalItemCount: Int {
@@ -227,7 +244,15 @@ final class EstimateEditorViewModel {
         isSaving = true
         errorMessage = nil
         do {
-            let allItems = (materialItems + laborItems + otherItems).map { $0.toLineItem() }
+            // In DIY mode, exclude labor items from the save
+            let itemsToSave: [LineItemDraft] = isDIY
+                ? (materialItems + otherItems)
+                : (materialItems + laborItems + otherItems)
+            let allItems = itemsToSave.map { $0.toLineItem() }
+
+            let effectiveLabor: Decimal = isDIY ? 0 : subtotalLabor
+            let effectiveTax: Decimal = isDIY ? materialsTaxOnly : taxAmount
+            let effectiveTotal: Decimal = isDIY ? diyGrandTotal : grandTotal
 
             let updatedEstimate = Estimate(
                 id: estimate.id,
@@ -237,11 +262,11 @@ final class EstimateEditorViewModel {
                 version: estimate.version,
                 status: estimate.status,
                 subtotalMaterials: subtotalMaterials,
-                subtotalLabor: subtotalLabor,
+                subtotalLabor: effectiveLabor,
                 subtotalOther: subtotalOther,
-                taxAmount: taxAmount,
+                taxAmount: effectiveTax,
                 discountAmount: discountAmount,
-                totalAmount: grandTotal,
+                totalAmount: effectiveTotal,
                 notes: notes.isEmpty ? nil : notes,
                 validUntil: estimate.validUntil,
                 createdAt: estimate.createdAt,
@@ -264,24 +289,30 @@ final class EstimateEditorViewModel {
     func generatePDF() -> URL? {
         guard let estimate else { return nil }
 
-        let allItems = (materialItems + laborItems + otherItems)
+        let itemsForPDF: [LineItemDraft] = isDIY
+            ? (materialItems + otherItems)
+            : (materialItems + laborItems + otherItems)
         let lineItemTuples: [(name: String, qty: Decimal, unit: String, unitCost: Decimal, total: Decimal)] =
-            allItems.map { item in
+            itemsForPDF.map { item in
                 (name: item.name, qty: item.quantity, unit: item.unit.rawValue, unitCost: item.unitCost, total: item.lineTotal)
             }
 
+        let effectiveLabor: Decimal = isDIY ? 0 : subtotalLabor
+        let effectiveTax: Decimal = isDIY ? materialsTaxOnly : taxAmount
+        let effectiveTotal: Decimal = isDIY ? diyGrandTotal : grandTotal
+
         return PDFGenerator.generateEstimatePDF(
             companyName: "ProEstimate AI",
-            estimateNumber: estimate.estimateNumber,
+            estimateNumber: estimate.estimateNumber + (isDIY ? " (DIY)" : ""),
             date: estimate.createdAt,
             status: estimate.status.rawValue.capitalized,
             lineItems: lineItemTuples,
             subtotalMaterials: subtotalMaterials,
-            subtotalLabor: subtotalLabor,
+            subtotalLabor: effectiveLabor,
             subtotalOther: subtotalOther,
-            taxAmount: taxAmount,
+            taxAmount: effectiveTax,
             discountAmount: discountAmount,
-            totalAmount: grandTotal,
+            totalAmount: effectiveTotal,
             notes: notes.isEmpty ? nil : notes
         )
     }

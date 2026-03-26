@@ -61,6 +61,82 @@ extension LineItemDraft {
         self.sortOrder = item.sortOrder
     }
 
+    /// Initialize a draft from an AI-suggested material.
+    /// When `isDIY` is true, markup is set to 0 (homeowner cost only).
+    init(from material: MaterialSuggestion, estimateId: String, isDIY: Bool, sortOrder: Int) {
+        self.id = UUID().uuidString
+        self.estimateId = estimateId
+        self.category = .materials
+        self.name = material.name
+        self.quantity = material.quantity
+        self.unit = LineItemUnit(rawValue: material.unit) ?? .each
+        self.unitCost = material.estimatedCost
+        self.markupPercent = isDIY ? 0 : 20
+        self.taxRate = 8.25
+        self.sortOrder = sortOrder
+
+        // Embed supplier info in description so it persists through the backend
+        var desc = material.category
+        if let supplier = material.supplierName {
+            desc += " · \(supplier)"
+        }
+        if let url = material.supplierURL {
+            desc += " · \(url.absoluteString)"
+        }
+        self.description = desc
+    }
+
+    /// Creates a default labor line item based on project type.
+    /// Labor is estimated as a percentage of material costs, varying by trade.
+    static func defaultLabor(
+        estimateId: String,
+        projectType: Project.ProjectType,
+        materialsCost: Decimal,
+        sortOrder: Int
+    ) -> LineItemDraft {
+        let (name, rate, hours) = laborDefaults(for: projectType, materialsCost: materialsCost)
+        var draft = LineItemDraft()
+        draft.id = UUID().uuidString
+        draft.estimateId = estimateId
+        draft.category = .labor
+        draft.name = name
+        draft.description = "Professional installation labor"
+        draft.quantity = hours
+        draft.unit = .hour
+        draft.unitCost = rate
+        draft.markupPercent = 15
+        draft.taxRate = 0 // Labor typically not taxed
+        draft.sortOrder = sortOrder
+        return draft
+    }
+
+    /// Returns (description, hourly rate, estimated hours) for a project type.
+    private static func laborDefaults(
+        for projectType: Project.ProjectType,
+        materialsCost: Decimal
+    ) -> (String, Decimal, Decimal) {
+        switch projectType {
+        case .kitchen:
+            return ("Kitchen Installation Labor", 75, 40)
+        case .bathroom:
+            return ("Bathroom Installation Labor", 70, 24)
+        case .flooring:
+            return ("Flooring Installation Labor", 55, 16)
+        case .roofing:
+            return ("Roofing Installation Labor", 65, 24)
+        case .painting:
+            return ("Painting Labor", 45, 16)
+        case .siding:
+            return ("Siding Installation Labor", 60, 32)
+        case .roomRemodel:
+            return ("Room Remodel Labor", 65, 24)
+        case .exterior:
+            return ("Exterior Work Labor", 60, 24)
+        case .custom:
+            return ("General Contractor Labor", 65, 20)
+        }
+    }
+
     /// Convert draft to an immutable EstimateLineItem for persistence.
     func toLineItem() -> EstimateLineItem {
         EstimateLineItem(

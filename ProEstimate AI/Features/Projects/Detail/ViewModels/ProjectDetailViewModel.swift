@@ -29,6 +29,9 @@ final class ProjectDetailViewModel {
     /// Local toggle state for material suggestions. Key = material ID.
     var materialSelectionState: [String: Bool] = [:]
 
+    /// Whether the user plans to do the work themselves (no labor costs).
+    var isDIY: Bool = false
+
     var selectedMaterialCount: Int {
         materialSelectionState.values.filter { $0 }.count
     }
@@ -37,6 +40,11 @@ final class ProjectDetailViewModel {
         materials
             .filter { materialSelectionState[$0.id] ?? $0.isSelected }
             .reduce(Decimal.zero) { $0 + $1.lineTotal }
+    }
+
+    /// Returns the currently selected materials.
+    var selectedMaterials: [MaterialSuggestion] {
+        materials.filter { materialSelectionState[$0.id] ?? $0.isSelected }
     }
 
     // MARK: - Dependencies
@@ -171,6 +179,8 @@ final class ProjectDetailViewModel {
     // MARK: - Estimate Creation
 
     /// Create a new estimate for this project via the backend.
+    /// Automatically imports selected materials as line items.
+    /// If `isDIY` is true, markup is 0 and no labor items are added.
     /// Returns the created Estimate or nil on failure.
     func createEstimate() async -> Estimate? {
         guard let project else { return nil }
@@ -178,6 +188,36 @@ final class ProjectDetailViewModel {
         do {
             let body = CreateEstimateBody(projectId: project.id)
             let estimate: Estimate = try await APIClient.shared.request(.createEstimate(body: body))
+
+            // Import selected materials as line items
+            let materialsToImport = selectedMaterials
+            for (index, material) in materialsToImport.enumerated() {
+                let draft = LineItemDraft(
+                    from: material,
+                    estimateId: estimate.id,
+                    isDIY: isDIY,
+                    sortOrder: index
+                )
+                let lineItem = draft.toLineItem()
+                let _: EstimateLineItem = try await APIClient.shared.request(
+                    .createEstimateLineItem(estimateId: estimate.id, body: lineItem)
+                )
+            }
+
+            // If professional mode (not DIY), add a placeholder labor line item
+            if !isDIY && !materialsToImport.isEmpty {
+                let laborDraft = LineItemDraft.defaultLabor(
+                    estimateId: estimate.id,
+                    projectType: project.projectType,
+                    materialsCost: selectedMaterialsTotal,
+                    sortOrder: 0
+                )
+                let laborItem = laborDraft.toLineItem()
+                let _: EstimateLineItem = try await APIClient.shared.request(
+                    .createEstimateLineItem(estimateId: estimate.id, body: laborItem)
+                )
+            }
+
             estimates.insert(estimate, at: 0)
             return estimate
         } catch {

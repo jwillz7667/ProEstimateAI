@@ -81,10 +81,8 @@ struct EstimateListView: View {
                 icon: "doc.text",
                 title: "No Estimates",
                 subtitle: viewModel.searchText.isEmpty
-                    ? "Create your first estimate to get started."
-                    : "No estimates match your search.",
-                ctaTitle: viewModel.searchText.isEmpty ? "Create Estimate" : nil,
-                ctaAction: viewModel.searchText.isEmpty ? {} : nil
+                    ? "Create your first estimate from a project's AI-suggested materials."
+                    : "No estimates match your search."
             )
             Spacer()
         }

@@ -2,9 +2,11 @@ import SwiftUI
 
 struct EstimateEditorView: View {
     let estimateId: String
+    var initialDIY: Bool = false
     @State private var viewModel = EstimateEditorViewModel()
     @State private var exportPDFURL: URL?
     @State private var showShareSheet = false
+    @State private var isCreatingProposal = false
     @Environment(\.dismiss) private var dismiss
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
@@ -69,19 +71,23 @@ struct EstimateEditorView: View {
                         }
 
                         Button {
-                            if let estimate = viewModel.estimate {
-                                router.navigate(to: .proposalPreview(id: estimate.id))
-                            }
+                            handleCreateProposal()
                         } label: {
                             Label("Create Proposal", systemImage: "doc.richtext")
                         }
                     } label: {
-                        Image(systemName: "square.and.arrow.up")
+                        if isCreatingProposal {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "square.and.arrow.up")
+                        }
                     }
                 }
             }
         }
         .task {
+            viewModel.isDIY = initialDIY
             await viewModel.loadEstimate(id: estimateId)
         }
         .sheet(isPresented: $viewModel.isLineItemSheetPresented) {
@@ -128,6 +134,31 @@ struct EstimateEditorView: View {
         }
     }
 
+    private func handleCreateProposal() {
+        guard let estimate = viewModel.estimate, !isCreatingProposal else { return }
+
+        // Save unsaved changes first, then create proposal
+        isCreatingProposal = true
+        Task {
+            if viewModel.hasUnsavedChanges {
+                await viewModel.save()
+            }
+
+            do {
+                let service = LiveProposalService()
+                let proposal = try await service.generateFromEstimate(estimateId: estimate.id)
+                isCreatingProposal = false
+                dismiss()
+                // Navigate to proposal preview after a brief delay to let dismiss complete
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                router.navigate(to: .proposalPreview(id: proposal.id))
+            } catch {
+                isCreatingProposal = false
+                viewModel.errorMessage = "Failed to create proposal: \(error.localizedDescription)"
+            }
+        }
+    }
+
     // MARK: - Editor Content
 
     private var editorContent: some View {
@@ -135,6 +166,9 @@ struct EstimateEditorView: View {
             List {
                 // Header summary
                 headerSection
+
+                // DIY / Professional toggle
+                diyToggleSection
 
                 // Materials section
                 EstimateSectionView(
@@ -151,20 +185,22 @@ struct EstimateEditorView: View {
                     }
                 )
 
-                // Labor section
-                EstimateSectionView(
-                    category: .labor,
-                    items: viewModel.laborItems,
-                    subtotal: viewModel.subtotalLabor,
-                    isExpanded: $viewModel.isLaborSectionExpanded,
-                    onAddItem: { viewModel.addLineItem(category: .labor) },
-                    onEditItem: { viewModel.editLineItem($0) },
-                    onDuplicateItem: { viewModel.duplicateLineItem(id: $0) },
-                    onDeleteItem: { viewModel.deleteLineItem(id: $0) },
-                    onMoveItem: { from, to in
-                        viewModel.moveLineItem(from: from, to: to, category: .labor)
-                    }
-                )
+                // Labor section — hidden in DIY mode
+                if !viewModel.isDIY {
+                    EstimateSectionView(
+                        category: .labor,
+                        items: viewModel.laborItems,
+                        subtotal: viewModel.subtotalLabor,
+                        isExpanded: $viewModel.isLaborSectionExpanded,
+                        onAddItem: { viewModel.addLineItem(category: .labor) },
+                        onEditItem: { viewModel.editLineItem($0) },
+                        onDuplicateItem: { viewModel.duplicateLineItem(id: $0) },
+                        onDeleteItem: { viewModel.deleteLineItem(id: $0) },
+                        onMoveItem: { from, to in
+                            viewModel.moveLineItem(from: from, to: to, category: .labor)
+                        }
+                    )
+                }
 
                 // Other section
                 EstimateSectionView(
@@ -196,12 +232,44 @@ struct EstimateEditorView: View {
             // Sticky bottom totals bar
             EstimateTotalsView(
                 subtotalMaterials: viewModel.subtotalMaterials,
-                subtotalLabor: viewModel.subtotalLabor,
+                subtotalLabor: viewModel.isDIY ? 0 : viewModel.subtotalLabor,
                 subtotalOther: viewModel.subtotalOther,
-                taxAmount: viewModel.taxAmount,
+                taxAmount: viewModel.isDIY ? viewModel.materialsTaxOnly : viewModel.taxAmount,
                 discountAmount: $viewModel.discountAmount,
-                grandTotal: viewModel.grandTotal
+                grandTotal: viewModel.isDIY ? viewModel.diyGrandTotal : viewModel.grandTotal
             )
+        }
+    }
+
+    private var diyToggleSection: some View {
+        Section {
+            HStack(spacing: SpacingTokens.sm) {
+                Image(systemName: viewModel.isDIY ? "wrench.and.screwdriver" : "person.badge.shield.checkmark")
+                    .font(.title3)
+                    .foregroundStyle(viewModel.isDIY ? ColorTokens.primaryOrange : .blue)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(viewModel.isDIY ? "DIY Estimate" : "Professional Estimate")
+                        .font(TypographyTokens.headline)
+                    Text(viewModel.isDIY
+                        ? "Materials & supplies only — no labor costs"
+                        : "Includes professional installation labor")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: Binding(
+                    get: { !viewModel.isDIY },
+                    set: { newValue in
+                        viewModel.isDIY = !newValue
+                        viewModel.hasUnsavedChanges = true
+                    }
+                ))
+                .labelsHidden()
+                .tint(.blue)
+            }
         }
     }
 

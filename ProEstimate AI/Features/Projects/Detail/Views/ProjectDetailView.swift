@@ -65,7 +65,7 @@ struct ProjectDetailView: View {
         } content: {
             if let estimateId = activeEstimateId {
                 NavigationStack {
-                    EstimateEditorView(estimateId: estimateId)
+                    EstimateEditorView(estimateId: estimateId, initialDIY: viewModel.isDIY)
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) {
                                 Button("Done") {
@@ -115,7 +115,9 @@ struct ProjectDetailView: View {
                     selectionState: viewModel.materialSelectionState,
                     selectedCount: viewModel.selectedMaterialCount,
                     selectedTotal: viewModel.selectedMaterialsTotal,
+                    isDIY: viewModel.isDIY,
                     onToggle: { id in viewModel.toggleMaterial(id: id) },
+                    onToggleDIY: { viewModel.isDIY.toggle() },
                     onAddToEstimate: {
                         handleCreateEstimate()
                     }
