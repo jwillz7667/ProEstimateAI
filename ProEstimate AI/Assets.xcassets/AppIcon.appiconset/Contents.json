@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "housd-icon-light.png",
+      "filename" : "house2-iOS-Default-1024x1024@1x.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "house-iOS-Dark-1024x1024@1x.png",
+      "filename" : "house2-iOS-Dark-1024x1024@1x.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "hyouse-icon-light.png",
+      "filename" : "house2-iOS-TintedLight-1024x1024@1x.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
