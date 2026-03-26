@@ -31,6 +31,8 @@ struct EstimateListView: View {
                 switch destination {
                 case .estimateEditor(let id):
                     EstimateEditorView(estimateId: id)
+                case .proposalPreview(let id):
+                    ProposalPreviewView(proposalId: id)
                 default:
                     EmptyView()
                 }

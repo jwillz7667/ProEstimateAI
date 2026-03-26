@@ -48,7 +48,27 @@ final class APIClient: APIClientProtocol {
         // Configure decoder with snake_case keys for inbound responses.
         let dec = JSONDecoder()
         dec.keyDecodingStrategy = .useDefaultKeys // We use explicit CodingKeys
-        dec.dateDecodingStrategy = .iso8601
+        // Custom date strategy: handles ISO8601 with and without fractional seconds.
+        // JavaScript's toISOString() always produces fractional seconds (e.g. ".000Z")
+        // which the default .iso8601 strategy cannot parse.
+        let isoWithFrac = ISO8601DateFormatter()
+        isoWithFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoWithout = ISO8601DateFormatter()
+        isoWithout.formatOptions = [.withInternetDateTime]
+        dec.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+            if let date = isoWithFrac.date(from: dateString) {
+                return date
+            }
+            if let date = isoWithout.date(from: dateString) {
+                return date
+            }
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Cannot decode date: \(dateString)"
+            )
+        }
         self.decoder = dec
     }
 

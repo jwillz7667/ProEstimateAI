@@ -4,7 +4,6 @@ import SwiftUI
 /// title, client name, status badge, and date.
 struct DashboardRecentProjectsSection: View {
     let projects: [Project]
-    var onProjectTap: ((Project) -> Void)?
     var onSeeAll: (() -> Void)?
 
     var body: some View {
@@ -31,9 +30,7 @@ struct DashboardRecentProjectsSection: View {
     // MARK: - Project Row
 
     private func projectRow(_ project: Project) -> some View {
-        Button {
-            onProjectTap?(project)
-        } label: {
+        NavigationLink(value: AppDestination.projectDetail(id: project.id)) {
             GlassCard {
                 HStack(spacing: SpacingTokens.sm) {
                     // Project type icon

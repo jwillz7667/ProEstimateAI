@@ -7,6 +7,8 @@ struct DashboardView: View {
     @Environment(UsageMeterStore.self) private var usageMeterStore
     @Environment(PaywallPresenter.self) private var paywallPresenter
     @State private var viewModel = DashboardViewModel()
+    @State private var showProjectCreation = false
+    @State private var showClientForm = false
 
     var body: some View {
         NavigationStack {
@@ -27,6 +29,25 @@ struct DashboardView: View {
                     await viewModel.loadDashboard()
                 }
             }
+            .fullScreenCover(isPresented: $showProjectCreation) {
+                // Refresh dashboard after project creation
+                Task { await viewModel.loadDashboard() }
+            } content: {
+                ProjectCreationFlowView()
+            }
+            .sheet(isPresented: $showClientForm) {
+                NavigationStack {
+                    ClientFormView()
+                }
+            }
+            .navigationDestination(for: AppDestination.self) { destination in
+                switch destination {
+                case .projectDetail(let id):
+                    ProjectDetailView(projectId: id)
+                default:
+                    EmptyView()
+                }
+            }
         }
     }
 
@@ -39,12 +60,12 @@ struct DashboardView: View {
                 greetingSection
                     .padding(.horizontal, SpacingTokens.md)
 
-                // MARK: - New Estimate CTA
+                // MARK: - New Project CTA
                 PrimaryCTAButton(
-                    title: "New Estimate",
+                    title: "New Project",
                     icon: "plus.circle.fill"
                 ) {
-                    router.navigate(to: .projectCreation)
+                    showProjectCreation = true
                 }
                 .padding(.horizontal, SpacingTokens.md)
 
@@ -60,9 +81,6 @@ struct DashboardView: View {
                 // MARK: - Recent Projects
                 DashboardRecentProjectsSection(
                     projects: viewModel.recentProjects,
-                    onProjectTap: { project in
-                        router.navigate(to: .projectDetail(id: project.id))
-                    },
                     onSeeAll: {
                         appState.selectedTab = .projects
                     }
@@ -144,9 +162,9 @@ struct DashboardView: View {
     private func handleQuickAction(_ action: QuickAction) {
         switch action {
         case .newProject:
-            router.navigate(to: .projectCreation)
+            showProjectCreation = true
         case .newClient:
-            router.navigate(to: .clientForm(id: nil))
+            showClientForm = true
         case .scanReceipt:
             break
         case .viewReports:

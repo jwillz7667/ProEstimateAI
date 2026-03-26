@@ -33,6 +33,7 @@ struct ProEstimate_AIApp: App {
                 .environment(usageMeterStore)
                 .environment(featureGateCoordinator)
                 .environment(paywallPresenter)
+                .preferredColorScheme(.light)
                 .tint(ColorTokens.primaryOrange)
                 .task {
                     await bootstrap()

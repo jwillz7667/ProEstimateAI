@@ -21,6 +21,12 @@ struct AuthGateView: View {
         }
         .animation(.easeInOut(duration: 0.35), value: appState.isAuthenticated)
         .animation(.easeInOut(duration: 0.25), value: isRestoring)
+        .onChange(of: appState.isAuthenticated) { _, isAuth in
+            if isAuth {
+                // Dismiss keyboard when transitioning to main app
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
+        }
         .task {
             await restoreSession()
         }

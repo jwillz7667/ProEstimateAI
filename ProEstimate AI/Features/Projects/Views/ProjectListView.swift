@@ -42,12 +42,16 @@ struct ProjectListView: View {
                 }
             }
             .fullScreenCover(isPresented: $showCreation) {
+                Task { await viewModel.loadProjects() }
+            } content: {
                 ProjectCreationFlowView()
             }
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {
                 case .projectDetail(let id):
                     ProjectDetailView(projectId: id)
+                case .clientDetail(let id):
+                    ClientDetailView(clientId: id)
                 default:
                     EmptyView()
                 }
@@ -106,9 +110,7 @@ struct ProjectListView: View {
         ScrollView {
             LazyVStack(spacing: SpacingTokens.sm) {
                 ForEach(viewModel.filteredProjects) { project in
-                    Button {
-                        router.navigate(to: .projectDetail(id: project.id))
-                    } label: {
+                    NavigationLink(value: AppDestination.projectDetail(id: project.id)) {
                         ProjectRowView(
                             project: project,
                             clientName: project.clientId.flatMap { viewModel.clientLookup[$0] }

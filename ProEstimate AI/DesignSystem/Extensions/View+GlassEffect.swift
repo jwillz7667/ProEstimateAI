@@ -3,15 +3,22 @@ import SwiftUI
 extension View {
     func glassCard(cornerRadius: CGFloat = RadiusTokens.card) -> some View {
         self
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+            .background(
+                Color(.secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: cornerRadius)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                    .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 0.5)
             )
+            .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
     }
 
     func glassSurface(cornerRadius: CGFloat = RadiusTokens.card) -> some View {
         self
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+            .background(
+                Color(.tertiarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: cornerRadius)
+            )
     }
 }
