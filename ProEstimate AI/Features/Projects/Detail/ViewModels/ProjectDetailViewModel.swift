@@ -78,6 +78,9 @@ final class ProjectDetailViewModel {
             estimates = try await estimatesTask
             assets = (try? await assetsTask) ?? []
 
+            // Load materials from completed generations
+            await loadMaterials()
+
             // Load client if project has one
             if let clientId = project?.clientId {
                 client = try? await clientService.getClient(id: clientId)
@@ -92,6 +95,19 @@ final class ProjectDetailViewModel {
         }
 
         isLoading = false
+    }
+
+    /// Fetch material suggestions from all completed generations.
+    private func loadMaterials() async {
+        var allMaterials: [MaterialSuggestion] = []
+        for generation in generations where generation.status == .completed {
+            if let mats: [MaterialSuggestion] = try? await APIClient.shared.request(
+                .listMaterialSuggestions(generationId: generation.id)
+            ) {
+                allMaterials.append(contentsOf: mats)
+            }
+        }
+        materials = allMaterials
     }
 
     // MARK: - AI Generation
@@ -123,7 +139,15 @@ final class ProjectDetailViewModel {
 
             generations.insert(completed, at: 0)
 
-            if completed.status == .failed {
+            if completed.status == .completed {
+                // Reload materials from the new generation
+                await loadMaterials()
+                for material in materials {
+                    if materialSelectionState[material.id] == nil {
+                        materialSelectionState[material.id] = material.isSelected
+                    }
+                }
+            } else if completed.status == .failed {
                 errorMessage = completed.errorMessage ?? "Image generation failed. Please try again."
             }
         } catch {
@@ -141,6 +165,24 @@ final class ProjectDetailViewModel {
             generations = try await generationService.listGenerations(projectId: project.id)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Estimate Creation
+
+    /// Create a new estimate for this project via the backend.
+    /// Returns the created Estimate or nil on failure.
+    func createEstimate() async -> Estimate? {
+        guard let project else { return nil }
+
+        do {
+            let body = CreateEstimateBody(projectId: project.id)
+            let estimate: Estimate = try await APIClient.shared.request(.createEstimate(body: body))
+            estimates.insert(estimate, at: 0)
+            return estimate
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
         }
     }
 
@@ -191,5 +233,16 @@ final class ProjectDetailViewModel {
         generationProgressTimer?.invalidate()
         generationProgressTimer = nil
         currentGenerationStage = GenerationStage.allCases.count - 1
+    }
+}
+
+// MARK: - Request Body
+
+/// Body sent to POST /estimates to create a new estimate for a project.
+private struct CreateEstimateBody: Encodable, Sendable {
+    let projectId: String
+
+    enum CodingKeys: String, CodingKey {
+        case projectId = "project_id"
     }
 }

@@ -5,6 +5,8 @@ import SwiftUI
 /// "Create Estimate" button.
 struct ProjectEstimatesSection: View {
     let estimates: [Estimate]
+    var onCreateEstimate: (() -> Void)?
+    var onEstimateTap: ((String) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
@@ -21,7 +23,7 @@ struct ProjectEstimatesSection: View {
 
             // Create estimate button
             SecondaryButton(title: "Create Estimate", icon: "doc.badge.plus") {
-                // Navigate to estimate editor (future phase)
+                onCreateEstimate?()
             }
             .padding(.horizontal, SpacingTokens.md)
         }
@@ -32,7 +34,12 @@ struct ProjectEstimatesSection: View {
     private var estimatesList: some View {
         VStack(spacing: SpacingTokens.xs) {
             ForEach(estimates) { estimate in
-                estimateRow(estimate)
+                Button {
+                    onEstimateTap?(estimate.id)
+                } label: {
+                    estimateRow(estimate)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, SpacingTokens.md)

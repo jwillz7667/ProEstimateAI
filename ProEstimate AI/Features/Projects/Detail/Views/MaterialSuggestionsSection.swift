@@ -9,6 +9,7 @@ struct MaterialSuggestionsSection: View {
     let selectedCount: Int
     let selectedTotal: Decimal
     let onToggle: (String) -> Void
+    var onAddToEstimate: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
@@ -59,7 +60,7 @@ struct MaterialSuggestionsSection: View {
                         title: "Add to Estimate",
                         icon: "doc.text.fill"
                     ) {
-                        // Navigate to estimate creation (future phase)
+                        onAddToEstimate?()
                     }
                 }
             }

@@ -9,6 +9,9 @@ struct ProjectDetailView: View {
     @State private var viewModel = ProjectDetailViewModel()
     @State private var hasCompletedFirstGeneration = false
     @State private var showEditSheet = false
+    @State private var showEstimateEditor = false
+    @State private var activeEstimateId: String?
+    @State private var isCreatingEstimate = false
     @Environment(AppRouter.self) private var router
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
@@ -57,6 +60,22 @@ struct ProjectDetailView: View {
         } content: {
             ProjectCreationFlowView()
         }
+        .sheet(isPresented: $showEstimateEditor) {
+            Task { await viewModel.loadProject(id: projectId) }
+        } content: {
+            if let estimateId = activeEstimateId {
+                NavigationStack {
+                    EstimateEditorView(estimateId: estimateId)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") {
+                                    showEstimateEditor = false
+                                }
+                            }
+                        }
+                }
+            }
+        }
     }
 
     // MARK: - Content
@@ -96,11 +115,23 @@ struct ProjectDetailView: View {
                     selectionState: viewModel.materialSelectionState,
                     selectedCount: viewModel.selectedMaterialCount,
                     selectedTotal: viewModel.selectedMaterialsTotal,
-                    onToggle: { id in viewModel.toggleMaterial(id: id) }
+                    onToggle: { id in viewModel.toggleMaterial(id: id) },
+                    onAddToEstimate: {
+                        handleCreateEstimate()
+                    }
                 )
 
                 // Estimates
-                ProjectEstimatesSection(estimates: viewModel.estimates)
+                ProjectEstimatesSection(
+                    estimates: viewModel.estimates,
+                    onCreateEstimate: {
+                        handleCreateEstimate()
+                    },
+                    onEstimateTap: { estimateId in
+                        activeEstimateId = estimateId
+                        showEstimateEditor = true
+                    }
+                )
 
                 // Activity
                 ProjectActivitySection(entries: viewModel.activityLog)
@@ -109,6 +140,17 @@ struct ProjectDetailView: View {
                 Spacer(minLength: SpacingTokens.huge)
             }
             .padding(.vertical, SpacingTokens.sm)
+        }
+        .overlay {
+            if isCreatingEstimate {
+                Color.black.opacity(0.2)
+                    .ignoresSafeArea()
+                    .overlay {
+                        ProgressView("Creating estimate...")
+                            .padding()
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    }
+            }
         }
     }
 
@@ -128,6 +170,19 @@ struct ProjectDetailView: View {
             }
         case .blocked(let decision):
             paywallPresenter.present(decision)
+        }
+    }
+
+    private func handleCreateEstimate() {
+        isCreatingEstimate = true
+        Task {
+            if let estimate = await viewModel.createEstimate() {
+                isCreatingEstimate = false
+                activeEstimateId = estimate.id
+                showEstimateEditor = true
+            } else {
+                isCreatingEstimate = false
+            }
         }
     }
 }

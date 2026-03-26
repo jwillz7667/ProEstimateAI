@@ -88,11 +88,13 @@ final class EstimateEditorViewModel {
         errorMessage = nil
         do {
             let loadedEstimate = try await service.getEstimate(id: id)
-            let lineItems = try await service.getLineItems(estimateId: id)
 
             estimate = loadedEstimate
             discountAmount = loadedEstimate.discountAmount
             notes = loadedEstimate.notes ?? ""
+
+            // Try to load line items (may be empty for new estimates)
+            let lineItems = (try? await service.getLineItems(estimateId: id)) ?? []
 
             // Sort line items into category buckets
             materialItems = lineItems
