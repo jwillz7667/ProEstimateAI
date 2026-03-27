@@ -111,18 +111,19 @@ The scene must show only the finished, move-in-ready result — no construction 
  * into a single optimized prompt for Nano Banana 2.
  */
 function buildFullPrompt(userPrompt: string, context: ImageGenContext, hasReferencePhoto: boolean = false): string {
-  const systemPrompt = buildSystemPrompt(context);
-
   if (hasReferencePhoto) {
-    return `${systemPrompt}
+    // For image editing: keep the prompt concise and direct.
+    // The model needs a clear instruction to EDIT the provided image, not generate from scratch.
+    const qualityTier = context.qualityTier.toLowerCase();
+    const projectType = context.projectType.replace(/_/g, ' ').toLowerCase();
 
-REFERENCE PHOTO: The attached image shows the homeowner's ACTUAL current space. You MUST use this exact room as the basis for the remodel. Preserve the room's layout, dimensions, window placement, door positions, and overall architecture. Apply the remodel changes TO THIS SPECIFIC ROOM — do not generate a generic room. The final image should be clearly recognizable as the same space, just beautifully remodeled.
+    return `Edit this photo to show a completed ${projectType} remodel. ${userPrompt}
 
-The homeowner wants: "${userPrompt}"
-
-Transform the attached photo into a photorealistic visualization of the completed remodel. Keep the same camera angle and perspective as the original photo. The viewer should immediately recognize this as their own space, upgraded.`;
+Keep the exact same room, same layout, same camera angle, same perspective, same windows and doors. Only change the finishes, materials, and fixtures to show a beautiful ${qualityTier}-grade ${projectType} renovation. The result must look like a real photo of this exact same space after a professional remodel. Photorealistic only, no text or labels.`;
   }
 
+  // For pure text-to-image generation (no reference photo)
+  const systemPrompt = buildSystemPrompt(context);
   return `${systemPrompt}
 
 The homeowner has described what they want: "${userPrompt}"
@@ -163,6 +164,8 @@ export async function generatePreviewImage(
     );
 
     // Build content: reference photo (if provided) + text prompt
+    // For image editing: image first, then prompt, with TEXT+IMAGE response modalities
+    // For pure generation: text only, with IMAGE response modality
     const contents = referencePhoto
       ? createUserContent([
           createPartFromBase64(referencePhoto.base64Data, referencePhoto.mimeType),
@@ -174,7 +177,7 @@ export async function generatePreviewImage(
       model: NANO_BANANA_2_MODEL,
       contents,
       config: {
-        responseModalities: ['IMAGE'],
+        responseModalities: referencePhoto ? ['TEXT', 'IMAGE'] : ['IMAGE'],
         imageConfig: {
           aspectRatio,
           imageSize: '2K',
