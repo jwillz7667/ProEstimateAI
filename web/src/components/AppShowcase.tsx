@@ -141,7 +141,7 @@ function ScreenshotCard({ screen }: { screen: AppScreen }) {
 
 export default function AppShowcase() {
   return (
-    <section className="relative overflow-hidden bg-gray-50 py-24 sm:py-32">
+    <section className="relative overflow-hidden bg-ink-50 py-24 sm:py-32">
       <motion.div
         className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12"
         variants={sectionVariants}
@@ -151,11 +151,11 @@ export default function AppShowcase() {
       >
         {/* Section header */}
         <div className="mb-16 text-center">
-          <h2 className="text-4xl font-bold tracking-tight text-gray-900 md:text-5xl">
+          <h2 className="text-4xl font-bold tracking-tight text-ink-950 md:text-5xl">
             See It{" "}
             <span className="text-gradient">In Action</span>
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-600">
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-ink-500">
             From photo upload to polished proposal, experience the complete
             ProEstimate AI workflow.
           </p>

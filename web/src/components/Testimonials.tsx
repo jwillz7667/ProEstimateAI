@@ -89,7 +89,7 @@ export default function Testimonials() {
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         {/* Section header */}
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+          <h2 className="text-4xl font-bold tracking-tight text-ink-950 sm:text-5xl">
             Loved by Contractors &amp; Homeowners
           </h2>
         </div>
@@ -132,16 +132,16 @@ export default function Testimonials() {
                   <StarRating />
 
                   {/* Quote */}
-                  <blockquote className="mt-5 flex-1 text-base italic leading-7 text-gray-700">
+                  <blockquote className="mt-5 flex-1 text-base italic leading-7 text-ink-700">
                     &ldquo;{t.quote}&rdquo;
                   </blockquote>
 
                   {/* Author */}
-                  <div className="mt-6 border-t border-gray-200/60 pt-5">
-                    <p className="text-sm font-semibold text-gray-900">
+                  <div className="mt-6 border-t border-ink-200/60 pt-5">
+                    <p className="text-sm font-semibold text-ink-950">
                       {t.author}
                     </p>
-                    <p className="mt-0.5 text-sm text-gray-500">{t.role}</p>
+                    <p className="mt-0.5 text-sm text-ink-400">{t.role}</p>
                   </div>
                 </div>
               </SwiperSlide>

@@ -33,7 +33,7 @@ const SCROLL_THRESHOLD = 32;
 
 /** Animated hamburger icon that morphs into an X when the drawer is open. */
 function HamburgerIcon({ isOpen }: { isOpen: boolean }) {
-  const lineCommon = "block h-[2px] w-5 rounded-full bg-gray-800 transition-all duration-300 origin-center";
+  const lineCommon = "block h-[2px] w-5 rounded-full bg-ink-950 transition-all duration-300 origin-center";
   return (
     <div className="flex flex-col items-center justify-center gap-[5px]">
       <span
@@ -112,7 +112,7 @@ export default function Navbar() {
             className="flex items-baseline gap-0.5 text-xl tracking-tight select-none"
             onClick={handleNavClick}
           >
-            <span className="font-bold text-gray-900">ProEstimate</span>
+            <span className="font-bold text-ink-950">ProEstimate</span>
             <span className="font-bold text-brand-500">AI</span>
           </a>
 
@@ -122,7 +122,7 @@ export default function Navbar() {
               <li key={link.href}>
                 <a
                   href={link.href}
-                  className="relative text-sm font-medium text-gray-600 transition-colors duration-200 hover:text-gray-900"
+                  className="relative text-sm font-medium text-ink-500 transition-colors duration-200 hover:text-ink-950"
                 >
                   {link.label}
                   {/* Animated underline on hover */}
@@ -158,7 +158,7 @@ export default function Navbar() {
           <button
             type="button"
             onClick={() => setDrawerOpen((prev) => !prev)}
-            className="relative z-50 flex h-10 w-10 items-center justify-center rounded-lg transition-colors duration-200 hover:bg-gray-100 md:hidden"
+            className="relative z-50 flex h-10 w-10 items-center justify-center rounded-lg transition-colors duration-200 hover:bg-ink-100 md:hidden"
             aria-label={drawerOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={drawerOpen}
           >
@@ -207,7 +207,7 @@ export default function Navbar() {
                     initial={{ opacity: 0, x: 24 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.08 * i, duration: 0.3 }}
-                    className="rounded-lg px-4 py-3 text-base font-medium text-gray-700 transition-colors duration-200 hover:bg-brand-50 hover:text-brand-600"
+                    className="rounded-lg px-4 py-3 text-base font-medium text-ink-700 transition-colors duration-200 hover:bg-brand-50 hover:text-brand-600"
                   >
                     {link.label}
                   </motion.a>

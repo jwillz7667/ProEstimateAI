@@ -15,7 +15,7 @@ export default function Home() {
       <Navbar />
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-white">
+      <section className="relative overflow-hidden bg-brand-500">
         <Hero />
       </section>
 

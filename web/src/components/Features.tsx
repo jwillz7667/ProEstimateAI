@@ -218,10 +218,10 @@ export default function Features() {
             variants={headerVariants}
             className="mx-auto max-w-2xl text-center"
           >
-            <h2 className="text-4xl font-bold tracking-tight text-gray-900">
+            <h2 className="text-4xl font-bold tracking-tight text-ink-950">
               Everything You Need
             </h2>
-            <p className="mt-4 text-lg leading-relaxed text-gray-600">
+            <p className="mt-4 text-lg leading-relaxed text-ink-500">
               From photo to professional estimate in one seamless flow.
             </p>
           </motion.div>
@@ -240,12 +240,12 @@ export default function Features() {
                 </div>
 
                 {/* Title */}
-                <h3 className="text-xl font-semibold text-gray-900">
+                <h3 className="text-xl font-semibold text-ink-950">
                   {feature.title}
                 </h3>
 
                 {/* Description */}
-                <p className="mt-2 leading-relaxed text-gray-600">
+                <p className="mt-2 leading-relaxed text-ink-500">
                   {feature.description}
                 </p>
               </motion.div>

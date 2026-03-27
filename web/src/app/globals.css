@@ -13,6 +13,19 @@
   --color-brand-800: #9A3412;
   --color-brand-900: #7C2D12;
 
+  /* Brand neutrals — derived from logo colors #1C1C1E and #69717F */
+  --color-ink-950: #1C1C1E;
+  --color-ink-900: #2A2A2E;
+  --color-ink-800: #3A3C42;
+  --color-ink-700: #4D5059;
+  --color-ink-600: #5B5F6A;
+  --color-ink-500: #69717F;
+  --color-ink-400: #8A919D;
+  --color-ink-300: #B0B5BF;
+  --color-ink-200: #D4D7DD;
+  --color-ink-100: #ECEDF0;
+  --color-ink-50: #F5F6F7;
+
   --color-surface: #FFFFFF;
   --color-surface-secondary: #F9FAFB;
   --color-surface-tertiary: #F3F4F6;
@@ -62,7 +75,7 @@ html {
 }
 
 body {
-  color: #111827;
+  color: var(--color-ink-950);
   background: var(--color-surface);
 }
 

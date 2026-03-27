@@ -83,12 +83,12 @@ function StepCard({
       </div>
 
       {/* Title */}
-      <h3 className="mt-6 text-xl font-semibold text-gray-900">
+      <h3 className="mt-6 text-xl font-semibold text-ink-950">
         {step.title}
       </h3>
 
       {/* Description */}
-      <p className="mt-2 max-w-[260px] text-base leading-relaxed text-gray-500">
+      <p className="mt-2 max-w-[260px] text-base leading-relaxed text-ink-400">
         {step.description}
       </p>
     </motion.div>
@@ -164,10 +164,10 @@ function SectionHeader() {
       animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 32 }}
       transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] as const }}
     >
-      <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl lg:text-5xl">
+      <h2 className="text-3xl font-bold tracking-tight text-ink-950 sm:text-4xl lg:text-5xl">
         How It Works
       </h2>
-      <p className="mt-4 text-lg leading-relaxed text-gray-500 sm:text-xl">
+      <p className="mt-4 text-lg leading-relaxed text-ink-400 sm:text-xl">
         Four simple steps from photo to professional estimate.
       </p>
     </motion.div>

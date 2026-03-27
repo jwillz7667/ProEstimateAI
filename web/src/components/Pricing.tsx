@@ -75,10 +75,10 @@ export default function Pricing() {
       {/* Section header */}
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+          <h2 className="text-4xl font-bold tracking-tight text-ink-950 sm:text-5xl">
             Simple, Transparent Pricing
           </h2>
-          <p className="mt-4 text-lg leading-8 text-gray-600">
+          <p className="mt-4 text-lg leading-8 text-ink-500">
             Start free. Upgrade when you&apos;re ready.
           </p>
         </div>
@@ -102,20 +102,20 @@ export default function Pricing() {
             transition={{ type: "spring", stiffness: 260, damping: 20 }}
             className="glass relative flex flex-col rounded-2xl p-8 sm:p-10"
           >
-            <h3 className="text-2xl font-semibold text-gray-900">Free</h3>
+            <h3 className="text-2xl font-semibold text-ink-950">Free</h3>
 
             {/* Price */}
             <div className="mt-6 flex items-baseline gap-x-1">
-              <span className="text-5xl font-bold tracking-tight text-gray-900">
+              <span className="text-5xl font-bold tracking-tight text-ink-950">
                 $0
               </span>
-              <span className="text-base font-medium text-gray-500">
+              <span className="text-base font-medium text-ink-400">
                 /forever
               </span>
             </div>
 
             {/* Features */}
-            <ul className="mt-8 flex flex-col gap-y-4 text-sm leading-6 text-gray-700">
+            <ul className="mt-8 flex flex-col gap-y-4 text-sm leading-6 text-ink-700">
               {FREE_FEATURES.map((feature) => (
                 <li key={feature} className="flex items-start gap-x-3">
                   <CheckIcon className="h-5 w-5 flex-shrink-0 text-brand-500" />
@@ -170,23 +170,23 @@ export default function Pricing() {
               </span>
             </div>
 
-            <h3 className="text-2xl font-semibold text-gray-900">Pro</h3>
+            <h3 className="text-2xl font-semibold text-ink-950">Pro</h3>
 
             {/* Price */}
             <div className="mt-6 flex items-baseline gap-x-1">
-              <span className="text-5xl font-bold tracking-tight text-gray-900">
+              <span className="text-5xl font-bold tracking-tight text-ink-950">
                 $19.99
               </span>
-              <span className="text-base font-medium text-gray-500">
+              <span className="text-base font-medium text-ink-400">
                 /month
               </span>
             </div>
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-2 text-sm text-ink-400">
               $199.99/year — Save 17%
             </p>
 
             {/* Features */}
-            <ul className="mt-8 flex flex-col gap-y-4 text-sm leading-6 text-gray-700">
+            <ul className="mt-8 flex flex-col gap-y-4 text-sm leading-6 text-ink-700">
               {PRO_FEATURES.map((feature) => (
                 <li key={feature} className="flex items-start gap-x-3">
                   <CheckIcon className="h-5 w-5 flex-shrink-0 text-brand-500" />

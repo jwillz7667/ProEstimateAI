@@ -115,7 +115,7 @@ const stats: Stat[] = [
 
 export default function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-white">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-brand-500">
       {/* Content layer — sits above the WebGL canvas (z-0) */}
       <motion.div
         className="relative z-10 mx-auto max-w-6xl px-6 py-24 text-center sm:px-8 lg:px-12"
@@ -125,24 +125,24 @@ export default function Hero() {
       >
         {/* ---- Animated badge ---- */}
         <motion.div className="mb-8 flex justify-center" variants={fadeInUp}>
-          <span className="glass-brand inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium text-brand-600">
-            <SparkleIcon className="text-brand-500" />
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-5 py-2 text-sm font-medium text-white backdrop-blur-sm">
+            <SparkleIcon className="text-white" />
             Powered by AI
           </span>
         </motion.div>
 
         {/* ---- Main headline ---- */}
         <motion.h1
-          className="text-5xl font-bold leading-tight tracking-tight text-gray-900 md:text-7xl"
+          className="text-5xl font-bold leading-tight tracking-tight text-white md:text-7xl"
           variants={fadeInUp}
         >
           See Your Remodel{" "}
-          <span className="text-gradient">Before You Build</span>
+          <span className="text-ink-950">Before You Build</span>
         </motion.h1>
 
         {/* ---- Sub-headline ---- */}
         <motion.p
-          className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-gray-600 md:text-xl"
+          className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/85 md:text-xl"
           variants={fadeInUp}
         >
           Upload a photo. Get an AI-generated preview of your renovation, a full
@@ -158,7 +158,7 @@ export default function Hero() {
           {/* Primary CTA */}
           <motion.a
             href="#get-started"
-            className="glow-brand inline-flex items-center rounded-full bg-brand-500 px-8 py-4 text-base font-semibold text-white shadow-lg transition-colors hover:bg-brand-600"
+            className="inline-flex items-center rounded-full bg-white px-8 py-4 text-base font-semibold text-ink-950 shadow-lg transition-colors hover:bg-white/90"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.97 }}
           >
@@ -168,11 +168,11 @@ export default function Hero() {
           {/* Secondary CTA — glass morphism */}
           <motion.a
             href="#demo"
-            className="glass inline-flex items-center gap-2 rounded-full px-8 py-4 text-base font-semibold text-gray-800 transition-colors hover:bg-white/90"
+            className="inline-flex items-center gap-2 rounded-full border-2 border-white px-8 py-4 text-base font-semibold text-white transition-colors hover:bg-white/10"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.97 }}
           >
-            <PlayIcon className="text-brand-500" />
+            <PlayIcon className="text-white" />
             Watch Demo
           </motion.a>
         </motion.div>
@@ -188,13 +188,13 @@ export default function Hero() {
           {stats.map((stat) => (
             <motion.div
               key={stat.label}
-              className="glass flex min-w-[140px] flex-col items-center rounded-2xl px-6 py-4"
+              className="flex min-w-[140px] flex-col items-center rounded-2xl bg-white/15 px-6 py-4 backdrop-blur-sm"
               variants={scaleIn}
             >
-              <span className="text-2xl font-bold text-brand-600">
+              <span className="text-2xl font-bold text-white">
                 {stat.value}
               </span>
-              <span className="mt-1 text-sm text-gray-500">{stat.label}</span>
+              <span className="mt-1 text-sm text-white/70">{stat.label}</span>
             </motion.div>
           ))}
         </motion.div>

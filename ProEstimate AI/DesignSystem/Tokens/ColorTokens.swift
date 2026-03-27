@@ -4,6 +4,10 @@ enum ColorTokens {
     // MARK: - Primary
     static let primaryOrange = Color(hex: 0xF97316)
 
+    // MARK: - Brand Neutrals (from logo)
+    static let brandDark = Color(hex: 0x1C1C1E)
+    static let brandGray = Color(hex: 0x69717F)
+
     // MARK: - Backgrounds (light mode, iOS system colors)
     static let background = Color(.systemGroupedBackground)
     static let surface = Color(.secondarySystemGroupedBackground)
