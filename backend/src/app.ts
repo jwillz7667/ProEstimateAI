@@ -31,6 +31,9 @@ import dashboardRoutes from './modules/dashboard/dashboard.routes';
 export function createApp() {
   const app = express();
 
+  // Railway runs behind a reverse proxy — trust it for correct IP detection
+  app.set('trust proxy', 1);
+
   // Global middleware
   app.use(cors(corsOptions));
   app.use(express.json({ limit: '10mb' }));
