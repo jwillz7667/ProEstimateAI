@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, createPartFromBase64, createPartFromText, createUserContent } from '@google/genai';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
 
@@ -110,8 +110,19 @@ The scene must show only the finished, move-in-ready result — no construction 
  * Combine the system meta prompt with the user's specific remodel request
  * into a single optimized prompt for Nano Banana 2.
  */
-function buildFullPrompt(userPrompt: string, context: ImageGenContext): string {
+function buildFullPrompt(userPrompt: string, context: ImageGenContext, hasReferencePhoto: boolean = false): string {
   const systemPrompt = buildSystemPrompt(context);
+
+  if (hasReferencePhoto) {
+    return `${systemPrompt}
+
+REFERENCE PHOTO: The attached image shows the homeowner's ACTUAL current space. You MUST use this exact room as the basis for the remodel. Preserve the room's layout, dimensions, window placement, door positions, and overall architecture. Apply the remodel changes TO THIS SPECIFIC ROOM — do not generate a generic room. The final image should be clearly recognizable as the same space, just beautifully remodeled.
+
+The homeowner wants: "${userPrompt}"
+
+Transform the attached photo into a photorealistic visualization of the completed remodel. Keep the same camera angle and perspective as the original photo. The viewer should immediately recognize this as their own space, upgraded.`;
+  }
+
   return `${systemPrompt}
 
 The homeowner has described what they want: "${userPrompt}"
@@ -125,25 +136,43 @@ Photograph this completed remodel from the most flattering angle, capturing the 
  * Config: 2K resolution, context-aware aspect ratio, person generation disabled.
  * Prompt style: narrative scene description optimized for photorealistic output.
  */
+/**
+ * Optional reference photo that the model uses as the basis for the remodel.
+ * The model sees the actual room/space and generates the remodel ON that space.
+ */
+export interface ReferencePhoto {
+  base64Data: string;
+  mimeType: string;
+}
+
 export async function generatePreviewImage(
   userPrompt: string,
-  context: ImageGenContext
+  context: ImageGenContext,
+  referencePhoto?: ReferencePhoto
 ): Promise<GeneratedImage | null> {
   try {
     const ai = getClient();
-    const fullPrompt = buildFullPrompt(userPrompt, context);
+    const fullPrompt = buildFullPrompt(userPrompt, context, !!referencePhoto);
     const startMs = Date.now();
 
     const aspectRatio = aspectRatioForProjectType(context.projectType);
 
     logger.info(
-      { model: NANO_BANANA_2_MODEL, projectType: context.projectType, qualityTier: context.qualityTier, aspectRatio, imageSize: '2K' },
+      { model: NANO_BANANA_2_MODEL, projectType: context.projectType, qualityTier: context.qualityTier, aspectRatio, imageSize: '2K', hasReferencePhoto: !!referencePhoto },
       'Starting Nano Banana 2 image generation'
     );
 
+    // Build content: reference photo (if provided) + text prompt
+    const contents = referencePhoto
+      ? createUserContent([
+          createPartFromBase64(referencePhoto.base64Data, referencePhoto.mimeType),
+          createPartFromText(fullPrompt),
+        ])
+      : fullPrompt;
+
     const response = await ai.models.generateContent({
       model: NANO_BANANA_2_MODEL,
-      contents: fullPrompt,
+      contents,
       config: {
         responseModalities: ['IMAGE'],
         imageConfig: {

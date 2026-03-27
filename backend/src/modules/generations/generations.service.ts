@@ -1,7 +1,7 @@
 import { prisma } from '../../config/database';
 import { logger } from '../../config/logger';
 import { NotFoundError, PaywallError } from '../../lib/errors';
-import { generatePreviewImage, getSystemPrompt, ImageGenContext, MaterialSpec } from '../../lib/image-gen';
+import { generatePreviewImage, getSystemPrompt, ImageGenContext, MaterialSpec, ReferencePhoto } from '../../lib/image-gen';
 import { env } from '../../config/env';
 import { CreateGenerationInput } from './generations.validators';
 
@@ -77,7 +77,7 @@ function toMaterialSpecs(materials?: Array<{ name: string; category?: string; qu
  * Runs outside the request transaction so the API responds immediately
  * while the image generates in the background.
  */
-async function processGeneration(generationId: string, prompt: string, context: ImageGenContext) {
+async function processGeneration(generationId: string, prompt: string, context: ImageGenContext, projectId: string) {
   try {
     // Mark as PROCESSING
     await prisma.aIGeneration.update({
@@ -98,8 +98,26 @@ async function processGeneration(generationId: string, prompt: string, context: 
       return;
     }
 
-    // Call Nano Banana 2
-    const result = await generatePreviewImage(prompt, context);
+    // Fetch the project's uploaded reference photo (most recent ORIGINAL asset with stored image data)
+    let referencePhoto: ReferencePhoto | undefined;
+    const originalAsset = await prisma.asset.findFirst({
+      where: { projectId, assetType: 'ORIGINAL', imageData: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { imageData: true, imageMimeType: true },
+    });
+
+    if (originalAsset?.imageData && originalAsset?.imageMimeType) {
+      referencePhoto = {
+        base64Data: originalAsset.imageData,
+        mimeType: originalAsset.imageMimeType,
+      };
+      logger.info({ generationId, projectId }, 'Found reference photo for generation');
+    } else {
+      logger.info({ generationId, projectId }, 'No reference photo found — generating without input image');
+    }
+
+    // Call Nano Banana 2 with the reference photo
+    const result = await generatePreviewImage(prompt, context, referencePhoto);
 
     if (!result) {
       await prisma.aIGeneration.update({
@@ -317,7 +335,7 @@ export async function create(
       });
 
       // Fire-and-forget: process the generation asynchronously
-      processGeneration(generation.id, data.prompt, imageContext).catch(() => {});
+      processGeneration(generation.id, data.prompt, imageContext, projectId).catch(() => {});
 
       return generation;
     }
@@ -354,7 +372,7 @@ export async function create(
   });
 
   // Fire-and-forget: process the generation asynchronously
-  processGeneration(generation.id, data.prompt, imageContext).catch(() => {});
+  processGeneration(generation.id, data.prompt, imageContext, projectId).catch(() => {});
 
   return generation;
 }
