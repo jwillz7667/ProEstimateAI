@@ -99,11 +99,12 @@ final class QuickGenerateViewModel {
             let project = try await projectService.createProject(request: request)
             createdProjectId = project.id
 
-            // 2. Upload photo as asset
-            let base64 = imageData.base64EncodedString()
+            // 2. Upload photo as asset (compress to max ~1MB JPEG for fast upload)
+            let compressedData = Self.compressImage(imageData, maxBytes: 1_000_000)
+            let base64 = compressedData.base64EncodedString()
             let uploadBody = AssetUploadRequest(
                 url: "data:image/jpeg;base64,\(base64)",
-                assetType: "ORIGINAL"
+                assetType: "original"
             )
             let _: Asset = try await APIClient.shared.request(
                 .uploadAsset(projectId: project.id, body: uploadBody)
@@ -182,6 +183,21 @@ final class QuickGenerateViewModel {
     }
 
     // MARK: - Helpers
+
+    /// Compress image data to JPEG at progressively lower quality until it fits within maxBytes.
+    private static func compressImage(_ data: Data, maxBytes: Int) -> Data {
+        guard let uiImage = UIImage(data: data) else { return data }
+        var quality: CGFloat = 0.8
+        while quality > 0.1 {
+            if let compressed = uiImage.jpegData(compressionQuality: quality),
+               compressed.count <= maxBytes {
+                return compressed
+            }
+            quality -= 0.1
+        }
+        // Last resort: lowest quality
+        return uiImage.jpegData(compressionQuality: 0.1) ?? data
+    }
 
     private func titleForType(_ type: Project.ProjectType) -> String {
         switch type {

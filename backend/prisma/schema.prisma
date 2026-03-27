@@ -283,13 +283,15 @@ model Project {
 }
 
 model Asset {
-  id           String   @id @default(cuid())
-  projectId    String
-  url          String
-  thumbnailUrl String?
-  assetType    AssetType @default(ORIGINAL)
-  sortOrder    Int       @default(0)
-  createdAt    DateTime  @default(now())
+  id            String   @id @default(cuid())
+  projectId     String
+  url           String
+  thumbnailUrl  String?
+  assetType     AssetType @default(ORIGINAL)
+  sortOrder     Int       @default(0)
+  imageData     String?   @db.Text
+  imageMimeType String?
+  createdAt     DateTime  @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 

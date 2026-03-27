@@ -23,6 +23,23 @@ export async function createHandler(req: Request, res: Response) {
 }
 
 /**
+ * GET /v1/assets/:id/image
+ * Serve the stored image binary for an asset.
+ */
+export async function serveImageHandler(req: Request, res: Response) {
+  const result = await assetsService.getImageData(param(req.params.id), req.companyId!);
+
+  if (!result) {
+    res.status(404).json({ ok: false, error: { code: 'NOT_FOUND', message: 'No image data stored for this asset' } });
+    return;
+  }
+
+  res.set('Content-Type', result.mimeType);
+  res.set('Cache-Control', 'public, max-age=86400, immutable');
+  res.send(result.data);
+}
+
+/**
  * DELETE /v1/assets/:id
  * Delete an asset by ID.
  */

@@ -45,21 +45,74 @@ export async function listByProject(projectId: string, companyId: string) {
 /**
  * Create a new asset attached to a project.
  * Verifies the project belongs to the requesting company.
+ *
+ * If the URL is a data URL (base64-encoded image), the raw base64 data
+ * is stored in the `imageData` column and the `url` is rewritten to the
+ * binary-serve endpoint `/v1/assets/:id/image`.
  */
 export async function create(projectId: string, companyId: string, data: CreateAssetInput) {
   await verifyProjectOwnership(projectId, companyId);
 
+  let url = data.url;
+  let imageData: string | null = null;
+  let imageMimeType: string | null = null;
+
+  // Detect data URL and extract base64 payload
+  const dataUrlMatch = url.match(/^data:(image\/[a-z+]+);base64,(.+)$/i);
+  if (dataUrlMatch) {
+    imageMimeType = dataUrlMatch[1];
+    imageData = dataUrlMatch[2];
+    // Placeholder URL — will be replaced with the actual serve endpoint after creation
+    url = '__pending__';
+  }
+
   const asset = await prisma.asset.create({
     data: {
       projectId,
-      url: data.url,
+      url,
       thumbnailUrl: data.thumbnail_url ?? null,
       assetType: data.asset_type ? ASSET_TYPE_MAP[data.asset_type] : 'ORIGINAL',
       sortOrder: data.sort_order ?? 0,
+      imageData,
+      imageMimeType,
     },
   });
 
+  // Rewrite URL to the binary-serve endpoint if we stored image data
+  if (imageData) {
+    const serveUrl = `/v1/assets/${asset.id}/image`;
+    const updated = await prisma.asset.update({
+      where: { id: asset.id },
+      data: { url: serveUrl, thumbnailUrl: serveUrl },
+    });
+    return updated;
+  }
+
   return asset;
+}
+
+/**
+ * Serve the stored image binary for an asset.
+ * Returns { data: Buffer, mimeType: string } or null if no image data stored.
+ */
+export async function getImageData(assetId: string, companyId: string) {
+  const asset = await prisma.asset.findUnique({
+    where: { id: assetId },
+    include: { project: { select: { companyId: true } } },
+  });
+
+  if (!asset || asset.project.companyId !== companyId) {
+    throw new NotFoundError('Asset', assetId);
+  }
+
+  if (!asset.imageData || !asset.imageMimeType) {
+    return null;
+  }
+
+  return {
+    data: Buffer.from(asset.imageData, 'base64'),
+    mimeType: asset.imageMimeType,
+  };
 }
 
 /**

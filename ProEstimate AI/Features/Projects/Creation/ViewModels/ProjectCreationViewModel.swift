@@ -218,14 +218,28 @@ final class ProjectCreationViewModel {
 
     private func uploadPhotos(projectId: String) async {
         for imageData in selectedImageData {
-            let base64 = imageData.base64EncodedString()
-            let body = AssetUploadBody(url: "data:image/jpeg;base64,\(base64)", assetType: "ORIGINAL")
+            let compressed = Self.compressImage(imageData, maxBytes: 1_000_000)
+            let base64 = compressed.base64EncodedString()
+            let body = AssetUploadBody(url: "data:image/jpeg;base64,\(base64)", assetType: "original")
             do {
                 let _: Asset = try await APIClient.shared.request(.uploadAsset(projectId: projectId, body: body))
             } catch {
                 // Non-critical: project was created, photo upload failed silently
             }
         }
+    }
+
+    private static func compressImage(_ data: Data, maxBytes: Int) -> Data {
+        guard let uiImage = UIImage(data: data) else { return data }
+        var quality: CGFloat = 0.8
+        while quality > 0.1 {
+            if let compressed = uiImage.jpegData(compressionQuality: quality),
+               compressed.count <= maxBytes {
+                return compressed
+            }
+            quality -= 0.1
+        }
+        return uiImage.jpegData(compressionQuality: 0.1) ?? data
     }
 }
 
