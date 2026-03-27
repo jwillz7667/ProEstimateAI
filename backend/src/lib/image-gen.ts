@@ -40,6 +40,29 @@ export interface ImageGenContext {
 }
 
 /**
+ * Determine the best aspect ratio for a given project type.
+ * Exteriors and wide rooms benefit from 16:9; bathrooms from 3:4 (portrait);
+ * kitchens and general rooms from 4:3.
+ */
+function aspectRatioForProjectType(projectType: string): string {
+  const type = projectType.toUpperCase();
+  switch (type) {
+    case 'EXTERIOR':
+    case 'ROOFING':
+    case 'SIDING':
+      return '16:9';   // wide landscape for exterior shots
+    case 'BATHROOM':
+      return '3:4';    // portrait for compact vertical spaces
+    case 'KITCHEN':
+    case 'ROOM_REMODEL':
+    case 'FLOORING':
+    case 'PAINTING':
+    default:
+      return '4:3';    // standard landscape for interior rooms
+  }
+}
+
+/**
  * Build a comprehensive system-level meta prompt that instructs Nano Banana 2
  * on exactly what it is, how it should behave, and how to produce the output image.
  *
@@ -52,74 +75,35 @@ export interface ImageGenContext {
  * 6. Safety & style guardrails — no people, no text overlays, clean output
  */
 function buildSystemPrompt(context: ImageGenContext): string {
-  return `You are ProEstimate AI's professional architectural visualization engine. Your sole purpose is to generate photorealistic remodel preview images that contractors show to their customers to win project approvals.
+  const qualityTierDescriptions: Record<string, string> = {
+    budget: 'Clean and functional with cost-effective builder-grade materials — laminate countertops, basic ceramic tile, painted MDF cabinetry, chrome fixtures. The space still looks professionally finished and well-maintained, just with practical, budget-friendly selections.',
+    standard: 'Mid-range materials with tasteful design — quartz countertops, engineered hardwood or quality luxury vinyl plank flooring, semi-custom shaker cabinetry, brushed nickel or matte black fixtures, subway tile backsplash. A well-designed, modern space that feels curated.',
+    premium: 'High-end finishes throughout — natural marble or quartzite countertops, solid hardwood flooring, custom cabinetry with soft-close hardware, designer lighting fixtures, frameless glass shower enclosures, premium appliances. Every detail feels intentional and luxurious.',
+    luxury: 'Ultra-premium, magazine-editorial quality — exotic stone slabs with dramatic veining, bespoke millwork with intricate detailing, statement chandelier lighting, imported European fixtures, architectural ceiling features like coffered or barrel vaults, wide-plank reclaimed wood, museum-quality finishes.',
+  };
 
-IDENTITY & ROLE:
-- You are a world-class architectural renderer specializing in residential remodeling visualization
-- You produce images that look like professional 3D renders from high-end design firms
-- Your output is used in formal client proposals and estimates worth $10,000–$500,000+
-- Quality must be indistinguishable from professional architectural visualization studios
+  const tierDesc = qualityTierDescriptions[context.qualityTier.toLowerCase()] ?? qualityTierDescriptions['standard'];
 
-OUTPUT QUALITY STANDARDS:
-- Photorealistic rendering quality — the image must look like a real photograph of a completed remodel
-- Resolution must be crisp and sharp with no artifacts, blur, or distortion
-- Colors must be natural, balanced, and true-to-life — no oversaturation or HDR glow
-- Textures must show realistic material properties: wood grain, stone veining, tile grout lines, metal reflections
-- No watermarks, text overlays, labels, annotations, or UI elements in the image
-- No people, pets, or living creatures in the scene
-- Clean, uncluttered spaces that showcase the remodel work
+  return `You are a world-class architectural visualization photographer. Generate a single photorealistic photograph of a beautifully completed ${context.projectType.replace(/_/g, ' ').toLowerCase()} remodel. This image will be presented to a homeowner in a professional contractor's proposal, so it must look like a real photograph taken by an interiors photographer for a design magazine.
 
-LIGHTING & ATMOSPHERE:
-- Use natural daylight as the primary light source — warm, inviting, golden-hour quality
-- Interior scenes: soft ambient light with natural window light creating gentle shadows
-- Exterior scenes: clear sky, late afternoon sun angle for warm tones and long shadows
-- Proper light interaction with materials — reflections on countertops, light through glass, shadow depth
-- Avoid flat lighting — create depth through light and shadow contrast
+Shoot the scene as if you are standing in the room with a full-frame camera and a 28mm wide-angle lens at eye level (about 5.5 feet high). Frame the composition using the rule of thirds, with the main focal point slightly off-center. Keep all vertical lines perfectly straight — no barrel distortion or keystoning.
 
-CAMERA & COMPOSITION:
-- Eye-level perspective (5-6 feet height) for relatable, walk-through feel
-- Wide-angle lens effect (24-35mm equivalent) to capture full room context
-- Slight off-center composition following rule of thirds
-- Show enough context to understand the space — walls, floor, ceiling relationships
-- Depth of field: sharp foreground and midground, gentle softening at far edges
-- Straight verticals — no lens distortion or tilting
+Light the scene with warm, natural daylight streaming through windows, creating soft directional shadows that give the space depth and dimension. For interior scenes, supplement with recessed downlights casting gentle pools of warm light on countertops and floors. The overall mood should be inviting, bright, and aspirational — the kind of golden-hour warmth that makes a homeowner say "I want my home to look exactly like this."
 
-MATERIAL RENDERING:
-- Wood: visible grain patterns, appropriate sheen levels, realistic color variation
-- Stone/marble: natural veining patterns, polished vs honed surface differences
-- Tile: visible grout lines, proper spacing, consistent pattern
-- Metal fixtures: accurate reflections, brushed vs polished finishes
-- Glass: transparency, reflections, and edge refraction
-- Paint: subtle wall texture, appropriate matte/satin/gloss sheen
-- Fabric: realistic draping, texture weave, light absorption
+Render every material with obsessive photorealistic detail. Wood surfaces should show natural grain variation and appropriate sheen. Stone and marble should display realistic veining patterns with subtle depth. Tile should have visible grout lines with proper spacing. Metal fixtures should show accurate reflections — distinguish between brushed, polished, and matte finishes. Glass should have proper transparency and edge refraction.
 
-PROJECT CONTEXT:
-- Project type: ${context.projectType.replace(/_/g, ' ').toLowerCase()}
-- Quality tier: ${context.qualityTier.toLowerCase()} grade finishes and materials
-- Project: "${context.projectTitle}"
-${context.projectDescription ? `- Description: ${context.projectDescription}` : ''}
-${context.squareFootage ? `- Approximate area: ${context.squareFootage} sq ft` : ''}
-${context.dimensions ? `- Dimensions: ${context.dimensions}` : ''}
+The finish level is ${context.qualityTier.toLowerCase()} grade: ${tierDesc}
+
+Project: "${context.projectTitle}" — a ${context.projectType.replace(/_/g, ' ').toLowerCase()} project.
+${context.projectDescription ? `The homeowner's vision: ${context.projectDescription}` : ''}
+${context.squareFootage ? `The space is approximately ${context.squareFootage} square feet.` : ''}
+${context.dimensions ? `Room dimensions: ${context.dimensions}.` : ''}
 ${context.materials && context.materials.length > 0 ? `
-EXACT MATERIALS TO RENDER (MANDATORY — use these specific materials in the image):
-${context.materials.map((m, i) => `${i + 1}. ${m.name}${m.category ? ` [${m.category}]` : ''}${m.quantity && m.unit ? ` — ${m.quantity} ${m.unit}` : ''}`).join('\n')}
+The following specific materials MUST be clearly visible and accurately rendered in the image, as they correspond to the line items on the contractor's estimate:
+${context.materials.map((m, i) => `${i + 1}. ${m.name}${m.category ? ` (${m.category})` : ''}${m.quantity && m.unit ? ` — ${m.quantity} ${m.unit}` : ''}`).join('\n')}
+Every listed material must appear in the scene. Do not substitute, omit, or invent materials not on this list.` : ''}
 
-CRITICAL: The image MUST visually depict ALL of the materials listed above. Each material should be clearly visible and rendered with photorealistic accuracy. The contractor will show this image to their customer alongside the estimate — the materials in the image must match what is being quoted. Do NOT substitute, omit, or replace any listed material.` : ''}
-
-STYLE GUIDELINES BY QUALITY TIER:
-- BUDGET: Clean, functional, cost-effective materials. Builder-grade fixtures, laminate counters, basic tile. Still looks professional and well-executed.
-- STANDARD: Mid-range materials with good design. Quartz countertops, hardwood or quality LVP flooring, semi-custom cabinetry, modern fixtures.
-- PREMIUM: High-end finishes throughout. Natural stone, custom cabinetry, designer fixtures, architectural details, luxury appliances.
-- LUXURY: Ultra-premium, magazine-worthy. Exotic materials, bespoke millwork, statement lighting, imported fixtures, architectural features.
-
-ABSOLUTE RULES:
-1. NEVER include text, labels, watermarks, or annotations of any kind
-2. NEVER include people, hands, pets, or living creatures
-3. NEVER include brand logos or identifiable product labels
-4. NEVER produce cartoon, sketch, or illustration style — ONLY photorealistic
-5. NEVER produce split-screen, before/after, or collage layouts — single cohesive image only
-6. NEVER include construction debris, tools, or incomplete work — show finished result only
-7. Always show the COMPLETED remodel — the finished, polished, move-in ready result`;
+The scene must show only the finished, move-in-ready result — no construction debris, no tools, no unfinished work. The space should be clean, styled, and magazine-ready. Do not include any people, pets, hands, or living creatures. Do not include any text, labels, watermarks, annotations, brand logos, or UI overlays. Do not produce a cartoon, illustration, sketch, or split-screen layout — only a single cohesive photorealistic image.`;
 }
 
 /**
@@ -130,20 +114,16 @@ function buildFullPrompt(userPrompt: string, context: ImageGenContext): string {
   const systemPrompt = buildSystemPrompt(context);
   return `${systemPrompt}
 
----
+The homeowner has described what they want: "${userPrompt}"
 
-GENERATE THE FOLLOWING REMODEL PREVIEW:
-${userPrompt}
-
-Render this as a single photorealistic image showing the completed remodel from the most flattering angle. The image should be presentation-ready for a professional contractor proposal.`;
+Photograph this completed remodel from the most flattering angle, capturing the full beauty of the finished space. Make it look so real and aspirational that the homeowner will immediately approve the project.`;
 }
 
 /**
- * Generate a remodel preview image using Google's Nano Banana 2
- * (Gemini 3.1 Flash Image) model.
+ * Generate a remodel preview image using Nano Banana 2 (Gemini 3.1 Flash Image).
  *
- * Takes the user's prompt and project context, builds a comprehensive
- * meta prompt, and returns base64-encoded image data on success.
+ * Config: 2K resolution, context-aware aspect ratio, person generation disabled.
+ * Prompt style: narrative scene description optimized for photorealistic output.
  */
 export async function generatePreviewImage(
   userPrompt: string,
@@ -154,8 +134,10 @@ export async function generatePreviewImage(
     const fullPrompt = buildFullPrompt(userPrompt, context);
     const startMs = Date.now();
 
+    const aspectRatio = aspectRatioForProjectType(context.projectType);
+
     logger.info(
-      { model: NANO_BANANA_2_MODEL, projectType: context.projectType, qualityTier: context.qualityTier },
+      { model: NANO_BANANA_2_MODEL, projectType: context.projectType, qualityTier: context.qualityTier, aspectRatio, imageSize: '2K' },
       'Starting Nano Banana 2 image generation'
     );
 
@@ -165,8 +147,9 @@ export async function generatePreviewImage(
       config: {
         responseModalities: ['IMAGE'],
         imageConfig: {
-          aspectRatio: '4:3',
-          imageSize: '1K',
+          aspectRatio,
+          imageSize: '2K',
+          personGeneration: 'ALLOW_NONE',
         },
       },
     });
