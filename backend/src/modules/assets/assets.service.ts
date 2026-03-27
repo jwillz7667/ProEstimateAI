@@ -1,4 +1,5 @@
 import { prisma } from '../../config/database';
+import { env } from '../../config/env';
 import { NotFoundError } from '../../lib/errors';
 import { CreateAssetInput } from './assets.validators';
 
@@ -80,7 +81,7 @@ export async function create(projectId: string, companyId: string, data: CreateA
 
   // Rewrite URL to the binary-serve endpoint if we stored image data
   if (imageData) {
-    const serveUrl = `/v1/assets/${asset.id}/image`;
+    const serveUrl = `${env.API_BASE_URL}/v1/assets/${asset.id}/image`;
     const updated = await prisma.asset.update({
       where: { id: asset.id },
       data: { url: serveUrl, thumbnailUrl: serveUrl },
@@ -106,6 +107,27 @@ export async function getImageData(assetId: string, companyId: string) {
   }
 
   if (!asset.imageData || !asset.imageMimeType) {
+    return null;
+  }
+
+  return {
+    data: Buffer.from(asset.imageData, 'base64'),
+    mimeType: asset.imageMimeType,
+  };
+}
+
+/**
+ * Public (no-auth) image retrieval by asset ID.
+ * Used for serving images to AsyncImage / <img> without auth headers.
+ * Security: asset IDs are CUIDs (unguessable).
+ */
+export async function getPublicAssetImage(assetId: string) {
+  const asset = await prisma.asset.findUnique({
+    where: { id: assetId },
+    select: { imageData: true, imageMimeType: true },
+  });
+
+  if (!asset?.imageData || !asset?.imageMimeType) {
     return null;
   }
 

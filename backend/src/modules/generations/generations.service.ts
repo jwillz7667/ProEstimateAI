@@ -113,8 +113,8 @@ async function processGeneration(generationId: string, prompt: string, context: 
     }
 
     // Store the image data and mark as COMPLETED
-    const previewUrl = `/v1/generations/${generationId}/preview`;
-    const thumbnailUrl = previewUrl; // Same endpoint, iOS can resize client-side
+    const previewUrl = `${env.API_BASE_URL}/v1/generations/${generationId}/preview`;
+    const thumbnailUrl = previewUrl;
 
     await prisma.aIGeneration.update({
       where: { id: generationId },
@@ -357,4 +357,25 @@ export async function create(
   processGeneration(generation.id, data.prompt, imageContext).catch(() => {});
 
   return generation;
+}
+
+/**
+ * Public (no-auth) image data retrieval by generation ID.
+ * Used for serving images to AsyncImage / <img> without auth headers.
+ * Security: generation IDs are CUIDs (unguessable).
+ */
+export async function getPublicImageData(generationId: string) {
+  const generation = await prisma.aIGeneration.findUnique({
+    where: { id: generationId },
+    select: { imageData: true, imageMimeType: true },
+  });
+
+  if (!generation?.imageData || !generation?.imageMimeType) {
+    return null;
+  }
+
+  return {
+    data: Buffer.from(generation.imageData, 'base64'),
+    mimeType: generation.imageMimeType,
+  };
 }

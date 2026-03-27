@@ -43,6 +43,35 @@ export function createApp() {
   // V1 routes
   const v1 = express.Router();
   v1.use('/auth', authRoutes);
+
+  // Public image endpoints (no auth — served to AsyncImage / <img> tags)
+  v1.get('/generations/:id/preview', async (req, res, next) => {
+    try {
+      const { getPublicImageData } = await import('./modules/generations/generations.service');
+      const imageResult = await getPublicImageData(req.params.id);
+      if (!imageResult) {
+        res.status(404).json({ ok: false, error: { code: 'IMAGE_NOT_READY', message: 'Image not available', retryable: true } });
+        return;
+      }
+      res.set('Content-Type', imageResult.mimeType);
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      res.send(imageResult.data);
+    } catch (err) { next(err); }
+  });
+  v1.get('/assets/:id/image', async (req, res, next) => {
+    try {
+      const { getPublicAssetImage } = await import('./modules/assets/assets.service');
+      const imageResult = await getPublicAssetImage(req.params.id);
+      if (!imageResult) {
+        res.status(404).json({ ok: false, error: { code: 'NOT_FOUND', message: 'Image not found' } });
+        return;
+      }
+      res.set('Content-Type', imageResult.mimeType);
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      res.send(imageResult.data);
+    } catch (err) { next(err); }
+  });
+
   v1.use('/users', requireAuth, usersRoutes);
   v1.use('/companies', requireAuth, companiesRoutes);
   v1.use('/clients', requireAuth, clientsRoutes);
