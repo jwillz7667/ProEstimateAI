@@ -149,7 +149,6 @@ export async function generatePreviewImage(
         imageConfig: {
           aspectRatio,
           imageSize: '2K',
-          personGeneration: 'ALLOW_NONE',
         },
       },
     });
