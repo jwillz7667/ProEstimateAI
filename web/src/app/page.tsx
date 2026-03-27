@@ -7,16 +7,15 @@ import Pricing from "@/components/Pricing";
 import Testimonials from "@/components/Testimonials";
 import CTA from "@/components/CTA";
 import Footer from "@/components/Footer";
-import WebGLWrapper from "@/components/WebGLWrapper";
+
 
 export default function Home() {
   return (
     <>
       <Navbar />
 
-      {/* Hero with WebGL background */}
-      <section className="relative overflow-hidden">
-        <WebGLWrapper />
+      {/* Hero */}
+      <section className="relative overflow-hidden bg-white">
         <Hero />
       </section>
 

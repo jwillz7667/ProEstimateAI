@@ -115,7 +115,7 @@ const stats: Stat[] = [
 
 export default function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-white">
       {/* Content layer — sits above the WebGL canvas (z-0) */}
       <motion.div
         className="relative z-10 mx-auto max-w-6xl px-6 py-24 text-center sm:px-8 lg:px-12"
