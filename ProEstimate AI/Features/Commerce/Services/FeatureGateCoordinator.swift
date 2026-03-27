@@ -83,14 +83,39 @@ final class FeatureGateCoordinator {
             triggerReason: "Free AI generation credits exhausted",
             blocking: true,
             headline: "You've used all \(AppConstants.freeGenerationCredits) free AI previews",
-            subheadline: "Upgrade to Pro for unlimited AI remodel previews, watermark-free exports, and branded proposals.",
-            primaryCtaTitle: "Start Free Trial",
-            secondaryCtaTitle: nil,
+            subheadline: "Unlock unlimited AI remodel previews, watermark-free exports, branded proposals, and priority support. Try Pro free for 7 days.",
+            primaryCtaTitle: "Start 7-Day Free Trial",
+            secondaryCtaTitle: "View Plans",
             showContinueFree: false,
             showRestorePurchases: true,
             recommendedProductId: AppConstants.monthlyProductID,
             availableProducts: products
         ))
+    }
+
+    /// Soft gate: after a successful generation, show a non-blocking upgrade prompt
+    /// when the user has 2 or fewer remaining credits.
+    func shouldShowSoftUpgradeAfterGeneration() -> PaywallDecision? {
+        guard let entitlementStore, let usageMeterStore else { return nil }
+        if entitlementStore.hasProAccess { return nil }
+
+        let remaining = usageMeterStore.generationsRemaining
+        if remaining <= 2 && remaining > 0 {
+            return PaywallDecision(
+                placement: .postFirstGeneration,
+                triggerReason: "Low AI generation credits",
+                blocking: false,
+                headline: "Only \(remaining) free preview\(remaining == 1 ? "" : "s") left",
+                subheadline: "Get unlimited AI previews, branded exports, and invoicing with a 7-day free trial.",
+                primaryCtaTitle: "Start Free Trial",
+                secondaryCtaTitle: nil,
+                showContinueFree: true,
+                showRestorePurchases: false,
+                recommendedProductId: AppConstants.monthlyProductID,
+                availableProducts: products
+            )
+        }
+        return nil
     }
 
     /// Check whether the user can export a quote.

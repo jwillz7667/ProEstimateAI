@@ -6,6 +6,7 @@ import SwiftUI
 struct BeforeAfterSlider: View {
     let beforeImageURL: URL?
     let afterImageURL: URL?
+    let beforeImageData: Data?
     let height: CGFloat
 
     @State private var sliderPosition: CGFloat = 0.5
@@ -14,10 +15,12 @@ struct BeforeAfterSlider: View {
     init(
         beforeImageURL: URL?,
         afterImageURL: URL?,
+        beforeImageData: Data? = nil,
         height: CGFloat = 280
     ) {
         self.beforeImageURL = beforeImageURL
         self.afterImageURL = afterImageURL
+        self.beforeImageData = beforeImageData
         self.height = height
     }
 
@@ -88,7 +91,11 @@ struct BeforeAfterSlider: View {
 
     private var beforeImage: some View {
         Group {
-            if let beforeImageURL {
+            if let beforeImageData, let uiImage = UIImage(data: beforeImageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else if let beforeImageURL {
                 AsyncImage(url: beforeImageURL) { image in
                     image
                         .resizable()

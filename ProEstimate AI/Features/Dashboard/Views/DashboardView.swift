@@ -8,6 +8,7 @@ struct DashboardView: View {
     @Environment(PaywallPresenter.self) private var paywallPresenter
     @State private var viewModel = DashboardViewModel()
     @State private var showProjectCreation = false
+    @State private var showQuickGenerate = false
     @State private var showClientForm = false
     @State private var navigateToProjectId: String?
 
@@ -43,6 +44,17 @@ struct DashboardView: View {
                     navigateToProjectId = projectId
                 }
             }
+            .fullScreenCover(isPresented: $showQuickGenerate) {
+                Task { await viewModel.loadDashboard() }
+                if let projectId = navigateToProjectId {
+                    navigateToProjectId = nil
+                    router.dashboardPath.append(AppDestination.projectDetail(id: projectId))
+                }
+            } content: {
+                QuickGenerateView { projectId in
+                    navigateToProjectId = projectId
+                }
+            }
             .sheet(isPresented: $showClientForm) {
                 NavigationStack {
                     ClientFormView()
@@ -68,11 +80,12 @@ struct DashboardView: View {
                 greetingSection
                     .padding(.horizontal, SpacingTokens.md)
 
+                // MARK: - Quick AI Generate (Hero CTA)
+                quickGenerateCard
+                    .padding(.horizontal, SpacingTokens.md)
+
                 // MARK: - New Project CTA
-                PrimaryCTAButton(
-                    title: "New Project",
-                    icon: "plus.circle.fill"
-                ) {
+                SecondaryButton(title: "New Project", icon: "plus.circle.fill") {
                     showProjectCreation = true
                 }
                 .padding(.horizontal, SpacingTokens.md)
@@ -89,6 +102,7 @@ struct DashboardView: View {
                 // MARK: - Recent Projects
                 DashboardRecentProjectsSection(
                     projects: viewModel.recentProjects,
+                    thumbnails: viewModel.projectThumbnails,
                     onSeeAll: {
                         appState.selectedTab = .projects
                     }
@@ -163,6 +177,89 @@ struct DashboardView: View {
                 value: "\(summary.invoicesDueCount)"
             )
         }
+    }
+
+    // MARK: - Quick Generate Card
+
+    private var quickGenerateCard: some View {
+        Button {
+            showQuickGenerate = true
+        } label: {
+            HStack(spacing: SpacingTokens.md) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [ColorTokens.primaryOrange, ColorTokens.primaryOrange.opacity(0.8)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.white)
+                }
+
+                // Text
+                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                    HStack(spacing: SpacingTokens.xs) {
+                        Text("AI Remodel Preview")
+                            .font(TypographyTokens.headline)
+                            .foregroundStyle(ColorTokens.primaryText)
+
+                        if !entitlementStore.hasProAccess {
+                            Text("\(usageMeterStore.generationsRemaining) left")
+                                .font(TypographyTokens.caption2)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, SpacingTokens.xs)
+                                .padding(.vertical, 2)
+                                .background(
+                                    usageMeterStore.generationsRemaining <= 2
+                                        ? ColorTokens.warning.opacity(0.15)
+                                        : ColorTokens.primaryOrange.opacity(0.12),
+                                    in: Capsule()
+                                )
+                                .foregroundStyle(
+                                    usageMeterStore.generationsRemaining <= 2
+                                        ? ColorTokens.warning
+                                        : ColorTokens.primaryOrange
+                                )
+                        }
+                    }
+
+                    Text("Upload a photo and see your remodel in seconds")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(ColorTokens.secondaryText)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(SpacingTokens.md)
+            .background(
+                LinearGradient(
+                    colors: [
+                        ColorTokens.primaryOrange.opacity(0.08),
+                        ColorTokens.primaryOrange.opacity(0.03),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
+                in: RoundedRectangle(cornerRadius: RadiusTokens.card)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.card)
+                    .strokeBorder(ColorTokens.primaryOrange.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Quick Action Handler

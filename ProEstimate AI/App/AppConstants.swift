@@ -10,8 +10,8 @@ enum AppConstants {
     static let annualProductID = "proestimate.pro.annual"
 
     // MARK: - Free Tier Limits
-    static let freeGenerationCredits = 3
-    static let freeQuoteExportCredits = 3
+    static let freeGenerationCredits = 5
+    static let freeQuoteExportCredits = 5
 
     // MARK: - Build Flags
     static var isDebug: Bool {

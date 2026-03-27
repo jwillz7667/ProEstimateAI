@@ -7,6 +7,7 @@ final class DashboardViewModel {
 
     var summary: DashboardSummary?
     var recentProjects: [Project] = []
+    var projectThumbnails: [String: URL] = [:]
     var isLoading: Bool = false
     var errorMessage: String?
 
@@ -57,6 +58,7 @@ final class DashboardViewModel {
 
             summary = try await summaryTask
             recentProjects = try await projectsTask
+            await loadThumbnails(for: recentProjects)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -66,5 +68,31 @@ final class DashboardViewModel {
 
     func refresh() async {
         await loadDashboard()
+    }
+
+    // MARK: - Thumbnail Loading
+
+    private func loadThumbnails(for projects: [Project]) async {
+        await withTaskGroup(of: (String, URL?).self) { group in
+            for project in projects.prefix(5) {
+                group.addTask { [apiClient] in
+                    do {
+                        let generations: [AIGeneration] = try await apiClient.request(
+                            .listGenerations(projectId: project.id)
+                        )
+                        let completed = generations.first { $0.status == .completed }
+                        return (project.id, completed?.previewURL)
+                    } catch {
+                        return (project.id, nil)
+                    }
+                }
+            }
+
+            for await (projectId, url) in group {
+                if let url {
+                    projectThumbnails[projectId] = url
+                }
+            }
+        }
     }
 }

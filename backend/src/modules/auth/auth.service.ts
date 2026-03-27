@@ -78,14 +78,14 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
       },
     });
 
-    // Initialize usage buckets: 3 AI generations, 3 quote exports
+    // Initialize usage buckets: 5 AI generations, 5 quote exports
     await tx.usageBucket.createMany({
       data: [
         {
           userId: createdUser.id,
           companyId: createdCompany.id,
           metricCode: 'AI_GENERATION',
-          includedQuantity: 3,
+          includedQuantity: 5,
           consumedQuantity: 0,
           resetPolicy: 'NEVER',
           source: 'STARTER_CREDITS',
@@ -94,7 +94,7 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
           userId: createdUser.id,
           companyId: createdCompany.id,
           metricCode: 'QUOTE_EXPORT',
-          includedQuantity: 3,
+          includedQuantity: 5,
           consumedQuantity: 0,
           resetPolicy: 'NEVER',
           source: 'STARTER_CREDITS',
@@ -280,7 +280,7 @@ export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> 
           userId: createdUser.id,
           companyId: createdCompany.id,
           metricCode: 'AI_GENERATION',
-          includedQuantity: 3,
+          includedQuantity: 5,
           consumedQuantity: 0,
           resetPolicy: 'NEVER',
           source: 'STARTER_CREDITS',
@@ -289,7 +289,7 @@ export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> 
           userId: createdUser.id,
           companyId: createdCompany.id,
           metricCode: 'QUOTE_EXPORT',
-          includedQuantity: 3,
+          includedQuantity: 5,
           consumedQuantity: 0,
           resetPolicy: 'NEVER',
           source: 'STARTER_CREDITS',

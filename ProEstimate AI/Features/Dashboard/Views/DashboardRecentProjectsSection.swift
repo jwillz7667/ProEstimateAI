@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// Shows the last 5 projects as tappable cards with project type icon,
-/// title, client name, status badge, and date.
+/// title, client name, status badge, date, and AI generation thumbnail.
 struct DashboardRecentProjectsSection: View {
     let projects: [Project]
+    var thumbnails: [String: URL] = [:]
     var onSeeAll: (() -> Void)?
 
     var body: some View {
@@ -32,27 +33,20 @@ struct DashboardRecentProjectsSection: View {
     private func projectRow(_ project: Project) -> some View {
         NavigationLink(value: AppDestination.projectDetail(id: project.id)) {
             HStack(spacing: SpacingTokens.sm) {
-                // Project type icon
-                Image(systemName: iconForProjectType(project.projectType))
-                    .font(.system(size: 20))
-                    .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
-                    .background(
-                        Color.white.opacity(0.2),
-                        in: RoundedRectangle(cornerRadius: RadiusTokens.small)
-                    )
+                // AI generation thumbnail or project type icon
+                thumbnailView(for: project)
 
                 // Title and details
                 VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
                     Text(project.title)
                         .font(TypographyTokens.subheadline)
                         .fontWeight(.medium)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(ColorTokens.primaryText)
                         .lineLimit(1)
 
                     Text(project.updatedAt.formatted(as: .relative))
                         .font(TypographyTokens.caption)
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(ColorTokens.secondaryText)
                 }
 
                 Spacer()
@@ -62,16 +56,53 @@ struct DashboardRecentProjectsSection: View {
             }
             .padding(SpacingTokens.md)
             .background(
-                LinearGradient(
-                    colors: [ColorTokens.primaryOrange, ColorTokens.primaryOrange.opacity(0.85)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
+                ColorTokens.elevatedSurface,
                 in: RoundedRectangle(cornerRadius: RadiusTokens.card)
             )
-            .shadow(color: ColorTokens.primaryOrange.opacity(0.2), radius: 4, x: 0, y: 2)
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.card)
+                    .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Thumbnail
+
+    private func thumbnailView(for project: Project) -> some View {
+        Group {
+            if let url = thumbnails[project.id] {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    case .failure:
+                        fallbackIcon(for: project)
+                    default:
+                        ProgressView()
+                            .frame(width: 48, height: 48)
+                    }
+                }
+                .frame(width: 48, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.small))
+            } else {
+                fallbackIcon(for: project)
+            }
+        }
+    }
+
+    private func fallbackIcon(for project: Project) -> some View {
+        Image(systemName: iconForProjectType(project.projectType))
+            .font(.system(size: 20))
+            .foregroundStyle(ColorTokens.primaryOrange)
+            .frame(width: 48, height: 48)
+            .background(
+                ColorTokens.primaryOrange.opacity(0.12),
+                in: RoundedRectangle(cornerRadius: RadiusTokens.small)
+            )
     }
 
     // MARK: - Empty View
@@ -107,19 +138,19 @@ struct DashboardRecentProjectsSection: View {
     }
 
     private func statusBadge(for status: Project.Status) -> some View {
-        let text: String = {
+        let (text, badgeColor): (String, Color) = {
             switch status {
-            case .draft: "Draft"
-            case .photosUploaded: "Photos"
-            case .generating: "Generating"
-            case .generationComplete: "Generated"
-            case .estimateCreated: "Estimated"
-            case .proposalSent: "Proposed"
-            case .approved: "Approved"
-            case .declined: "Declined"
-            case .invoiced: "Invoiced"
-            case .completed: "Complete"
-            case .archived: "Archived"
+            case .draft: ("Draft", ColorTokens.secondaryText)
+            case .photosUploaded: ("Photos", ColorTokens.primaryOrange)
+            case .generating: ("Generating", ColorTokens.warning)
+            case .generationComplete: ("Generated", ColorTokens.success)
+            case .estimateCreated: ("Estimated", ColorTokens.success)
+            case .proposalSent: ("Proposed", Color.blue)
+            case .approved: ("Approved", ColorTokens.success)
+            case .declined: ("Declined", ColorTokens.error)
+            case .invoiced: ("Invoiced", Color.purple)
+            case .completed: ("Complete", ColorTokens.success)
+            case .archived: ("Archived", ColorTokens.secondaryText)
             }
         }()
 
@@ -128,7 +159,7 @@ struct DashboardRecentProjectsSection: View {
             .fontWeight(.medium)
             .padding(.horizontal, SpacingTokens.xs)
             .padding(.vertical, 3)
-            .background(Color.white.opacity(0.25), in: Capsule())
-            .foregroundStyle(.white)
+            .background(badgeColor.opacity(0.12), in: Capsule())
+            .foregroundStyle(badgeColor)
     }
 }
