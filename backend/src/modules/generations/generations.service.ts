@@ -2,6 +2,7 @@ import { prisma } from '../../config/database';
 import { logger } from '../../config/logger';
 import { NotFoundError, PaywallError } from '../../lib/errors';
 import { generatePreviewImage, getSystemPrompt, ImageGenContext, MaterialSpec, ReferencePhoto } from '../../lib/image-gen';
+import { generateMaterialSuggestions, generateLaborEstimates, MaterialGenContext } from '../../lib/material-gen';
 import { env } from '../../config/env';
 import { CreateGenerationInput } from './generations.validators';
 
@@ -150,6 +151,11 @@ async function processGeneration(generationId: string, prompt: string, context: 
       { generationId, durationMs: result.durationMs },
       'Generation completed successfully'
     );
+
+    // Auto-generate material suggestions in the background
+    generateAndStoreMaterials(generationId, projectId, prompt, context).catch((err) => {
+      logger.error({ err, generationId }, 'Material suggestion generation failed (non-critical)');
+    });
   } catch (err) {
     logger.error({ err, generationId }, 'Generation processing failed');
     try {
@@ -164,6 +170,74 @@ async function processGeneration(generationId: string, prompt: string, context: 
       logger.error({ updateErr, generationId }, 'Failed to update generation status to FAILED');
     }
   }
+}
+
+/**
+ * After image generation completes, call Gemini text model to generate
+ * material suggestions and labor estimates, then store them in the DB.
+ */
+async function generateAndStoreMaterials(
+  generationId: string,
+  projectId: string,
+  prompt: string,
+  context: ImageGenContext
+) {
+  const matContext: MaterialGenContext = {
+    projectType: context.projectType,
+    qualityTier: context.qualityTier,
+    squareFootage: context.squareFootage,
+    dimensions: context.dimensions,
+    projectTitle: context.projectTitle,
+    projectDescription: context.projectDescription,
+  };
+
+  // Generate materials and labor in parallel
+  const [materials, laborEstimates] = await Promise.all([
+    generateMaterialSuggestions(prompt, matContext),
+    generateLaborEstimates(matContext),
+  ]);
+
+  if (materials.length === 0 && laborEstimates.length === 0) {
+    logger.warn({ generationId }, 'No materials or labor estimates generated');
+    return;
+  }
+
+  // Store material suggestions
+  const materialRecords = materials.map((m) => ({
+    generationId,
+    projectId,
+    name: m.name,
+    category: m.category,
+    estimatedCost: m.estimatedCost,
+    unit: m.unit,
+    quantity: m.quantity,
+    supplierName: m.supplierName ?? null,
+    isSelected: true, // Default all to selected
+    sortOrder: m.sortOrder,
+  }));
+
+  // Store labor as material suggestions with category "Labor"
+  const laborRecords = laborEstimates.map((l, i) => ({
+    generationId,
+    projectId,
+    name: l.taskName,
+    category: `Labor - ${l.category}`,
+    estimatedCost: l.ratePerHour,
+    unit: 'hour',
+    quantity: l.hoursEstimate,
+    supplierName: null,
+    isSelected: true,
+    sortOrder: materials.length + i,
+  }));
+
+  const allRecords = [...materialRecords, ...laborRecords];
+
+  await prisma.materialSuggestion.createMany({ data: allRecords });
+
+  logger.info(
+    { generationId, materialCount: materialRecords.length, laborCount: laborRecords.length },
+    'Material suggestions and labor estimates stored'
+  );
 }
 
 /**
