@@ -1,4 +1,4 @@
-import { GoogleGenAI, createPartFromBase64, createPartFromText, createUserContent } from '@google/genai';
+import { GoogleGenAI, HarmBlockThreshold, HarmCategory, createPartFromBase64, createPartFromText, createUserContent } from '@google/genai';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
 
@@ -177,7 +177,16 @@ export async function generatePreviewImage(
       model: NANO_BANANA_2_MODEL,
       contents,
       config: {
+        temperature: 1,
+        topP: 0.95,
+        maxOutputTokens: 32768,
         responseModalities: referencePhoto ? ['TEXT', 'IMAGE'] : ['IMAGE'],
+        safetySettings: [
+          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.OFF },
+          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.OFF },
+          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.OFF },
+          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.OFF },
+        ],
         imageConfig: {
           aspectRatio,
           imageSize: '2K',
