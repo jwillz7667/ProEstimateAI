@@ -54,18 +54,6 @@ final class LiveProposalService: ProposalServiceProtocol, Sendable {
         try await apiClient.request(.createProposal(body: proposal))
     }
 
-    func updateProposal(_ proposal: Proposal) async throws -> Proposal {
-        // The backend does not currently expose a PATCH /proposals/:id endpoint.
-        // Until it is available, throw an explicit error so callers know this path
-        // is unsupported rather than silently failing.
-        throw APIError.unknown("Updating proposals is not yet supported by the API.")
-    }
-
-    func deleteProposal(id: String) async throws {
-        // The backend does not currently expose a DELETE /proposals/:id endpoint.
-        throw APIError.unknown("Deleting proposals is not yet supported by the API.")
-    }
-
     func sendProposal(id: String) async throws -> Proposal {
         try await apiClient.request(.sendProposal(id: id))
     }

@@ -10,6 +10,7 @@ enum APIEndpoint: Sendable {
     case authAppleSignIn(body: Encodable & Sendable)
     case authRefreshToken(refreshToken: String)
     case authLogout
+    case authForgotPassword(email: String)
 
     // MARK: - User / Company
     case getMe
@@ -120,6 +121,7 @@ extension APIEndpoint {
         case .authAppleSignIn: return "/auth/apple-signin"
         case .authRefreshToken: return "/auth/refresh"
         case .authLogout: return "/auth/logout"
+        case .authForgotPassword: return "/auth/forgot-password"
 
         // User / Company
         case .getMe: return "/users/me"
@@ -223,6 +225,7 @@ extension APIEndpoint {
     var method: HTTPMethod {
         switch self {
         case .authLogin, .authSignup, .authAppleSignIn, .authRefreshToken, .authLogout,
+             .authForgotPassword,
              .createClient, .createProject, .uploadAsset, .createGeneration,
              .createEstimate, .createEstimateLineItem,
              .createProposal, .sendProposal,
@@ -253,7 +256,7 @@ extension APIEndpoint {
     /// Whether this endpoint requires an Authorization header with a bearer token.
     var requiresAuth: Bool {
         switch self {
-        case .authLogin, .authSignup, .authAppleSignIn, .authRefreshToken:
+        case .authLogin, .authSignup, .authAppleSignIn, .authRefreshToken, .authForgotPassword:
             return false
         default:
             return true
@@ -291,6 +294,8 @@ extension APIEndpoint {
             return body
         case .authRefreshToken(let refreshToken):
             return RefreshBody(refreshToken: refreshToken)
+        case .authForgotPassword(let email):
+            return ForgotPasswordBody(email: email)
         case .updateCompany(let body),
              .createClient(let body), .updateClient(_, let body),
              .createProject(let body), .updateProject(_, let body),
@@ -353,6 +358,11 @@ private struct RefreshBody: Encodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case refreshToken = "refresh_token"
     }
+}
+
+/// Forgot password request body.
+private struct ForgotPasswordBody: Encodable, Sendable {
+    let email: String
 }
 
 /// Material selection toggle body.

@@ -162,18 +162,20 @@ enum ActivityAction {
 // ─── AUTH ─────────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(cuid())
-  companyId    String
-  email        String   @unique
-  passwordHash String?
-  fullName     String
-  role         UserRole @default(OWNER)
-  avatarUrl    String?
-  phone        String?
-  appleUserId  String?  @unique
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                     String    @id @default(cuid())
+  companyId              String
+  email                  String    @unique
+  passwordHash           String?
+  fullName               String
+  role                   UserRole  @default(OWNER)
+  avatarUrl              String?
+  phone                  String?
+  appleUserId            String?   @unique
+  passwordResetToken     String?   @unique
+  passwordResetExpiresAt DateTime?
+  isActive               Boolean   @default(true)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   company        Company          @relation(fields: [companyId], references: [id])
   refreshTokens  RefreshToken[]

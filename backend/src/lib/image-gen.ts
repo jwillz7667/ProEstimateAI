@@ -1,6 +1,7 @@
 import { GoogleGenAI, HarmBlockThreshold, HarmCategory, createPartFromBase64, createPartFromText, createUserContent } from '@google/genai';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
+import { generatePreviewImagePiAPI } from './piapi-image-gen';
 
 const NANO_BANANA_2_MODEL = 'gemini-3.1-flash-image-preview';
 
@@ -146,7 +147,61 @@ export interface ReferencePhoto {
   mimeType: string;
 }
 
+/**
+ * Generate a preview image using the best available provider.
+ *
+ * Provider strategy (primary → fallback):
+ *   1. PiAPI Nano Banana Pro (if PIAPI_API_KEY is set) — best quality, safety controls
+ *      - Internal fallback: PiAPI Nano Banana 2
+ *   2. Google GenAI direct (if GOOGLE_AI_API_KEY is set) — original provider
+ *
+ * Both providers produce the same GeneratedImage output (base64 + mimeType + durationMs).
+ * The caller is unaware of which provider fulfilled the request.
+ */
 export async function generatePreviewImage(
+  userPrompt: string,
+  context: ImageGenContext,
+  referencePhoto?: ReferencePhoto,
+  referenceAssetUrl?: string
+): Promise<GeneratedImage | null> {
+
+  // ── Provider 1: PiAPI (primary) ─────────────────────────────────────────
+  if (env.PIAPI_API_KEY) {
+    try {
+      logger.info({ provider: 'piapi' }, 'Attempting PiAPI image generation (primary)');
+      const piResult = await generatePreviewImagePiAPI({
+        userPrompt,
+        context,
+        referencePhoto,
+        referenceAssetUrl,
+      });
+
+      if (piResult) {
+        logger.info({ provider: 'piapi', durationMs: piResult.durationMs }, 'PiAPI generation succeeded');
+        return piResult;
+      }
+
+      logger.warn({ provider: 'piapi' }, 'PiAPI returned null — falling through to Google GenAI');
+    } catch (piErr) {
+      logger.error({ err: piErr, provider: 'piapi' }, 'PiAPI generation failed — falling through to Google GenAI');
+    }
+  }
+
+  // ── Provider 2: Google GenAI (fallback) ─────────────────────────────────
+  if (env.GOOGLE_AI_API_KEY) {
+    return generatePreviewImageGoogle(userPrompt, context, referencePhoto);
+  }
+
+  // ── No provider configured ──────────────────────────────────────────────
+  logger.error('No image generation provider configured (need PIAPI_API_KEY or GOOGLE_AI_API_KEY)');
+  return null;
+}
+
+/**
+ * Google GenAI direct implementation (original Nano Banana 2 path).
+ * Used as fallback when PiAPI is unavailable.
+ */
+async function generatePreviewImageGoogle(
   userPrompt: string,
   context: ImageGenContext,
   referencePhoto?: ReferencePhoto
@@ -159,13 +214,10 @@ export async function generatePreviewImage(
     const aspectRatio = aspectRatioForProjectType(context.projectType);
 
     logger.info(
-      { model: NANO_BANANA_2_MODEL, projectType: context.projectType, qualityTier: context.qualityTier, aspectRatio, imageSize: '2K', hasReferencePhoto: !!referencePhoto },
-      'Starting Nano Banana 2 image generation'
+      { model: NANO_BANANA_2_MODEL, provider: 'google', projectType: context.projectType, qualityTier: context.qualityTier, aspectRatio, imageSize: '2K', hasReferencePhoto: !!referencePhoto },
+      'Starting Google GenAI image generation (fallback)'
     );
 
-    // Build content: reference photo (if provided) + text prompt
-    // For image editing: image first, then prompt, with TEXT+IMAGE response modalities
-    // For pure generation: text only, with IMAGE response modality
     const contents = referencePhoto
       ? createUserContent([
           createPartFromBase64(referencePhoto.base64Data, referencePhoto.mimeType),
@@ -195,11 +247,11 @@ export async function generatePreviewImage(
     });
 
     const durationMs = Date.now() - startMs;
-    logger.info({ durationMs, model: NANO_BANANA_2_MODEL }, 'Nano Banana 2 generation complete');
+    logger.info({ durationMs, model: NANO_BANANA_2_MODEL, provider: 'google' }, 'Google GenAI generation complete');
 
     const parts = response.candidates?.[0]?.content?.parts;
     if (!parts) {
-      logger.warn('Nano Banana 2 returned no parts');
+      logger.warn('Google GenAI returned no parts');
       return null;
     }
 
@@ -213,10 +265,10 @@ export async function generatePreviewImage(
       }
     }
 
-    logger.warn('Nano Banana 2 returned no image data in parts');
+    logger.warn('Google GenAI returned no image data in parts');
     return null;
   } catch (err) {
-    logger.error({ err }, 'Nano Banana 2 image generation failed');
+    logger.error({ err, provider: 'google' }, 'Google GenAI image generation failed');
     return null;
   }
 }

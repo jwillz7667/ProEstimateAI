@@ -86,9 +86,9 @@ async function processGeneration(generationId: string, prompt: string, context: 
       data: { status: 'PROCESSING' },
     });
 
-    // Check if API key is configured
-    if (!env.GOOGLE_AI_API_KEY) {
-      logger.warn({ generationId }, 'GOOGLE_AI_API_KEY not configured — marking generation as failed');
+    // Check that at least one image generation provider is configured
+    if (!env.PIAPI_API_KEY && !env.GOOGLE_AI_API_KEY) {
+      logger.warn({ generationId }, 'No image generation provider configured — marking generation as failed');
       await prisma.aIGeneration.update({
         where: { id: generationId },
         data: {
@@ -101,10 +101,11 @@ async function processGeneration(generationId: string, prompt: string, context: 
 
     // Fetch the project's uploaded reference photo (most recent ORIGINAL asset with stored image data)
     let referencePhoto: ReferencePhoto | undefined;
+    let referenceAssetUrl: string | undefined;
     const originalAsset = await prisma.asset.findFirst({
       where: { projectId, assetType: 'ORIGINAL', imageData: { not: null } },
       orderBy: { createdAt: 'desc' },
-      select: { imageData: true, imageMimeType: true },
+      select: { id: true, imageData: true, imageMimeType: true },
     });
 
     if (originalAsset?.imageData && originalAsset?.imageMimeType) {
@@ -112,13 +113,15 @@ async function processGeneration(generationId: string, prompt: string, context: 
         base64Data: originalAsset.imageData,
         mimeType: originalAsset.imageMimeType,
       };
-      logger.info({ generationId, projectId }, 'Found reference photo for generation');
+      // Public URL for PiAPI (which requires image URLs, not base64)
+      referenceAssetUrl = `${env.API_BASE_URL}/v1/assets/${originalAsset.id}/image`;
+      logger.info({ generationId, projectId, assetId: originalAsset.id }, 'Found reference photo for generation');
     } else {
       logger.info({ generationId, projectId }, 'No reference photo found — generating without input image');
     }
 
-    // Call Nano Banana 2 with the reference photo
-    const result = await generatePreviewImage(prompt, context, referencePhoto);
+    // Call image generation with provider fallback (PiAPI primary → Google GenAI fallback)
+    const result = await generatePreviewImage(prompt, context, referencePhoto, referenceAssetUrl);
 
     if (!result) {
       await prisma.aIGeneration.update({

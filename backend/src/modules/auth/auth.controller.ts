@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { sendSuccess } from '../../lib/envelope';
 import { toUserDto, toCompanyDto } from './auth.dto';
 import type { AuthResponseDto, TokenPairDto } from './auth.dto';
-import type { SignupInput, LoginInput, AppleSignInInput, RefreshInput, LogoutInput } from './auth.validators';
+import type { SignupInput, LoginInput, AppleSignInInput, RefreshInput, LogoutInput, ForgotPasswordInput, ResetPasswordInput } from './auth.validators';
 import * as authService from './auth.service';
 
 // ─── Async handler ───────────────────────────────────────────────────────────
@@ -101,5 +101,34 @@ export const logoutHandler = asyncHandler(
     await authService.logout(req.userId, body.refresh_token);
 
     sendSuccess(res, {});
+  },
+);
+
+// ─── POST /v1/auth/forgot-password ─────────────────────────────────────────
+
+export const forgotPasswordHandler = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const input = req.body as ForgotPasswordInput;
+
+    await authService.forgotPassword(input);
+
+    // Always return success regardless of whether the email exists
+    sendSuccess(res, {
+      message: 'If an account exists with that email, a reset link has been sent.',
+    });
+  },
+);
+
+// ─── POST /v1/auth/reset-password ──────────────────────────────────────────
+
+export const resetPasswordHandler = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const input = req.body as ResetPasswordInput;
+
+    await authService.resetPassword(input);
+
+    sendSuccess(res, {
+      message: 'Password has been reset successfully.',
+    });
   },
 );

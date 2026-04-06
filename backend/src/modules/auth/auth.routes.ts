@@ -7,6 +7,8 @@ import {
   appleSignInSchema,
   refreshSchema,
   logoutSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
 } from './auth.validators';
 import {
   signupHandler,
@@ -14,6 +16,8 @@ import {
   appleSignInHandler,
   refreshHandler,
   logoutHandler,
+  forgotPasswordHandler,
+  resetPasswordHandler,
 } from './auth.controller';
 
 const router = Router();
@@ -37,5 +41,11 @@ router.post('/refresh', validate(refreshSchema), refreshHandler);
 // Logout accepts an optional refresh_token. The user may or may not be
 // authenticated (Bearer header is not required for logout).
 router.post('/logout', validate(logoutSchema), logoutHandler);
+
+// POST /v1/auth/forgot-password
+router.post('/forgot-password', validate(forgotPasswordSchema), forgotPasswordHandler);
+
+// POST /v1/auth/reset-password
+router.post('/reset-password', validate(resetPasswordSchema), resetPasswordHandler);
 
 export default router;

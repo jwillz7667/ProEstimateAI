@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import { hashPassword, verifyPassword } from '../../lib/hash';
 import {
@@ -7,10 +8,10 @@ import {
   type JwtPayload,
 } from '../../lib/jwt';
 import { generateId } from '../../lib/id';
-import { AuthenticationError, ConflictError } from '../../lib/errors';
+import { AuthenticationError, ConflictError, ValidationError } from '../../lib/errors';
 import { verifyAppleIdentityToken } from '../../lib/apple-auth';
 import type { User, Company } from '@prisma/client';
-import type { SignupInput, LoginInput, AppleSignInInput } from './auth.validators';
+import type { SignupInput, LoginInput, AppleSignInInput, ForgotPasswordInput, ResetPasswordInput } from './auth.validators';
 
 // ─── Result types ────────────────────────────────────────────────────────────
 
@@ -386,4 +387,81 @@ export async function logout(
     });
   }
   // If neither is provided, this is a no-op (client-only logout)
+}
+
+// ─── Forgot Password ────────────────────────────────────────────────────────
+
+const RESET_TOKEN_BYTES = 32;
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+export async function forgotPassword(input: ForgotPasswordInput): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { email: input.email },
+  });
+
+  // Always return silently to prevent email enumeration
+  if (!user) return;
+
+  // Apple-only accounts have no password to reset
+  if (!user.passwordHash) return;
+
+  // Generate a cryptographically secure reset token
+  const resetToken = crypto.randomBytes(RESET_TOKEN_BYTES).toString('hex');
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordResetToken: resetToken,
+      passwordResetExpiresAt: expiresAt,
+    },
+  });
+
+  // TODO: Send email with reset link. For now, log for development/testing.
+  console.log(
+    `[ForgotPassword] Reset token for ${user.email}: ${resetToken} (expires ${expiresAt.toISOString()})`,
+  );
+}
+
+// ─── Reset Password ─────────────────────────────────────────────────────────
+
+export async function resetPassword(input: ResetPasswordInput): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { passwordResetToken: input.token },
+  });
+
+  if (!user) {
+    throw new ValidationError('Invalid or expired reset token');
+  }
+
+  if (!user.passwordResetExpiresAt || user.passwordResetExpiresAt < new Date()) {
+    // Clear the expired token
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetToken: null,
+        passwordResetExpiresAt: null,
+      },
+    });
+    throw new ValidationError('Reset token has expired');
+  }
+
+  const passwordHash = await hashPassword(input.new_password);
+
+  // Update password, clear reset token, and invalidate all refresh tokens in a transaction
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        passwordResetToken: null,
+        passwordResetExpiresAt: null,
+      },
+    });
+
+    // Invalidate all active sessions so the user must re-login with the new password
+    await tx.refreshToken.deleteMany({
+      where: { userId: user.id },
+    });
+  });
 }

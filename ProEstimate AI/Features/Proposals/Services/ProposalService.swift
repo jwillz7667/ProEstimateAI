@@ -12,8 +12,6 @@ protocol ProposalServiceProtocol: Sendable {
     func getProposalCompany(companyId: String) async throws -> Company
     func generateFromEstimate(estimateId: String) async throws -> Proposal
     func createProposal(_ proposal: Proposal) async throws -> Proposal
-    func updateProposal(_ proposal: Proposal) async throws -> Proposal
-    func deleteProposal(id: String) async throws
     func sendProposal(id: String) async throws -> Proposal
 }
 
@@ -68,15 +66,6 @@ final class MockProposalService: ProposalServiceProtocol {
     func createProposal(_ proposal: Proposal) async throws -> Proposal {
         try await Task.sleep(nanoseconds: simulatedDelay)
         return proposal
-    }
-
-    func updateProposal(_ proposal: Proposal) async throws -> Proposal {
-        try await Task.sleep(nanoseconds: simulatedDelay)
-        return proposal
-    }
-
-    func deleteProposal(id: String) async throws {
-        try await Task.sleep(nanoseconds: simulatedDelay)
     }
 
     func sendProposal(id: String) async throws -> Proposal {

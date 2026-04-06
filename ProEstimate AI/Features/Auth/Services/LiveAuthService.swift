@@ -33,8 +33,6 @@ final class LiveAuthService: AuthServiceProtocol, Sendable {
     }
 
     func forgotPassword(request: ForgotPasswordRequest) async throws -> ForgotPasswordResponse {
-        // Password reset requires a dedicated backend endpoint that is not yet available.
-        // This will be wired up once the /auth/forgot-password endpoint is implemented.
-        throw APIError.unknown("Forgot password is not yet implemented.")
+        try await apiClient.request(.authForgotPassword(email: request.email))
     }
 }
