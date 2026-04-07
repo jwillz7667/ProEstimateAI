@@ -1,12 +1,14 @@
 import { prisma } from '../../config/database';
 import { NotFoundError, ValidationError } from '../../lib/errors';
 import { v4 as uuidv4 } from 'uuid';
+import { isAdminUser } from '../../lib/admin';
 import {
   StoreProductDto,
   toStoreProductDto,
   EntitlementSnapshotDto,
   toEntitlementSnapshotDto,
   PurchaseAttemptResponseDto,
+  ADMIN_ENTITLEMENT_SNAPSHOT,
 } from './commerce.dto';
 import {
   SyncTransactionInput,
@@ -19,6 +21,11 @@ export async function getEffectiveEntitlement(
   userId: string,
   companyId: string,
 ): Promise<EntitlementSnapshotDto> {
+  // Admin users get full Pro access without a real subscription
+  if (await isAdminUser(userId)) {
+    return ADMIN_ENTITLEMENT_SNAPSHOT;
+  }
+
   // Fetch entitlement with plan in a single query
   const entitlement = await prisma.userEntitlement.findUnique({
     where: { userId },

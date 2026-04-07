@@ -44,14 +44,19 @@ struct ProjectListView: View {
                 }
             }
             .fullScreenCover(isPresented: $showCreation) {
-                Task { await viewModel.loadProjects() }
-                if let projectId = navigateToProjectId {
-                    navigateToProjectId = nil
-                    router.projectsPath.append(AppDestination.projectDetail(id: projectId))
-                }
-            } content: {
                 ProjectCreationFlowView { projectId in
                     navigateToProjectId = projectId
+                }
+            }
+            .onChange(of: showCreation) { wasPresented, isPresented in
+                if wasPresented && !isPresented {
+                    Task { await viewModel.loadProjects() }
+                    if let projectId = navigateToProjectId {
+                        navigateToProjectId = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            router.projectsPath.append(AppDestination.projectDetail(id: projectId))
+                        }
+                    }
                 }
             }
             .navigationDestination(for: AppDestination.self) { destination in

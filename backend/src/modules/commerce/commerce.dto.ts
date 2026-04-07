@@ -172,6 +172,36 @@ export function toEntitlementSnapshotDto(
   };
 }
 
+// ─── Admin Entitlement ────────────────────────────────
+
+/**
+ * Hardcoded PRO entitlement returned for admin users.
+ * All features unlocked, unlimited usage, no billing state.
+ */
+export const ADMIN_ENTITLEMENT_SNAPSHOT: EntitlementSnapshotDto = {
+  subscription_state: 'PRO_ACTIVE',
+  current_plan_code: 'PRO_ANNUAL',
+  feature_flags: {
+    CAN_GENERATE_PREVIEW: true,
+    CAN_EXPORT_QUOTE: true,
+    CAN_REMOVE_WATERMARK: true,
+    CAN_USE_BRANDING: true,
+    CAN_CREATE_INVOICE: true,
+    CAN_SHARE_APPROVAL_LINK: true,
+    CAN_EXPORT_MATERIAL_LINKS: true,
+    CAN_USE_HIGH_RES_PREVIEW: true,
+  },
+  usage: [
+    { metric_code: 'AI_GENERATION', included_quantity: 999999, consumed_quantity: 0, remaining_quantity: 999999, source: 'ADMIN' },
+    { metric_code: 'QUOTE_EXPORT', included_quantity: 999999, consumed_quantity: 0, remaining_quantity: 999999, source: 'ADMIN' },
+  ],
+  renewal_date: null,
+  trial_ends_at: null,
+  grace_period_ends_at: null,
+  is_auto_renew_enabled: null,
+  billing_warning: null,
+};
+
 // ─── Purchase Attempt Response ─────────────────────────
 
 export interface PurchaseAttemptResponseDto {

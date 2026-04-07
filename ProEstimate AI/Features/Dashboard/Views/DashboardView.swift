@@ -33,26 +33,25 @@ struct DashboardView: View {
                 }
             }
             .fullScreenCover(isPresented: $showProjectCreation) {
-                // Refresh dashboard and navigate to newly created project
-                Task { await viewModel.loadDashboard() }
-                if let projectId = navigateToProjectId {
-                    navigateToProjectId = nil
-                    router.dashboardPath.append(AppDestination.projectDetail(id: projectId))
-                }
-            } content: {
                 ProjectCreationFlowView { projectId in
                     navigateToProjectId = projectId
                 }
             }
             .fullScreenCover(isPresented: $showQuickGenerate) {
-                Task { await viewModel.loadDashboard() }
-                if let projectId = navigateToProjectId {
-                    navigateToProjectId = nil
-                    router.dashboardPath.append(AppDestination.projectDetail(id: projectId))
-                }
-            } content: {
                 QuickGenerateView { projectId in
                     navigateToProjectId = projectId
+                }
+            }
+            .onChange(of: showProjectCreation) { wasPresented, isPresented in
+                if wasPresented && !isPresented {
+                    Task { await viewModel.loadDashboard() }
+                    navigateToCreatedProject()
+                }
+            }
+            .onChange(of: showQuickGenerate) { wasPresented, isPresented in
+                if wasPresented && !isPresented {
+                    Task { await viewModel.loadDashboard() }
+                    navigateToCreatedProject()
                 }
             }
             .sheet(isPresented: $showClientForm) {
@@ -260,6 +259,18 @@ struct DashboardView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Post-Creation Navigation
+
+    private func navigateToCreatedProject() {
+        guard let projectId = navigateToProjectId else { return }
+        navigateToProjectId = nil
+        // Brief delay lets the fullScreenCover dismiss animation finish
+        // before pushing onto the NavigationStack — avoids SwiftUI race.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            router.dashboardPath.append(AppDestination.projectDetail(id: projectId))
+        }
     }
 
     // MARK: - Quick Action Handler

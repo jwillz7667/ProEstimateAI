@@ -1,6 +1,7 @@
 import { UsageMetricCode } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { NotFoundError, PaywallError } from '../../lib/errors';
+import { isAdminUser } from '../../lib/admin';
 import { UsageBucketDto, toUsageBucketDto } from './usage.dto';
 import { PaywallPlacement } from '../../types/enums';
 
@@ -43,6 +44,17 @@ export async function checkAndConsume(
   companyId: string,
   metricCode: UsageMetricCode,
 ): Promise<UsageBucketDto> {
+  // Admin users have unlimited access — return a synthetic unlimited bucket
+  if (await isAdminUser(userId)) {
+    return {
+      metric_code: metricCode,
+      included_quantity: 999999,
+      consumed_quantity: 0,
+      remaining_quantity: 999999,
+      source: 'ADMIN',
+    };
+  }
+
   // Use a Prisma transaction with serializable isolation to prevent
   // double-spend race conditions on concurrent requests.
   const result = await prisma.$transaction(async (tx) => {

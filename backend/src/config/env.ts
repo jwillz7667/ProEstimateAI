@@ -9,6 +9,7 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   GOOGLE_AI_API_KEY: z.string().min(1).optional(),
   PIAPI_API_KEY: z.string().min(1).optional(),
+  ADMIN_EMAILS: z.string().optional().default(''),
   GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
   API_BASE_URL: z.string().default('https://proestimate-api-production.up.railway.app'),
 });

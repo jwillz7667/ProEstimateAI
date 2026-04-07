@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database';
 import { logger } from '../../config/logger';
 import { NotFoundError, PaywallError } from '../../lib/errors';
+import { isAdminUser } from '../../lib/admin';
 import { generatePreviewImage, getSystemPrompt, ImageGenContext, MaterialSpec, ReferencePhoto } from '../../lib/image-gen';
 import { generateMaterialSuggestions, generateLaborEstimates, MaterialGenContext } from '../../lib/material-gen';
 import { env } from '../../config/env';
@@ -322,6 +323,25 @@ export async function create(
   const imageContext = buildImageContext(project);
   imageContext.materials = toMaterialSpecs(data.materials);
   const systemPrompt = getSystemPrompt(imageContext);
+
+  // ── Admin bypass — skip entitlement gate entirely ──────────────────
+  if (await isAdminUser(userId)) {
+    const generation = await prisma.$transaction(async (tx) => {
+      const gen = await tx.aIGeneration.create({
+        data: { projectId, prompt: data.prompt, systemPrompt, status: 'QUEUED' },
+      });
+      await tx.activityLogEntry.create({
+        data: {
+          projectId, userId,
+          action: 'GENERATION_STARTED',
+          description: `AI generation started: ${data.prompt.substring(0, 100)}`,
+        },
+      });
+      return gen;
+    });
+    processGeneration(generation.id, data.prompt, imageContext, projectId).catch(() => {});
+    return generation;
+  }
 
   // ── Entitlement check ──────────────────────────────────────────────
   const entitlement = await prisma.userEntitlement.findUnique({

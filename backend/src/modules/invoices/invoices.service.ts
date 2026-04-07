@@ -1,5 +1,6 @@
 import { prisma } from '../../config/database';
 import { NotFoundError, PaywallError } from '../../lib/errors';
+import { isAdminUser } from '../../lib/admin';
 import { PaginationParams, paginateResults, buildCursorWhere } from '../../lib/pagination';
 import { CreateInvoiceInput, UpdateInvoiceInput } from './invoices.validators';
 import { InvoiceStatus } from '@prisma/client';
@@ -28,6 +29,8 @@ const INVOICE_LOCKED_PAYWALL = {
  * featuresJson array for the CAN_CREATE_INVOICE feature code.
  */
 async function assertCanCreateInvoice(userId: string): Promise<void> {
+  if (await isAdminUser(userId)) return;
+
   const entitlement = await prisma.userEntitlement.findUnique({
     where: { userId },
     include: { plan: { select: { featuresJson: true } } },
