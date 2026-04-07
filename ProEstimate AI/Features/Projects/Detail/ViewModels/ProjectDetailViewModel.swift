@@ -76,33 +76,51 @@ final class ProjectDetailViewModel {
 
         do {
             project = try await projectService.getProject(id: id)
-
-            // Load data from real API in parallel
-            async let gensTask = generationService.listGenerations(projectId: id)
-            async let estimatesTask = estimateService.listByProject(projectId: id)
-            async let assetsTask: [Asset] = APIClient.shared.request(.listAssets(projectId: id))
-
-            generations = try await gensTask
-            estimates = try await estimatesTask
-            assets = (try? await assetsTask) ?? []
-
-            // Load materials from completed generations
-            await loadMaterials()
-
-            // Load client if project has one
-            if let clientId = project?.clientId {
-                client = try? await clientService.getClient(id: clientId)
-            }
-
-            // Initialize selection state from server values
-            for material in materials {
-                materialSelectionState[material.id] = material.isSelected
-            }
         } catch {
             errorMessage = error.localizedDescription
+            isLoading = false
+            return
+        }
+
+        // Load sub-resources independently — one failure must not block the others
+        async let gensTask: Void = loadGenerations(projectId: id)
+        async let estimatesTask: Void = loadEstimates(projectId: id)
+        async let assetsTask: Void = loadAssets(projectId: id)
+        async let activityTask: Void = loadActivity(projectId: id)
+        async let clientTask: Void = loadClient()
+
+        _ = await (gensTask, estimatesTask, assetsTask, activityTask, clientTask)
+
+        // Load materials from completed generations
+        await loadMaterials()
+
+        // Initialize selection state from server values
+        for material in materials {
+            materialSelectionState[material.id] = material.isSelected
         }
 
         isLoading = false
+    }
+
+    private func loadGenerations(projectId: String) async {
+        generations = (try? await generationService.listGenerations(projectId: projectId)) ?? []
+    }
+
+    private func loadEstimates(projectId: String) async {
+        estimates = (try? await estimateService.listByProject(projectId: projectId)) ?? []
+    }
+
+    private func loadAssets(projectId: String) async {
+        assets = (try? await APIClient.shared.request(.listAssets(projectId: projectId))) ?? []
+    }
+
+    private func loadActivity(projectId: String) async {
+        activityLog = (try? await APIClient.shared.request(.listActivityLog(projectId: projectId, cursor: nil))) ?? []
+    }
+
+    private func loadClient() async {
+        guard let clientId = project?.clientId else { return }
+        client = try? await clientService.getClient(id: clientId)
     }
 
     /// Fetch material suggestions from all completed generations.
@@ -135,10 +153,10 @@ final class ProjectDetailViewModel {
                 prompt: project.description ?? "Generate a remodel preview for \(project.title)"
             )
 
-            // Poll for completion — Nano Banana 2 typically takes 15-35 seconds
+            // Poll for completion — PiAPI typically takes 60-130 seconds
             var completed = generation
-            for _ in 0..<24 {
-                try await Task.sleep(nanoseconds: 2_000_000_000) // 2 second intervals
+            for _ in 0..<60 {
+                try await Task.sleep(nanoseconds: 3_000_000_000) // 3 second intervals (max 3 min)
                 completed = try await generationService.getGenerationStatus(id: generation.id)
                 if completed.status == .completed || completed.status == .failed {
                     break
