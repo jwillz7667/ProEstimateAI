@@ -9,6 +9,7 @@ import { CreateEstimateLineItemInput, UpdateEstimateLineItemInput } from './esti
  */
 async function recalculateEstimateTotals(estimateId: string) {
   const lineItems = await prisma.estimateLineItem.findMany({ where: { estimateId } });
+  const estimate = await prisma.estimate.findUnique({ where: { id: estimateId } });
 
   let subtotalMaterials = 0;
   let subtotalLabor = 0;
@@ -29,7 +30,8 @@ async function recalculateEstimateTotals(estimateId: string) {
     }
   }
 
-  const totalAmount = subtotalMaterials + subtotalLabor + subtotalOther + taxAmount;
+  const discountAmount = Number(estimate?.discountAmount ?? 0);
+  const totalAmount = subtotalMaterials + subtotalLabor + subtotalOther + taxAmount - discountAmount;
 
   await prisma.estimate.update({
     where: { id: estimateId },

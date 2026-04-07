@@ -189,10 +189,6 @@ final class SettingsViewModel {
         }
     }
 
-    func signOut() {
-        // This will be handled by AppState; the view triggers it via environment.
-    }
-
     // MARK: - Private
 
     private func populateFields(from company: Company) {

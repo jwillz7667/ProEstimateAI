@@ -247,7 +247,13 @@ final class ProjectDetailViewModel {
     // MARK: - Material Selection
 
     func toggleMaterial(id: String) {
-        materialSelectionState[id] = !(materialSelectionState[id] ?? false)
+        let newValue = !(materialSelectionState[id] ?? false)
+        materialSelectionState[id] = newValue
+        Task {
+            let _: MaterialSuggestion? = try? await APIClient.shared.request(
+                .updateMaterialSelection(id: id, isSelected: newValue)
+            )
+        }
     }
 
     // MARK: - Computed Helpers

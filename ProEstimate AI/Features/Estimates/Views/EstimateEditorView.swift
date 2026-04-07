@@ -112,6 +112,14 @@ struct EstimateEditorView: View {
                 Text(error)
             }
         }
+        .alert("Success", isPresented: .init(
+            get: { viewModel.successMessage != nil },
+            set: { if !$0 { viewModel.successMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { viewModel.successMessage = nil }
+        } message: {
+            Text(viewModel.successMessage ?? "")
+        }
         .sheet(isPresented: $showShareSheet) {
             if let url = exportPDFURL {
                 ActivityViewRepresentable(activityItems: [url])

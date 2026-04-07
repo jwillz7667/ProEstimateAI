@@ -11,12 +11,15 @@ async function recalculateInvoiceTotals(invoiceId: string) {
 
   const subtotal = lineItems.reduce((sum, item) => sum + Number(item.lineTotal), 0);
 
-  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: { company: { select: { defaultTaxRate: true } } },
+  });
 
-  // Tax amount is simplified for now; can be enhanced with company default tax rate
-  const taxAmount = 0;
+  const defaultTaxRate = Number(invoice?.company?.defaultTaxRate ?? 0);
+  const taxAmount = subtotal * (defaultTaxRate / 100);
   const totalAmount = subtotal + taxAmount;
-  const amountDue = totalAmount - Number(invoice?.amountPaid || 0);
+  const amountDue = totalAmount - Number(invoice?.amountPaid ?? 0);
 
   await prisma.invoice.update({
     where: { id: invoiceId },
