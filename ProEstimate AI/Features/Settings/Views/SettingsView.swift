@@ -207,7 +207,7 @@ struct SettingsView: View {
             }
 
             // About Section
-            Section("About") {
+            Section {
                 HStack {
                     Text("Version")
                     Spacer()
@@ -226,6 +226,22 @@ struct SettingsView: View {
                 Link(destination: URL(string: "mailto:support@proestimate.ai")!) {
                     Label("Contact Support", systemImage: "envelope")
                 }
+            } header: {
+                Text("About")
+            } footer: {
+                VStack(spacing: SpacingTokens.xs) {
+                    Image("housd-icon-light")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: 32)
+                        .opacity(0.6)
+
+                    Text("ProEstimate AI")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, SpacingTokens.lg)
             }
         }
         .listStyle(.insetGrouped)

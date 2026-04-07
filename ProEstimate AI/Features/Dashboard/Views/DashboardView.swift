@@ -133,15 +133,24 @@ struct DashboardView: View {
     // MARK: - Greeting
 
     private var greetingSection: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-            Text(viewModel.greeting(for: appState.currentUser?.fullName ?? ""))
-                .font(TypographyTokens.title2)
+        HStack(spacing: SpacingTokens.sm) {
+            Image("housd-icon-light")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 40)
 
-            if let companyName = appState.currentCompany?.name {
-                Text(companyName)
-                    .font(TypographyTokens.subheadline)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                Text(viewModel.greeting(for: appState.currentUser?.fullName ?? ""))
+                    .font(TypographyTokens.title2)
+
+                if let companyName = appState.currentCompany?.name {
+                    Text(companyName)
+                        .font(TypographyTokens.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
+
+            Spacer()
         }
     }
 

@@ -33,17 +33,51 @@ struct AuthGateView: View {
     }
 
     private var splashView: some View {
-        VStack(spacing: SpacingTokens.lg) {
-            Image("housd-icon-light")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(height: 72)
+        ZStack {
+            // Subtle orange radial glow behind logo
+            RadialGradient(
+                colors: [
+                    ColorTokens.primaryOrange.opacity(0.08),
+                    Color.clear,
+                ],
+                center: .center,
+                startRadius: 40,
+                endRadius: 260
+            )
+            .ignoresSafeArea()
 
-            Text("ProEstimate AI")
-                .font(TypographyTokens.largeTitle)
+            VStack(spacing: SpacingTokens.lg) {
+                Spacer()
 
-            ProgressView()
-                .tint(ColorTokens.primaryOrange)
+                Image("housd-icon-light")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 100)
+                    .shadow(color: ColorTokens.primaryOrange.opacity(0.3), radius: 20, x: 0, y: 8)
+
+                VStack(spacing: SpacingTokens.xxs) {
+                    Text("ProEstimate")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+
+                    Text("AI")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundStyle(ColorTokens.primaryOrange)
+                        .tracking(6)
+                }
+
+                Spacer()
+
+                VStack(spacing: SpacingTokens.sm) {
+                    ProgressView()
+                        .tint(ColorTokens.primaryOrange)
+                        .controlSize(.regular)
+
+                    Text("Loading your workspace...")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.bottom, SpacingTokens.huge)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
