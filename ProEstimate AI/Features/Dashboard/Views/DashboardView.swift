@@ -281,10 +281,10 @@ struct DashboardView: View {
             showProjectCreation = true
         case .newClient:
             showClientForm = true
-        case .scanReceipt:
-            break
-        case .viewReports:
-            break
+        case .viewEstimates:
+            appState.selectedTab = .estimates
+        case .viewInvoices:
+            appState.selectedTab = .invoices
         }
     }
 }

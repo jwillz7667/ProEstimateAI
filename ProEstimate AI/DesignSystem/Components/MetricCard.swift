@@ -59,10 +59,22 @@ struct MetricCard: View {
             ColorTokens.elevatedSurface,
             in: RoundedRectangle(cornerRadius: RadiusTokens.card)
         )
+        .overlay(alignment: .top) {
+            // Orange accent bar at top of card
+            RoundedRectangle(cornerRadius: RadiusTokens.card)
+                .fill(ColorTokens.primaryOrange)
+                .frame(height: 3)
+                .mask(alignment: .top) {
+                    VStack {
+                        Rectangle().frame(height: 3)
+                        Spacer()
+                    }
+                }
+        }
         .overlay(
             RoundedRectangle(cornerRadius: RadiusTokens.card)
-                .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 0.5)
+                .strokeBorder(ColorTokens.primaryOrange.opacity(0.15), lineWidth: 0.5)
         )
-        .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
+        .shadow(color: ColorTokens.primaryOrange.opacity(0.06), radius: 4, x: 0, y: 2)
     }
 }

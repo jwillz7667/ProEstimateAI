@@ -46,8 +46,8 @@ extension DashboardSummary {
 enum QuickAction: String, CaseIterable, Identifiable {
     case newProject
     case newClient
-    case scanReceipt
-    case viewReports
+    case viewEstimates
+    case viewInvoices
 
     var id: String { rawValue }
 
@@ -55,8 +55,8 @@ enum QuickAction: String, CaseIterable, Identifiable {
         switch self {
         case .newProject: "New Project"
         case .newClient: "New Client"
-        case .scanReceipt: "Scan Receipt"
-        case .viewReports: "View Reports"
+        case .viewEstimates: "Estimates"
+        case .viewInvoices: "Invoices"
         }
     }
 
@@ -64,8 +64,8 @@ enum QuickAction: String, CaseIterable, Identifiable {
         switch self {
         case .newProject: "folder.badge.plus"
         case .newClient: "person.badge.plus"
-        case .scanReceipt: "doc.viewfinder"
-        case .viewReports: "chart.bar"
+        case .viewEstimates: "doc.text"
+        case .viewInvoices: "dollarsign.circle"
         }
     }
 }

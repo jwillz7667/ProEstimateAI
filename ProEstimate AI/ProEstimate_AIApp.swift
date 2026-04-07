@@ -22,6 +22,11 @@ struct ProEstimate_AIApp: App {
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }
+
+        // Global navigation bar appearance — orange large title text
+        let orange = UIColor(red: 249/255, green: 115/255, blue: 22/255, alpha: 1)
+        UINavigationBar.appearance().largeTitleTextAttributes = [.foregroundColor: orange]
+        UINavigationBar.appearance().tintColor = orange
     }
 
     var body: some Scene {

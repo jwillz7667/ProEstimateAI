@@ -9,9 +9,9 @@ extension View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 0.5)
+                    .strokeBorder(ColorTokens.primaryOrange.opacity(0.12), lineWidth: 0.5)
             )
-            .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
+            .shadow(color: ColorTokens.primaryOrange.opacity(0.04), radius: 3, x: 0, y: 1)
     }
 
     func glassSurface(cornerRadius: CGFloat = RadiusTokens.card) -> some View {
