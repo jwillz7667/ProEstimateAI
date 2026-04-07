@@ -342,13 +342,16 @@ export async function refresh(refreshTokenValue: string): Promise<TokenPairResul
   }
 
   if (storedToken.expiresAt < new Date()) {
-    // Clean up expired token
-    await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+    // Clean up expired token (deleteMany avoids P2025 on concurrent requests)
+    await prisma.refreshToken.deleteMany({ where: { id: storedToken.id } });
     throw new AuthenticationError('Refresh token has expired');
   }
 
   // 3. Rotate: delete old token, issue new pair
-  await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+  // Use deleteMany to handle concurrent refresh attempts gracefully —
+  // if two requests race to refresh the same token, the second delete
+  // is a no-op instead of throwing P2025.
+  await prisma.refreshToken.deleteMany({ where: { id: storedToken.id } });
 
   const jwtPayload: JwtPayload = {
     userId: payload.userId,

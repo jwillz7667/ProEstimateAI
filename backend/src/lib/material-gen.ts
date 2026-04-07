@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
 
-const GEMINI_TEXT_MODEL = 'gemini-2.5-flash-preview-05-20';
+const GEMINI_TEXT_MODEL = 'gemini-2.5-flash';
 
 let genAI: GoogleGenAI | null = null;
 
