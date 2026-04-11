@@ -92,10 +92,8 @@ struct PaywallHostView: View {
                 }
             }
 
-            // Dismiss button (only for non-blocking paywalls).
-            if !viewModel.isBlocking {
-                dismissButton
-            }
+            // Dismiss button — always shown so user can back out
+            dismissButton
         }
         .task {
             await viewModel.loadProducts()
@@ -106,7 +104,7 @@ struct PaywallHostView: View {
                 dismiss()
             }
         }
-        .interactiveDismissDisabled(viewModel.isBlocking)
+        .interactiveDismissDisabled(false)
     }
 
     // MARK: - Background
