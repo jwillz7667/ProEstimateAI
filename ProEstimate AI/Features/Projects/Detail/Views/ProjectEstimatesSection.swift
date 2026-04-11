@@ -65,7 +65,7 @@ struct ProjectEstimatesSection: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, SpacingTokens.xxs)
                             .padding(.vertical, 1)
-                            .background(Color.gray.opacity(0.15), in: Capsule())
+                            .background(ColorTokens.inputBackground, in: Capsule())
                     }
 
                     HStack(spacing: SpacingTokens.xs) {

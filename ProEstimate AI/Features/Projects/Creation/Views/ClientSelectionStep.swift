@@ -49,7 +49,7 @@ struct ClientSelectionStep: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .frame(width: 40, height: 40)
-                    .background(Color.gray.opacity(0.12), in: Circle())
+                    .background(ColorTokens.inputBackground, in: Circle())
 
                 VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
                     Text("No Client")

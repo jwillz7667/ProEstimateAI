@@ -95,7 +95,7 @@ struct ProposalScopeSection: View {
         }
         .padding(.horizontal, SpacingTokens.xs)
         .padding(.vertical, SpacingTokens.xxs)
-        .background(Color.gray.opacity(0.1), in: Capsule())
+        .background(ColorTokens.inputBackground, in: Capsule())
         .foregroundStyle(.secondary)
     }
 

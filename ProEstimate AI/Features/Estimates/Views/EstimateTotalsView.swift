@@ -59,7 +59,7 @@ struct EstimateTotalsView: View {
             }
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.sm)
-            .background(Color(.systemBackground))
+            .background(ColorTokens.background)
         }
         .onAppear {
             discountText = discountAmount > 0

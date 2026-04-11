@@ -34,7 +34,7 @@ struct GenerationProgressCard: View {
                 switch state {
                 case .pending:
                     Circle()
-                        .strokeBorder(Color.gray.opacity(0.3), lineWidth: 2)
+                        .strokeBorder(ColorTokens.progressTrack, lineWidth: 2)
                         .frame(width: 24, height: 24)
 
                 case .active:
@@ -86,7 +86,7 @@ struct GenerationProgressCard: View {
 
     private func iconColor(for state: StageState) -> Color {
         switch state {
-        case .pending: Color.gray.opacity(0.4)
+        case .pending: ColorTokens.secondaryText
         case .active: ColorTokens.primaryOrange
         case .complete: ColorTokens.success
         }

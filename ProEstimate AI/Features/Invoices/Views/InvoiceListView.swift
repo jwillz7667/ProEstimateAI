@@ -239,7 +239,7 @@ private struct InvoiceRowView: View {
                 if let dueDate = invoice.dueDate {
                     Label(dueDate.formatted(as: .relative), systemImage: "clock")
                         .font(TypographyTokens.caption)
-                        .foregroundStyle(invoice.isPastDue ? ColorTokens.error : Color.gray.opacity(0.6))
+                        .foregroundStyle(invoice.isPastDue ? ColorTokens.error : ColorTokens.secondaryText)
                 }
             }
 
@@ -248,7 +248,7 @@ private struct InvoiceRowView: View {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.gray.opacity(0.15))
+                            .fill(ColorTokens.progressTrack)
                             .frame(height: 4)
 
                         RoundedRectangle(cornerRadius: 2)

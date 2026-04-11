@@ -46,7 +46,7 @@ struct EstimateEditorView: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, SpacingTokens.xs)
                         .padding(.vertical, SpacingTokens.xxs)
-                        .background(Color.gray.opacity(0.15), in: Capsule())
+                        .background(ColorTokens.inputBackground, in: Capsule())
 
                     Button {
                         Task { await viewModel.save() }

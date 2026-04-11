@@ -244,7 +244,7 @@ struct ProposalPreviewView: View {
         }
         .padding(SpacingTokens.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.gray.opacity(0.05))
+        .background(ColorTokens.cardOverlay)
     }
 
     private func termsSection(_ terms: String) -> some View {

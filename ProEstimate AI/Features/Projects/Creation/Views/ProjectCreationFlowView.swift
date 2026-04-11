@@ -69,7 +69,7 @@ struct ProjectCreationFlowView: View {
         HStack(spacing: SpacingTokens.xxs) {
             ForEach(0..<viewModel.totalSteps, id: \.self) { step in
                 Capsule()
-                    .fill(step <= viewModel.currentStep ? ColorTokens.primaryOrange : Color.gray.opacity(0.3))
+                    .fill(step <= viewModel.currentStep ? ColorTokens.primaryOrange : ColorTokens.progressTrack)
                     .frame(height: 4)
                     .animation(.easeInOut(duration: 0.25), value: viewModel.currentStep)
             }

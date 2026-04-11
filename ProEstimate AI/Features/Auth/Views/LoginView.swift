@@ -160,8 +160,8 @@ struct LoginView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, SpacingTokens.sm)
             .padding(.horizontal, SpacingTokens.md)
-            .background(Color(.label), in: RoundedRectangle(cornerRadius: RadiusTokens.button))
-            .foregroundStyle(Color(.systemBackground))
+            .background(.white, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
+            .foregroundStyle(ColorTokens.background)
         }
         .disabled(viewModel.isLoading)
     }

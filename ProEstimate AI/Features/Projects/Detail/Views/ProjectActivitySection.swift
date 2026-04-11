@@ -41,7 +41,7 @@ struct ProjectActivitySection: View {
 
                 if !isLast {
                     Rectangle()
-                        .fill(Color.gray.opacity(0.2))
+                        .fill(ColorTokens.subtleBorder)
                         .frame(width: 1)
                         .frame(maxHeight: .infinity)
                 }

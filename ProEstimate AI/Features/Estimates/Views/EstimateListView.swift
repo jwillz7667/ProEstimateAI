@@ -158,7 +158,7 @@ private struct EstimateRowView: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, SpacingTokens.xxs)
                         .padding(.vertical, 2)
-                        .background(Color.gray.opacity(0.15), in: Capsule())
+                        .background(ColorTokens.inputBackground, in: Capsule())
                 }
 
                 Spacer()
