@@ -70,8 +70,14 @@ export async function create(companyId: string, userId: string, data: CreateEsti
         projectId: data.project_id,
         companyId,
         estimateNumber,
+        title: data.title ?? null,
+        pricingProfileId: data.pricing_profile_id ?? null,
         notes: data.notes ?? null,
+        assumptions: data.assumptions ?? null,
+        exclusions: data.exclusions ?? null,
+        contingencyAmount: data.contingency_amount ?? null,
         validUntil: data.valid_until ? new Date(data.valid_until) : null,
+        createdByUserId: userId,
       },
     });
 
@@ -105,8 +111,23 @@ export async function update(id: string, companyId: string, userId: string, data
   if (data.status !== undefined) {
     updateData.status = data.status.toUpperCase() as EstimateStatus;
   }
+  if (data.title !== undefined) {
+    updateData.title = data.title;
+  }
+  if (data.pricing_profile_id !== undefined) {
+    updateData.pricingProfileId = data.pricing_profile_id;
+  }
   if (data.notes !== undefined) {
     updateData.notes = data.notes;
+  }
+  if (data.assumptions !== undefined) {
+    updateData.assumptions = data.assumptions;
+  }
+  if (data.exclusions !== undefined) {
+    updateData.exclusions = data.exclusions;
+  }
+  if (data.contingency_amount !== undefined) {
+    updateData.contingencyAmount = data.contingency_amount;
   }
   if (data.valid_until !== undefined) {
     updateData.validUntil = data.valid_until ? new Date(data.valid_until) : null;

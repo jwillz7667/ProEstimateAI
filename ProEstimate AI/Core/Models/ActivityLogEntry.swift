@@ -5,7 +5,7 @@ import Foundation
 /// from project creation through invoice payment.
 struct ActivityLogEntry: Codable, Identifiable, Hashable, Sendable {
     let id: String
-    let projectId: String
+    let projectId: String?
     let userId: String?
     let action: Action
     let description: String

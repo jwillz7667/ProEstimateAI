@@ -6,6 +6,7 @@ import {
   updateHandler,
   sendHandler,
   deleteHandler,
+  exportPDFHandler,
 } from './invoices.controller';
 import { validate } from '../../middleware/validate.middleware';
 import { createInvoiceSchema, updateInvoiceSchema } from './invoices.validators';
@@ -19,6 +20,7 @@ function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => P
 
 router.get('/', asyncHandler(listHandler));
 router.get('/:id', asyncHandler(getByIdHandler));
+router.get('/:id/export', asyncHandler(exportPDFHandler));
 router.post('/', validate(createInvoiceSchema), asyncHandler(createHandler));
 router.patch('/:id', validate(updateInvoiceSchema), asyncHandler(updateHandler));
 router.post('/:id/send', asyncHandler(sendHandler));

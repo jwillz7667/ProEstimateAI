@@ -58,10 +58,16 @@ export async function checkAndConsume(
   // Use a Prisma transaction with serializable isolation to prevent
   // double-spend race conditions on concurrent requests.
   const result = await prisma.$transaction(async (tx) => {
-    // Lock the row by reading it inside the transaction
-    const bucket = await tx.usageBucket.findUnique({
-      where: { userId_metricCode: { userId, metricCode } },
+    // Find all buckets for this metric, prefer STARTER_CREDITS first (consume free credits before Pro)
+    const buckets = await tx.usageBucket.findMany({
+      where: { userId, metricCode },
+      orderBy: { source: 'asc' }, // STARTER_CREDITS < PRO_SUBSCRIPTION alphabetically
     });
+
+    // Find the first bucket with remaining credits
+    const bucket = buckets.find(
+      (b) => b.includedQuantity - b.consumedQuantity > 0,
+    ) ?? buckets[0];
 
     if (!bucket) {
       throw new NotFoundError('UsageBucket', `${userId}/${metricCode}`);
@@ -73,21 +79,25 @@ export async function checkAndConsume(
       const placement = METRIC_TO_PLACEMENT[metricCode];
       const label = METRIC_LABELS[metricCode];
 
+      // Sum across all buckets for accurate reporting
+      const totalIncluded = buckets.reduce((s, b) => s + b.includedQuantity, 0);
+      const totalConsumed = buckets.reduce((s, b) => s + b.consumedQuantity, 0);
+
       throw new PaywallError(
         `You have used all your free ${label} credits. Upgrade to Pro for unlimited access.`,
         {
           placement,
           metric_code: metricCode,
-          included_quantity: bucket.includedQuantity,
-          consumed_quantity: bucket.consumedQuantity,
+          included_quantity: totalIncluded,
+          consumed_quantity: totalConsumed,
           remaining_quantity: 0,
         },
       );
     }
 
-    // Atomically increment consumed quantity
+    // Atomically increment consumed quantity on the chosen bucket
     const updated = await tx.usageBucket.update({
-      where: { userId_metricCode: { userId, metricCode } },
+      where: { id: bucket.id },
       data: { consumedQuantity: { increment: 1 } },
     });
 

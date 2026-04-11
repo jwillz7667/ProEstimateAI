@@ -15,6 +15,11 @@ export const updateCompanySchema = z.object({
   default_markup_percent: z.number().min(0).max(999).nullable().optional(),
   estimate_prefix: z.string().max(10).nullable().optional(),
   invoice_prefix: z.string().max(10).nullable().optional(),
+  proposal_prefix: z.string().max(10).nullable().optional(),
+  default_language: z.string().max(10).nullable().optional(),
+  timezone: z.string().max(100).nullable().optional(),
+  website_url: z.string().url().max(2048).nullable().optional(),
+  tax_label: z.string().max(50).nullable().optional(),
 });
 
 export type UpdateCompanyInput = z.infer<typeof updateCompanySchema>;

@@ -103,6 +103,9 @@ export async function create(estimateId: string, companyId: string, data: Create
       taxRate: data.tax_rate ?? 0,
       lineTotal,
       sortOrder: data.sort_order ?? 0,
+      parentLineItemId: data.parent_line_item_id ?? null,
+      sourceMaterialSuggestionId: data.source_material_suggestion_id ?? null,
+      itemType: data.item_type ?? null,
     },
   });
 
@@ -143,6 +146,15 @@ export async function update(lineItemId: string, companyId: string, data: Update
   }
   if (data.sort_order !== undefined) {
     updateData.sortOrder = data.sort_order;
+  }
+  if (data.parent_line_item_id !== undefined) {
+    updateData.parentLineItemId = data.parent_line_item_id;
+  }
+  if (data.source_material_suggestion_id !== undefined) {
+    updateData.sourceMaterialSuggestionId = data.source_material_suggestion_id;
+  }
+  if (data.item_type !== undefined) {
+    updateData.itemType = data.item_type;
   }
 
   // Recalculate line total using merged values

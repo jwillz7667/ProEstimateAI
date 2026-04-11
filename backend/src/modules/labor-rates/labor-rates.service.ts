@@ -55,6 +55,10 @@ export async function create(profileId: string, companyId: string, data: CreateL
       category: data.category,
       ratePerHour: data.rate_per_hour,
       minimumHours: data.minimum_hours ?? undefined,
+      rateType: data.rate_type ?? 'hourly',
+      flatRate: data.flat_rate ?? null,
+      unitRate: data.unit_rate ?? null,
+      unit: data.unit ?? null,
     },
   });
 
@@ -70,6 +74,10 @@ export async function update(id: string, companyId: string, data: UpdateLaborRat
       ...(data.category !== undefined && { category: data.category }),
       ...(data.rate_per_hour !== undefined && { ratePerHour: data.rate_per_hour }),
       ...(data.minimum_hours !== undefined && { minimumHours: data.minimum_hours }),
+      ...(data.rate_type !== undefined && { rateType: data.rate_type }),
+      ...(data.flat_rate !== undefined && { flatRate: data.flat_rate }),
+      ...(data.unit_rate !== undefined && { unitRate: data.unit_rate }),
+      ...(data.unit !== undefined && { unit: data.unit }),
     },
   });
 

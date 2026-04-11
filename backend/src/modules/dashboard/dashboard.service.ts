@@ -59,18 +59,14 @@ export async function getSummary(
       },
     }),
 
-    // AI generation credits remaining
-    prisma.usageBucket.findUnique({
-      where: {
-        userId_metricCode: { userId, metricCode: 'AI_GENERATION' },
-      },
+    // AI generation credits remaining (sum across all buckets for this metric)
+    prisma.usageBucket.findMany({
+      where: { userId, metricCode: 'AI_GENERATION' },
     }),
 
-    // Quote export credits remaining
-    prisma.usageBucket.findUnique({
-      where: {
-        userId_metricCode: { userId, metricCode: 'QUOTE_EXPORT' },
-      },
+    // Quote export credits remaining (sum across all buckets for this metric)
+    prisma.usageBucket.findMany({
+      where: { userId, metricCode: 'QUOTE_EXPORT' },
     }),
   ]);
 
@@ -78,13 +74,13 @@ export async function getSummary(
     ? Number(revenueResult._sum.totalAmount)
     : 0;
 
-  const generationsRemaining = generationBucket
-    ? Math.max(0, generationBucket.includedQuantity - generationBucket.consumedQuantity)
-    : 0;
+  const generationsRemaining = generationBucket.reduce(
+    (sum, b) => sum + Math.max(0, b.includedQuantity - b.consumedQuantity), 0,
+  );
 
-  const quotesRemaining = quoteBucket
-    ? Math.max(0, quoteBucket.includedQuantity - quoteBucket.consumedQuantity)
-    : 0;
+  const quotesRemaining = quoteBucket.reduce(
+    (sum, b) => sum + Math.max(0, b.includedQuantity - b.consumedQuantity), 0,
+  );
 
   return {
     active_projects_count: activeProjectsCount,

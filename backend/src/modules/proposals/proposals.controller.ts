@@ -27,7 +27,26 @@ export async function createHandler(req: Request, res: Response) {
   sendSuccess(res, toProposalDto(proposal), { statusCode: 201 });
 }
 
+export async function updateHandler(req: Request, res: Response) {
+  const proposal = await proposalsService.update(param(req.params.id), req.companyId!, req.body);
+  sendSuccess(res, toProposalDto(proposal));
+}
+
+export async function deleteHandler(req: Request, res: Response) {
+  await proposalsService.remove(param(req.params.id), req.companyId!);
+  sendSuccess(res, {});
+}
+
 export async function sendHandler(req: Request, res: Response) {
   const proposal = await proposalsService.send(param(req.params.id), req.companyId!, req.userId!, req.body);
   sendSuccess(res, toProposalDto(proposal));
+}
+
+export async function exportPDFHandler(req: Request, res: Response) {
+  const { generateProposalPDF } = await import('../pdf/pdf.service');
+  const pdfBuffer = await generateProposalPDF(param(req.params.id), req.companyId!, req.userId!);
+  res.set('Content-Type', 'application/pdf');
+  res.set('Content-Disposition', `attachment; filename="proposal-${req.params.id}.pdf"`);
+  res.set('Cache-Control', 'private, no-cache');
+  res.send(pdfBuffer);
 }

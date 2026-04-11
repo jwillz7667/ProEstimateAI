@@ -41,3 +41,12 @@ export async function deleteHandler(req: Request, res: Response) {
   await invoicesService.remove(param(req.params.id), req.companyId!);
   sendSuccess(res, {});
 }
+
+export async function exportPDFHandler(req: Request, res: Response) {
+  const { generateInvoicePDF } = await import('../pdf/pdf.service');
+  const pdfBuffer = await generateInvoicePDF(param(req.params.id), req.companyId!, req.userId!);
+  res.set('Content-Type', 'application/pdf');
+  res.set('Content-Disposition', `attachment; filename="invoice-${req.params.id}.pdf"`);
+  res.set('Cache-Control', 'private, no-cache');
+  res.send(pdfBuffer);
+}

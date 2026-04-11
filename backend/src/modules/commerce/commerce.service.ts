@@ -2,6 +2,12 @@ import { prisma } from '../../config/database';
 import { NotFoundError, ValidationError } from '../../lib/errors';
 import { v4 as uuidv4 } from 'uuid';
 import { isAdminUser } from '../../lib/admin';
+import { logger } from '../../config/logger';
+import {
+  DecodedAppleNotification,
+  AppleNotificationType,
+  AppleNotificationSubtype,
+} from '../../lib/apple-storekit';
 import {
   StoreProductDto,
   toStoreProductDto,
@@ -214,7 +220,11 @@ export async function syncTransaction(
     const PRO_INCLUDED_QUANTITY = 999999;
 
     await tx.usageBucket.upsert({
-      where: { userId_metricCode: { userId, metricCode: 'AI_GENERATION' } },
+      where: {
+        userId_companyId_metricCode_source: {
+          userId, companyId, metricCode: 'AI_GENERATION', source: 'PRO_SUBSCRIPTION',
+        },
+      },
       create: {
         userId,
         companyId,
@@ -226,12 +236,15 @@ export async function syncTransaction(
       },
       update: {
         includedQuantity: PRO_INCLUDED_QUANTITY,
-        source: 'PRO_SUBSCRIPTION',
       },
     });
 
     await tx.usageBucket.upsert({
-      where: { userId_metricCode: { userId, metricCode: 'QUOTE_EXPORT' } },
+      where: {
+        userId_companyId_metricCode_source: {
+          userId, companyId, metricCode: 'QUOTE_EXPORT', source: 'PRO_SUBSCRIPTION',
+        },
+      },
       create: {
         userId,
         companyId,
@@ -243,7 +256,6 @@ export async function syncTransaction(
       },
       update: {
         includedQuantity: PRO_INCLUDED_QUANTITY,
-        source: 'PRO_SUBSCRIPTION',
       },
     });
 
@@ -343,7 +355,11 @@ export async function restorePurchases(
 
     // Upgrade usage buckets to Pro limits
     await tx.usageBucket.upsert({
-      where: { userId_metricCode: { userId, metricCode: 'AI_GENERATION' } },
+      where: {
+        userId_companyId_metricCode_source: {
+          userId, companyId, metricCode: 'AI_GENERATION', source: 'PRO_SUBSCRIPTION',
+        },
+      },
       create: {
         userId,
         companyId,
@@ -355,12 +371,15 @@ export async function restorePurchases(
       },
       update: {
         includedQuantity: PRO_INCLUDED_QUANTITY,
-        source: 'PRO_SUBSCRIPTION',
       },
     });
 
     await tx.usageBucket.upsert({
-      where: { userId_metricCode: { userId, metricCode: 'QUOTE_EXPORT' } },
+      where: {
+        userId_companyId_metricCode_source: {
+          userId, companyId, metricCode: 'QUOTE_EXPORT', source: 'PRO_SUBSCRIPTION',
+        },
+      },
       create: {
         userId,
         companyId,
@@ -372,7 +391,6 @@ export async function restorePurchases(
       },
       update: {
         includedQuantity: PRO_INCLUDED_QUANTITY,
-        source: 'PRO_SUBSCRIPTION',
       },
     });
 
@@ -384,4 +402,152 @@ export async function restorePurchases(
   });
 
   return toEntitlementSnapshotDto(result.entitlement, result.buckets);
+}
+
+// ─── App Store Webhook Handler ────────────────────────
+
+export async function handleAppStoreWebhook(
+  decoded: DecodedAppleNotification,
+): Promise<void> {
+  const { payload, transactionInfo, renewalInfo } = decoded;
+  const { notificationType, subtype } = payload;
+  const { originalTransactionId, transactionId, productId, appAccountToken, environment } = transactionInfo;
+
+  const entitlement = await prisma.userEntitlement.findFirst({
+    where: { originalTransactionId },
+    include: { plan: true },
+  });
+
+  if (!entitlement) {
+    if (appAccountToken) {
+      const attempt = await prisma.purchaseAttempt.findFirst({
+        where: { appAccountToken },
+      });
+      if (attempt) {
+        logger.warn(
+          { originalTransactionId, appAccountToken, notificationType },
+          'Found purchase attempt but no entitlement — notification arrived before sync',
+        );
+      }
+    }
+    logger.warn({ originalTransactionId, notificationType }, 'No entitlement for App Store notification — skipping');
+    return;
+  }
+
+  const eventType = mapNotificationToEventType(notificationType, subtype);
+
+  // Idempotency: skip if we already processed this transactionId + eventType
+  const existingEvent = await prisma.subscriptionEvent.findFirst({
+    where: { entitlementId: entitlement.id, transactionId, eventType },
+  });
+  if (existingEvent) {
+    logger.info({ transactionId, notificationType }, 'Duplicate App Store notification — already processed');
+    return;
+  }
+
+  const statusUpdate = mapNotificationToStatus(notificationType, subtype, renewalInfo);
+
+  await prisma.$transaction(async (tx) => {
+    if (statusUpdate.status) {
+      const updateData: Record<string, unknown> = {
+        status: statusUpdate.status,
+        latestTransactionId: transactionId,
+        environment,
+      };
+      if (statusUpdate.renewalDate) updateData.renewalDate = statusUpdate.renewalDate;
+      if (statusUpdate.gracePeriodEndsAt !== undefined) updateData.gracePeriodEndsAt = statusUpdate.gracePeriodEndsAt;
+      if (statusUpdate.isAutoRenewEnabled !== undefined) updateData.isAutoRenewEnabled = statusUpdate.isAutoRenewEnabled;
+      if (statusUpdate.endsAt) updateData.endsAt = statusUpdate.endsAt;
+
+      await tx.userEntitlement.update({ where: { id: entitlement.id }, data: updateData });
+    }
+
+    await tx.subscriptionEvent.create({
+      data: {
+        entitlementId: entitlement.id,
+        userId: entitlement.userId,
+        companyId: entitlement.companyId,
+        eventType,
+        storeProductId: productId,
+        transactionId,
+        environment,
+        platform: 'ios',
+        appAccountToken: appAccountToken ?? null,
+        effectiveAt: new Date(),
+        payloadJson: { notificationType, subtype: subtype ?? null, notificationUUID: payload.notificationUUID },
+        metadata: { originalTransactionId, auto_renew_status: renewalInfo?.autoRenewStatus, expiration_intent: renewalInfo?.expirationIntent },
+      },
+    });
+  });
+
+  logger.info(
+    { entitlementId: entitlement.id, userId: entitlement.userId, notificationType, subtype, newStatus: statusUpdate.status, eventType },
+    'App Store webhook processed — entitlement updated',
+  );
+}
+
+type WebhookEventType = 'PURCHASED' | 'INITIAL_PURCHASE' | 'RENEWED' | 'TRIAL_STARTED' | 'TRIAL_CONVERTED' | 'CANCELED' | 'EXPIRED' | 'GRACE_PERIOD_ENTERED' | 'GRACE_PERIOD_RECOVERED' | 'BILLING_RETRY_ENTERED' | 'REVOKED' | 'RESTORED' | 'AUTO_RENEW_DISABLED' | 'AUTO_RENEW_ENABLED' | 'REFUNDED' | 'PRODUCT_CHANGED';
+
+function mapNotificationToEventType(notificationType: string, subtype?: string): WebhookEventType {
+  switch (notificationType) {
+    case AppleNotificationType.SUBSCRIBED:
+      return subtype === AppleNotificationSubtype.INITIAL_BUY ? 'INITIAL_PURCHASE' : 'PURCHASED';
+    case AppleNotificationType.DID_RENEW:
+      return subtype === AppleNotificationSubtype.BILLING_RECOVERY ? 'GRACE_PERIOD_RECOVERED' : 'RENEWED';
+    case AppleNotificationType.DID_FAIL_TO_RENEW:
+      return subtype === AppleNotificationSubtype.GRACE_PERIOD ? 'GRACE_PERIOD_ENTERED' : 'BILLING_RETRY_ENTERED';
+    case AppleNotificationType.EXPIRED:
+      return 'EXPIRED';
+    case AppleNotificationType.REVOKE:
+      return 'REVOKED';
+    case AppleNotificationType.REFUND:
+      return 'REFUNDED';
+    case AppleNotificationType.DID_CHANGE_RENEWAL_STATUS:
+      return subtype === AppleNotificationSubtype.AUTO_RENEW_DISABLED ? 'AUTO_RENEW_DISABLED' : 'AUTO_RENEW_ENABLED';
+    case AppleNotificationType.DID_CHANGE_RENEWAL_PREF:
+      return 'PRODUCT_CHANGED';
+    default:
+      return 'PURCHASED';
+  }
+}
+
+interface StatusUpdate {
+  status: string | null;
+  renewalDate?: Date;
+  gracePeriodEndsAt?: Date | null;
+  isAutoRenewEnabled?: boolean;
+  endsAt?: Date;
+}
+
+function mapNotificationToStatus(
+  notificationType: string,
+  subtype?: string,
+  renewalInfo?: { autoRenewStatus: number; renewalDate?: number; gracePeriodExpiresDate?: number } | null,
+): StatusUpdate {
+  switch (notificationType) {
+    case AppleNotificationType.SUBSCRIBED:
+      return { status: 'PRO_ACTIVE', gracePeriodEndsAt: null };
+    case AppleNotificationType.DID_RENEW:
+      return {
+        status: 'PRO_ACTIVE',
+        renewalDate: renewalInfo?.renewalDate ? new Date(renewalInfo.renewalDate) : undefined,
+        gracePeriodEndsAt: null, isAutoRenewEnabled: true,
+      };
+    case AppleNotificationType.DID_FAIL_TO_RENEW:
+      if (subtype === AppleNotificationSubtype.GRACE_PERIOD) {
+        return { status: 'GRACE_PERIOD', gracePeriodEndsAt: renewalInfo?.gracePeriodExpiresDate ? new Date(renewalInfo.gracePeriodExpiresDate) : null };
+      }
+      return { status: 'BILLING_RETRY' };
+    case AppleNotificationType.EXPIRED:
+    case AppleNotificationType.GRACE_PERIOD_EXPIRED:
+      return { status: 'EXPIRED', endsAt: new Date(), gracePeriodEndsAt: null };
+    case AppleNotificationType.REVOKE:
+    case AppleNotificationType.REFUND:
+      return { status: 'REVOKED', endsAt: new Date() };
+    case AppleNotificationType.DID_CHANGE_RENEWAL_STATUS:
+      if (subtype === AppleNotificationSubtype.AUTO_RENEW_DISABLED) return { status: 'CANCELED_ACTIVE', isAutoRenewEnabled: false };
+      return { status: 'PRO_ACTIVE', isAutoRenewEnabled: true };
+    default:
+      return { status: null };
+  }
 }

@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { env } from '../../config/env';
 import { prisma } from '../../config/database';
 import { hashPassword, verifyPassword } from '../../lib/hash';
 import {
@@ -420,10 +421,10 @@ export async function forgotPassword(input: ForgotPasswordInput): Promise<void> 
     },
   });
 
-  // TODO: Send email with reset link. For now, log for development/testing.
-  console.log(
-    `[ForgotPassword] Reset token for ${user.email}: ${resetToken} (expires ${expiresAt.toISOString()})`,
-  );
+  // Send password reset email (graceful no-op if RESEND_API_KEY not configured)
+  const { sendPasswordResetEmail } = await import('../../lib/email');
+  const resetUrl = `${env.API_BASE_URL}/reset-password?token=${resetToken}`;
+  await sendPasswordResetEmail(user.email, resetUrl);
 }
 
 // ─── Reset Password ─────────────────────────────────────────────────────────

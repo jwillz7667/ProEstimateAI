@@ -42,6 +42,11 @@ export async function updateMe(companyId: string, data: UpdateCompanyInput) {
       ...(data.default_markup_percent !== undefined && { defaultMarkupPercent: data.default_markup_percent }),
       ...(data.estimate_prefix !== undefined && { estimatePrefix: data.estimate_prefix }),
       ...(data.invoice_prefix !== undefined && { invoicePrefix: data.invoice_prefix }),
+      ...(data.proposal_prefix !== undefined && { proposalPrefix: data.proposal_prefix }),
+      ...(data.default_language !== undefined && { defaultLanguage: data.default_language }),
+      ...(data.timezone !== undefined && { timezone: data.timezone }),
+      ...(data.website_url !== undefined && { websiteUrl: data.website_url }),
+      ...(data.tax_label !== undefined && { taxLabel: data.tax_label }),
     },
   });
 

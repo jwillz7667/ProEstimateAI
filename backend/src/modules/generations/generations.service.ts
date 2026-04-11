@@ -363,14 +363,14 @@ export async function create(
     if (canGenerate === 'CREDIT_GATED') {
       // Atomically check and consume a credit inside a transaction
       const generation = await prisma.$transaction(async (tx) => {
-        const bucket = await tx.usageBucket.findUnique({
-          where: {
-            userId_metricCode: {
-              userId,
-              metricCode: 'AI_GENERATION',
-            },
-          },
+        // Find the first bucket with remaining credits for this metric
+        const buckets = await tx.usageBucket.findMany({
+          where: { userId, metricCode: 'AI_GENERATION' },
+          orderBy: { source: 'asc' },
         });
+        const bucket = buckets.find(
+          (b) => b.includedQuantity - b.consumedQuantity > 0,
+        ) ?? buckets[0] ?? null;
 
         if (!bucket) {
           throw new PaywallError(

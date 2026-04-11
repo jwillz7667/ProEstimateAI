@@ -19,15 +19,18 @@ import materialsRoutes from './modules/materials/materials.routes';
 import estimatesRoutes from './modules/estimates/estimates.routes';
 import estimateLineItemsRoutes from './modules/estimate-line-items/estimate-line-items.routes';
 import proposalsRoutes from './modules/proposals/proposals.routes';
+import proposalsShareRoutes from './modules/proposals/proposals-share.routes';
 import invoicesRoutes from './modules/invoices/invoices.routes';
 import invoiceLineItemsRoutes from './modules/invoice-line-items/invoice-line-items.routes';
 import pricingProfilesRoutes from './modules/pricing-profiles/pricing-profiles.routes';
 import laborRatesRoutes from './modules/labor-rates/labor-rates.routes';
 import activityRoutes from './modules/activity/activity.routes';
 import commerceRoutes from './modules/commerce/commerce.routes';
+import commerceWebhookRoutes from './modules/commerce/commerce-webhook.routes';
 import usageRoutes from './modules/usage/usage.routes';
 import dashboardRoutes from './modules/dashboard/dashboard.routes';
 import contractorsRoutes from './modules/contractors/contractors.routes';
+import materialsPricingRoutes from './modules/materials-pricing/materials-pricing.routes';
 
 export function createApp() {
   const app = express();
@@ -76,6 +79,12 @@ export function createApp() {
     } catch (err) { next(err); }
   });
 
+  // Public proposal share page (no auth — accessed by clients via share link)
+  v1.use('/proposals/share', proposalsShareRoutes);
+
+  // App Store Server Notifications webhook (no auth — Apple sends JWS-signed payloads)
+  v1.use('/commerce/webhooks', commerceWebhookRoutes);
+
   v1.use('/users', requireAuth, usersRoutes);
   v1.use('/companies', requireAuth, companiesRoutes);
   v1.use('/clients', requireAuth, clientsRoutes);
@@ -95,6 +104,7 @@ export function createApp() {
   v1.use('/usage', requireAuth, usageRoutes);
   v1.use('/dashboard', requireAuth, dashboardRoutes);
   v1.use('/contractors', requireAuth, contractorsRoutes);
+  v1.use('/materials-pricing', requireAuth, materialsPricingRoutes);
   app.use('/v1', v1);
 
   // Global error handler

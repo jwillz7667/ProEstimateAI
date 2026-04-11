@@ -10,6 +10,9 @@ export const createEstimateLineItemSchema = z.object({
   markup_percent: z.number().min(0).max(1000).optional().default(0),
   tax_rate: z.number().min(0).max(1).optional().default(0),
   sort_order: z.number().int().min(0).optional().default(0),
+  parent_line_item_id: z.string().nullable().optional(),
+  source_material_suggestion_id: z.string().nullable().optional(),
+  item_type: z.enum(['per_unit', 'flat_rate', 'hourly']).nullable().optional(),
 });
 
 export const updateEstimateLineItemSchema = z.object({
@@ -22,6 +25,9 @@ export const updateEstimateLineItemSchema = z.object({
   markup_percent: z.number().min(0).max(1000).optional(),
   tax_rate: z.number().min(0).max(1).optional(),
   sort_order: z.number().int().min(0).optional(),
+  parent_line_item_id: z.string().nullable().optional(),
+  source_material_suggestion_id: z.string().nullable().optional(),
+  item_type: z.enum(['per_unit', 'flat_rate', 'hourly']).nullable().optional(),
 });
 
 export type CreateEstimateLineItemInput = z.infer<typeof createEstimateLineItemSchema>;

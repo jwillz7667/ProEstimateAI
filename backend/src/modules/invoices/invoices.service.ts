@@ -142,9 +142,14 @@ export async function create(companyId: string, userId: string, data: CreateInvo
         companyId,
         clientId: data.client_id,
         estimateId: data.estimate_id ?? null,
+        proposalId: data.proposal_id ?? null,
         invoiceNumber,
         notes: data.notes ?? null,
+        issuedDate: data.issued_date ? new Date(data.issued_date) : null,
         dueDate: data.due_date ? new Date(data.due_date) : null,
+        discountAmount: data.discount_amount ?? 0,
+        paymentInstructions: data.payment_instructions ?? null,
+        currencyCode: data.currency_code ?? null,
       },
     });
 
@@ -181,8 +186,23 @@ export async function update(id: string, companyId: string, data: UpdateInvoiceI
   if (data.notes !== undefined) {
     updateData.notes = data.notes;
   }
+  if (data.proposal_id !== undefined) {
+    updateData.proposalId = data.proposal_id;
+  }
+  if (data.issued_date !== undefined) {
+    updateData.issuedDate = data.issued_date ? new Date(data.issued_date) : null;
+  }
   if (data.due_date !== undefined) {
     updateData.dueDate = data.due_date ? new Date(data.due_date) : null;
+  }
+  if (data.discount_amount !== undefined) {
+    updateData.discountAmount = data.discount_amount;
+  }
+  if (data.payment_instructions !== undefined) {
+    updateData.paymentInstructions = data.payment_instructions;
+  }
+  if (data.currency_code !== undefined) {
+    updateData.currencyCode = data.currency_code;
   }
   if (data.amount_paid !== undefined) {
     updateData.amountPaid = data.amount_paid;
@@ -229,6 +249,15 @@ export async function send(invoiceId: string, companyId: string, userId: string)
       description: `Invoice ${invoice.invoiceNumber} sent`,
     },
   });
+
+  // Send email to client
+  const client = await prisma.client.findUnique({ where: { id: invoice.clientId } });
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  if (client?.email && company) {
+    const { sendInvoiceEmail } = await import('../../lib/email');
+    const amount = `$${Number(updated.totalAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+    await sendInvoiceEmail(client.email, '', company.name, amount);
+  }
 
   return updated;
 }

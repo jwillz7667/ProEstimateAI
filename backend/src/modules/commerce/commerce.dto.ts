@@ -131,6 +131,11 @@ export interface EntitlementSnapshotDto {
   grace_period_ends_at: string | null;
   is_auto_renew_enabled: boolean | null;
   billing_warning: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  source: string | null;
+  latest_transaction_id: string | null;
+  environment: string | null;
 }
 
 /**
@@ -169,6 +174,11 @@ export function toEntitlementSnapshotDto(
     grace_period_ends_at: entitlement.gracePeriodEndsAt ? entitlement.gracePeriodEndsAt.toISOString() : null,
     is_auto_renew_enabled: entitlement.isAutoRenewEnabled,
     billing_warning: billingWarning,
+    starts_at: entitlement.startsAt?.toISOString() ?? null,
+    ends_at: entitlement.endsAt?.toISOString() ?? null,
+    source: entitlement.source ?? null,
+    latest_transaction_id: entitlement.latestTransactionId ?? null,
+    environment: entitlement.environment ?? null,
   };
 }
 
@@ -200,6 +210,11 @@ export const ADMIN_ENTITLEMENT_SNAPSHOT: EntitlementSnapshotDto = {
   grace_period_ends_at: null,
   is_auto_renew_enabled: null,
   billing_warning: null,
+  starts_at: null,
+  ends_at: null,
+  source: 'ADMIN',
+  latest_transaction_id: null,
+  environment: null,
 };
 
 // ─── Purchase Attempt Response ─────────────────────────

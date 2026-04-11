@@ -26,6 +26,12 @@ struct ProjectDetailView: View {
                 }
             } else if let project = viewModel.project {
                 projectContent(project)
+            } else {
+                // Fallback: if task didn't fire, show loading and trigger load
+                LoadingStateView(message: "Loading project...")
+                    .onAppear {
+                        Task { await viewModel.loadProject(id: projectId) }
+                    }
             }
         }
         .navigationTitle(viewModel.project?.title ?? "Project")

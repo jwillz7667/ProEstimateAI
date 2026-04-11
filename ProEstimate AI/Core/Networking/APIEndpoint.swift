@@ -107,6 +107,10 @@ enum APIEndpoint: Sendable {
 
     // MARK: - Dashboard
     case getDashboardSummary
+
+    // MARK: - Materials Pricing
+    case searchMaterialsPricing(query: String, zipCode: String?, sort: String?, maxResults: Int?)
+    case projectMaterialsPricing(projectType: String, zipCode: String?)
 }
 
 // MARK: - Computed Properties
@@ -218,6 +222,10 @@ extension APIEndpoint {
 
         // Dashboard
         case .getDashboardSummary: return "/dashboard/summary"
+
+        // Materials Pricing
+        case .searchMaterialsPricing: return "/materials-pricing/search"
+        case .projectMaterialsPricing: return "/materials-pricing/project"
         }
     }
 
@@ -278,6 +286,16 @@ extension APIEndpoint {
             return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
         case .listActivityLog(_, let cursor):
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
+        case .searchMaterialsPricing(let query, let zipCode, let sort, let maxResults):
+            var items = [URLQueryItem(name: "query", value: query)]
+            if let zipCode { items.append(URLQueryItem(name: "zip_code", value: zipCode)) }
+            if let sort { items.append(URLQueryItem(name: "sort", value: sort)) }
+            if let maxResults { items.append(URLQueryItem(name: "max_results", value: String(maxResults))) }
+            return items
+        case .projectMaterialsPricing(let projectType, let zipCode):
+            var items = [URLQueryItem(name: "project_type", value: projectType)]
+            if let zipCode { items.append(URLQueryItem(name: "zip_code", value: zipCode)) }
+            return items
         default:
             return nil
         }

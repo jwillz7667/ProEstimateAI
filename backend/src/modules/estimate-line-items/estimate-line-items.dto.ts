@@ -3,7 +3,10 @@ import { EstimateLineItem } from '@prisma/client';
 export interface EstimateLineItemDto {
   id: string;
   estimate_id: string;
+  parent_line_item_id: string | null;
+  source_material_suggestion_id: string | null;
   category: string;
+  item_type: string | null;
   name: string;
   description: string | null;
   quantity: number;
@@ -19,7 +22,10 @@ export function toEstimateLineItemDto(item: EstimateLineItem): EstimateLineItemD
   return {
     id: item.id,
     estimate_id: item.estimateId,
+    parent_line_item_id: item.parentLineItemId ?? null,
+    source_material_suggestion_id: item.sourceMaterialSuggestionId ?? null,
     category: item.category.toLowerCase(),
+    item_type: item.itemType ?? null,
     name: item.name,
     description: item.description,
     quantity: Number(item.quantity),
