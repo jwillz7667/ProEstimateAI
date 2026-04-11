@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database';
 import { NotFoundError } from '../../lib/errors';
 import { UpdateUserInput } from './users.validators';
+import { invalidateCache, CacheKeys } from '../../config/redis';
 
 export async function getMe(userId: string) {
   const user = await prisma.user.findUnique({
@@ -23,5 +24,9 @@ export async function updateMe(userId: string, data: UpdateUserInput) {
   if (data.phone !== undefined) updateData.phone = data.phone;
   if (data.avatar_url !== undefined) updateData.avatarUrl = data.avatar_url;
 
-  return prisma.user.update({ where: { id: userId }, data: updateData });
+  const updated = await prisma.user.update({ where: { id: userId }, data: updateData });
+
+  await invalidateCache(CacheKeys.userProfile(userId));
+
+  return updated;
 }

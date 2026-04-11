@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database';
 import { NotFoundError } from '../../lib/errors';
 import { UpdateCompanyInput } from './companies.validators';
+import { invalidateCache, CacheKeys } from '../../config/redis';
 
 export async function getMe(companyId: string) {
   const company = await prisma.company.findUnique({
@@ -49,6 +50,8 @@ export async function updateMe(companyId: string, data: UpdateCompanyInput) {
       ...(data.tax_label !== undefined && { taxLabel: data.tax_label }),
     },
   });
+
+  await invalidateCache(CacheKeys.companyProfile(companyId));
 
   return company;
 }

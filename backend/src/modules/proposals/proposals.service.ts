@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '../../config/database';
 import { NotFoundError, ValidationError } from '../../lib/errors';
+import { cached, invalidateCache, CacheKeys, CacheTTL } from '../../config/redis';
 import { PaginationParams, paginateResults, buildCursorWhere } from '../../lib/pagination';
 import { CreateProposalInput, SendProposalInput, RespondToProposalInput, UpdateProposalInput } from './proposals.validators';
 
@@ -152,55 +153,60 @@ export async function remove(proposalId: string, companyId: string) {
 }
 
 export async function getByShareToken(shareToken: string) {
-  const proposal = await prisma.proposal.findUnique({
-    where: { shareToken },
-    include: {
-      company: true,
-      project: {
-        include: {
-          assets: {
-            orderBy: { sortOrder: 'asc' },
+  return cached(CacheKeys.proposalShare(shareToken), CacheTTL.PROPOSAL_SHARE, async () => {
+    const proposal = await prisma.proposal.findUnique({
+      where: { shareToken },
+      include: {
+        company: true,
+        project: {
+          include: {
+            assets: {
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        },
+        estimate: {
+          include: {
+            lineItems: {
+              orderBy: { sortOrder: 'asc' },
+            },
           },
         },
       },
-      estimate: {
-        include: {
-          lineItems: {
-            orderBy: { sortOrder: 'asc' },
-          },
+    });
+
+    if (!proposal) {
+      throw new NotFoundError('Proposal');
+    }
+
+    // Mark as viewed on first access (if currently in SENT status)
+    if (proposal.status === 'SENT') {
+      await prisma.proposal.update({
+        where: { id: proposal.id },
+        data: {
+          status: 'VIEWED',
+          viewedAt: new Date(),
         },
-      },
-    },
+      });
+
+      await prisma.activityLogEntry.create({
+        data: {
+          projectId: proposal.projectId,
+          action: 'PROPOSAL_VIEWED',
+          description: `Proposal viewed by client via share link`,
+        },
+      });
+
+      // Return with updated status so the response is current
+      proposal.status = 'VIEWED';
+      proposal.viewedAt = new Date();
+
+      // Invalidate so the next fetch sees the VIEWED status
+      await invalidateCache(CacheKeys.proposalShare(shareToken));
+    }
+
+    return proposal;
   });
-
-  if (!proposal) {
-    throw new NotFoundError('Proposal');
-  }
-
-  // Mark as viewed on first access (if currently in SENT status)
-  if (proposal.status === 'SENT') {
-    await prisma.proposal.update({
-      where: { id: proposal.id },
-      data: {
-        status: 'VIEWED',
-        viewedAt: new Date(),
-      },
-    });
-
-    await prisma.activityLogEntry.create({
-      data: {
-        projectId: proposal.projectId,
-        action: 'PROPOSAL_VIEWED',
-        description: `Proposal viewed by client via share link`,
-      },
-    });
-
-    // Return with updated status so the response is current
-    proposal.status = 'VIEWED';
-    proposal.viewedAt = new Date();
-  }
-
-  return proposal;
 }
 
 export async function respondToProposal(shareToken: string, data: RespondToProposalInput) {
@@ -283,6 +289,8 @@ export async function respondToProposal(shareToken: string, data: RespondToPropo
       description: `Proposal ${data.decision} by client${data.message ? `: ${data.message}` : ''}`,
     },
   });
+
+  await invalidateCache(CacheKeys.proposalShare(shareToken));
 
   return updated;
 }

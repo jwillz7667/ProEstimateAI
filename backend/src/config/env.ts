@@ -13,6 +13,7 @@ const envSchema = z.object({
   GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
   SERPAPI_API_KEY: z.string().min(1).optional(),
+  REDIS_URL: z.string().url().optional(),
   RESEND_FROM_EMAIL: z.string().default('ProEstimate AI <noreply@proestimate.ai>'),
   API_BASE_URL: z.string().default('https://proestimate-api-production.up.railway.app'),
   APP_STORE_ISSUER_ID: z.string().optional(),

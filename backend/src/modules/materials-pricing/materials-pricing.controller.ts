@@ -3,6 +3,7 @@ import { sendSuccess } from '../../lib/envelope';
 import { searchHomeDepot, searchMaterialsForProject } from '../../lib/home-depot';
 import { toMaterialPricingDto } from './materials-pricing.dto';
 import type { SearchMaterialsInput, ProjectMaterialsInput } from './materials-pricing.validators';
+import { cached, CacheKeys, CacheTTL } from '../../config/redis';
 
 /**
  * GET /v1/materials-pricing/search
@@ -11,14 +12,18 @@ import type { SearchMaterialsInput, ProjectMaterialsInput } from './materials-pr
 export async function searchHandler(req: Request, res: Response) {
   const query = req.query as unknown as SearchMaterialsInput;
 
-  const result = await searchHomeDepot({
-    query: query.query,
-    zipCode: query.zip_code,
-    storeId: query.store_id,
-    sort: query.sort,
-    page: query.page,
-    maxResults: query.max_results,
-  });
+  const result = await cached(
+    CacheKeys.materialSearch(query.query, query.zip_code),
+    CacheTTL.MATERIAL_SEARCH,
+    async () => searchHomeDepot({
+      query: query.query,
+      zipCode: query.zip_code,
+      storeId: query.store_id,
+      sort: query.sort,
+      page: query.page,
+      maxResults: query.max_results,
+    }),
+  );
 
   sendSuccess(res, {
     products: result.products.map(toMaterialPricingDto),
@@ -35,9 +40,13 @@ export async function searchHandler(req: Request, res: Response) {
 export async function projectMaterialsHandler(req: Request, res: Response) {
   const query = req.query as unknown as ProjectMaterialsInput;
 
-  const categorized = await searchMaterialsForProject(
-    query.project_type,
-    query.zip_code,
+  const categorized = await cached(
+    CacheKeys.projectMaterials(query.project_type, query.zip_code),
+    CacheTTL.PROJECT_MATERIALS,
+    async () => searchMaterialsForProject(
+      query.project_type,
+      query.zip_code,
+    ),
   );
 
   // Transform products to DTOs

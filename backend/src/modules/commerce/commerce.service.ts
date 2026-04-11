@@ -3,6 +3,7 @@ import { NotFoundError, ValidationError } from '../../lib/errors';
 import { v4 as uuidv4 } from 'uuid';
 import { isAdminUser } from '../../lib/admin';
 import { logger } from '../../config/logger';
+import { cached, invalidateCache, CacheKeys, CacheTTL } from '../../config/redis';
 import {
   DecodedAppleNotification,
   AppleNotificationType,
@@ -32,33 +33,41 @@ export async function getEffectiveEntitlement(
     return ADMIN_ENTITLEMENT_SNAPSHOT;
   }
 
-  // Fetch entitlement with plan in a single query
-  const entitlement = await prisma.userEntitlement.findUnique({
-    where: { userId },
-    include: { plan: true },
-  });
+  return cached(
+    CacheKeys.entitlement(userId),
+    CacheTTL.ENTITLEMENT,
+    async () => {
+      // Fetch entitlement with plan in a single query
+      const entitlement = await prisma.userEntitlement.findUnique({
+        where: { userId },
+        include: { plan: true },
+      });
 
-  if (!entitlement) {
-    throw new NotFoundError('UserEntitlement');
-  }
+      if (!entitlement) {
+        throw new NotFoundError('UserEntitlement');
+      }
 
-  // Fetch all usage buckets for this user
-  const buckets = await prisma.usageBucket.findMany({
-    where: { userId, companyId },
-  });
+      // Fetch all usage buckets for this user
+      const buckets = await prisma.usageBucket.findMany({
+        where: { userId, companyId },
+      });
 
-  return toEntitlementSnapshotDto(entitlement, buckets);
+      return toEntitlementSnapshotDto(entitlement, buckets);
+    },
+  );
 }
 
 // ─── Commerce Product Service ──────────────────────────
 
 export async function getProducts(): Promise<StoreProductDto[]> {
-  const products = await prisma.subscriptionProduct.findMany({
-    include: { plan: true },
-    orderBy: { sortOrder: 'asc' },
-  });
+  return cached(CacheKeys.commerceProducts(), CacheTTL.COMMERCE_PRODUCTS, async () => {
+    const products = await prisma.subscriptionProduct.findMany({
+      include: { plan: true },
+      orderBy: { sortOrder: 'asc' },
+    });
 
-  return products.map(toStoreProductDto);
+    return products.map(toStoreProductDto);
+  });
 }
 
 // ─── Purchase Attempt Service ──────────────────────────
@@ -267,6 +276,8 @@ export async function syncTransaction(
     return { entitlement, buckets };
   });
 
+  await invalidateCache(CacheKeys.entitlement(userId));
+
   return toEntitlementSnapshotDto(result.entitlement, result.buckets);
 }
 
@@ -401,6 +412,8 @@ export async function restorePurchases(
     return { entitlement, buckets };
   });
 
+  await invalidateCache(CacheKeys.entitlement(userId));
+
   return toEntitlementSnapshotDto(result.entitlement, result.buckets);
 }
 
@@ -479,6 +492,8 @@ export async function handleAppStoreWebhook(
       },
     });
   });
+
+  await invalidateCache(CacheKeys.entitlement(entitlement.userId));
 
   logger.info(
     { entitlementId: entitlement.id, userId: entitlement.userId, notificationType, subtype, newStatus: statusUpdate.status, eventType },

@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
+import pinoHttp from 'pino-http';
 import { corsOptions } from './config/cors';
+import { logger } from './config/logger';
 import { requestIdMiddleware } from './middleware/request-id.middleware';
 import { globalRateLimit } from './middleware/rate-limit.middleware';
 import { errorHandler } from './middleware/error-handler.middleware';
@@ -40,9 +43,26 @@ export function createApp() {
 
   // Global middleware
   app.use(cors(corsOptions));
+  app.use(compression()); // gzip responses — reduces bandwidth 60-80%
   app.use(express.json({ limit: '10mb' }));
   app.use(requestIdMiddleware);
   app.use(globalRateLimit);
+
+  // Structured request logging (production only — dev uses pino-pretty on stdout)
+  if (process.env.NODE_ENV === 'production') {
+    app.use(pinoHttp({
+      logger,
+      autoLogging: {
+        ignore: (req) => (req.url === '/health'), // Don't log health checks
+      },
+      customSuccessMessage: (req, res) => `${req.method} ${req.url} ${res.statusCode}`,
+      customErrorMessage: (req, res) => `${req.method} ${req.url} ${res.statusCode}`,
+      serializers: {
+        req: (req) => ({ method: req.method, url: req.url, id: req.id }),
+        res: (res) => ({ statusCode: res.statusCode }),
+      },
+    }));
+  }
 
   // Health (no auth)
   app.use('/health', healthRoutes);
