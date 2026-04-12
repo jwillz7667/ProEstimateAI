@@ -42,7 +42,7 @@ struct LegalDisclosureSection: View {
             }
         }
         .font(.system(size: 10))
-        .foregroundStyle(.white.opacity(0.35))
+        .foregroundStyle(.white.opacity(0.5))
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -52,7 +52,7 @@ struct LegalDisclosureSection: View {
     private var cancellationText: some View {
         Text("You can manage or cancel your subscription at any time in your Apple ID account settings (Settings > Apple ID > Subscriptions).")
             .font(.system(size: 10))
-            .foregroundStyle(.white.opacity(0.35))
+            .foregroundStyle(.white.opacity(0.5))
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -63,11 +63,11 @@ struct LegalDisclosureSection: View {
         HStack(spacing: SpacingTokens.md) {
             Link("Terms of Service", destination: termsURL)
             Text("|")
-                .foregroundStyle(.white.opacity(0.2))
+                .foregroundStyle(.white.opacity(0.3))
             Link("Privacy Policy", destination: privacyURL)
         }
         .font(.system(size: 10, weight: .medium))
-        .foregroundStyle(.white.opacity(0.4))
+        .foregroundStyle(.white.opacity(0.55))
     }
 }
 

@@ -182,3 +182,52 @@ export async function remove(lineItemId: string, companyId: string) {
   // Recalculate estimate totals after removal
   await recalculateEstimateTotals(existing.estimateId);
 }
+
+/**
+ * Batch-create multiple line items for an estimate in a single Prisma transaction.
+ * Recalculates estimate totals once at the end (not per item).
+ */
+export async function createBatch(
+  estimateId: string,
+  companyId: string,
+  items: ReadonlyArray<CreateEstimateLineItemInput>
+) {
+  await verifyEstimateOwnership(estimateId, companyId);
+
+  const createdItems = await prisma.$transaction(async (tx) => {
+    const results = [];
+
+    for (const data of items) {
+      const markupPercent = data.markup_percent ?? 0;
+      const lineTotal = data.quantity * data.unit_cost * (1 + markupPercent / 100);
+
+      const lineItem = await tx.estimateLineItem.create({
+        data: {
+          estimateId,
+          category: data.category.toUpperCase() as LineItemCategory,
+          name: data.name,
+          description: data.description ?? null,
+          quantity: data.quantity,
+          unit: data.unit,
+          unitCost: data.unit_cost,
+          markupPercent,
+          taxRate: data.tax_rate ?? 0,
+          lineTotal,
+          sortOrder: data.sort_order ?? 0,
+          parentLineItemId: data.parent_line_item_id ?? null,
+          sourceMaterialSuggestionId: data.source_material_suggestion_id ?? null,
+          itemType: data.item_type ?? null,
+        },
+      });
+
+      results.push(lineItem);
+    }
+
+    return results;
+  });
+
+  // Recalculate estimate totals once after all items are created
+  await recalculateEstimateTotals(estimateId);
+
+  return createdItems;
+}

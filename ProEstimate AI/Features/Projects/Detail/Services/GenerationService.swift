@@ -1,12 +1,39 @@
 import Foundation
 
+// MARK: - Material Spec
+
+/// Lightweight material descriptor sent alongside generation requests so the AI
+/// can incorporate the user's chosen finishes into the preview image.
+/// Matches the backend's `materials` array schema (name required, rest optional).
+struct MaterialSpec: Encodable, Sendable, Hashable {
+    let name: String
+    let category: String?
+    let quantity: Double?
+    let unit: String?
+
+    init(name: String, category: String? = nil, quantity: Double? = nil, unit: String? = nil) {
+        self.name = name
+        self.category = category
+        self.quantity = quantity
+        self.unit = unit
+    }
+
+    /// Convenience initializer from a full `MaterialSuggestion`.
+    init(from material: MaterialSuggestion) {
+        self.name = material.name
+        self.category = material.category
+        self.quantity = NSDecimalNumber(decimal: material.quantity).doubleValue
+        self.unit = material.unit
+    }
+}
+
 // MARK: - Protocol
 
 /// Contract for triggering and polling AI generation jobs.
 /// The mock implementation simulates asynchronous progress through
 /// the five generation stages.
 protocol GenerationServiceProtocol: Sendable {
-    func startGeneration(projectId: String, prompt: String) async throws -> AIGeneration
+    func startGeneration(projectId: String, prompt: String, materials: [MaterialSpec]?) async throws -> AIGeneration
     func getGenerationStatus(id: String) async throws -> AIGeneration
     func listGenerations(projectId: String) async throws -> [AIGeneration]
 }
@@ -16,7 +43,7 @@ protocol GenerationServiceProtocol: Sendable {
 final class MockGenerationService: GenerationServiceProtocol {
     private let simulatedDelay: UInt64 = 600_000_000
 
-    func startGeneration(projectId: String, prompt: String) async throws -> AIGeneration {
+    func startGeneration(projectId: String, prompt: String, materials: [MaterialSpec]? = nil) async throws -> AIGeneration {
         try await Task.sleep(nanoseconds: simulatedDelay)
 
         return AIGeneration(

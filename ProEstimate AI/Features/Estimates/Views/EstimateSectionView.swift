@@ -107,8 +107,8 @@ struct EstimateSectionView: View {
     private var categoryColor: Color {
         switch category {
         case .materials: ColorTokens.primaryOrange
-        case .labor: .blue
-        case .other: .purple
+        case .labor: ColorTokens.accentBlue
+        case .other: ColorTokens.accentPurple
         }
     }
 }

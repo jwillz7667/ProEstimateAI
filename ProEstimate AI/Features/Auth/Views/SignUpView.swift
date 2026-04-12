@@ -32,7 +32,7 @@ struct SignUpView: View {
                             .foregroundStyle(.secondary)
 
                         TextField("John Doe", text: $viewModel.fullName)
-                            .textFieldStyle(.roundedBorder)
+                            .formField()
                             .textContentType(.name)
                             .textInputAutocapitalization(.words)
                     }
@@ -43,7 +43,7 @@ struct SignUpView: View {
                             .foregroundStyle(.secondary)
 
                         TextField("you@company.com", text: $viewModel.email)
-                            .textFieldStyle(.roundedBorder)
+                            .formField()
                             .textContentType(.emailAddress)
                             .keyboardType(.emailAddress)
                             .textInputAutocapitalization(.never)
@@ -56,7 +56,7 @@ struct SignUpView: View {
                             .foregroundStyle(.secondary)
 
                         TextField("Apex Remodeling Co.", text: $viewModel.companyName)
-                            .textFieldStyle(.roundedBorder)
+                            .formField()
                             .textContentType(.organizationName)
                             .textInputAutocapitalization(.words)
                     }
@@ -67,7 +67,7 @@ struct SignUpView: View {
                             .foregroundStyle(.secondary)
 
                         SecureField("Minimum 8 characters", text: $viewModel.password)
-                            .textFieldStyle(.roundedBorder)
+                            .formField()
                             .textContentType(.newPassword)
 
                         if !viewModel.password.isEmpty && viewModel.password.count < 8 {

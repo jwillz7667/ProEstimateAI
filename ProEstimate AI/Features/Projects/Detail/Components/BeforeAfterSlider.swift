@@ -156,7 +156,7 @@ struct BeforeAfterSlider: View {
 
     private func placeholderView(label: String) -> some View {
         Rectangle()
-            .fill(Color.gray.opacity(0.2))
+            .fill(ColorTokens.inputBackground)
             .overlay {
                 VStack(spacing: SpacingTokens.xs) {
                     Image(systemName: "photo")

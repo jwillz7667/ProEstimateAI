@@ -184,6 +184,13 @@ final class ProjectCreationViewModel {
         }
     }
 
+    /// Adds an image captured from the camera to the selected images array.
+    /// Converts the UIImage to JPEG data before appending.
+    func addCameraImage(_ image: UIImage) {
+        guard let data = image.jpegData(compressionQuality: 0.8) else { return }
+        selectedImageData.append(data)
+    }
+
     func createProject() async {
         guard let projectType = selectedProjectType else { return }
 

@@ -109,11 +109,23 @@ struct ProjectDetailView: View {
                     generations: viewModel.generations,
                     isGenerating: viewModel.isGenerating,
                     currentGenerationStage: viewModel.currentGenerationStage,
-                    onGenerate: {
-                        handleGenerate()
+                    onGenerate: { prompt in
+                        handleGenerate(prompt: prompt)
                     },
+                    defaultPrompt: viewModel.project?.description ?? "",
                     assets: viewModel.assets
                 )
+
+                // AI Estimate Ready card (shown when backend auto-created an estimate)
+                if let latestEstimate = viewModel.latestEstimate, viewModel.hasAIEstimate {
+                    AIEstimateReadyCard(
+                        estimate: latestEstimate,
+                        onReview: {
+                            activeEstimateId = latestEstimate.id
+                            showEstimateEditor = true
+                        }
+                    )
+                }
 
                 // Materials
                 MaterialSuggestionsSection(
@@ -122,6 +134,7 @@ struct ProjectDetailView: View {
                     selectedCount: viewModel.selectedMaterialCount,
                     selectedTotal: viewModel.selectedMaterialsTotal,
                     isDIY: viewModel.isDIY,
+                    hasExistingEstimate: viewModel.hasAIEstimate,
                     onToggle: { id in viewModel.toggleMaterial(id: id) },
                     onToggleDIY: { viewModel.isDIY.toggle() },
                     onAddToEstimate: {
@@ -164,12 +177,12 @@ struct ProjectDetailView: View {
 
     // MARK: - Feature-Gated Actions
 
-    private func handleGenerate() {
+    private func handleGenerate(prompt: String) {
         let result = featureGateCoordinator.guardGeneratePreview()
         switch result {
         case .allowed:
             Task {
-                await viewModel.startGeneration()
+                await viewModel.startGeneration(prompt: prompt)
                 // After first successful generation, show soft upsell
                 if !hasCompletedFirstGeneration {
                     hasCompletedFirstGeneration = true

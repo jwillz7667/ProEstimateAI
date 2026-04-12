@@ -29,3 +29,12 @@ export async function deleteHandler(req: Request, res: Response) {
   await estimateLineItemsService.remove(param(req.params.id), req.companyId!);
   sendSuccess(res, {});
 }
+
+// --- Batch handler (mounted under /estimates/:estimateId/line-items/batch) ---
+
+export async function batchCreateForEstimateHandler(req: Request, res: Response) {
+  const estimateId = param(req.params.estimateId);
+  const { items } = req.body as { items: Parameters<typeof estimateLineItemsService.createBatch>[2] };
+  const created = await estimateLineItemsService.createBatch(estimateId, req.companyId!, items);
+  sendSuccess(res, created.map(toEstimateLineItemDto), { statusCode: 201 });
+}

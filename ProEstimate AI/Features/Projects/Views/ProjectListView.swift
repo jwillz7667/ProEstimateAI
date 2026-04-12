@@ -54,6 +54,7 @@ struct ProjectListView: View {
                     if let projectId = navigateToProjectId {
                         navigateToProjectId = nil
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            router.projectsPath = NavigationPath()
                             router.projectsPath.append(AppDestination.projectDetail(id: projectId))
                         }
                     }

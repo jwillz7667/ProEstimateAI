@@ -8,9 +8,12 @@ struct QuickGenerateView: View {
     var onProjectCreated: ((String) -> Void)?
 
     @State private var viewModel = QuickGenerateViewModel()
+    @State private var isCameraPresented = false
     @Environment(\.dismiss) private var dismiss
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
+
+    private let isCameraAvailable = UIImagePickerController.isSourceTypeAvailable(.camera)
 
     var body: some View {
         NavigationStack {
@@ -107,42 +110,81 @@ struct QuickGenerateView: View {
                     .padding(.top, SpacingTokens.sm)
                 }
             } else {
-                PhotosPicker(
-                    selection: $viewModel.photosPickerItem,
-                    matching: .images
-                ) {
-                    VStack(spacing: SpacingTokens.sm) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 36))
-                            .foregroundStyle(ColorTokens.primaryOrange)
-
-                        Text("Take or Upload a Photo")
-                            .font(TypographyTokens.subheadline)
-                            .fontWeight(.medium)
-
-                        Text("Show us the space you want to remodel")
-                            .font(TypographyTokens.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 180)
-                    .background(
-                        ColorTokens.elevatedSurface,
-                        in: RoundedRectangle(cornerRadius: RadiusTokens.card)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: RadiusTokens.card)
-                            .strokeBorder(
-                                ColorTokens.primaryOrange.opacity(0.3),
-                                style: StrokeStyle(lineWidth: 2, dash: [8, 6])
+                VStack(spacing: SpacingTokens.sm) {
+                    if isCameraAvailable {
+                        Button {
+                            isCameraPresented = true
+                        } label: {
+                            HStack(spacing: SpacingTokens.sm) {
+                                Image(systemName: "camera.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(ColorTokens.primaryOrange)
+                                Text("Take Photo")
+                                    .font(TypographyTokens.subheadline)
+                                    .fontWeight(.medium)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(SpacingTokens.md)
+                            .background(
+                                ColorTokens.elevatedSurface,
+                                in: RoundedRectangle(cornerRadius: RadiusTokens.card)
                             )
-                    )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: RadiusTokens.card)
+                                    .strokeBorder(
+                                        ColorTokens.primaryOrange.opacity(0.3),
+                                        lineWidth: 1
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    PhotosPicker(
+                        selection: $viewModel.photosPickerItem,
+                        matching: .images
+                    ) {
+                        HStack(spacing: SpacingTokens.sm) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.title3)
+                                .foregroundStyle(ColorTokens.primaryOrange)
+                            Text("Choose from Library")
+                                .font(TypographyTokens.subheadline)
+                                .fontWeight(.medium)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(SpacingTokens.md)
+                        .background(
+                            ColorTokens.elevatedSurface,
+                            in: RoundedRectangle(cornerRadius: RadiusTokens.card)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: RadiusTokens.card)
+                                .strokeBorder(
+                                    Color(.separator).opacity(0.3),
+                                    lineWidth: 1
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, SpacingTokens.md)
             }
         }
         .onChange(of: viewModel.photosPickerItem) { _, _ in
             Task { await viewModel.loadSelectedPhoto() }
+        }
+        .fullScreenCover(isPresented: $isCameraPresented) {
+            CameraView { image in
+                viewModel.setCameraImage(image)
+            }
+            .ignoresSafeArea()
         }
     }
 

@@ -59,14 +59,16 @@ ${context.squareFootage ? `- Area: ${context.squareFootage} sq ft` : ''}
 ${context.dimensions ? `- Dimensions: ${context.dimensions}` : ''}
 - User's request: "${userPrompt}"
 
-Generate a comprehensive materials list. Include ALL materials needed for this project — primary materials, secondary materials, hardware, fixtures, adhesives, fasteners, finishing materials, etc.
+Generate a materials list with only the PRIMARY materials needed for this project. Do not list every fastener, adhesive, or finishing supply separately — group minor items into a single "Miscellaneous Hardware & Supplies" line if needed.
+
+Keep the total number of material items between 5-15 for typical projects. Use mid-range pricing (not premium/luxury unless the quality tier specifies it). Estimate realistic quantities with a 5-10% waste factor already included — do not over-specify.
 
 For each material, provide:
 - name: specific product name (e.g. "Quartz Countertop - Calacatta" not just "countertop")
 - category: one of "Countertops", "Cabinets", "Flooring", "Tile", "Fixtures", "Lighting", "Plumbing", "Electrical", "Paint", "Hardware", "Appliances", "Lumber", "Drywall", "Insulation", "Roofing", "Siding", "Windows", "Doors", "Trim", "Adhesives & Sealants", "Fasteners", "Other"
-- estimatedCost: per-unit cost in USD (realistic retail pricing)
+- estimatedCost: per-unit cost in USD (realistic retail pricing — avoid inflated or premium pricing unless the quality tier calls for it)
 - unit: "sq ft", "linear ft", "each", "gallon", "box", "sheet", "bundle", "roll", "bag", "set"
-- quantity: estimated quantity needed for this project
+- quantity: estimated quantity needed for this project (include 5-10% waste factor, do not add extra beyond that)
 - supplierName: suggest a real supplier (Home Depot, Lowe's, Floor & Decor, Ferguson, Build.com, Wayfair, etc.)
 
 QUALITY TIER PRICING GUIDE:

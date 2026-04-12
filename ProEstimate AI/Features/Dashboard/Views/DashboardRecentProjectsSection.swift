@@ -111,11 +111,11 @@ struct DashboardRecentProjectsSection: View {
         VStack(spacing: SpacingTokens.sm) {
             Image(systemName: "folder")
                 .font(.system(size: 32))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ColorTokens.secondaryText)
 
             Text("No projects yet")
                 .font(TypographyTokens.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ColorTokens.secondaryText)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, SpacingTokens.xxl)
@@ -145,10 +145,10 @@ struct DashboardRecentProjectsSection: View {
             case .generating: ("Generating", ColorTokens.warning)
             case .generationComplete: ("Generated", ColorTokens.success)
             case .estimateCreated: ("Estimated", ColorTokens.success)
-            case .proposalSent: ("Proposed", Color.blue)
+            case .proposalSent: ("Proposed", ColorTokens.accentBlue)
             case .approved: ("Approved", ColorTokens.success)
             case .declined: ("Declined", ColorTokens.error)
-            case .invoiced: ("Invoiced", Color.purple)
+            case .invoiced: ("Invoiced", ColorTokens.accentPurple)
             case .completed: ("Complete", ColorTokens.success)
             case .archived: ("Archived", ColorTokens.secondaryText)
             }

@@ -118,7 +118,7 @@ struct SettingsView: View {
                         }
                     } icon: {
                         Image(systemName: "building.columns")
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(ColorTokens.accentBlue)
                     }
                 }
 
@@ -132,7 +132,7 @@ struct SettingsView: View {
                         }
                     } icon: {
                         Image(systemName: "number")
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(ColorTokens.accentPurple)
                     }
                 }
 
@@ -146,7 +146,7 @@ struct SettingsView: View {
                         }
                     } icon: {
                         Image(systemName: "dollarsign.gauge.chart.lefthalf.righthalf")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(ColorTokens.accentGreen)
                     }
                 }
             }
@@ -163,7 +163,7 @@ struct SettingsView: View {
                         }
                     } icon: {
                         Image(systemName: "globe")
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(ColorTokens.accentTeal)
                     }
                 }
 
@@ -171,7 +171,7 @@ struct SettingsView: View {
                     Toggle("Push Notifications", isOn: .constant(true))
                 } icon: {
                     Image(systemName: "bell.badge")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ColorTokens.accentRed)
                 }
             }
 

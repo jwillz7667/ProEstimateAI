@@ -66,7 +66,7 @@ struct ForgotPasswordView: View {
                     .foregroundStyle(.secondary)
 
                 TextField("you@company.com", text: $viewModel.email)
-                    .textFieldStyle(.roundedBorder)
+                    .formField()
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)

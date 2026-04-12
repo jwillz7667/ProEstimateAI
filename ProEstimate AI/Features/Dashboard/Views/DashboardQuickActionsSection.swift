@@ -35,7 +35,7 @@ struct DashboardQuickActionsSection: View {
 
                 Text(action.title)
                     .font(TypographyTokens.caption)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(ColorTokens.primaryText)
                     .lineLimit(1)
             }
             .frame(width: 80)

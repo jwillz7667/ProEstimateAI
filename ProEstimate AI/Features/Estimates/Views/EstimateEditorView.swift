@@ -38,7 +38,7 @@ struct EstimateEditorView: View {
                     if viewModel.hasUnsavedChanges {
                         Text("Unsaved")
                             .font(TypographyTokens.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(ColorTokens.warning)
                     }
 
                     Text(viewModel.versionDisplay)
@@ -254,7 +254,7 @@ struct EstimateEditorView: View {
             HStack(spacing: SpacingTokens.sm) {
                 Image(systemName: viewModel.isDIY ? "wrench.and.screwdriver" : "person.badge.shield.checkmark")
                     .font(.title3)
-                    .foregroundStyle(viewModel.isDIY ? ColorTokens.primaryOrange : .blue)
+                    .foregroundStyle(viewModel.isDIY ? ColorTokens.primaryOrange : ColorTokens.accentBlue)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(viewModel.isDIY ? "DIY Estimate" : "Professional Estimate")
@@ -276,7 +276,7 @@ struct EstimateEditorView: View {
                     }
                 ))
                 .labelsHidden()
-                .tint(.blue)
+                .tint(ColorTokens.accentBlue)
             }
         }
     }

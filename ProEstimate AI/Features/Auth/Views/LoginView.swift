@@ -45,7 +45,7 @@ struct LoginView: View {
                     HStack(spacing: SpacingTokens.xxs) {
                         Text("Don't have an account?")
                             .font(TypographyTokens.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(ColorTokens.secondaryText)
 
                         Button {
                             viewModel.showSignUp = true
@@ -85,14 +85,17 @@ struct LoginView: View {
             Image("housd-icon-light")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(height: 72)
+                .frame(height: 56)
+                .padding(SpacingTokens.md)
+                .background(.white, in: Circle())
+                .shadow(color: .white.opacity(0.15), radius: 12)
 
             Text("ProEstimate")
                 .font(TypographyTokens.largeTitle)
 
             Text("AI-powered estimates for professionals")
                 .font(TypographyTokens.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ColorTokens.secondaryText)
                 .multilineTextAlignment(.center)
         }
     }
@@ -104,10 +107,10 @@ struct LoginView: View {
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
                 Text("Email")
                     .font(TypographyTokens.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ColorTokens.secondaryText)
 
                 TextField("you@company.com", text: $viewModel.email)
-                    .textFieldStyle(.roundedBorder)
+                    .formField()
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
@@ -117,10 +120,10 @@ struct LoginView: View {
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
                 Text("Password")
                     .font(TypographyTokens.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ColorTokens.secondaryText)
 
                 SecureField("Enter your password", text: $viewModel.password)
-                    .textFieldStyle(.roundedBorder)
+                    .formField()
                     .textContentType(.password)
             }
         }
@@ -131,15 +134,15 @@ struct LoginView: View {
     private var dividerSection: some View {
         HStack {
             Rectangle()
-                .fill(.secondary.opacity(0.3))
+                .fill(ColorTokens.subtleBorder)
                 .frame(height: 1)
 
             Text("or")
                 .font(TypographyTokens.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ColorTokens.secondaryText)
 
             Rectangle()
-                .fill(.secondary.opacity(0.3))
+                .fill(ColorTokens.subtleBorder)
                 .frame(height: 1)
         }
     }
@@ -160,8 +163,12 @@ struct LoginView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, SpacingTokens.sm)
             .padding(.horizontal, SpacingTokens.md)
-            .background(.white, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
-            .foregroundStyle(ColorTokens.background)
+            .background(ColorTokens.elevatedSurface, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.button)
+                    .strokeBorder(ColorTokens.subtleBorder, lineWidth: 1)
+            )
+            .foregroundStyle(ColorTokens.primaryText)
         }
         .disabled(viewModel.isLoading)
     }

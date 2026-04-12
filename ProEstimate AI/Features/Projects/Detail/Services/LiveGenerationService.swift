@@ -11,8 +11,8 @@ final class LiveGenerationService: GenerationServiceProtocol, Sendable {
 
     // MARK: - GenerationServiceProtocol
 
-    func startGeneration(projectId: String, prompt: String) async throws -> AIGeneration {
-        let body = GenerationRequestBody(prompt: prompt)
+    func startGeneration(projectId: String, prompt: String, materials: [MaterialSpec]? = nil) async throws -> AIGeneration {
+        let body = GenerationRequestBody(prompt: prompt, materials: materials)
         return try await apiClient.request(
             .createGeneration(projectId: projectId, body: body)
         )
@@ -33,4 +33,5 @@ final class LiveGenerationService: GenerationServiceProtocol, Sendable {
 /// The encoder uses `.convertToSnakeCase`, so `prompt` stays as `"prompt"`.
 private struct GenerationRequestBody: Encodable, Sendable {
     let prompt: String
+    let materials: [MaterialSpec]?
 }

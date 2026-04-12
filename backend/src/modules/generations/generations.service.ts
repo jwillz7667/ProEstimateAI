@@ -6,6 +6,9 @@ import { generatePreviewImage, getSystemPrompt, ImageGenContext, MaterialSpec, R
 import { generateMaterialSuggestions, generateLaborEstimates, MaterialGenContext } from '../../lib/material-gen';
 import { env } from '../../config/env';
 import { CreateGenerationInput } from './generations.validators';
+import * as estimatesService from '../estimates/estimates.service';
+import * as estimateLineItemsService from '../estimate-line-items/estimate-line-items.service';
+import { CreateEstimateLineItemInput } from '../estimate-line-items/estimate-line-items.validators';
 
 /**
  * PaywallDecision payload returned when a free user exhausts AI generation credits.
@@ -79,7 +82,7 @@ function toMaterialSpecs(materials?: Array<{ name: string; category?: string; qu
  * Runs outside the request transaction so the API responds immediately
  * while the image generates in the background.
  */
-async function processGeneration(generationId: string, prompt: string, context: ImageGenContext, projectId: string) {
+async function processGeneration(generationId: string, prompt: string, context: ImageGenContext, projectId: string, companyId: string, userId: string) {
   try {
     // Mark as PROCESSING
     await prisma.aIGeneration.update({
@@ -156,8 +159,8 @@ async function processGeneration(generationId: string, prompt: string, context: 
       'Generation completed successfully'
     );
 
-    // Auto-generate material suggestions in the background
-    generateAndStoreMaterials(generationId, projectId, prompt, context).catch((err) => {
+    // Auto-generate material suggestions and create estimate in the background
+    generateAndStoreMaterials(generationId, projectId, companyId, userId, prompt, context).catch((err) => {
       logger.error({ err, generationId }, 'Material suggestion generation failed (non-critical)');
     });
   } catch (err) {
@@ -179,10 +182,13 @@ async function processGeneration(generationId: string, prompt: string, context: 
 /**
  * After image generation completes, call Gemini text model to generate
  * material suggestions and labor estimates, then store them in the DB.
+ * Finally, auto-creates an estimate with the generated materials as line items.
  */
 async function generateAndStoreMaterials(
   generationId: string,
   projectId: string,
+  companyId: string,
+  userId: string,
   prompt: string,
   context: ImageGenContext
 ) {
@@ -241,6 +247,135 @@ async function generateAndStoreMaterials(
   logger.info(
     { generationId, materialCount: materialRecords.length, laborCount: laborRecords.length },
     'Material suggestions and labor estimates stored'
+  );
+
+  // Fetch the IDs of the just-created material suggestions (materials only, not labor records)
+  // for linking to estimate line items via sourceMaterialSuggestionId
+  const storedMaterials = await prisma.materialSuggestion.findMany({
+    where: { generationId, projectId },
+    select: { id: true },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  // Auto-create estimate with materials as line items
+  try {
+    await autoCreateEstimate(
+      projectId,
+      companyId,
+      userId,
+      storedMaterials.map((m) => m.id),
+      context.projectType
+    );
+  } catch (err) {
+    logger.error({ err, generationId, projectId }, 'Auto-estimate creation failed (non-critical)');
+  }
+}
+
+/**
+ * Default labor hours and hourly rates by project type, used for auto-estimate creation.
+ */
+const DEFAULT_LABOR_BY_PROJECT_TYPE: Record<string, { hours: number; rate: number }> = {
+  KITCHEN:      { hours: 40, rate: 75 },
+  BATHROOM:     { hours: 24, rate: 70 },
+  FLOORING:     { hours: 16, rate: 55 },
+  ROOFING:      { hours: 24, rate: 65 },
+  PAINTING:     { hours: 16, rate: 45 },
+  SIDING:       { hours: 24, rate: 60 },
+  ROOM_REMODEL: { hours: 32, rate: 65 },
+  EXTERIOR:     { hours: 20, rate: 55 },
+  CUSTOM:       { hours: 24, rate: 60 },
+};
+
+/**
+ * After materials are generated and stored, automatically create (or update) an estimate
+ * with all MaterialSuggestion records as line items plus a default labor line item.
+ *
+ * If an estimate already exists for this project, its line items are deleted and repopulated
+ * so that re-generation updates the estimate rather than creating duplicates.
+ */
+async function autoCreateEstimate(
+  projectId: string,
+  companyId: string,
+  userId: string,
+  materialSuggestionIds: string[],
+  projectType: string
+) {
+  // Fetch the stored material suggestions
+  const materials = await prisma.materialSuggestion.findMany({
+    where: { id: { in: materialSuggestionIds } },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  if (materials.length === 0) {
+    logger.warn({ projectId }, 'No materials to create auto-estimate from');
+    return;
+  }
+
+  // Check if an estimate already exists for this project
+  const existingEstimates = await prisma.estimate.findMany({
+    where: { projectId, companyId },
+    orderBy: { createdAt: 'asc' },
+    take: 1,
+  });
+
+  let estimateId: string;
+
+  if (existingEstimates.length > 0) {
+    // Repopulate: delete existing line items, keep the estimate shell
+    estimateId = existingEstimates[0].id;
+    await prisma.estimateLineItem.deleteMany({ where: { estimateId } });
+    logger.info({ estimateId, projectId }, 'Cleared existing estimate line items for repopulation');
+  } else {
+    // Create a new estimate via the estimates service
+    const estimate = await estimatesService.create(companyId, userId, {
+      project_id: projectId,
+      title: 'AI-Generated Estimate',
+    });
+    estimateId = estimate.id;
+    logger.info({ estimateId, projectId }, 'Created new auto-estimate');
+  }
+
+  // Convert MaterialSuggestions to line item inputs
+  const lineItems: CreateEstimateLineItemInput[] = materials.map((m, index) => ({
+    category: 'materials' as const,
+    name: m.name,
+    quantity: Number(m.quantity),
+    unit: m.unit,
+    unit_cost: Number(m.estimatedCost),
+    markup_percent: 10,
+    tax_rate: 0.0825,
+    sort_order: index,
+    source_material_suggestion_id: m.id,
+  }));
+
+  // Add default labor line item based on project type
+  const labor = DEFAULT_LABOR_BY_PROJECT_TYPE[projectType] ?? DEFAULT_LABOR_BY_PROJECT_TYPE.CUSTOM;
+  lineItems.push({
+    category: 'labor' as const,
+    name: `${projectType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())} Labor`,
+    quantity: labor.hours,
+    unit: 'hour',
+    unit_cost: labor.rate,
+    markup_percent: 15,
+    tax_rate: 0,
+    sort_order: materials.length,
+  });
+
+  // Batch create all line items and recalculate totals once
+  await estimateLineItemsService.createBatch(estimateId, companyId, lineItems);
+
+  // Update project status to ESTIMATE_CREATED if still in an earlier state
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { status: true } });
+  if (project && ['DRAFT', 'PHOTOS_UPLOADED', 'GENERATING', 'GENERATION_COMPLETE'].includes(project.status)) {
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { status: 'ESTIMATE_CREATED' },
+    });
+  }
+
+  logger.info(
+    { estimateId, projectId, materialCount: materials.length, laborIncluded: true },
+    'Auto-estimate created with line items'
   );
 }
 
@@ -339,7 +474,7 @@ export async function create(
       });
       return gen;
     });
-    processGeneration(generation.id, data.prompt, imageContext, projectId).catch(() => {});
+    processGeneration(generation.id, data.prompt, imageContext, projectId, companyId, userId).catch(() => {});
     return generation;
   }
 
@@ -432,7 +567,7 @@ export async function create(
       });
 
       // Fire-and-forget: process the generation asynchronously
-      processGeneration(generation.id, data.prompt, imageContext, projectId).catch(() => {});
+      processGeneration(generation.id, data.prompt, imageContext, projectId, companyId, userId).catch(() => {});
 
       return generation;
     }
@@ -469,7 +604,7 @@ export async function create(
   });
 
   // Fire-and-forget: process the generation asynchronously
-  processGeneration(generation.id, data.prompt, imageContext, projectId).catch(() => {});
+  processGeneration(generation.id, data.prompt, imageContext, projectId, companyId, userId).catch(() => {});
 
   return generation;
 }

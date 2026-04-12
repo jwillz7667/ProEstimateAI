@@ -34,6 +34,18 @@
           }
         }
       }
+    },
+    "NSCameraUsageDescription" : {
+      "comment" : "Privacy - Camera Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ProEstimate AI uses your camera to photograph project sites for AI-powered remodel previews and material estimates."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

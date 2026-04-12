@@ -13,7 +13,7 @@ struct StatusBadge: View {
             case .warning: ColorTokens.warning.opacity(0.15)
             case .error: ColorTokens.error.opacity(0.15)
             case .info: ColorTokens.primaryOrange.opacity(0.15)
-            case .neutral: Color.gray.opacity(0.15)
+            case .neutral: ColorTokens.secondaryText.opacity(0.15)
             }
         }
 
@@ -23,7 +23,7 @@ struct StatusBadge: View {
             case .warning: ColorTokens.warning
             case .error: ColorTokens.error
             case .info: ColorTokens.primaryOrange
-            case .neutral: .gray
+            case .neutral: ColorTokens.secondaryText
             }
         }
     }

@@ -10,6 +10,7 @@ struct MaterialSuggestionsSection: View {
     let selectedCount: Int
     let selectedTotal: Decimal
     let isDIY: Bool
+    let hasExistingEstimate: Bool
     let onToggle: (String) -> Void
     var onToggleDIY: (() -> Void)?
     var onAddToEstimate: (() -> Void)?
@@ -40,7 +41,7 @@ struct MaterialSuggestionsSection: View {
             HStack(spacing: SpacingTokens.sm) {
                 Image(systemName: isDIY ? "wrench.and.screwdriver" : "person.badge.shield.checkmark")
                     .font(.title3)
-                    .foregroundStyle(isDIY ? ColorTokens.primaryOrange : .blue)
+                    .foregroundStyle(isDIY ? ColorTokens.primaryOrange : ColorTokens.accentBlue)
                     .frame(width: 32)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -61,7 +62,7 @@ struct MaterialSuggestionsSection: View {
                     set: { _ in onToggleDIY?() }
                 ))
                 .labelsHidden()
-                .tint(.blue)
+                .tint(ColorTokens.accentBlue)
             }
         }
         .padding(.horizontal, SpacingTokens.md)
@@ -97,7 +98,7 @@ struct MaterialSuggestionsSection: View {
                     HStack {
                         Image(systemName: "hammer")
                             .font(.caption)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(ColorTokens.accentBlue)
                         Text("Labor costs will be added automatically")
                             .font(TypographyTokens.caption)
                             .foregroundStyle(.secondary)
@@ -106,8 +107,15 @@ struct MaterialSuggestionsSection: View {
                 }
 
                 if selectedCount > 0 {
+                    let title: String = {
+                        if hasExistingEstimate {
+                            return "Create Custom Estimate"
+                        }
+                        return isDIY ? "Create DIY Estimate" : "Create Professional Estimate"
+                    }()
+
                     PrimaryCTAButton(
-                        title: isDIY ? "Create DIY Estimate" : "Create Professional Estimate",
+                        title: title,
                         icon: "doc.text.fill"
                     ) {
                         onAddToEstimate?()
@@ -153,6 +161,7 @@ struct MaterialSuggestionsSection: View {
             selectedCount: 3,
             selectedTotal: 7142,
             isDIY: false,
+            hasExistingEstimate: false,
             onToggle: { _ in }
         )
     }

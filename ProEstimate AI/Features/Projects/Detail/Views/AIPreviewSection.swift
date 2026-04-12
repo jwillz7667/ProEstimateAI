@@ -7,10 +7,14 @@ struct AIPreviewSection: View {
     let generations: [AIGeneration]
     let isGenerating: Bool
     let currentGenerationStage: Int
-    let onGenerate: () -> Void
+    let onGenerate: (String) -> Void
+    /// Default prompt text shown when no previous generation exists (typically the project description).
+    var defaultPrompt: String = ""
     var assets: [Asset] = []
 
     @State private var selectedGenerationIndex: Int = 0
+    @State private var showRegenerateSheet = false
+    @State private var regeneratePrompt = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
@@ -27,12 +31,70 @@ struct AIPreviewSection: View {
                 completedView
             }
         }
+        .sheet(isPresented: $showRegenerateSheet) {
+            regenerateSheet
+        }
     }
 
     // MARK: - Computed
 
     private var completedGenerations: [AIGeneration] {
         generations.filter { $0.status == .completed }
+    }
+
+    /// Best available pre-fill: most recent generation's prompt, or the project-level default.
+    private var bestPromptSuggestion: String {
+        completedGenerations.first?.prompt ?? defaultPrompt
+    }
+
+    // MARK: - Regenerate Sheet
+
+    private var regenerateSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: SpacingTokens.md) {
+                Text("Describe how you want the remodel to look. Be specific about materials, colors, and style.")
+                    .font(TypographyTokens.subheadline)
+                    .foregroundStyle(.secondary)
+
+                TextEditor(text: $regeneratePrompt)
+                    .font(TypographyTokens.body)
+                    .scrollContentBackground(.hidden)
+                    .padding(SpacingTokens.sm)
+                    .background(ColorTokens.darkSurface.opacity(0.6))
+                    .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.small))
+                    .frame(minHeight: 120, maxHeight: 200)
+
+                Text("\(regeneratePrompt.count)/2000")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(regeneratePrompt.count > 2000 ? ColorTokens.error : .secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+
+                Spacer()
+
+                PrimaryCTAButton(
+                    title: "Generate",
+                    icon: "wand.and.stars",
+                    isDisabled: regeneratePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || regeneratePrompt.count > 2000
+                ) {
+                    let prompt = regeneratePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                    showRegenerateSheet = false
+                    onGenerate(prompt)
+                }
+            }
+            .padding(SpacingTokens.lg)
+            .navigationTitle("AI Prompt")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showRegenerateSheet = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 
     // MARK: - State Views
@@ -53,9 +115,11 @@ struct AIPreviewSection: View {
 
             PrimaryCTAButton(
                 title: "Generate Preview",
-                icon: "wand.and.stars",
-                action: onGenerate
-            )
+                icon: "wand.and.stars"
+            ) {
+                regeneratePrompt = bestPromptSuggestion
+                showRegenerateSheet = true
+            }
             .frame(maxWidth: 280)
         }
         .padding(SpacingTokens.xl)
@@ -116,7 +180,8 @@ struct AIPreviewSection: View {
 
             // Generate another button
             SecondaryButton(title: "Generate Another", icon: "wand.and.stars") {
-                onGenerate()
+                regeneratePrompt = bestPromptSuggestion
+                showRegenerateSheet = true
             }
             .padding(.horizontal, SpacingTokens.md)
         }
@@ -177,7 +242,8 @@ struct AIPreviewSection: View {
         generations: [],
         isGenerating: false,
         currentGenerationStage: 0,
-        onGenerate: {}
+        onGenerate: { _ in },
+        defaultPrompt: "Modern kitchen with white shaker cabinets"
     )
 }
 
@@ -186,7 +252,7 @@ struct AIPreviewSection: View {
         generations: [],
         isGenerating: true,
         currentGenerationStage: 2,
-        onGenerate: {}
+        onGenerate: { _ in }
     )
 }
 
@@ -195,6 +261,6 @@ struct AIPreviewSection: View {
         generations: MockGenerationService.sampleGenerations,
         isGenerating: false,
         currentGenerationStage: 0,
-        onGenerate: {}
+        onGenerate: { _ in }
     )
 }

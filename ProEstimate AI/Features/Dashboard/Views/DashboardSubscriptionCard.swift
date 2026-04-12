@@ -49,7 +49,7 @@ struct DashboardSubscriptionCard: View {
 
                 Text("Unlimited AI generations and exports")
                     .font(TypographyTokens.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ColorTokens.secondaryText)
             }
 
             Spacer()
@@ -67,7 +67,7 @@ struct DashboardSubscriptionCard: View {
 
                     Text("Upgrade to Pro for unlimited access")
                         .font(TypographyTokens.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(ColorTokens.secondaryText)
                 }
 
                 Spacer()
@@ -104,7 +104,7 @@ struct DashboardSubscriptionCard: View {
             HStack {
                 Text(label)
                     .font(TypographyTokens.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ColorTokens.secondaryText)
 
                 Spacer()
 
@@ -117,7 +117,7 @@ struct DashboardSubscriptionCard: View {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.15))
+                        .fill(ColorTokens.progressTrack)
                         .frame(height: 6)
 
                     RoundedRectangle(cornerRadius: 4)

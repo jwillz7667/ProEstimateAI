@@ -145,7 +145,7 @@ struct InvoiceListView: View {
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
                 Text("Outstanding")
                     .font(TypographyTokens.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ColorTokens.secondaryText)
                 CurrencyText(amount: viewModel.totalOutstanding, font: TypographyTokens.moneyMedium)
             }
 

@@ -30,5 +30,10 @@ export const updateEstimateLineItemSchema = z.object({
   item_type: z.enum(['per_unit', 'flat_rate', 'hourly']).nullable().optional(),
 });
 
+export const batchCreateEstimateLineItemsSchema = z.object({
+  items: z.array(createEstimateLineItemSchema).min(1, 'At least one line item is required').max(200, 'Maximum 200 line items per batch'),
+});
+
 export type CreateEstimateLineItemInput = z.infer<typeof createEstimateLineItemSchema>;
 export type UpdateEstimateLineItemInput = z.infer<typeof updateEstimateLineItemSchema>;
+export type BatchCreateEstimateLineItemsInput = z.infer<typeof batchCreateEstimateLineItemsSchema>;

@@ -40,7 +40,17 @@ enum ColorTokens {
     static let warning = Color(hex: 0xF59E0B)
     static let error = Color(hex: 0xEF4444)
 
+    // MARK: - Accent Colors (for category icons, status badges, toggles)
+    static let accentBlue = Color(hex: 0x3B82F6)
+    static let accentPurple = Color(hex: 0x8B5CF6)
+    static let accentTeal = Color(hex: 0x14B8A6)
+    static let accentGreen = Color(hex: 0x22C55E)
+    static let accentRed = Color(hex: 0xEF4444)
+
     // MARK: - Surfaces for inputs/cards
     static let inputBackground = Color("InputBackground", bundle: nil)
     static let progressTrack = Color("ProgressTrack", bundle: nil)
+
+    // MARK: - Form Inputs (white in dark mode for contrast)
+    static let formFieldBackground = Color.white
 }

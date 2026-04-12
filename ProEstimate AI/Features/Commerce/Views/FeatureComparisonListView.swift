@@ -36,13 +36,13 @@ struct FeatureComparisonListView: View {
             Text("Features")
                 .font(TypographyTokens.subheadline)
                 .fontWeight(.semibold)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.6))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text("Free")
                 .font(TypographyTokens.caption)
                 .fontWeight(.semibold)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.6))
                 .frame(width: 50)
 
             Text("Pro")
@@ -100,7 +100,7 @@ struct FeatureComparisonListView: View {
         case .limited(let text):
             Text(text)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.6))
         case .unlimited:
             Image(systemName: "infinity")
                 .font(.system(size: 12, weight: .bold))

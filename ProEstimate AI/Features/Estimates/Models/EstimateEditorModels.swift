@@ -71,7 +71,7 @@ extension LineItemDraft {
         self.quantity = material.quantity
         self.unit = LineItemUnit(rawValue: material.unit) ?? .each
         self.unitCost = material.estimatedCost
-        self.markupPercent = isDIY ? 0 : 20
+        self.markupPercent = isDIY ? 0 : 10
         self.taxRate = 8.25
         self.sortOrder = sortOrder
 

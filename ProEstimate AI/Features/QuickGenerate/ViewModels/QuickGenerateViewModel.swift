@@ -69,6 +69,12 @@ final class QuickGenerateViewModel {
         selectedImageData = nil
     }
 
+    /// Sets photo data from a camera-captured UIImage.
+    func setCameraImage(_ image: UIImage) {
+        photosPickerItem = nil
+        selectedImageData = image.jpegData(compressionQuality: 0.8)
+    }
+
     // MARK: - Generation Flow
 
     func generate() async {
@@ -113,7 +119,8 @@ final class QuickGenerateViewModel {
             // 3. Start generation
             let generation = try await generationService.startGeneration(
                 projectId: project.id,
-                prompt: prompt
+                prompt: prompt,
+                materials: nil
             )
 
             // 4. Poll for completion

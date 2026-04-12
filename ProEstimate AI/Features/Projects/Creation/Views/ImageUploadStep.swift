@@ -1,11 +1,14 @@
 import PhotosUI
 import SwiftUI
 
-/// Step 2: Upload project photos via the system PhotosPicker.
+/// Step 2: Upload project photos via the system PhotosPicker or camera.
 /// Displays a grid of selected image thumbnails with delete buttons
-/// and a camera/library entry point.
+/// and camera/library entry points.
 struct ImageUploadStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
+    @State private var isCameraPresented = false
+
+    private let isCameraAvailable = UIImagePickerController.isSourceTypeAvailable(.camera)
 
     private let columns = [
         GridItem(.flexible(), spacing: SpacingTokens.sm),
@@ -23,8 +26,13 @@ struct ImageUploadStep: View {
                     .font(TypographyTokens.subheadline)
                     .foregroundStyle(.secondary)
 
-                // Photo picker button
-                photoPickerButton
+                // Photo source buttons
+                VStack(spacing: SpacingTokens.sm) {
+                    if isCameraAvailable {
+                        takePhotoButton
+                    }
+                    photoPickerButton
+                }
 
                 // Minimum indicator
                 if viewModel.selectedImageData.isEmpty {
@@ -67,9 +75,44 @@ struct ImageUploadStep: View {
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.sm)
         }
+        .fullScreenCover(isPresented: $isCameraPresented) {
+            CameraView { image in
+                viewModel.addCameraImage(image)
+            }
+            .ignoresSafeArea()
+        }
     }
 
     // MARK: - Subviews
+
+    private var takePhotoButton: some View {
+        Button {
+            isCameraPresented = true
+        } label: {
+            HStack(spacing: SpacingTokens.sm) {
+                Image(systemName: "camera.fill")
+                    .font(.title2)
+                    .foregroundStyle(ColorTokens.primaryOrange)
+
+                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                    Text("Take Photo")
+                        .font(TypographyTokens.headline)
+                    Text("Use your camera to capture the space")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(SpacingTokens.md)
+            .glassCard(cornerRadius: RadiusTokens.card)
+        }
+        .buttonStyle(.plain)
+    }
 
     private var photoPickerButton: some View {
         PhotosPicker(
@@ -84,9 +127,9 @@ struct ImageUploadStep: View {
                     .foregroundStyle(ColorTokens.primaryOrange)
 
                 VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("Select from Library")
+                    Text("Choose from Library")
                         .font(TypographyTokens.headline)
-                    Text("Choose up to 10 photos")
+                    Text("Select up to 10 photos")
                         .font(TypographyTokens.caption)
                         .foregroundStyle(.secondary)
                 }

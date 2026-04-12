@@ -146,7 +146,7 @@ struct DashboardView: View {
                 if let companyName = appState.currentCompany?.name {
                     Text(companyName)
                         .font(TypographyTokens.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(ColorTokens.secondaryText)
                 }
             }
 
@@ -248,7 +248,7 @@ struct DashboardView: View {
 
                 Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(ColorTokens.tertiaryText)
             }
             .padding(SpacingTokens.md)
             .background(
@@ -278,6 +278,8 @@ struct DashboardView: View {
         // Brief delay lets the fullScreenCover dismiss animation finish
         // before pushing onto the NavigationStack — avoids SwiftUI race.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            // Clear any stale navigation entries first so we don't land on an old project
+            router.dashboardPath = NavigationPath()
             router.dashboardPath.append(AppDestination.projectDetail(id: projectId))
         }
     }

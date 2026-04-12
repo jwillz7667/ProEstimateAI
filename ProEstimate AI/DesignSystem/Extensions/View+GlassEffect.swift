@@ -21,4 +21,15 @@ extension View {
                 in: RoundedRectangle(cornerRadius: cornerRadius)
             )
     }
+
+    func formField() -> some View {
+        self
+            .padding(SpacingTokens.sm)
+            .background(ColorTokens.formFieldBackground, in: RoundedRectangle(cornerRadius: RadiusTokens.small))
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.small)
+                    .strokeBorder(ColorTokens.subtleBorder, lineWidth: 1)
+            )
+            .foregroundStyle(.black)
+    }
 }

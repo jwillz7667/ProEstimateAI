@@ -36,6 +36,7 @@ struct ClientSelectionStep: View {
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.sm)
         }
+        .task { await viewModel.loadClients() }
     }
 
     // MARK: - Subviews

@@ -138,7 +138,7 @@ final class ProjectDetailViewModel {
 
     // MARK: - AI Generation
 
-    func startGeneration() async {
+    func startGeneration(prompt: String? = nil, materials: [MaterialSpec]? = nil) async {
         guard let project else { return }
 
         isGenerating = true
@@ -147,10 +147,21 @@ final class ProjectDetailViewModel {
         // Start the timer to animate progress stages
         startProgressSimulation()
 
+        let effectivePrompt = prompt ?? project.description ?? "Generate a remodel preview for \(project.title)"
+
+        // If the user has selected materials from a prior generation, pass them so the
+        // new image reflects the chosen finishes.
+        let effectiveMaterials: [MaterialSpec]? = materials ?? {
+            let selected = selectedMaterials
+            guard !selected.isEmpty else { return nil }
+            return selected.map { MaterialSpec(from: $0) }
+        }()
+
         do {
             let generation = try await generationService.startGeneration(
                 projectId: project.id,
-                prompt: project.description ?? "Generate a remodel preview for \(project.title)"
+                prompt: effectivePrompt,
+                materials: effectiveMaterials
             )
 
             // Poll for completion — PiAPI typically takes 60-130 seconds
@@ -168,11 +179,14 @@ final class ProjectDetailViewModel {
             if completed.status == .completed {
                 // Reload materials from the new generation
                 await loadMaterials()
-                for material in materials {
+                for material in self.materials {
                     if materialSelectionState[material.id] == nil {
                         materialSelectionState[material.id] = material.isSelected
                     }
                 }
+
+                // Reload estimates — backend may have auto-created one from materials
+                await loadEstimates(projectId: project.id)
             } else if completed.status == .failed {
                 errorMessage = completed.errorMessage ?? "Image generation failed. Please try again."
             }
@@ -271,6 +285,16 @@ final class ProjectDetailViewModel {
     /// Most recent completed generation.
     var latestGeneration: AIGeneration? {
         generations.first { $0.status == .completed }
+    }
+
+    /// Whether AI-generated estimates exist (auto-created after generation).
+    var hasAIEstimate: Bool {
+        !estimates.isEmpty && hasCompletedGenerations
+    }
+
+    /// The most recent estimate (typically the auto-created AI estimate).
+    var latestEstimate: Estimate? {
+        estimates.first
     }
 
     // MARK: - Progress Simulation
