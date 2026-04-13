@@ -275,15 +275,15 @@ async function generateAndStoreMaterials(
  * Default labor hours and hourly rates by project type, used for auto-estimate creation.
  */
 const DEFAULT_LABOR_BY_PROJECT_TYPE: Record<string, { hours: number; rate: number }> = {
-  KITCHEN:      { hours: 40, rate: 75 },
-  BATHROOM:     { hours: 24, rate: 70 },
-  FLOORING:     { hours: 16, rate: 55 },
-  ROOFING:      { hours: 24, rate: 65 },
-  PAINTING:     { hours: 16, rate: 45 },
-  SIDING:       { hours: 24, rate: 60 },
-  ROOM_REMODEL: { hours: 32, rate: 65 },
-  EXTERIOR:     { hours: 20, rate: 55 },
-  CUSTOM:       { hours: 24, rate: 60 },
+  KITCHEN:      { hours: 32, rate: 50 },
+  BATHROOM:     { hours: 20, rate: 45 },
+  FLOORING:     { hours: 12, rate: 40 },
+  ROOFING:      { hours: 20, rate: 45 },
+  PAINTING:     { hours: 10, rate: 35 },
+  SIDING:       { hours: 18, rate: 42 },
+  ROOM_REMODEL: { hours: 24, rate: 45 },
+  EXTERIOR:     { hours: 16, rate: 40 },
+  CUSTOM:       { hours: 18, rate: 42 },
 };
 
 /**
@@ -342,7 +342,7 @@ async function autoCreateEstimate(
     quantity: Number(m.quantity),
     unit: m.unit,
     unit_cost: Number(m.estimatedCost),
-    markup_percent: 10,
+    markup_percent: 0,
     tax_rate: 0.0825,
     sort_order: index,
     source_material_suggestion_id: m.id,
@@ -356,7 +356,7 @@ async function autoCreateEstimate(
     quantity: labor.hours,
     unit: 'hour',
     unit_cost: labor.rate,
-    markup_percent: 15,
+    markup_percent: 0,
     tax_rate: 0,
     sort_order: materials.length,
   });

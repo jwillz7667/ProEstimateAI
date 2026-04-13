@@ -48,7 +48,7 @@ export async function generateMaterialSuggestions(
     const projectType = context.projectType.replace(/_/g, ' ').toLowerCase();
     const qualityTier = context.qualityTier.toLowerCase();
 
-    const prompt = `You are a professional construction estimator. Given this remodel project, generate a detailed materials list with realistic 2025-2026 US market pricing.
+    const prompt = `You are a professional construction estimator helping homeowners and small contractors get accurate, competitive material pricing. Generate a materials list with realistic 2025-2026 US retail pricing that a homeowner would actually pay at Home Depot or Lowe's.
 
 PROJECT:
 - Type: ${projectType}
@@ -59,24 +59,29 @@ ${context.squareFootage ? `- Area: ${context.squareFootage} sq ft` : ''}
 ${context.dimensions ? `- Dimensions: ${context.dimensions}` : ''}
 - User's request: "${userPrompt}"
 
-Generate a materials list with only the PRIMARY materials needed for this project. Do not list every fastener, adhesive, or finishing supply separately — group minor items into a single "Miscellaneous Hardware & Supplies" line if needed.
+IMPORTANT PRICING RULES:
+- Use the LOWEST reasonable retail price for the quality tier — what someone would actually pay, not MSRP or inflated contractor-supply pricing.
+- Standard tier = budget-friendly big-box store pricing. Think sale prices and value lines.
+- Do NOT inflate prices. A gallon of interior paint is $25-40, not $50+. Vinyl plank flooring is $1.50-3.50/sq ft, not $5+. Basic ceramic tile is $1-3/sq ft.
+- The total project cost for materials should feel reasonable to a homeowner — a standard bathroom should be $1,500-4,000 in materials, a standard kitchen $3,000-8,000, painting a room $200-500.
+- Include a 5% waste factor in quantities (not 10%).
 
-Keep the total number of material items between 5-15 for typical projects. Use mid-range pricing (not premium/luxury unless the quality tier specifies it). Estimate realistic quantities with a 5-10% waste factor already included — do not over-specify.
+Generate only PRIMARY materials (5-12 items). Group minor items (fasteners, adhesives, caulk, tape) into one "Miscellaneous Supplies" line at $50-150.
 
-For each material, provide:
-- name: specific product name (e.g. "Quartz Countertop - Calacatta" not just "countertop")
-- category: one of "Countertops", "Cabinets", "Flooring", "Tile", "Fixtures", "Lighting", "Plumbing", "Electrical", "Paint", "Hardware", "Appliances", "Lumber", "Drywall", "Insulation", "Roofing", "Siding", "Windows", "Doors", "Trim", "Adhesives & Sealants", "Fasteners", "Other"
-- estimatedCost: per-unit cost in USD (realistic retail pricing — avoid inflated or premium pricing unless the quality tier calls for it)
+For each material:
+- name: specific product (e.g. "LVP Flooring - Oak Look" not just "flooring")
+- category: one of "Countertops", "Cabinets", "Flooring", "Tile", "Fixtures", "Lighting", "Plumbing", "Electrical", "Paint", "Hardware", "Appliances", "Lumber", "Drywall", "Insulation", "Roofing", "Siding", "Windows", "Doors", "Trim", "Other"
+- estimatedCost: per-unit cost in USD — use the LOW END of realistic retail pricing for the tier
 - unit: "sq ft", "linear ft", "each", "gallon", "box", "sheet", "bundle", "roll", "bag", "set"
-- quantity: estimated quantity needed for this project (include 5-10% waste factor, do not add extra beyond that)
-- supplierName: suggest a real supplier (Home Depot, Lowe's, Floor & Decor, Ferguson, Build.com, Wayfair, etc.)
+- quantity: conservative estimate (don't over-order)
+- supplierName: Home Depot, Lowe's, Floor & Decor, etc.
 
-QUALITY TIER PRICING GUIDE:
-- standard: mid-range retail pricing (Home Depot/Lowe's level)
-- premium: upper-mid pricing (specialty retailers, upgraded brands)
-- luxury: high-end pricing (designer brands, custom/exotic materials)
+QUALITY TIER PRICING:
+- standard: lowest reasonable retail (Home Depot/Lowe's value lines, e.g. Hampton Bay, StyleSelections, TrafficMaster)
+- premium: mid-range retail (e.g. Delta, Moen, LifeProof, Allen + Roth)
+- luxury: upper retail (e.g. Kohler, KitchenAid, custom options)
 
-Respond with ONLY a JSON array, no markdown, no explanation:
+Respond with ONLY a JSON array:
 [{"name":"...","category":"...","estimatedCost":0.00,"unit":"...","quantity":0,"supplierName":"..."}]`;
 
     logger.info({ projectType, qualityTier }, 'Generating material suggestions via Gemini');
@@ -135,7 +140,7 @@ export async function generateLaborEstimates(
     const projectType = context.projectType.replace(/_/g, ' ').toLowerCase();
     const qualityTier = context.qualityTier.toLowerCase();
 
-    const prompt = `You are a professional construction estimator. Estimate the labor needed for this remodel project with 2025-2026 US contractor rates.
+    const prompt = `You are a professional construction estimator. Estimate the labor needed for this remodel project with competitive 2025-2026 US rates. Use rates that a small contractor or handyman would charge — NOT high-end general contractor rates.
 
 PROJECT:
 - Type: ${projectType}
@@ -143,23 +148,24 @@ PROJECT:
 - Title: "${context.projectTitle}"
 ${context.squareFootage ? `- Area: ${context.squareFootage} sq ft` : ''}
 
-Generate labor line items. Include all trades needed (demolition, framing, plumbing, electrical, tiling, painting, installation, cleanup, etc.)
+Generate labor line items for only the trades actually needed. Don't add trades that aren't relevant to this project type. Be conservative with hours — don't pad estimates.
 
 For each task:
-- taskName: descriptive name (e.g. "Tile Installation - Floor & Backsplash")
-- hoursEstimate: realistic hours for this scope
-- ratePerHour: typical contractor rate in USD for this trade
-- category: the trade (e.g. "General Labor", "Plumbing", "Electrical", "Tiling", "Painting", "Carpentry", "Demolition", "HVAC", "Cleanup")
+- taskName: descriptive name (e.g. "Tile Installation - Floor")
+- hoursEstimate: realistic hours (lean, not padded)
+- ratePerHour: competitive rate in USD (use the LOW END of the range)
+- category: the trade
 
-RATE GUIDE (per hour):
-- General labor/demolition: $35-55
-- Carpentry/framing: $45-75
-- Plumbing: $65-120
-- Electrical: $55-100
-- Tile/stone: $50-85
-- Painting: $35-65
-- HVAC: $65-110
-- Premium/specialty trades add 20-40%
+RATE GUIDE (per hour — use the low end for standard tier):
+- General labor/demolition/cleanup: $25-40
+- Carpentry/framing: $35-55
+- Plumbing: $45-75
+- Electrical: $45-70
+- Tile/stone: $40-60
+- Painting: $25-45
+- HVAC: $50-80
+- Premium tier: use mid-range of these rates
+- Luxury tier: use upper range
 
 Respond with ONLY a JSON array:
 [{"taskName":"...","hoursEstimate":0,"ratePerHour":0,"category":"..."}]`;
