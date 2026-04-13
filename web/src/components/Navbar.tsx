@@ -108,12 +108,14 @@ export default function Navbar() {
           {/* Logo */}
           <a
             href="#"
-            aria-label="ProEstimate AI home"
-            className="flex items-baseline gap-0.5 text-xl tracking-tight select-none"
+            aria-label="ProEstimate home"
+            className="flex items-center gap-2 text-xl tracking-tight select-none"
             onClick={handleNavClick}
           >
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm">
+              <img src="/logo.png" alt="ProEstimate" className="h-5 w-5 object-contain" />
+            </div>
             <span className="font-bold text-ink-950">ProEstimate</span>
-            <span className="font-bold text-brand-500">AI</span>
           </a>
 
           {/* Desktop nav links */}

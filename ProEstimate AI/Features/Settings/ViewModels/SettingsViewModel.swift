@@ -7,6 +7,7 @@ final class SettingsViewModel {
     // MARK: - Dependencies
 
     private let service: SettingsServiceProtocol
+    weak var appState: AppState?
 
     // MARK: - State
 
@@ -108,7 +109,9 @@ final class SettingsViewModel {
                 primaryColor: primaryColorHex,
                 secondaryColor: secondaryColorHex
             )
-            company = try await service.saveCompanyBranding(update)
+            let updated = try await service.saveCompanyBranding(update)
+            company = updated
+            syncAppState(from: updated)
             successMessage = "Branding saved successfully."
         } catch {
             errorMessage = error.localizedDescription
@@ -128,7 +131,9 @@ final class SettingsViewModel {
                 defaultTaxRate: defaultTaxRate,
                 taxInclusivePricing: taxInclusivePricing
             )
-            company = try await service.saveTaxSettings(update)
+            let updated = try await service.saveTaxSettings(update)
+            company = updated
+            syncAppState(from: updated)
             successMessage = "Tax settings saved."
         } catch {
             errorMessage = error.localizedDescription
@@ -146,7 +151,9 @@ final class SettingsViewModel {
                 nextEstimateNumber: nextEstimateNumber,
                 nextInvoiceNumber: nextInvoiceNumber
             )
-            company = try await service.saveNumberingSettings(update)
+            let updated = try await service.saveNumberingSettings(update)
+            company = updated
+            syncAppState(from: updated)
             successMessage = "Numbering settings saved."
         } catch {
             errorMessage = error.localizedDescription
@@ -190,6 +197,14 @@ final class SettingsViewModel {
     }
 
     // MARK: - Private
+
+    private func syncAppState(from company: Company) {
+        appState?.currentCompany = AppState.CurrentCompany(
+            id: company.id,
+            name: company.name,
+            logoURL: company.logoURL
+        )
+    }
 
     private func populateFields(from company: Company) {
         companyName = company.name

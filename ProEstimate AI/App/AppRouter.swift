@@ -27,6 +27,7 @@ enum AppDestination: Hashable {
     case pricingProfiles
     case languageSettings
     case subscriptionSettings
+    case analytics
 
     // Commerce
     case paywall(placement: String)

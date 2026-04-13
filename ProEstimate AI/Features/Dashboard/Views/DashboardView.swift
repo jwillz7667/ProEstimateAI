@@ -10,6 +10,7 @@ struct DashboardView: View {
     @State private var showProjectCreation = false
     @State private var showQuickGenerate = false
     @State private var showClientForm = false
+    @State private var showSettings = false
     @State private var navigateToProjectId: String?
 
     var body: some View {
@@ -26,7 +27,30 @@ struct DashboardView: View {
                     dashboardContent
                 }
             }
-            .navigationTitle("Dashboard")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .foregroundStyle(ColorTokens.primaryOrange)
+                    }
+                }
+            }
+            .sheet(isPresented: $showSettings) {
+                NavigationStack {
+                    SettingsView()
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button("Done") {
+                                    showSettings = false
+                                }
+                                .foregroundStyle(ColorTokens.primaryOrange)
+                            }
+                        }
+                }
+            }
             .task {
                 if viewModel.summary == nil {
                     await viewModel.loadDashboard()
@@ -89,10 +113,6 @@ struct DashboardView: View {
                 }
                 .padding(.horizontal, SpacingTokens.md)
 
-                // MARK: - Metrics Grid
-                metricsGrid
-                    .padding(.horizontal, SpacingTokens.md)
-
                 // MARK: - Quick Actions
                 DashboardQuickActionsSection { action in
                     handleQuickAction(action)
@@ -133,13 +153,20 @@ struct DashboardView: View {
     // MARK: - Greeting
 
     private var greetingSection: some View {
-        HStack(spacing: SpacingTokens.sm) {
-            Image("housd-icon-light")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(height: 40)
+        VStack(spacing: SpacingTokens.sm) {
+            ZStack {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 80, height: 80)
+                    .shadow(color: ColorTokens.primaryOrange.opacity(0.25), radius: 12, x: 0, y: 4)
 
-            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                Image("housd-icon-light")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 48)
+            }
+
+            VStack(spacing: SpacingTokens.xxs) {
                 Text(viewModel.greeting(for: appState.currentUser?.fullName ?? ""))
                     .font(TypographyTokens.title2)
 
@@ -149,42 +176,8 @@ struct DashboardView: View {
                         .foregroundStyle(ColorTokens.secondaryText)
                 }
             }
-
-            Spacer()
         }
-    }
-
-    // MARK: - Metrics Grid
-
-    private var metricsGrid: some View {
-        let summary = viewModel.summary ?? DashboardSummary.empty
-        return LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: SpacingTokens.sm),
-                GridItem(.flexible(), spacing: SpacingTokens.sm),
-            ],
-            spacing: SpacingTokens.sm
-        ) {
-            MetricCard(
-                label: "Active Projects",
-                value: "\(summary.activeProjectsCount)"
-            )
-
-            MetricCard(
-                label: "Pending Estimates",
-                value: "\(summary.pendingEstimatesCount)"
-            )
-
-            MetricCard(
-                label: "Revenue This Month",
-                value: viewModel.formattedRevenue
-            )
-
-            MetricCard(
-                label: "Invoices Due",
-                value: "\(summary.invoicesDueCount)"
-            )
-        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Quick Generate Card

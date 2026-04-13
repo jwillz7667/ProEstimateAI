@@ -2,7 +2,7 @@ import SwiftUI
 
 enum ColorTokens {
     // MARK: - Primary
-    static let primaryOrange = Color(hex: 0xF97316)
+    static let primaryOrange = Color(hex: 0xFF9230)
 
     // MARK: - Brand Neutrals (from logo)
     static let brandDark = Color(hex: 0x1C1C1E)

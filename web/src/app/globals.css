@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  /* Brand colors — matching iOS app ColorTokens */
-  --color-brand-50: #FFF7ED;
-  --color-brand-100: #FFEDD5;
-  --color-brand-200: #FED7AA;
-  --color-brand-300: #FDBA74;
-  --color-brand-400: #FB923C;
-  --color-brand-500: #F97316;
-  --color-brand-600: #EA580C;
-  --color-brand-700: #C2410C;
-  --color-brand-800: #9A3412;
-  --color-brand-900: #7C2D12;
+  /* Brand colors — matching iOS app ColorTokens (#FF9230 primary) */
+  --color-brand-50: #FFF8F0;
+  --color-brand-100: #FFEFD9;
+  --color-brand-200: #FFDDB3;
+  --color-brand-300: #FFC580;
+  --color-brand-400: #FFAB58;
+  --color-brand-500: #FF9230;
+  --color-brand-600: #E87A18;
+  --color-brand-700: #C46210;
+  --color-brand-800: #9C4D0E;
+  --color-brand-900: #7A3C0C;
 
   /* Brand neutrals — derived from logo colors #1C1C1E and #69717F */
   --color-ink-950: #1C1C1E;
@@ -95,10 +95,10 @@ body {
 }
 
 .glass-brand {
-  background: rgba(249, 115, 22, 0.08);
+  background: rgba(255, 146, 48, 0.08);
   backdrop-filter: blur(16px) saturate(150%);
   -webkit-backdrop-filter: blur(16px) saturate(150%);
-  border: 1px solid rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(255, 146, 48, 0.15);
 }
 
 /* WebGL canvas */
@@ -137,7 +137,7 @@ body {
 
 /* Glow effect */
 .glow-brand {
-  box-shadow: 0 0 40px rgba(249, 115, 22, 0.3), 0 0 80px rgba(249, 115, 22, 0.1);
+  box-shadow: 0 0 40px rgba(255, 146, 48, 0.3), 0 0 80px rgba(255, 146, 48, 0.1);
 }
 
 /* Noise texture overlay */

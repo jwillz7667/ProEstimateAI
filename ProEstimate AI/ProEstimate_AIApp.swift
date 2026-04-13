@@ -1,4 +1,4 @@
-import SwiftUI
+ import SwiftUI
 import SwiftData
 
 @main
@@ -9,6 +9,7 @@ struct ProEstimate_AIApp: App {
     @State private var usageMeterStore = UsageMeterStore()
     @State private var featureGateCoordinator = FeatureGateCoordinator()
     @State private var paywallPresenter = PaywallPresenter()
+    @State private var appearanceStore = AppearanceStore()
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -24,7 +25,7 @@ struct ProEstimate_AIApp: App {
         }
 
         // Global navigation bar appearance — orange large title text
-        let orange = UIColor(red: 249/255, green: 115/255, blue: 22/255, alpha: 1)
+        let orange = UIColor(red: 255/255, green: 146/255, blue: 48/255, alpha: 1)
         UINavigationBar.appearance().largeTitleTextAttributes = [.foregroundColor: orange]
         UINavigationBar.appearance().tintColor = orange
     }
@@ -38,7 +39,8 @@ struct ProEstimate_AIApp: App {
                 .environment(usageMeterStore)
                 .environment(featureGateCoordinator)
                 .environment(paywallPresenter)
-                .preferredColorScheme(.dark)
+                .environment(appearanceStore)
+                .preferredColorScheme(appearanceStore.colorScheme)
                 .tint(ColorTokens.primaryOrange)
                 .task {
                     await bootstrap()

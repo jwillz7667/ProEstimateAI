@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Environment(EntitlementStore.self) private var entitlementStore
     @Environment(UsageMeterStore.self) private var usageMeterStore
     @Environment(PaywallPresenter.self) private var paywallPresenter
+    @Environment(AppearanceStore.self) private var appearanceStore
     @State private var showingSignOutConfirmation = false
 
     var body: some View {
@@ -30,11 +31,14 @@ struct SettingsView: View {
                     PricingProfilesView(viewModel: viewModel)
                 case .languageSettings:
                     LanguageSettingsView(viewModel: viewModel)
+                case .analytics:
+                    AnalyticsView()
                 default:
                     EmptyView()
                 }
             }
             .task {
+                viewModel.appState = appState
                 await viewModel.loadSettings()
             }
             .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
@@ -136,6 +140,20 @@ struct SettingsView: View {
                     }
                 }
 
+                NavigationLink(value: AppDestination.analytics) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Analytics")
+                            Text("Projects, revenue & estimates")
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "chart.bar.xaxis")
+                            .foregroundStyle(ColorTokens.primaryOrange)
+                    }
+                }
+
                 NavigationLink(value: AppDestination.pricingProfiles) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
@@ -165,6 +183,19 @@ struct SettingsView: View {
                         Image(systemName: "globe")
                             .foregroundStyle(ColorTokens.accentTeal)
                     }
+                }
+
+                Label {
+                    @Bindable var store = appearanceStore
+                    Picker("Appearance", selection: $store.mode) {
+                        ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                            Label(mode.label, systemImage: mode.icon)
+                                .tag(mode)
+                        }
+                    }
+                } icon: {
+                    Image(systemName: appearanceStore.mode.icon)
+                        .foregroundStyle(ColorTokens.primaryOrange)
                 }
 
                 Label {
@@ -275,4 +306,5 @@ struct SettingsView: View {
         .environment(EntitlementStore.preview())
         .environment(UsageMeterStore.preview())
         .environment(PaywallPresenter())
+        .environment(AppearanceStore())
 }

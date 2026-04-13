@@ -9,7 +9,7 @@ extension View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(ColorTokens.subtleBorder, lineWidth: 0.5)
+                    .strokeBorder(ColorTokens.primaryOrange.opacity(0.4), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
     }

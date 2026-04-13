@@ -147,7 +147,7 @@ export default function Pricing() {
             whileHover={{
               y: -6,
               boxShadow:
-                "0 20px 60px -12px rgba(249, 115, 22, 0.25), 0 8px 24px -8px rgba(249, 115, 22, 0.15)",
+                "0 20px 60px -12px rgba(255, 146, 48, 0.25), 0 8px 24px -8px rgba(255, 146, 48, 0.15)",
             }}
             transition={{ type: "spring", stiffness: 260, damping: 20 }}
             className="relative flex flex-col rounded-2xl p-8 sm:p-10"
@@ -155,12 +155,12 @@ export default function Pricing() {
               // Double-layered glass + brand gradient border via
               // background-origin trick (outer = gradient, inner = glass fill)
               background:
-                "linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)) padding-box, linear-gradient(135deg, #F97316, #FB923C, #FBBF24) border-box",
+                "linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)) padding-box, linear-gradient(135deg, #FF9230, #FFAB58, #FFC580) border-box",
               border: "2px solid transparent",
               backdropFilter: "blur(20px) saturate(180%)",
               WebkitBackdropFilter: "blur(20px) saturate(180%)",
               boxShadow:
-                "0 0 40px rgba(249, 115, 22, 0.12), 0 0 80px rgba(249, 115, 22, 0.06)",
+                "0 0 40px rgba(255, 146, 48, 0.12), 0 0 80px rgba(255, 146, 48, 0.06)",
             }}
           >
             {/* "Most Popular" badge */}

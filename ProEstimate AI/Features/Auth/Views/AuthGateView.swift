@@ -49,21 +49,20 @@ struct AuthGateView: View {
             VStack(spacing: SpacingTokens.lg) {
                 Spacer()
 
-                Image("housd-icon-light")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(height: 100)
-                    .shadow(color: ColorTokens.primaryOrange.opacity(0.3), radius: 20, x: 0, y: 8)
+                ZStack {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 140, height: 140)
+                        .shadow(color: ColorTokens.primaryOrange.opacity(0.3), radius: 20, x: 0, y: 8)
 
-                VStack(spacing: SpacingTokens.xxs) {
-                    Text("ProEstimate")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-
-                    Text("AI")
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundStyle(ColorTokens.primaryOrange)
-                        .tracking(6)
+                    Image("housd-icon-light")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: 80)
                 }
+
+                Text("ProEstimate")
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
 
                 Spacer()
 

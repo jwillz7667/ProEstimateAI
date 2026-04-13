@@ -123,6 +123,13 @@ export default function Hero() {
         initial="hidden"
         animate="visible"
       >
+        {/* ---- Logo ---- */}
+        <motion.div className="mb-6 flex justify-center" variants={fadeInUp}>
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-lg">
+            <img src="/logo.png" alt="ProEstimate" className="h-12 w-12 object-contain" />
+          </div>
+        </motion.div>
+
         {/* ---- Animated badge ---- */}
         <motion.div className="mb-8 flex justify-center" variants={fadeInUp}>
           <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-5 py-2 text-sm font-medium text-white backdrop-blur-sm">

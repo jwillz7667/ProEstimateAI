@@ -24,11 +24,8 @@ struct MainTabView: View {
             Tab("Clients", systemImage: AppTab.clients.systemImage, value: AppTab.clients) {
                 ClientListView()
             }
-
-            Tab("Settings", systemImage: AppTab.settings.systemImage, value: AppTab.settings) {
-                SettingsView()
-            }
         }
+        .tabViewStyle(.tabBarOnly)
         .tint(ColorTokens.primaryOrange)
     }
 }

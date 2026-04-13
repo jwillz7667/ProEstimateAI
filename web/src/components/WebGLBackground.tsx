@@ -118,10 +118,10 @@ const vertexShader = /* glsl */ `
 
 const fragmentShader = /* glsl */ `
   uniform float uTime;
-  uniform vec3 uColorA;    // Brand orange   #F97316
-  uniform vec3 uColorB;    // Warm coral     #FB923C
-  uniform vec3 uColorC;    // Amber          #FBBF24
-  uniform vec3 uColorD;    // Soft peach     #FED7AA
+  uniform vec3 uColorA;    // Brand orange   #FF9230
+  uniform vec3 uColorB;    // Warm coral     #FFAB58
+  uniform vec3 uColorC;    // Amber          #FFC580
+  uniform vec3 uColorD;    // Soft peach     #FFDDB3
   uniform float uOpacity;
   varying vec2 vUv;
   varying float vElevation;
@@ -174,10 +174,10 @@ function GradientMesh() {
       uTime: { value: 0 },
       uAmplitude: { value: 0.35 },
       uFrequency: { value: 0.8 },
-      uColorA: { value: hexToVec3("#F97316") }, // Brand orange
-      uColorB: { value: hexToVec3("#FB923C") }, // Warm coral
-      uColorC: { value: hexToVec3("#FBBF24") }, // Amber
-      uColorD: { value: hexToVec3("#FED7AA") }, // Soft peach
+      uColorA: { value: hexToVec3("#FF9230") }, // Brand orange
+      uColorB: { value: hexToVec3("#FFAB58") }, // Warm coral
+      uColorC: { value: hexToVec3("#FFC580") }, // Amber
+      uColorD: { value: hexToVec3("#FFDDB3") }, // Soft peach
       uOpacity: { value: 0.85 },
     }),
     []
