@@ -6,7 +6,10 @@ import Foundation
 struct EstimateLineItem: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let estimateId: String
+    let parentLineItemId: String?
+    let sourceMaterialSuggestionId: String?
     let category: Category
+    let itemType: String?
     let name: String
     let description: String?
     let quantity: Decimal
@@ -29,7 +32,10 @@ struct EstimateLineItem: Codable, Identifiable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id
         case estimateId = "estimate_id"
+        case parentLineItemId = "parent_line_item_id"
+        case sourceMaterialSuggestionId = "source_material_suggestion_id"
         case category
+        case itemType = "item_type"
         case name
         case description
         case quantity
@@ -67,7 +73,10 @@ extension EstimateLineItem {
     static let sample = EstimateLineItem(
         id: "eli-001",
         estimateId: "e-001",
+        parentLineItemId: nil,
+        sourceMaterialSuggestionId: nil,
         category: .materials,
+        itemType: "per_unit",
         name: "Quartz Countertop – Calacatta",
         description: "Premium quartz slab, fabrication included",
         quantity: 45,

@@ -6,6 +6,7 @@ import Foundation
 struct Invoice: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let estimateId: String?
+    let proposalId: String?
     let projectId: String
     let companyId: String
     let clientId: String
@@ -13,13 +14,17 @@ struct Invoice: Codable, Identifiable, Hashable, Sendable {
     let status: Status
     let subtotal: Decimal
     let taxAmount: Decimal
+    let discountAmount: Decimal
     let totalAmount: Decimal
     let amountPaid: Decimal
     let amountDue: Decimal
+    let issuedDate: Date?
     let dueDate: Date?
     let paidAt: Date?
     let sentAt: Date?
     let notes: String?
+    let paymentInstructions: String?
+    let currencyCode: String?
     let createdAt: Date
     let updatedAt: Date
 
@@ -39,6 +44,7 @@ struct Invoice: Codable, Identifiable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id
         case estimateId = "estimate_id"
+        case proposalId = "proposal_id"
         case projectId = "project_id"
         case companyId = "company_id"
         case clientId = "client_id"
@@ -46,13 +52,17 @@ struct Invoice: Codable, Identifiable, Hashable, Sendable {
         case status
         case subtotal
         case taxAmount = "tax_amount"
+        case discountAmount = "discount_amount"
         case totalAmount = "total_amount"
         case amountPaid = "amount_paid"
         case amountDue = "amount_due"
+        case issuedDate = "issued_date"
         case dueDate = "due_date"
         case paidAt = "paid_at"
         case sentAt = "sent_at"
         case notes
+        case paymentInstructions = "payment_instructions"
+        case currencyCode = "currency_code"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -85,6 +95,7 @@ extension Invoice {
     static let sample = Invoice(
         id: "inv-001",
         estimateId: "e-001",
+        proposalId: nil,
         projectId: "p-001",
         companyId: "c-001",
         clientId: "cl-001",
@@ -92,13 +103,17 @@ extension Invoice {
         status: .sent,
         subtotal: 21000,
         taxAmount: 1732.50,
+        discountAmount: 0,
         totalAmount: 22732.50,
         amountPaid: 11366.25,
         amountDue: 11366.25,
+        issuedDate: Date(),
         dueDate: Calendar.current.date(byAdding: .day, value: 14, to: Date()),
         paidAt: nil,
         sentAt: Date(),
         notes: "50% deposit received. Balance due upon completion.",
+        paymentInstructions: "Zelle or check payable to Apex Remodeling Co.",
+        currencyCode: "USD",
         createdAt: Date(),
         updatedAt: Date()
     )

@@ -144,6 +144,7 @@ struct DashboardView: View {
                 .padding(.bottom, SpacingTokens.xxl)
             }
             .padding(.top, SpacingTokens.sm)
+            .readableContentWidth()
         }
         .refreshable {
             await viewModel.refresh()

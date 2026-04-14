@@ -25,11 +25,11 @@ extension View {
     func formField() -> some View {
         self
             .padding(SpacingTokens.sm)
-            .background(ColorTokens.formFieldBackground, in: RoundedRectangle(cornerRadius: RadiusTokens.small))
+            .background(ColorTokens.inputBackground, in: RoundedRectangle(cornerRadius: RadiusTokens.small))
             .overlay(
                 RoundedRectangle(cornerRadius: RadiusTokens.small)
-                    .strokeBorder(ColorTokens.subtleBorder, lineWidth: 1)
+                    .strokeBorder(ColorTokens.primaryOrange.opacity(0.3), lineWidth: 1)
             )
-            .foregroundStyle(.black)
+            .foregroundStyle(ColorTokens.primaryText)
     }
 }

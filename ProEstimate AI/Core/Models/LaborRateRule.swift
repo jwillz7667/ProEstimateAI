@@ -7,14 +7,22 @@ struct LaborRateRule: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let pricingProfileId: String
     let category: String
+    let rateType: String
     let ratePerHour: Decimal
+    let flatRate: Decimal?
+    let unitRate: Decimal?
+    let unit: String?
     let minimumHours: Decimal
 
     enum CodingKeys: String, CodingKey {
         case id
         case pricingProfileId = "pricing_profile_id"
         case category
+        case rateType = "rate_type"
         case ratePerHour = "rate_per_hour"
+        case flatRate = "flat_rate"
+        case unitRate = "unit_rate"
+        case unit
         case minimumHours = "minimum_hours"
     }
 }
@@ -35,7 +43,11 @@ extension LaborRateRule {
         id: "lrr-001",
         pricingProfileId: "pp-001",
         category: "General Labor",
+        rateType: "hourly",
         ratePerHour: 65,
+        flatRate: nil,
+        unitRate: nil,
+        unit: nil,
         minimumHours: 4
     )
 }

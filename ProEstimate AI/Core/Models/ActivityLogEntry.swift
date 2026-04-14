@@ -6,9 +6,12 @@ import Foundation
 struct ActivityLogEntry: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let projectId: String?
+    let companyId: String?
     let userId: String?
     let action: Action
     let description: String
+    let entityType: String?
+    let entityId: String?
     let createdAt: Date
 
     // MARK: - Nested Enums
@@ -35,9 +38,12 @@ struct ActivityLogEntry: Codable, Identifiable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id
         case projectId = "project_id"
+        case companyId = "company_id"
         case userId = "user_id"
         case action
         case description
+        case entityType = "entity_type"
+        case entityId = "entity_id"
         case createdAt = "created_at"
     }
 }
@@ -73,9 +79,12 @@ extension ActivityLogEntry {
     static let sample = ActivityLogEntry(
         id: "log-001",
         projectId: "p-001",
+        companyId: "c-001",
         userId: "u-001",
         action: .created,
         description: "Project created",
+        entityType: "Project",
+        entityId: "p-001",
         createdAt: Date()
     )
 
@@ -84,33 +93,45 @@ extension ActivityLogEntry {
         ActivityLogEntry(
             id: "act-001",
             projectId: "p-001",
+            companyId: "c-001",
             userId: "u-001",
             action: .created,
             description: "Kitchen Remodel project was created",
+            entityType: "Project",
+            entityId: "p-001",
             createdAt: Calendar.current.date(byAdding: .day, value: -5, to: Date())!
         ),
         ActivityLogEntry(
             id: "act-002",
             projectId: "p-001",
+            companyId: "c-001",
             userId: "u-001",
             action: .imageUploaded,
             description: "4 photos were uploaded",
+            entityType: "Asset",
+            entityId: nil,
             createdAt: Calendar.current.date(byAdding: .day, value: -4, to: Date())!
         ),
         ActivityLogEntry(
             id: "act-003",
             projectId: "p-001",
+            companyId: "c-001",
             userId: nil,
             action: .generationCompleted,
             description: "Generation completed in 2.4s",
+            entityType: "AIGeneration",
+            entityId: nil,
             createdAt: Calendar.current.date(byAdding: .day, value: -4, to: Date())!
         ),
         ActivityLogEntry(
             id: "act-004",
             projectId: "p-001",
+            companyId: "c-001",
             userId: "u-001",
             action: .estimateCreated,
             description: "EST-1001 v1 — $22,732.50",
+            entityType: "Estimate",
+            entityId: "e-001",
             createdAt: Calendar.current.date(byAdding: .day, value: -3, to: Date())!
         ),
     ]

@@ -59,6 +59,7 @@ struct LoginView: View {
                     .padding(.bottom, SpacingTokens.xxl)
                 }
                 .padding(.horizontal, SpacingTokens.xl)
+                .readableContentWidth()
             }
             .scrollDismissesKeyboard(.interactively)
             .alert("Error", isPresented: .init(

@@ -11,12 +11,18 @@ struct Estimate: Codable, Identifiable, Hashable, Sendable {
     let estimateNumber: String
     let version: Int
     let status: Status
+    let title: String?
+    let pricingProfileId: String?
+    let createdByUserId: String?
     let subtotalMaterials: Decimal
     let subtotalLabor: Decimal
     let subtotalOther: Decimal
     let taxAmount: Decimal
     let discountAmount: Decimal
     let totalAmount: Decimal
+    let contingencyAmount: Decimal?
+    let assumptions: String?
+    let exclusions: String?
     let notes: String?
     let validUntil: Date?
     let createdAt: Date
@@ -40,12 +46,18 @@ struct Estimate: Codable, Identifiable, Hashable, Sendable {
         case estimateNumber = "estimate_number"
         case version
         case status
+        case title
+        case pricingProfileId = "pricing_profile_id"
+        case createdByUserId = "created_by_user_id"
         case subtotalMaterials = "subtotal_materials"
         case subtotalLabor = "subtotal_labor"
         case subtotalOther = "subtotal_other"
         case taxAmount = "tax_amount"
         case discountAmount = "discount_amount"
         case totalAmount = "total_amount"
+        case contingencyAmount = "contingency_amount"
+        case assumptions
+        case exclusions
         case notes
         case validUntil = "valid_until"
         case createdAt = "created_at"
@@ -83,12 +95,18 @@ extension Estimate {
         estimateNumber: "EST-1001",
         version: 1,
         status: .draft,
+        title: "Kitchen Remodel - Full Scope",
+        pricingProfileId: nil,
+        createdByUserId: "u-001",
         subtotalMaterials: 12500,
         subtotalLabor: 8000,
         subtotalOther: 500,
         taxAmount: 1732.50,
         discountAmount: 0,
         totalAmount: 22732.50,
+        contingencyAmount: nil,
+        assumptions: "Existing plumbing in good condition.",
+        exclusions: "Appliances not included.",
         notes: "Price valid for 30 days.",
         validUntil: Calendar.current.date(byAdding: .day, value: 30, to: Date()),
         createdAt: Date(),

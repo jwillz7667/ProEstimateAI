@@ -14,9 +14,9 @@ enum ColorTokens {
     static let elevatedSurface = Color("ElevatedSurface", bundle: nil)
 
     // MARK: - Dark Mode Explicit (for overlays/cards in dark contexts)
-    static let darkBackground = Color(hex: 0x000000)
-    static let darkSurface = Color(hex: 0x0A0A0A)
-    static let darkElevated = Color(hex: 0x1C1C1E)
+    static let darkBackground = Color(UIColor.systemBackground)
+    static let darkSurface = Color(UIColor.secondarySystemBackground)
+    static let darkElevated = Color(UIColor.tertiarySystemBackground)
     static let cardOverlay = Color("CardOverlay", bundle: nil)
     static let subtleBorder = Color("SubtleBorder", bundle: nil)
 
@@ -51,6 +51,6 @@ enum ColorTokens {
     static let inputBackground = Color("InputBackground", bundle: nil)
     static let progressTrack = Color("ProgressTrack", bundle: nil)
 
-    // MARK: - Form Inputs (white in dark mode for contrast)
-    static let formFieldBackground = Color.white
+    // MARK: - Form Inputs
+    static let formFieldBackground = Color("InputBackground", bundle: nil)
 }

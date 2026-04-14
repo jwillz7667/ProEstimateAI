@@ -142,7 +142,10 @@ extension LineItemDraft {
         EstimateLineItem(
             id: id,
             estimateId: estimateId,
+            parentLineItemId: nil,
+            sourceMaterialSuggestionId: nil,
             category: category,
+            itemType: "per_unit",
             name: name,
             description: description.isEmpty ? nil : description,
             quantity: quantity,

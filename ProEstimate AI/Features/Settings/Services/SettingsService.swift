@@ -90,8 +90,14 @@ final class MockSettingsService: SettingsServiceProtocol {
             defaultMarkupPercent: 20,
             estimatePrefix: "EST",
             invoicePrefix: "INV",
+            proposalPrefix: "PROP",
             nextEstimateNumber: 1001,
             nextInvoiceNumber: 2001,
+            nextProposalNumber: 3001,
+            defaultLanguage: "en",
+            timezone: "America/New_York",
+            websiteUrl: nil,
+            taxLabel: "Tax",
             createdAt: Date(),
             updatedAt: Date()
         )
@@ -115,8 +121,14 @@ final class MockSettingsService: SettingsServiceProtocol {
             defaultMarkupPercent: 20,
             estimatePrefix: "EST",
             invoicePrefix: "INV",
+            proposalPrefix: "PROP",
             nextEstimateNumber: 1001,
             nextInvoiceNumber: 2001,
+            nextProposalNumber: 3001,
+            defaultLanguage: "en",
+            timezone: "America/New_York",
+            websiteUrl: nil,
+            taxLabel: "Tax",
             createdAt: Date(),
             updatedAt: Date()
         )
@@ -140,8 +152,14 @@ final class MockSettingsService: SettingsServiceProtocol {
             defaultMarkupPercent: 20,
             estimatePrefix: settings.estimatePrefix,
             invoicePrefix: settings.invoicePrefix,
+            proposalPrefix: "PROP",
             nextEstimateNumber: settings.nextEstimateNumber,
             nextInvoiceNumber: settings.nextInvoiceNumber,
+            nextProposalNumber: 3001,
+            defaultLanguage: "en",
+            timezone: "America/New_York",
+            websiteUrl: nil,
+            taxLabel: "Tax",
             createdAt: Date(),
             updatedAt: Date()
         )

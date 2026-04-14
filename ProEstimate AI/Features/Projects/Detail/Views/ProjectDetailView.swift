@@ -161,6 +161,7 @@ struct ProjectDetailView: View {
                 Spacer(minLength: SpacingTokens.huge)
             }
             .padding(.vertical, SpacingTokens.sm)
+            .readableContentWidth()
         }
         .overlay {
             if isCreatingEstimate {

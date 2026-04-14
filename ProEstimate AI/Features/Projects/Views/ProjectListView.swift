@@ -142,6 +142,7 @@ struct ProjectListView: View {
             }
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.xs)
+            .readableContentWidth()
         }
     }
 }

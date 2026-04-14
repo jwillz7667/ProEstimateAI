@@ -8,11 +8,18 @@ struct Proposal: Codable, Identifiable, Hashable, Sendable {
     let estimateId: String
     let projectId: String
     let companyId: String
+    let proposalNumber: String?
+    let title: String?
     let status: Status
     let shareToken: String?
     let heroImageURL: URL?
+    let introText: String?
+    let scopeOfWork: String?
+    let timelineText: String?
     let termsAndConditions: String?
+    let footerText: String?
     let clientMessage: String?
+    let pdfAssetId: String?
     let sentAt: Date?
     let viewedAt: Date?
     let respondedAt: Date?
@@ -36,11 +43,18 @@ struct Proposal: Codable, Identifiable, Hashable, Sendable {
         case estimateId = "estimate_id"
         case projectId = "project_id"
         case companyId = "company_id"
+        case proposalNumber = "proposal_number"
+        case title
         case status
         case shareToken = "share_token"
         case heroImageURL = "hero_image_url"
+        case introText = "intro_text"
+        case scopeOfWork = "scope_of_work"
+        case timelineText = "timeline_text"
         case termsAndConditions = "terms_and_conditions"
+        case footerText = "footer_text"
         case clientMessage = "client_message"
+        case pdfAssetId = "pdf_asset_id"
         case sentAt = "sent_at"
         case viewedAt = "viewed_at"
         case respondedAt = "responded_at"
@@ -78,11 +92,18 @@ extension Proposal {
         estimateId: "e-001",
         projectId: "p-001",
         companyId: "c-001",
+        proposalNumber: "PROP-3001",
+        title: "Kitchen Remodel Proposal",
         status: .draft,
         shareToken: "abc123def456",
         heroImageURL: URL(string: "https://cdn.proestimate.ai/gen/gen-001.jpg"),
+        introText: "Thank you for choosing us for your kitchen renovation.",
+        scopeOfWork: "Full demolition, cabinet install, countertops, backsplash, flooring.",
+        timelineText: "Estimated 3-4 weeks from start date.",
         termsAndConditions: "50% deposit required. Balance due upon completion.",
+        footerText: nil,
         clientMessage: "Hi Sarah, here is your kitchen remodel proposal.",
+        pdfAssetId: nil,
         sentAt: nil,
         viewedAt: nil,
         respondedAt: nil,

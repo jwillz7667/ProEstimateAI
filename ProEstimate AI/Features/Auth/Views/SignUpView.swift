@@ -107,6 +107,7 @@ struct SignUpView: View {
                 .padding(.bottom, SpacingTokens.xxl)
             }
             .padding(.horizontal, SpacingTokens.xl)
+            .readableContentWidth()
         }
         .scrollDismissesKeyboard(.interactively)
         .navigationBarBackButtonHidden()

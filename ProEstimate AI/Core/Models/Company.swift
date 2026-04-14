@@ -19,8 +19,14 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
     let defaultMarkupPercent: Decimal?
     let estimatePrefix: String?
     let invoicePrefix: String?
+    let proposalPrefix: String?
     let nextEstimateNumber: Int
     let nextInvoiceNumber: Int
+    let nextProposalNumber: Int?
+    let defaultLanguage: String?
+    let timezone: String?
+    let websiteUrl: String?
+    let taxLabel: String?
     let createdAt: Date
     let updatedAt: Date
 
@@ -40,8 +46,14 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
         case defaultMarkupPercent = "default_markup_percent"
         case estimatePrefix = "estimate_prefix"
         case invoicePrefix = "invoice_prefix"
+        case proposalPrefix = "proposal_prefix"
         case nextEstimateNumber = "next_estimate_number"
         case nextInvoiceNumber = "next_invoice_number"
+        case nextProposalNumber = "next_proposal_number"
+        case defaultLanguage = "default_language"
+        case timezone
+        case websiteUrl = "website_url"
+        case taxLabel = "tax_label"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -67,8 +79,14 @@ extension Company {
         defaultMarkupPercent: 20,
         estimatePrefix: "EST",
         invoicePrefix: "INV",
+        proposalPrefix: "PROP",
         nextEstimateNumber: 1001,
         nextInvoiceNumber: 2001,
+        nextProposalNumber: 3001,
+        defaultLanguage: "en",
+        timezone: "America/New_York",
+        websiteUrl: nil,
+        taxLabel: "Tax",
         createdAt: Date(),
         updatedAt: Date()
     )
