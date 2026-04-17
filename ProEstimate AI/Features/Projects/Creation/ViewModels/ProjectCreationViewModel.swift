@@ -37,6 +37,9 @@ final class ProjectCreationViewModel {
     var selectedPhotosItems: [PhotosPickerItem] = []
     var selectedImageData: [Data] = []
     var isLoadingImages: Bool = false
+    /// User-facing error if one or more picker items failed to transfer
+    /// from the Photos library. Cleared on a successful retry.
+    var imageLoadError: String?
 
     // MARK: - Step 3: Prompt / Description
 
@@ -164,16 +167,35 @@ final class ProjectCreationViewModel {
 
     func loadImages() async {
         isLoadingImages = true
+        imageLoadError = nil
+
         var loadedData: [Data] = []
+        var failedCount = 0
 
         for item in selectedPhotosItems {
-            if let data = try? await item.loadTransferable(type: Data.self) {
-                loadedData.append(data)
+            do {
+                if let data = try await item.loadTransferable(type: Data.self) {
+                    loadedData.append(data)
+                } else {
+                    failedCount += 1
+                }
+            } catch {
+                failedCount += 1
             }
         }
 
         selectedImageData = loadedData
         isLoadingImages = false
+
+        if failedCount > 0 {
+            let plural = failedCount == 1 ? "photo" : "photos"
+            imageLoadError = "\(failedCount) \(plural) couldn't be loaded. You can retry, or continue with the \(loadedData.count) that loaded."
+        }
+    }
+
+    /// Clear the image-load error banner (e.g., when the user dismisses it).
+    func clearImageLoadError() {
+        imageLoadError = nil
     }
 
     func removeImage(at index: Int) {

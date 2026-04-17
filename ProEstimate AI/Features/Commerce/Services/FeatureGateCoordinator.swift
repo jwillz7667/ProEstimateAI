@@ -234,6 +234,67 @@ final class FeatureGateCoordinator {
         ))
     }
 
+    /// Check whether the user can open the Analytics dashboard.
+    /// Business analytics is a Pro-only feature.
+    func guardAccessAnalytics() -> FeatureGateResult {
+        guard let entitlementStore else {
+            logger.warning("FeatureGateCoordinator not configured. Defaulting to allowed.")
+            return .allowed
+        }
+
+        if entitlementStore.hasProAccess {
+            return .allowed
+        }
+
+        logger.info("Analytics blocked — Pro required.")
+        return .blocked(PaywallDecision(
+            placement: .analyticsLocked,
+            triggerReason: "Analytics requires Pro",
+            blocking: true,
+            headline: "Unlock business insights",
+            subheadline: "Track revenue, win rates, and project trends across your entire pipeline. Available on Pro.",
+            primaryCtaTitle: "Start Free Trial",
+            secondaryCtaTitle: nil,
+            showContinueFree: false,
+            showRestorePurchases: true,
+            recommendedProductId: AppConstants.monthlyProductID,
+            availableProducts: products
+        ))
+    }
+
+    /// Check whether the user can create an additional pricing profile.
+    /// Free users get one default profile; additional custom profiles require Pro.
+    func guardAddPricingProfile(currentCount: Int) -> FeatureGateResult {
+        guard let entitlementStore else {
+            logger.warning("FeatureGateCoordinator not configured. Defaulting to allowed.")
+            return .allowed
+        }
+
+        if entitlementStore.hasProAccess {
+            return .allowed
+        }
+
+        // Free tier: allow at most one pricing profile (the default one).
+        if currentCount < 1 {
+            return .allowed
+        }
+
+        logger.info("Pricing profile creation blocked — Pro required.")
+        return .blocked(PaywallDecision(
+            placement: .pricingProfileLocked,
+            triggerReason: "Multiple pricing profiles require Pro",
+            blocking: true,
+            headline: "Create pricing profiles for every job",
+            subheadline: "Build reusable pricing templates for residential, commercial, and specialty work — and switch between them in one tap. Available on Pro.",
+            primaryCtaTitle: "Start Free Trial",
+            secondaryCtaTitle: nil,
+            showContinueFree: false,
+            showRestorePurchases: true,
+            recommendedProductId: AppConstants.monthlyProductID,
+            availableProducts: products
+        ))
+    }
+
     /// Check whether the user can remove watermarks from exports.
     /// Watermark removal is a Pro-only feature.
     func guardRemoveWatermark() -> FeatureGateResult {

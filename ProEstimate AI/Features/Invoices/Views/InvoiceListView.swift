@@ -32,6 +32,8 @@ struct InvoiceListView: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(ColorTokens.primaryOrange)
                     }
+                    .accessibilityLabel("New invoice")
+                    .accessibilityHint("Create a new invoice")
                 }
             }
             .navigationDestination(for: AppDestination.self) { destination in
@@ -119,24 +121,30 @@ struct InvoiceListView: View {
 
             filterPicker
 
-            List {
-                ForEach(viewModel.filteredInvoices) { invoice in
-                    NavigationLink(value: AppDestination.invoicePreview(id: invoice.id)) {
-                        InvoiceRowView(invoice: invoice)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        if invoice.status == .draft {
-                            Button(role: .destructive) {
-                                invoiceToDelete = invoice.id
-                                showingDeleteConfirmation = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+            ScrollView {
+                LazyVStack(spacing: SpacingTokens.sm) {
+                    ForEach(viewModel.filteredInvoices) { invoice in
+                        NavigationLink(value: AppDestination.invoicePreview(id: invoice.id)) {
+                            InvoiceRowView(invoice: invoice)
+                                .padding(SpacingTokens.md)
+                                .glassCard()
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            if invoice.status == .draft {
+                                Button(role: .destructive) {
+                                    invoiceToDelete = invoice.id
+                                    showingDeleteConfirmation = true
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             }
                         }
                     }
                 }
+                .padding(.horizontal, SpacingTokens.md)
+                .padding(.vertical, SpacingTokens.xs)
             }
-            .listStyle(.plain)
         }
     }
 

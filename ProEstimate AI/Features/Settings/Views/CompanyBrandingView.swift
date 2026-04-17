@@ -173,7 +173,7 @@ struct CompanyBrandingView: View {
                 .frame(height: 2)
         }
         .padding(SpacingTokens.md)
-        .background(ColorTokens.cardOverlay, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
+        .glassCard()
     }
 }
 

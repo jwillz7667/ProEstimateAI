@@ -108,6 +108,7 @@ struct QuickGenerateView: View {
                     }
                     .padding(.trailing, SpacingTokens.lg)
                     .padding(.top, SpacingTokens.sm)
+                    .accessibilityLabel("Remove photo")
                 }
             } else {
                 VStack(spacing: SpacingTokens.sm) {
@@ -128,17 +129,7 @@ struct QuickGenerateView: View {
                                     .foregroundStyle(.tertiary)
                             }
                             .padding(SpacingTokens.md)
-                            .background(
-                                ColorTokens.elevatedSurface,
-                                in: RoundedRectangle(cornerRadius: RadiusTokens.card)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: RadiusTokens.card)
-                                    .strokeBorder(
-                                        ColorTokens.primaryOrange.opacity(0.3),
-                                        lineWidth: 1
-                                    )
-                            )
+                            .glassCard()
                         }
                         .buttonStyle(.plain)
                     }
@@ -160,17 +151,7 @@ struct QuickGenerateView: View {
                                 .foregroundStyle(.tertiary)
                         }
                         .padding(SpacingTokens.md)
-                        .background(
-                            ColorTokens.elevatedSurface,
-                            in: RoundedRectangle(cornerRadius: RadiusTokens.card)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: RadiusTokens.card)
-                                .strokeBorder(
-                                    Color(.separator).opacity(0.3),
-                                    lineWidth: 1
-                                )
-                        )
+                        .glassCard()
                     }
                     .buttonStyle(.plain)
                 }
@@ -222,7 +203,7 @@ struct QuickGenerateView: View {
             .background(
                 isSelected
                     ? ColorTokens.primaryOrange
-                    : ColorTokens.elevatedSurface,
+                    : ColorTokens.surface,
                 in: Capsule()
             )
             .foregroundStyle(isSelected ? .white : ColorTokens.primaryText)
@@ -259,14 +240,7 @@ struct QuickGenerateView: View {
                     .padding(.horizontal, SpacingTokens.xs)
                     .padding(.vertical, SpacingTokens.xs)
             }
-            .background(
-                ColorTokens.elevatedSurface,
-                in: RoundedRectangle(cornerRadius: RadiusTokens.card)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: RadiusTokens.card)
-                    .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 0.5)
-            )
+            .glassCard()
             .padding(.horizontal, SpacingTokens.md)
 
             Text("\(viewModel.prompt.count)/500")

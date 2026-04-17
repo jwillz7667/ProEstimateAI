@@ -64,24 +64,47 @@ final class ClientFormViewModel {
 
     // MARK: - Validation
 
-    func validate() -> Bool {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Whether the required name field is currently empty (after trimming).
+    /// Drives the inline "Client name is required" message under the field.
+    var isNameInvalid: Bool {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
-        if trimmedName.isEmpty {
+    /// Whether the email field, if provided, matches a valid pattern.
+    var isEmailInvalid: Bool {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return false } // Email is optional.
+        let pattern = #"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
+        return trimmed.range(of: pattern, options: .regularExpression) == nil
+    }
+
+    /// Show the name error only after the user has interacted with the field
+    /// in a way that could leave it empty — i.e. never on initial presentation.
+    var showsNameError: Bool {
+        // Show whenever the user has tapped into the field and the name is empty.
+        // Using non-empty on the *other* fields as a pragmatic "has interacted" signal.
+        isNameInvalid && (!email.isEmpty || !phone.isEmpty)
+    }
+
+    /// Show the email error only when the user has typed something invalid.
+    var showsEmailError: Bool {
+        !email.isEmpty && isEmailInvalid
+    }
+
+    /// Whether the whole form is valid enough to submit.
+    var isFormValid: Bool {
+        !isNameInvalid && !isEmailInvalid
+    }
+
+    func validate() -> Bool {
+        if isNameInvalid {
             errorMessage = "Client name is required."
             return false
         }
-
-        // Email is optional but if provided must be valid
-        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedEmail.isEmpty {
-            let pattern = #"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
-            if trimmedEmail.range(of: pattern, options: .regularExpression) == nil {
-                errorMessage = "Please enter a valid email address."
-                return false
-            }
+        if isEmailInvalid {
+            errorMessage = "Please enter a valid email address."
+            return false
         }
-
         errorMessage = nil
         return true
     }

@@ -82,15 +82,63 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
         logger.info("Restoring purchases...")
 
         do {
+            // 1. Ask the App Store to refresh local transaction state.
             try await AppStore.sync()
-            logger.info("App Store sync completed. Refreshing entitlements.")
-
-            // After restore, refresh entitlements from backend.
-            await entitlementStore.refresh()
+            logger.info("App Store sync completed. Collecting current entitlements.")
         } catch {
-            logger.error("Restore purchases failed: \(error.localizedDescription)")
+            logger.error("AppStore.sync failed: \(error.localizedDescription)")
             throw PurchaseError.storeKitError(error.localizedDescription)
         }
+
+        // 2. Iterate every verified current entitlement and post to the backend.
+        var items: [RestoreTransactionItem] = []
+        for await result in Transaction.currentEntitlements {
+            do {
+                let transaction = try verifyTransaction(result)
+                items.append(makeRestoreItem(from: transaction))
+                await transaction.finish()
+            } catch {
+                logger.warning("Skipping unverified transaction in restore: \(error.localizedDescription)")
+            }
+        }
+
+        // 3. Post every collected transaction to the backend so it can re-bind to this user.
+        if !items.isEmpty {
+            do {
+                let snapshot = try await commerceAPI.restoreTransactions(items)
+                await entitlementStore.updateFromSnapshot(snapshot)
+                logger.info("Restore synced \(items.count) transaction(s) to backend. New state: \(snapshot.subscriptionState.rawValue)")
+            } catch {
+                logger.error("Backend restore sync failed: \(error.localizedDescription)")
+                // Still refresh in case backend reconciled via ASSN.
+                await entitlementStore.refresh()
+                throw PurchaseError.storeKitError(error.localizedDescription)
+            }
+        } else {
+            // No transactions on file — pull a fresh snapshot anyway so UI updates.
+            await entitlementStore.refresh()
+            logger.info("No current entitlements to restore.")
+        }
+    }
+
+    /// Build a `RestoreTransactionItem` from a verified StoreKit `Transaction`.
+    private func makeRestoreItem(from transaction: Transaction) -> RestoreTransactionItem {
+        let environment: String = {
+            switch transaction.environment {
+            case .sandbox: return "sandbox"
+            case .production: return "production"
+            case .xcode: return "xcode"
+            default: return "unknown"
+            }
+        }()
+
+        return RestoreTransactionItem(
+            storeProductId: transaction.productID,
+            transactionId: String(transaction.id),
+            originalTransactionId: String(transaction.originalID),
+            appAccountToken: transaction.appAccountToken?.uuidString,
+            environment: environment
+        )
     }
 
     func listenForTransactions() async {

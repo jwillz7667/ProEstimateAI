@@ -35,6 +35,11 @@ final class CommerceAPIClient: CommerceAPIClientProtocol {
         try await apiClient.request(.syncTransaction(body: request))
     }
 
+    func restoreTransactions(_ transactions: [RestoreTransactionItem]) async throws -> EntitlementSnapshot {
+        let body = RestoreTransactionsRequest(transactions: transactions)
+        return try await apiClient.request(.restorePurchases(body: body))
+    }
+
     func consumeUsage(metric: UsageMetricCode) async throws -> UsageBucket {
         let body = ConsumeUsageBody(metricCode: metric.rawValue)
         return try await apiClient.request(.checkUsage(body: body))

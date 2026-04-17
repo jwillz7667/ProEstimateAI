@@ -11,21 +11,17 @@ import SwiftUI
 struct LegalDisclosureSection: View {
     let selectedProduct: StoreProductModel?
 
-    /// URLs for legal pages. Update these with production URLs.
-    private let termsURL = URL(string: "https://proestimate.ai/terms")!
-    private let privacyURL = URL(string: "https://proestimate.ai/privacy")!
-
     var body: some View {
         VStack(spacing: SpacingTokens.xs) {
-            // Auto-renewal disclosure.
+            // Auto-renewal disclosure (App Store Review Guideline 3.1.2(a)).
             if let product = selectedProduct {
                 autoRenewalDisclosure(product)
             }
 
-            // Cancellation instructions.
+            // Cancellation instructions with tappable subscription management link.
             cancellationText
 
-            // Legal links.
+            // Legal links: Terms, Privacy, Manage Subscriptions.
             legalLinks
         }
         .padding(.top, SpacingTokens.xs)
@@ -34,15 +30,19 @@ struct LegalDisclosureSection: View {
     // MARK: - Auto-Renewal Disclosure
 
     private func autoRenewalDisclosure(_ product: StoreProductModel) -> some View {
+        // App Store Review Guideline 3.1.2(a) requires:
+        // (1) title/length, (2) price per period, (3) auto-renewal terms,
+        // (4) "charged within 24 hours prior to end of period" language,
+        // (5) cancellation method, (6) Privacy Policy + Terms links.
         Group {
             if product.showsTrialBadge, let introText = product.introOfferDisplayText {
-                Text("After the \(introText), your subscription will automatically renew at \(product.priceDisplay) \(product.billingPeriodLabel) unless cancelled at least 24 hours before the end of the current period.")
+                Text("After the \(introText), your \(product.displayName) subscription automatically renews at \(product.priceDisplay) unless canceled at least 24 hours before the end of the current period. Your Apple ID will be charged for renewal within 24 hours prior to the end of each billing period.")
             } else {
-                Text("Your subscription will automatically renew at \(product.priceDisplay) \(product.billingPeriodLabel) unless cancelled at least 24 hours before the end of the current period.")
+                Text("Your \(product.displayName) subscription automatically renews at \(product.priceDisplay) unless canceled at least 24 hours before the end of the current period. Your Apple ID will be charged for renewal within 24 hours prior to the end of each billing period.")
             }
         }
         .font(.system(size: 10))
-        .foregroundStyle(.white.opacity(0.5))
+        .foregroundStyle(ColorTokens.onDarkTertiary)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -50,9 +50,9 @@ struct LegalDisclosureSection: View {
     // MARK: - Cancellation
 
     private var cancellationText: some View {
-        Text("You can manage or cancel your subscription at any time in your Apple ID account settings (Settings > Apple ID > Subscriptions).")
+        Text("Manage or cancel anytime from your Apple ID subscription settings.")
             .font(.system(size: 10))
-            .foregroundStyle(.white.opacity(0.5))
+            .foregroundStyle(ColorTokens.onDarkTertiary)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -60,14 +60,17 @@ struct LegalDisclosureSection: View {
     // MARK: - Legal Links
 
     private var legalLinks: some View {
-        HStack(spacing: SpacingTokens.md) {
-            Link("Terms of Service", destination: termsURL)
-            Text("|")
-                .foregroundStyle(.white.opacity(0.3))
-            Link("Privacy Policy", destination: privacyURL)
+        VStack(spacing: SpacingTokens.xxs) {
+            HStack(spacing: SpacingTokens.md) {
+                Link("Terms of Service", destination: AppConstants.termsOfServiceURL)
+                Text("|")
+                    .foregroundStyle(ColorTokens.onDarkDisabled)
+                Link("Privacy Policy", destination: AppConstants.privacyPolicyURL)
+            }
+            Link("Manage Subscriptions", destination: AppConstants.manageSubscriptionsURL)
         }
         .font(.system(size: 10, weight: .medium))
-        .foregroundStyle(.white.opacity(0.55))
+        .foregroundStyle(ColorTokens.onDarkTertiary)
     }
 }
 
@@ -75,7 +78,7 @@ struct LegalDisclosureSection: View {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        ColorTokens.overlayBackground.ignoresSafeArea()
         LegalDisclosureSection(selectedProduct: .sampleMonthly)
             .padding()
     }

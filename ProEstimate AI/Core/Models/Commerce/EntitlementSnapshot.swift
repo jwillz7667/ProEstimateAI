@@ -183,4 +183,28 @@ extension EntitlementSnapshot {
         isAutoRenewEnabled: true,
         billingWarning: nil
     )
+
+    /// Sample snapshot with Pro access still active but the subscription is
+    /// in the App Store's billing grace period — used to preview the
+    /// `BillingIssueBanner` and exercise the billing-warning UI path.
+    static let sampleGracePeriod = EntitlementSnapshot(
+        subscriptionState: .gracePeriod,
+        currentPlanCode: .proMonthly,
+        featureFlags: [
+            FeatureCode.canGeneratePreview.rawValue: true,
+            FeatureCode.canExportQuote.rawValue: true,
+            FeatureCode.canRemoveWatermark.rawValue: true,
+            FeatureCode.canUseBranding.rawValue: true,
+            FeatureCode.canCreateInvoice.rawValue: true,
+            FeatureCode.canShareApprovalLink.rawValue: true,
+            FeatureCode.canExportMaterialLinks.rawValue: true,
+            FeatureCode.canUseHighResPreview.rawValue: true,
+        ],
+        usage: [],
+        renewalDate: Calendar.current.date(byAdding: .day, value: 5, to: Date()),
+        trialEndsAt: nil,
+        gracePeriodEndsAt: Calendar.current.date(byAdding: .day, value: 14, to: Date()),
+        isAutoRenewEnabled: true,
+        billingWarning: "We couldn't renew your subscription. Please update your payment method."
+    )
 }

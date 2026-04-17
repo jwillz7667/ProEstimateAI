@@ -6,6 +6,9 @@ struct PricingProfilesView: View {
     @State private var editingProfile: PricingProfileDraft?
     @State private var showingDeleteConfirmation = false
     @State private var profileToDelete: String?
+    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
+    @Environment(PaywallPresenter.self) private var paywallPresenter
+    @Environment(EntitlementStore.self) private var entitlementStore
 
     var body: some View {
         List {
@@ -42,14 +45,29 @@ struct PricingProfilesView: View {
                 Text("The default profile is used when creating new estimates. Tap a profile to edit.")
             }
 
-            // Add profile button
+            // Add profile button (Pro-gated after the first profile)
             Section {
                 Button {
-                    editingProfile = PricingProfileDraft()
-                    isEditing = true
+                    handleAddProfileTap()
                 } label: {
-                    Label("Add Profile", systemImage: "plus.circle")
-                        .foregroundStyle(ColorTokens.primaryOrange)
+                    HStack {
+                        Label("Add Profile", systemImage: "plus.circle")
+                            .foregroundStyle(ColorTokens.primaryOrange)
+                        Spacer()
+                        if !entitlementStore.hasProAccess && viewModel.pricingProfiles.count >= 1 {
+                            Text("PRO")
+                                .font(TypographyTokens.caption2.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, SpacingTokens.xs)
+                                .padding(.vertical, 2)
+                                .background(ColorTokens.primaryOrange, in: Capsule())
+                        }
+                    }
+                }
+            } footer: {
+                if !entitlementStore.hasProAccess {
+                    Text("Free plan includes one pricing profile. Upgrade to Pro to create multiple profiles for residential, commercial, and specialty jobs.")
+                        .font(TypographyTokens.caption)
                 }
             }
         }
@@ -90,6 +108,21 @@ struct PricingProfilesView: View {
             }
         } message: {
             Text("This profile will be permanently deleted.")
+        }
+    }
+
+    // MARK: - Feature Gate
+
+    private func handleAddProfileTap() {
+        let result = featureGateCoordinator.guardAddPricingProfile(
+            currentCount: viewModel.pricingProfiles.count
+        )
+        switch result {
+        case .allowed:
+            editingProfile = PricingProfileDraft()
+            isEditing = true
+        case .blocked(let decision):
+            paywallPresenter.present(decision)
         }
     }
 

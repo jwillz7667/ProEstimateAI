@@ -83,6 +83,7 @@ struct InvoiceTotalsSection: View {
                     .frame(width: 180, height: 70)
                     .rotationEffect(.degrees(-20))
             )
+            .accessibilityLabel("Paid")
     }
 }
 

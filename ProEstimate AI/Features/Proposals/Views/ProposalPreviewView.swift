@@ -16,7 +16,9 @@ struct ProposalPreviewView: View {
             } else if viewModel.proposal != nil {
                 proposalContent
             } else if let error = viewModel.errorMessage {
-                errorState(message: error)
+                RetryStateView(message: error) {
+                    Task { await viewModel.loadProposal(id: proposalId) }
+                }
             } else {
                 EmptyStateView(
                     icon: "doc.richtext",
@@ -62,6 +64,8 @@ struct ProposalPreviewView: View {
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
+                    .accessibilityLabel("Share and export")
+                    .accessibilityHint("Share link, export PDF, or send to client")
                 }
             }
         }
@@ -244,7 +248,7 @@ struct ProposalPreviewView: View {
         }
         .padding(SpacingTokens.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ColorTokens.cardOverlay)
+        .background(ColorTokens.surface)
     }
 
     private func termsSection(_ terms: String) -> some View {
@@ -316,28 +320,6 @@ struct ProposalPreviewView: View {
         .padding(SpacingTokens.lg)
     }
 
-    private func errorState(message: String) -> some View {
-        VStack(spacing: SpacingTokens.md) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 48))
-                .foregroundStyle(ColorTokens.warning)
-
-            Text("Failed to Load")
-                .font(TypographyTokens.title3)
-
-            Text(message)
-                .font(TypographyTokens.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            PrimaryCTAButton(title: "Try Again") {
-                Task { await viewModel.loadProposal(id: proposalId) }
-            }
-            .frame(maxWidth: 200)
-        }
-        .padding(SpacingTokens.xxl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
 // MARK: - Preview

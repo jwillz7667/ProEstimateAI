@@ -12,9 +12,12 @@ struct ProjectDetailView: View {
     @State private var showEstimateEditor = false
     @State private var activeEstimateId: String?
     @State private var isCreatingEstimate = false
+    @State private var showDeleteConfirmation = false
+    @State private var isDeleting = false
     @Environment(AppRouter.self) private var router
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         Group {
@@ -38,12 +41,6 @@ struct ProjectDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    showEditSheet = true
-                } label: {
-                    Image(systemName: "pencil")
-                }
-
                 ShareLink(
                     item: "Check out this project: \(viewModel.project?.title ?? "")",
                     subject: Text(viewModel.project?.title ?? "Project"),
@@ -51,7 +48,42 @@ struct ProjectDetailView: View {
                 ) {
                     Image(systemName: "square.and.arrow.up")
                 }
+                .accessibilityLabel("Share")
+                .accessibilityHint("Share this project")
+
+                Menu {
+                    Button {
+                        showEditSheet = true
+                    } label: {
+                        Label("Edit Project", systemImage: "pencil")
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Label("Delete Project", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityLabel("More options")
+                .accessibilityHint("Edit or delete this project")
+                .disabled(viewModel.project == nil || isDeleting)
             }
+        }
+        .confirmationDialog(
+            "Delete Project",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Permanently", role: .destructive) {
+                Task { await performProjectDeletion() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently delete the project and all linked photos, AI previews, materials, estimates, proposals, and invoices. This cannot be undone.")
         }
         .refreshable {
             await viewModel.loadProject(id: projectId)
@@ -161,7 +193,6 @@ struct ProjectDetailView: View {
                 Spacer(minLength: SpacingTokens.huge)
             }
             .padding(.vertical, SpacingTokens.sm)
-            .readableContentWidth()
         }
         .overlay {
             if isCreatingEstimate {
@@ -205,6 +236,17 @@ struct ProjectDetailView: View {
             } else {
                 isCreatingEstimate = false
             }
+        }
+    }
+
+    private func performProjectDeletion() async {
+        isDeleting = true
+        defer { isDeleting = false }
+        let succeeded = await viewModel.deleteProject()
+        if succeeded {
+            // Return to the Projects tab list by popping the navigation stack.
+            appState.selectedTab = .projects
+            router.projectsPath = NavigationPath()
         }
     }
 }

@@ -14,7 +14,7 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   SERPAPI_API_KEY: z.string().min(1).optional(),
   REDIS_URL: z.string().url().optional(),
-  RESEND_FROM_EMAIL: z.string().default('ProEstimate AI <noreply@proestimate.ai>'),
+  RESEND_FROM_EMAIL: z.string().default('ProEstimate AI <noreply@proestimateai.com>'),
   API_BASE_URL: z.string().default('https://proestimate-api-production.up.railway.app'),
   APP_STORE_ISSUER_ID: z.string().optional(),
 });

@@ -29,18 +29,22 @@ struct BeforeAfterSlider: View {
             let width = geometry.size.width
             let dividerX = width * sliderPosition
 
-            ZStack {
+            ZStack(alignment: .leading) {
                 // After image (full width, underneath)
                 afterImage
-                    .frame(width: width, height: height)
+                    .frame(width: width, height: height, alignment: .center)
                     .clipped()
 
                 // Before image (clipped to left portion)
                 beforeImage
-                    .frame(width: width, height: height)
+                    .frame(width: width, height: height, alignment: .center)
                     .clipped()
-                    .clipShape(
-                        HorizontalClipShape(width: dividerX)
+                    .mask(
+                        HStack(spacing: 0) {
+                            Rectangle()
+                                .frame(width: dividerX)
+                            Spacer(minLength: 0)
+                        }
                     )
 
                 // Divider line
@@ -72,19 +76,27 @@ struct BeforeAfterSlider: View {
                     Spacer()
                 }
             }
+            .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .updating($isDragging) { _, state, _ in
                         state = true
                     }
                     .onChanged { value in
-                        let newPosition = value.location.x / width
-                        sliderPosition = min(max(newPosition, 0.05), 0.95)
+                        withAnimation(.interactiveSpring) {
+                            let newPosition = value.location.x / width
+                            sliderPosition = min(max(newPosition, 0.02), 0.98)
+                        }
                     }
             )
         }
+        .frame(maxWidth: 600)
+        .frame(maxWidth: .infinity)
         .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Before and after comparison")
+        .accessibilityHint("Drag horizontally to reveal before or after image")
     }
 
     // MARK: - Subviews

@@ -5,6 +5,7 @@ import SwiftUI
 /// On cold launch, attempts to restore a previous session from stored tokens.
 struct AuthGateView: View {
     @Environment(AppState.self) private var appState
+    @Environment(OnboardingStore.self) private var onboardingStore
     @State private var isRestoring = true
 
     var body: some View {
@@ -12,14 +13,22 @@ struct AuthGateView: View {
             if isRestoring {
                 splashView
             } else if appState.isAuthenticated {
-                MainTabView(appState: appState)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                if onboardingStore.hasCompletedOnboarding {
+                    MainTabView(appState: appState)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                } else {
+                    OnboardingFlowView {
+                        onboardingStore.markCompleted()
+                    }
+                    .transition(.opacity)
+                }
             } else {
                 LoginView()
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
         .animation(.easeInOut(duration: 0.35), value: appState.isAuthenticated)
+        .animation(.easeInOut(duration: 0.35), value: onboardingStore.hasCompletedOnboarding)
         .animation(.easeInOut(duration: 0.25), value: isRestoring)
         .onChange(of: appState.isAuthenticated) { _, isAuth in
             if isAuth {

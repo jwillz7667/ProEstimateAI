@@ -72,7 +72,7 @@ struct PurchaseButtonSection: View {
             Text(secondaryCtaTitle ?? "Continue with Free Plan")
                 .font(TypographyTokens.subheadline)
                 .fontWeight(.medium)
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(ColorTokens.onDarkSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SpacingTokens.sm)
         }
@@ -85,12 +85,12 @@ struct PurchaseButtonSection: View {
             HStack(spacing: SpacingTokens.xxs) {
                 if isRestoring {
                     ProgressView()
-                        .tint(.white.opacity(0.4))
+                        .tint(ColorTokens.onDarkQuaternary)
                         .scaleEffect(0.8)
                 }
                 Text("Restore Purchases")
                     .font(TypographyTokens.footnote)
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(ColorTokens.onDarkQuaternary)
                     .underline()
             }
         }
@@ -103,7 +103,7 @@ struct PurchaseButtonSection: View {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        ColorTokens.overlayBackground.ignoresSafeArea()
         PurchaseButtonSection(
             primaryTitle: "Start Free Trial",
             isPurchasing: false,

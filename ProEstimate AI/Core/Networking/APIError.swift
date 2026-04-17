@@ -92,4 +92,33 @@ extension APIError {
     var requiresReauth: Bool {
         self == .unauthorized
     }
+
+    /// If this is a validation error, return the first error message per field.
+    /// Returns `nil` for other error types. Useful for surfacing inline form errors.
+    var fieldErrors: [String: String]? {
+        guard case .validation(let fields) = self else { return nil }
+        return fields.reduce(into: [String: String]()) { result, pair in
+            if let first = pair.value.first {
+                result[pair.key] = first
+            }
+        }
+    }
+
+    /// Human-readable summary of validation field errors joined with newlines.
+    /// Useful for surfacing all validation issues in an error banner.
+    var validationSummary: String? {
+        guard let fields = fieldErrors else { return nil }
+        return fields
+            .map { "\(prettifyFieldName($0.key)): \($0.value)" }
+            .sorted()
+            .joined(separator: "\n")
+    }
+
+    private func prettifyFieldName(_ raw: String) -> String {
+        raw
+            .replacingOccurrences(of: "_", with: " ")
+            .split(separator: " ")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
 }

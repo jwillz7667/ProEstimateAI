@@ -26,7 +26,7 @@ struct PaywallHeroSection: View {
             // Subheadline.
             Text(decision.subheadline)
                 .font(TypographyTokens.body)
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(ColorTokens.onDarkSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -80,7 +80,7 @@ struct PaywallHeroSection: View {
     private var heroGradient: some View {
         LinearGradient(
             colors: [
-                Color(hex: 0x1A0E05),
+                ColorTokens.overlayAccent,
                 ColorTokens.primaryOrange.opacity(0.15),
                 Color.clear
             ],
@@ -94,7 +94,7 @@ struct PaywallHeroSection: View {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        ColorTokens.overlayBackground.ignoresSafeArea()
         PaywallHeroSection(decision: .sampleSoftGate)
     }
 }

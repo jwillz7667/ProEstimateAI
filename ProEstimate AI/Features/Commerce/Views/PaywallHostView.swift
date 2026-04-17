@@ -59,14 +59,16 @@ struct PaywallHostView: View {
                             FreeUsageMeterView()
                         }
 
-                        // Error message.
+                        // Error message with inline retry.
                         if let errorMessage = viewModel.errorMessage {
-                            errorBanner(errorMessage)
+                            errorBanner(errorMessage) {
+                                Task { await viewModel.purchase() }
+                            }
                         }
 
                         // Purchase CTA and secondary actions.
                         PurchaseButtonSection(
-                            primaryTitle: viewModel.decision.primaryCtaTitle,
+                            primaryTitle: viewModel.primaryCtaTitle,
                             isPurchasing: viewModel.isPurchasing,
                             isRestoring: viewModel.isRestoring,
                             showContinueFree: viewModel.showContinueFree,
@@ -112,9 +114,9 @@ struct PaywallHostView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             colors: [
-                Color.black,
-                Color(hex: 0x1A0E05),
-                Color.black
+                ColorTokens.overlayBackground,
+                ColorTokens.overlayAccent,
+                ColorTokens.overlayBackground
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -133,12 +135,14 @@ struct PaywallHostView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(ColorTokens.onDarkSecondary)
                         .frame(width: 30, height: 30)
                         .background(.ultraThinMaterial, in: Circle())
                 }
                 .padding(.trailing, SpacingTokens.md)
                 .padding(.top, SpacingTokens.md)
+                .accessibilityLabel("Close")
+                .accessibilityHint("Dismiss the paywall")
             }
             Spacer()
         }
@@ -146,14 +150,20 @@ struct PaywallHostView: View {
 
     // MARK: - Error Banner
 
-    private func errorBanner(_ message: String) -> some View {
+    private func errorBanner(_ message: String, onRetry: @escaping () -> Void) -> some View {
         HStack(spacing: SpacingTokens.xs) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(ColorTokens.warning)
 
             Text(message)
                 .font(TypographyTokens.footnote)
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(ColorTokens.onDarkPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button("Try Again", action: onRetry)
+                .font(TypographyTokens.footnote.weight(.semibold))
+                .foregroundStyle(ColorTokens.primaryOrange)
+                .disabled(viewModel.isPurchasing)
         }
         .padding(SpacingTokens.sm)
         .frame(maxWidth: .infinity, alignment: .leading)

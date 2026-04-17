@@ -19,6 +19,20 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
 
     private var continuation: CheckedContinuation<AppleSignInResult, Error>?
 
+    /// Atomically resume and clear the pending continuation. No-op if a
+    /// previous delegate callback already completed it — prevents the runtime
+    /// crash that `CheckedContinuation` raises when resumed twice.
+    private func finish(with result: Result<AppleSignInResult, Error>) {
+        guard let cont = continuation else { return }
+        continuation = nil
+        switch result {
+        case .success(let value):
+            cont.resume(returning: value)
+        case .failure(let error):
+            cont.resume(throwing: error)
+        }
+    }
+
     // MARK: - Public API
 
     /// Initiates the Sign in with Apple flow and returns the credential data.
@@ -45,26 +59,21 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
         didCompleteWithAuthorization authorization: ASAuthorization
     ) {
         guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
-            continuation?.resume(
-                throwing: AppleSignInError.invalidCredential
-            )
-            continuation = nil
+            finish(with: .failure(AppleSignInError.invalidCredential))
             return
         }
 
         guard let identityTokenData = credential.identityToken,
               let identityToken = String(data: identityTokenData, encoding: .utf8)
         else {
-            continuation?.resume(throwing: AppleSignInError.missingIdentityToken)
-            continuation = nil
+            finish(with: .failure(AppleSignInError.missingIdentityToken))
             return
         }
 
         guard let authCodeData = credential.authorizationCode,
               let authorizationCode = String(data: authCodeData, encoding: .utf8)
         else {
-            continuation?.resume(throwing: AppleSignInError.missingAuthorizationCode)
-            continuation = nil
+            finish(with: .failure(AppleSignInError.missingAuthorizationCode))
             return
         }
 
@@ -85,8 +94,7 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
             email: credential.email
         )
 
-        continuation?.resume(returning: result)
-        continuation = nil
+        finish(with: .success(result))
     }
 
     func authorizationController(
@@ -96,11 +104,10 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
         if let asError = error as? ASAuthorizationError,
            asError.code == .canceled
         {
-            continuation?.resume(throwing: AppleSignInError.cancelled)
+            finish(with: .failure(AppleSignInError.cancelled))
         } else {
-            continuation?.resume(throwing: AppleSignInError.system(error))
+            finish(with: .failure(AppleSignInError.system(error)))
         }
-        continuation = nil
     }
 
     // MARK: - ASAuthorizationControllerPresentationContextProviding

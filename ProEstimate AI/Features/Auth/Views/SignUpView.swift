@@ -48,6 +48,12 @@ struct SignUpView: View {
                             .keyboardType(.emailAddress)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+
+                        if !viewModel.email.isEmpty && !viewModel.isEmailValid {
+                            Text("Please enter a valid email address.")
+                                .font(TypographyTokens.caption2)
+                                .foregroundStyle(ColorTokens.error)
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
@@ -107,7 +113,7 @@ struct SignUpView: View {
                 .padding(.bottom, SpacingTokens.xxl)
             }
             .padding(.horizontal, SpacingTokens.xl)
-            .readableContentWidth()
+            .readableFormWidth()
         }
         .scrollDismissesKeyboard(.interactively)
         .navigationBarBackButtonHidden()
@@ -119,6 +125,8 @@ struct SignUpView: View {
                     Image(systemName: "chevron.left")
                         .foregroundStyle(ColorTokens.primaryOrange)
                 }
+                .accessibilityLabel("Back")
+                .accessibilityHint("Returns to sign in")
             }
         }
         .alert("Error", isPresented: .init(

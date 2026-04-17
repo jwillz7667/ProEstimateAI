@@ -67,9 +67,10 @@ struct Proposal: Codable, Identifiable, Hashable, Sendable {
 
 extension Proposal {
     /// Shareable URL for the client-facing proposal page.
+    /// The base lives on the marketing site (`proestimateai.com/proposal/<token>`).
     var shareURL: URL? {
         guard let shareToken else { return nil }
-        return URL(string: "https://app.proestimate.ai/proposal/\(shareToken)")
+        return AppConstants.proposalShareBaseURL.appendingPathComponent(shareToken)
     }
 
     /// Whether the proposal is still pending client action.

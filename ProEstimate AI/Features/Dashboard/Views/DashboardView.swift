@@ -6,6 +6,7 @@ struct DashboardView: View {
     @Environment(EntitlementStore.self) private var entitlementStore
     @Environment(UsageMeterStore.self) private var usageMeterStore
     @Environment(PaywallPresenter.self) private var paywallPresenter
+    @State private var eventBus = AppEventBus.shared
     @State private var viewModel = DashboardViewModel()
     @State private var showProjectCreation = false
     @State private var showQuickGenerate = false
@@ -36,6 +37,8 @@ struct DashboardView: View {
                         Image(systemName: "gearshape")
                             .foregroundStyle(ColorTokens.primaryOrange)
                     }
+                    .accessibilityLabel("Settings")
+                    .accessibilityHint("Opens app settings")
                 }
             }
             .sheet(isPresented: $showSettings) {
@@ -55,6 +58,11 @@ struct DashboardView: View {
                 if viewModel.summary == nil {
                     await viewModel.loadDashboard()
                 }
+            }
+            // Reload revenue metrics when an invoice payment event fires
+            // from another screen (e.g. InvoicePreviewView "Mark as Paid").
+            .onChange(of: eventBus.paymentEventToken) { _, _ in
+                Task { await viewModel.loadDashboard() }
             }
             .fullScreenCover(isPresented: $showProjectCreation) {
                 ProjectCreationFlowView { projectId in
@@ -99,6 +107,12 @@ struct DashboardView: View {
     private var dashboardContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
+                // MARK: - Billing issue banner (grace period / retry)
+                if entitlementStore.hasBillingIssue {
+                    BillingIssueBanner()
+                        .padding(.horizontal, SpacingTokens.md)
+                }
+
                 // MARK: - Greeting
                 greetingSection
                     .padding(.horizontal, SpacingTokens.md)
@@ -144,7 +158,6 @@ struct DashboardView: View {
                 .padding(.bottom, SpacingTokens.xxl)
             }
             .padding(.top, SpacingTokens.sm)
-            .readableContentWidth()
         }
         .refreshable {
             await viewModel.refresh()
@@ -157,7 +170,7 @@ struct DashboardView: View {
         VStack(spacing: SpacingTokens.sm) {
             ZStack {
                 Circle()
-                    .fill(.white)
+                    .fill(ColorTokens.surface)
                     .frame(width: 80, height: 80)
                     .shadow(color: ColorTokens.primaryOrange.opacity(0.25), radius: 12, x: 0, y: 4)
 

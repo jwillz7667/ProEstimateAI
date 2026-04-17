@@ -6,8 +6,12 @@ struct SettingsView: View {
     @Environment(EntitlementStore.self) private var entitlementStore
     @Environment(UsageMeterStore.self) private var usageMeterStore
     @Environment(PaywallPresenter.self) private var paywallPresenter
+    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
+    @Environment(AppRouter.self) private var router
     @Environment(AppearanceStore.self) private var appearanceStore
     @State private var showingSignOutConfirmation = false
+    @State private var showingDeleteAccountConfirmation = false
+    @State private var isDeletingAccount = false
 
     var body: some View {
         NavigationStack {
@@ -63,6 +67,55 @@ struct SettingsView: View {
             } message: {
                 Text("Are you sure you want to sign out?")
             }
+            .confirmationDialog(
+                "Delete Account",
+                isPresented: $showingDeleteAccountConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Account Permanently", role: .destructive) {
+                    Task { await performAccountDeletion() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently deletes your account, company, and all related projects, estimates, and invoices. This cannot be undone. Any active subscription must be canceled separately in your Apple ID settings.")
+            }
+        }
+    }
+
+    // MARK: - Pro Badge
+
+    private var proBadge: some View {
+        Text("PRO")
+            .font(TypographyTokens.caption2.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, SpacingTokens.xs)
+            .padding(.vertical, 2)
+            .background(ColorTokens.primaryOrange, in: Capsule())
+    }
+
+    // MARK: - Feature Gates
+
+    private func handleAnalyticsTap() {
+        let result = featureGateCoordinator.guardAccessAnalytics()
+        switch result {
+        case .allowed:
+            router.settingsPath.append(AppDestination.analytics)
+        case .blocked(let decision):
+            paywallPresenter.present(decision)
+        }
+    }
+
+    // MARK: - Account Deletion
+
+    private func performAccountDeletion() async {
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+        let succeeded = await viewModel.deleteAccount()
+        if succeeded {
+            appState.signOut(
+                entitlementStore: entitlementStore,
+                usageMeterStore: usageMeterStore
+            )
         }
     }
 
@@ -70,6 +123,16 @@ struct SettingsView: View {
 
     private var settingsList: some View {
         List {
+            // Billing issue banner — surfaces grace-period / billing-retry warnings
+            // so users can update their payment method before Pro access lapses.
+            if entitlementStore.hasBillingIssue {
+                Section {
+                    BillingIssueBanner()
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
+            }
+
             // Account Section
             Section("Account") {
                 if let user = appState.currentUser {
@@ -94,6 +157,19 @@ struct SettingsView: View {
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
+
+                Button(role: .destructive) {
+                    showingDeleteAccountConfirmation = true
+                } label: {
+                    HStack {
+                        Label("Delete Account", systemImage: "trash")
+                        if isDeletingAccount {
+                            Spacer()
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isDeletingAccount)
             }
 
             // Company Section
@@ -140,19 +216,34 @@ struct SettingsView: View {
                     }
                 }
 
-                NavigationLink(value: AppDestination.analytics) {
+                Button {
+                    handleAnalyticsTap()
+                } label: {
                     Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Analytics")
-                            Text("Projects, revenue & estimates")
-                                .font(TypographyTokens.caption)
-                                .foregroundStyle(.secondary)
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Analytics")
+                                    .foregroundStyle(ColorTokens.primaryText)
+                                Text("Projects, revenue & estimates")
+                                    .font(TypographyTokens.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if !entitlementStore.hasProAccess {
+                                proBadge
+                            } else {
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
                     } icon: {
                         Image(systemName: "chart.bar.xaxis")
                             .foregroundStyle(ColorTokens.primaryOrange)
                     }
                 }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
 
                 NavigationLink(value: AppDestination.pricingProfiles) {
                     Label {
@@ -197,13 +288,6 @@ struct SettingsView: View {
                     Image(systemName: appearanceStore.mode.icon)
                         .foregroundStyle(ColorTokens.primaryOrange)
                 }
-
-                Label {
-                    Toggle("Push Notifications", isOn: .constant(true))
-                } icon: {
-                    Image(systemName: "bell.badge")
-                        .foregroundStyle(ColorTokens.accentRed)
-                }
             }
 
             // Subscription Section
@@ -246,15 +330,15 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Link(destination: URL(string: "https://proestimate.ai/terms")!) {
+                Link(destination: AppConstants.termsOfServiceURL) {
                     Label("Terms of Service", systemImage: "doc.text")
                 }
 
-                Link(destination: URL(string: "https://proestimate.ai/privacy")!) {
+                Link(destination: AppConstants.privacyPolicyURL) {
                     Label("Privacy Policy", systemImage: "lock.shield")
                 }
 
-                Link(destination: URL(string: "mailto:support@proestimate.ai")!) {
+                Link(destination: AppConstants.supportEmailURL) {
                     Label("Contact Support", systemImage: "envelope")
                 }
             } header: {

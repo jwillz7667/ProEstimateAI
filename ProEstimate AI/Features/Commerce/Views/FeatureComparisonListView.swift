@@ -10,7 +10,7 @@ struct FeatureComparisonListView: View {
             headerRow
 
             Divider()
-                .background(.white.opacity(0.1))
+                .background(ColorTokens.onDarkSeparator)
 
             // Feature rows.
             ForEach(features) { feature in
@@ -18,14 +18,14 @@ struct FeatureComparisonListView: View {
 
                 if feature.id != features.last?.id {
                     Divider()
-                        .background(.white.opacity(0.05))
+                        .background(ColorTokens.onDarkFillSubtle)
                 }
             }
         }
-        .background(.white.opacity(0.03), in: RoundedRectangle(cornerRadius: RadiusTokens.card))
+        .background(ColorTokens.onDarkFillSubtle, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
         .overlay(
             RoundedRectangle(cornerRadius: RadiusTokens.card)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(ColorTokens.onDarkFillSubtle, lineWidth: 1)
         )
     }
 
@@ -36,13 +36,13 @@ struct FeatureComparisonListView: View {
             Text("Features")
                 .font(TypographyTokens.subheadline)
                 .fontWeight(.semibold)
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(ColorTokens.onDarkSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text("Free")
                 .font(TypographyTokens.caption)
                 .fontWeight(.semibold)
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(ColorTokens.onDarkSecondary)
                 .frame(width: 50)
 
             Text("Pro")
@@ -68,7 +68,7 @@ struct FeatureComparisonListView: View {
 
                 Text(feature.name)
                     .font(TypographyTokens.footnote)
-                    .foregroundStyle(.white.opacity(0.9))
+                    .foregroundStyle(ColorTokens.onDarkPrimary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -93,18 +93,21 @@ struct FeatureComparisonListView: View {
             Image(systemName: "checkmark")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(ColorTokens.success.opacity(0.6))
+                .accessibilityLabel("Included")
         case .cross:
             Image(systemName: "xmark")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(ColorTokens.error.opacity(0.5))
+                .accessibilityLabel("Not included")
         case .limited(let text):
             Text(text)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(ColorTokens.onDarkSecondary)
         case .unlimited:
             Image(systemName: "infinity")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(ColorTokens.success)
+                .accessibilityLabel("Unlimited")
         }
     }
 
@@ -115,18 +118,21 @@ struct FeatureComparisonListView: View {
             Image(systemName: "checkmark")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(ColorTokens.success)
+                .accessibilityLabel("Included")
         case .cross:
             Image(systemName: "xmark")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(ColorTokens.error)
+                .accessibilityLabel("Not included")
         case .limited(let text):
             Text(text)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(ColorTokens.onDarkSecondary)
         case .unlimited:
             Image(systemName: "infinity")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(ColorTokens.primaryOrange)
+                .accessibilityLabel("Unlimited")
         }
     }
 
@@ -208,7 +214,7 @@ private enum FeatureValue {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        ColorTokens.overlayBackground.ignoresSafeArea()
         FeatureComparisonListView()
             .padding()
     }

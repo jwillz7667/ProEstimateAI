@@ -76,23 +76,49 @@ struct ProjectReviewStep: View {
                 // Details
                 detailsSummary
 
-                // Submission error
+                // Submission error with inline Retry
                 if let error = viewModel.submissionError {
-                    HStack(spacing: SpacingTokens.xs) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(ColorTokens.error)
-                        Text(error)
-                            .font(TypographyTokens.caption)
-                            .foregroundStyle(ColorTokens.error)
-                    }
-                    .padding(SpacingTokens.sm)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(ColorTokens.error.opacity(0.1), in: RoundedRectangle(cornerRadius: RadiusTokens.small))
+                    submissionErrorBanner(error)
                 }
             }
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.sm)
         }
+    }
+
+    // MARK: - Error Banner
+
+    private func submissionErrorBanner(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            HStack(alignment: .top, spacing: SpacingTokens.xs) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(ColorTokens.error)
+                    .accessibilityHidden(true)
+                Text(message)
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.error)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button {
+                Task { await viewModel.createProject() }
+            } label: {
+                HStack(spacing: SpacingTokens.xxs) {
+                    if viewModel.isSubmitting {
+                        ProgressView().controlSize(.mini).tint(ColorTokens.error)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    Text("Try Again")
+                }
+                .font(TypographyTokens.caption.weight(.semibold))
+                .foregroundStyle(ColorTokens.error)
+            }
+            .disabled(viewModel.isSubmitting)
+        }
+        .padding(SpacingTokens.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ColorTokens.error.opacity(0.1), in: RoundedRectangle(cornerRadius: RadiusTokens.small))
     }
 
     // MARK: - Subviews

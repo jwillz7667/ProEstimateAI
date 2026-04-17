@@ -55,10 +55,7 @@ struct MetricCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(SpacingTokens.md)
-        .background(
-            ColorTokens.elevatedSurface,
-            in: RoundedRectangle(cornerRadius: RadiusTokens.card)
-        )
+        .glassCard()
         .overlay(alignment: .top) {
             // Orange accent bar at top of card
             RoundedRectangle(cornerRadius: RadiusTokens.card)
@@ -71,10 +68,5 @@ struct MetricCard: View {
                     }
                 }
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: RadiusTokens.card)
-                .strokeBorder(ColorTokens.primaryOrange.opacity(0.15), lineWidth: 0.5)
-        )
-        .shadow(color: ColorTokens.primaryOrange.opacity(0.06), radius: 4, x: 0, y: 2)
     }
 }

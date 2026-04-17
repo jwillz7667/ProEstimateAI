@@ -45,7 +45,6 @@ struct ProjectCreationFlowView: View {
                     .padding(.horizontal, SpacingTokens.md)
                     .padding(.vertical, SpacingTokens.md)
             }
-            .readableContentWidth()
             .navigationTitle(viewModel.currentStepEnum.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

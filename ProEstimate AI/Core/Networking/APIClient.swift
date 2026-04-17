@@ -26,18 +26,36 @@ final class APIClient: APIClientProtocol {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
+    /// Serializes concurrent token-refresh attempts so a burst of 401s only
+    /// triggers a single refresh. Protects the Keychain write and prevents
+    /// `originalTransactionId` drift when multiple ViewModels hit auth at once.
+    private let refreshLock = NSLock()
+
     /// Callback invoked when token refresh fails and the user must re-authenticate.
     /// Set by the app's auth coordinator.
     var onUnauthorized: (@Sendable () -> Void)?
 
     init(
         baseURL: String = AppConstants.apiBaseURL,
-        session: URLSession = .shared,
+        session: URLSession? = nil,
         tokenStore: TokenStore = .shared
     ) {
         self.baseURL = baseURL
-        self.session = session
         self.tokenStore = tokenStore
+
+        // Configure a dedicated URLSession so we can tune timeouts.
+        // Request timeout (30s) protects short REST calls; resource timeout (600s)
+        // accommodates the long-running AI generation polling flow.
+        if let injected = session {
+            self.session = injected
+        } else {
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = 30
+            config.timeoutIntervalForResource = 600
+            config.waitsForConnectivity = true
+            config.httpMaximumConnectionsPerHost = 6
+            self.session = URLSession(configuration: config)
+        }
 
         // Configure encoder with snake_case keys for outbound requests.
         let enc = JSONEncoder()
@@ -180,12 +198,36 @@ final class APIClient: APIClientProtocol {
     }
 
     /// Decode a success envelope and return the inner `data` payload.
+    /// Preserves `DecodingError` context so support can diagnose schema mismatches.
     private func decodeSuccess<T: Decodable>(data: Data) throws -> T {
         do {
             let envelope = try decoder.decode(APISuccessEnvelope<T>.self, from: data)
             return envelope.data
+        } catch let decodingError as DecodingError {
+            throw APIError.decoding(Self.describe(decodingError, type: T.self))
         } catch {
             throw APIError.decoding(error.localizedDescription)
+        }
+    }
+
+    /// Produce a concise, developer-friendly description of a `DecodingError`
+    /// that identifies the exact key path and failure reason.
+    private static func describe<T>(_ error: DecodingError, type: T.Type) -> String {
+        switch error {
+        case .typeMismatch(let type, let context):
+            let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
+            return "\(T.self): type mismatch at '\(path)' — expected \(type). \(context.debugDescription)"
+        case .valueNotFound(let type, let context):
+            let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
+            return "\(T.self): missing \(type) at '\(path)'. \(context.debugDescription)"
+        case .keyNotFound(let key, let context):
+            let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
+            return "\(T.self): missing key '\(key.stringValue)' at '\(path)'."
+        case .dataCorrupted(let context):
+            let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
+            return "\(T.self): corrupted data at '\(path)'. \(context.debugDescription)"
+        @unknown default:
+            return "\(T.self): \(error.localizedDescription)"
         }
     }
 
@@ -212,7 +254,23 @@ final class APIClient: APIClientProtocol {
 
     /// Attempt to refresh the access token using the stored refresh token.
     /// Returns `true` if the refresh succeeded and new tokens are stored.
+    ///
+    /// Serialized via `refreshLock` so concurrent 401s only hit the backend once;
+    /// the second caller observes the newly-stored tokens from the first caller.
     private func attemptTokenRefresh() async -> Bool {
+        let initialRefreshToken = tokenStore.refreshToken
+        guard initialRefreshToken != nil else { return false }
+
+        refreshLock.lock()
+        defer { refreshLock.unlock() }
+
+        // A parallel caller may have refreshed while we waited for the lock.
+        // Detect this by comparing the token we entered with, then short-circuit.
+        if tokenStore.refreshToken != initialRefreshToken,
+           tokenStore.accessToken != nil {
+            return true
+        }
+
         guard let refreshToken = tokenStore.refreshToken else { return false }
 
         do {

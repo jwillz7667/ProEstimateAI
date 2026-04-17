@@ -14,7 +14,9 @@ struct InvoicePreviewView: View {
             } else if viewModel.invoice != nil {
                 invoiceContent
             } else if let error = viewModel.errorMessage {
-                errorState(message: error)
+                RetryStateView(message: error) {
+                    Task { await viewModel.loadInvoice(id: invoiceId) }
+                }
             } else {
                 EmptyStateView(
                     icon: "dollarsign.circle",
@@ -64,6 +66,8 @@ struct InvoicePreviewView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                    .accessibilityLabel("More options")
+                    .accessibilityHint("Share, export, send, or mark paid")
                 }
             }
         }
@@ -411,28 +415,6 @@ struct InvoicePreviewView: View {
         return String(format: "%.1f", number.doubleValue)
     }
 
-    private func errorState(message: String) -> some View {
-        VStack(spacing: SpacingTokens.md) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 48))
-                .foregroundStyle(ColorTokens.warning)
-
-            Text("Failed to Load")
-                .font(TypographyTokens.title3)
-
-            Text(message)
-                .font(TypographyTokens.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            PrimaryCTAButton(title: "Try Again") {
-                Task { await viewModel.loadInvoice(id: invoiceId) }
-            }
-            .frame(maxWidth: 200)
-        }
-        .padding(SpacingTokens.xxl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
 // MARK: - Preview

@@ -76,6 +76,13 @@ final class MockCommerceAPIClient: CommerceAPIClientProtocol {
         return .samplePro
     }
 
+    func restoreTransactions(_ transactions: [RestoreTransactionItem]) async throws -> EntitlementSnapshot {
+        try await simulateDelay()
+        if let error = forcedError { throw error }
+        // If any transactions are restored, return Pro; otherwise return current snapshot.
+        return transactions.isEmpty ? entitlementSnapshot : .samplePro
+    }
+
     func consumeUsage(metric: UsageMetricCode) async throws -> UsageBucket {
         try await simulateDelay()
         consumeUsageCallCount += 1

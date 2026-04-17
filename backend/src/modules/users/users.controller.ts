@@ -12,3 +12,8 @@ export async function updateMeHandler(req: Request, res: Response) {
   const user = await usersService.updateMe(req.userId!, req.body);
   sendSuccess(res, toUserDto(user));
 }
+
+export async function deleteMeHandler(req: Request, res: Response) {
+  await usersService.deleteMe(req.userId!);
+  sendSuccess(res, { deleted: true });
+}

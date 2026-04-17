@@ -26,21 +26,32 @@ struct ClientFormView: View {
                         TextField("Client name", text: $viewModel.name)
                             .textContentType(.name)
                             .textInputAutocapitalization(.words)
+
+                        if viewModel.showsNameError {
+                            Text("Client name is required.")
+                                .font(TypographyTokens.caption2)
+                                .foregroundStyle(ColorTokens.error)
+                        }
                     }
                 } header: {
                     Text("Name *")
-                } footer: {
-                    Text("Client name is required.")
-                        .foregroundStyle(.secondary)
                 }
 
                 // MARK: - Contact
                 Section("Contact") {
-                    TextField("Email address", text: $viewModel.email)
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                    VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                        TextField("Email address", text: $viewModel.email)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+
+                        if viewModel.showsEmailError {
+                            Text("Please enter a valid email address.")
+                                .font(TypographyTokens.caption2)
+                                .foregroundStyle(ColorTokens.error)
+                        }
+                    }
 
                     TextField("Phone number", text: $viewModel.phone)
                         .textContentType(.telephoneNumber)
@@ -87,9 +98,10 @@ struct ClientFormView: View {
                     }
                     .fontWeight(.semibold)
                     .foregroundStyle(ColorTokens.primaryOrange)
-                    .disabled(viewModel.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isSaving)
+                    .disabled(!viewModel.isFormValid || viewModel.isSaving)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .alert("Error", isPresented: .init(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.clearError() } }

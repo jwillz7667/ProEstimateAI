@@ -14,6 +14,7 @@ enum APIEndpoint: Sendable {
 
     // MARK: - User / Company
     case getMe
+    case deleteMe
     case getCompany
     case updateCompany(body: Encodable & Sendable)
 
@@ -129,6 +130,7 @@ extension APIEndpoint {
 
         // User / Company
         case .getMe: return "/users/me"
+        case .deleteMe: return "/users/me"
         case .getCompany: return "/companies/me"
         case .updateCompany: return "/companies/me"
 
@@ -250,7 +252,8 @@ extension APIEndpoint {
              .updatePricingProfile, .updateLaborRateRule:
             return .patch
 
-        case .deleteClient, .deleteProject, .deleteAsset,
+        case .deleteMe,
+             .deleteClient, .deleteProject, .deleteAsset,
              .deleteEstimate, .deleteEstimateLineItem,
              .deleteInvoice, .deleteInvoiceLineItem,
              .deletePricingProfile, .deleteLaborRateRule:

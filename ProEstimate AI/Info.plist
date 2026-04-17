@@ -2,13 +2,30 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDisplayName</key>
+	<string>ProEstimate AI</string>
 	<key>NSCameraUsageDescription</key>
 	<string>ProEstimate AI uses your camera to photograph project sites for AI-powered remodel previews and material estimates.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ProEstimate AI accesses your photo library to import project reference images and your company logo for branded estimates.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>ProEstimate AI saves generated remodel previews and exported PDFs to your photo library when you choose to share them.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>Background</string>
+		<key>UIImageName</key>
+		<string>housd-icon-light</string>
+		<key>UIImageRespectsSafeAreaInsets</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

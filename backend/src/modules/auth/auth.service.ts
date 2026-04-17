@@ -80,14 +80,15 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
       },
     });
 
-    // Initialize usage buckets: 5 AI generations, 5 quote exports
+    // Initialize starter credits: 3 AI generations, 3 quote exports
+    // (matches monitization-spec.md; iOS AppConstants must stay in sync).
     await tx.usageBucket.createMany({
       data: [
         {
           userId: createdUser.id,
           companyId: createdCompany.id,
           metricCode: 'AI_GENERATION',
-          includedQuantity: 5,
+          includedQuantity: 3,
           consumedQuantity: 0,
           resetPolicy: 'NEVER',
           source: 'STARTER_CREDITS',
@@ -96,7 +97,7 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
           userId: createdUser.id,
           companyId: createdCompany.id,
           metricCode: 'QUOTE_EXPORT',
-          includedQuantity: 5,
+          includedQuantity: 3,
           consumedQuantity: 0,
           resetPolicy: 'NEVER',
           source: 'STARTER_CREDITS',
@@ -276,13 +277,15 @@ export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> 
       },
     });
 
+    // Initialize starter credits: 3 AI generations, 3 quote exports
+    // (matches monitization-spec.md; iOS AppConstants must stay in sync).
     await tx.usageBucket.createMany({
       data: [
         {
           userId: createdUser.id,
           companyId: createdCompany.id,
           metricCode: 'AI_GENERATION',
-          includedQuantity: 5,
+          includedQuantity: 3,
           consumedQuantity: 0,
           resetPolicy: 'NEVER',
           source: 'STARTER_CREDITS',
@@ -291,7 +294,7 @@ export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> 
           userId: createdUser.id,
           companyId: createdCompany.id,
           metricCode: 'QUOTE_EXPORT',
-          includedQuantity: 5,
+          includedQuantity: 3,
           consumedQuantity: 0,
           resetPolicy: 'NEVER',
           source: 'STARTER_CREDITS',

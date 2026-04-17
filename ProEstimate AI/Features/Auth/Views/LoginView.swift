@@ -59,7 +59,7 @@ struct LoginView: View {
                     .padding(.bottom, SpacingTokens.xxl)
                 }
                 .padding(.horizontal, SpacingTokens.xl)
-                .readableContentWidth()
+                .readableFormWidth()
             }
             .scrollDismissesKeyboard(.interactively)
             .alert("Error", isPresented: .init(
@@ -88,8 +88,8 @@ struct LoginView: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(height: 56)
                 .padding(SpacingTokens.md)
-                .background(.white, in: Circle())
-                .shadow(color: .white.opacity(0.15), radius: 12)
+                .background(ColorTokens.surface, in: Circle())
+                .shadow(color: ColorTokens.primaryOrange.opacity(0.18), radius: 12)
 
             Text("ProEstimate")
                 .font(TypographyTokens.largeTitle)
@@ -116,6 +116,12 @@ struct LoginView: View {
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+
+                if !viewModel.email.isEmpty && !viewModel.isEmailValid {
+                    Text("Please enter a valid email address.")
+                        .font(TypographyTokens.caption2)
+                        .foregroundStyle(ColorTokens.error)
+                }
             }
 
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
@@ -164,10 +170,10 @@ struct LoginView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, SpacingTokens.sm)
             .padding(.horizontal, SpacingTokens.md)
-            .background(ColorTokens.elevatedSurface, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
+            .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
             .overlay(
                 RoundedRectangle(cornerRadius: RadiusTokens.button)
-                    .strokeBorder(ColorTokens.subtleBorder, lineWidth: 1)
+                    .strokeBorder(ColorTokens.primaryOrange.opacity(0.35), lineWidth: 1)
             )
             .foregroundStyle(ColorTokens.primaryText)
         }

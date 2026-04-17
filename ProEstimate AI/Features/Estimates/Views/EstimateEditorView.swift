@@ -7,7 +7,9 @@ struct EstimateEditorView: View {
     @State private var exportPDFURL: URL?
     @State private var showShareSheet = false
     @State private var isCreatingProposal = false
+    @State private var showDiscardConfirmation = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresentedBySheet
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
     @Environment(AppRouter.self) private var router
@@ -20,7 +22,9 @@ struct EstimateEditorView: View {
                 } else if viewModel.estimate != nil {
                     editorContent
                 } else if let errorMessage = viewModel.errorMessage {
-                    errorState(message: errorMessage)
+                    RetryStateView(message: errorMessage) {
+                        Task { await viewModel.loadEstimate(id: estimateId) }
+                    }
                 } else {
                     EmptyStateView(
                         icon: "doc.text",
@@ -32,7 +36,14 @@ struct EstimateEditorView: View {
         }
         .navigationTitle(viewModel.estimate?.estimateNumber ?? "New Estimate")
         .navigationBarTitleDisplayMode(.inline)
+        // Prevent swipe-to-dismiss losing unsaved work; the explicit Close
+        // button below shows a confirmation dialog when changes are pending.
+        .interactiveDismissDisabled(viewModel.hasUnsavedChanges)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Close") { handleCloseTap() }
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: SpacingTokens.sm) {
                     if viewModel.hasUnsavedChanges {
@@ -83,6 +94,8 @@ struct EstimateEditorView: View {
                             Image(systemName: "square.and.arrow.up")
                         }
                     }
+                    .accessibilityLabel("Share and export")
+                    .accessibilityHint("Share, export PDF, or create proposal")
                 }
             }
         }
@@ -124,6 +137,27 @@ struct EstimateEditorView: View {
             if let url = exportPDFURL {
                 ActivityViewRepresentable(activityItems: [url])
             }
+        }
+        .confirmationDialog(
+            "Discard changes?",
+            isPresented: $showDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) { dismiss() }
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("You have unsaved edits that will be lost if you close now.")
+        }
+    }
+
+    // MARK: - Close Handling
+
+    /// Close tap handler that shows a confirmation if there are unsaved changes.
+    private func handleCloseTap() {
+        if viewModel.hasUnsavedChanges {
+            showDiscardConfirmation = true
+        } else {
+            dismiss()
         }
     }
 
@@ -311,28 +345,6 @@ struct EstimateEditorView: View {
         }
     }
 
-    private func errorState(message: String) -> some View {
-        VStack(spacing: SpacingTokens.md) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 48))
-                .foregroundStyle(ColorTokens.warning)
-
-            Text("Failed to Load")
-                .font(TypographyTokens.title3)
-
-            Text(message)
-                .font(TypographyTokens.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            PrimaryCTAButton(title: "Try Again") {
-                Task { await viewModel.loadEstimate(id: estimateId) }
-            }
-            .frame(maxWidth: 200)
-        }
-        .padding(SpacingTokens.xxl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
 // MARK: - Preview

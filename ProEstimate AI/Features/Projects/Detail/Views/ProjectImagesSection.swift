@@ -69,13 +69,15 @@ struct ProjectImagesSection: View {
     private var imageScroll: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: SpacingTokens.sm) {
-                ForEach(assets) { asset in
+                ForEach(Array(assets.enumerated()), id: \.element.id) { index, asset in
                     Button {
                         selectedAsset = asset
                     } label: {
                         imageCard(asset)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Project photo \(index + 1) of \(assets.count)")
+                    .accessibilityHint("Opens full-screen preview")
                 }
             }
             .padding(.horizontal, SpacingTokens.md)

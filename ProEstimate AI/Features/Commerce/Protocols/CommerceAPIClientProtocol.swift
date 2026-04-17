@@ -21,6 +21,11 @@ protocol CommerceAPIClientProtocol {
     /// Returns the updated entitlement snapshot.
     func syncTransaction(request: SyncTransactionRequest) async throws -> EntitlementSnapshot
 
+    /// Restore previously purchased transactions on the backend.
+    /// Posts every verified `Transaction.currentEntitlements` item so the backend
+    /// can re-bind them to the current user. Returns the refreshed entitlement snapshot.
+    func restoreTransactions(_ transactions: [RestoreTransactionItem]) async throws -> EntitlementSnapshot
+
     /// Consume one unit of a metered usage bucket (e.g., AI generation, quote export).
     /// Returns the updated usage bucket with decremented remaining quantity.
     func consumeUsage(metric: UsageMetricCode) async throws -> UsageBucket
@@ -78,5 +83,28 @@ struct ConsumeUsageBody: Encodable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case metricCode = "metric_code"
+    }
+}
+
+/// Request body for `POST /v1/commerce/restore`.
+/// Sent during a Restore Purchases flow with every verified entitlement transaction.
+struct RestoreTransactionsRequest: Encodable, Sendable {
+    let transactions: [RestoreTransactionItem]
+}
+
+/// One transaction item inside a restore request.
+struct RestoreTransactionItem: Codable, Sendable {
+    let storeProductId: String
+    let transactionId: String
+    let originalTransactionId: String
+    let appAccountToken: String?
+    let environment: String
+
+    enum CodingKeys: String, CodingKey {
+        case storeProductId = "store_product_id"
+        case transactionId = "transaction_id"
+        case originalTransactionId = "original_transaction_id"
+        case appAccountToken = "app_account_token"
+        case environment
     }
 }

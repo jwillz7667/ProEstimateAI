@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import os.log
 
 /// Keychain-backed storage for access and refresh tokens.
 /// Uses the iOS Security framework directly — no third-party dependencies.
@@ -10,6 +11,9 @@ final class TokenStore: Sendable {
     static let shared = TokenStore()
 
     private let serviceName: String
+    /// Logger for keychain operations. SECURITY: never log the token values
+    /// themselves — only opaque status codes and key identifiers.
+    private static let logger = Logger(subsystem: AppConstants.bundleID, category: "TokenStore")
 
     init(serviceName: String = AppConstants.keychainServiceName) {
         self.serviceName = serviceName
@@ -66,7 +70,9 @@ final class TokenStore: Sendable {
 
         let status = SecItemAdd(query as CFDictionary, nil)
         if status != errSecSuccess {
-            print("[TokenStore] Failed to save \(key): \(status)")
+            // Log only opaque status + key label (never the token value itself)
+            // so nothing sensitive can leak into crash reports or device logs.
+            Self.logger.error("Keychain save failed (OSStatus=\(status))")
         }
     }
 

@@ -60,7 +60,15 @@ final class LiveInvoiceService: InvoiceServiceProtocol, Sendable {
     }
 
     func markAsPaid(id: String) async throws -> Invoice {
-        let body = InvoiceStatusBody(status: "paid")
+        // Fetch the current invoice so we can carry forward totals when we update.
+        // The backend expects status, paidAt, and amountPaid = totalAmount for a full-payment mark.
+        let current: Invoice = try await apiClient.request(.getInvoice(id: id))
+        let body = MarkPaidBody(
+            status: "paid",
+            paidAt: Date(),
+            amountPaid: current.totalAmount,
+            amountDue: 0
+        )
         return try await apiClient.request(.updateInvoice(id: id, body: body))
     }
 }
@@ -73,7 +81,12 @@ private struct CreateFromEstimateBody: Encodable, Sendable {
     let estimateId: String
 }
 
-/// Body for updating an invoice's status field.
-private struct InvoiceStatusBody: Encodable, Sendable {
+/// Body sent when marking an invoice as fully paid.
+/// Records the payment timestamp and zeros the amount due so downstream
+/// dashboards and revenue metrics pick up the payment immediately.
+private struct MarkPaidBody: Encodable, Sendable {
     let status: String
+    let paidAt: Date
+    let amountPaid: Decimal
+    let amountDue: Decimal
 }

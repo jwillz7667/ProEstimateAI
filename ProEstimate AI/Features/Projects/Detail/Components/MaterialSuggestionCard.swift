@@ -21,6 +21,8 @@ struct MaterialSuggestionCard: View {
                         .foregroundStyle(isSelected ? ColorTokens.primaryOrange : .secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isSelected ? "Deselect \(material.name)" : "Select \(material.name)")
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
 
                 // Material info
                 VStack(alignment: .leading, spacing: SpacingTokens.xxs) {

@@ -27,6 +27,8 @@ struct EstimateListView: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(ColorTokens.primaryOrange)
                     }
+                    .accessibilityLabel("New estimate")
+                    .accessibilityHint("Create a new estimate")
                 }
             }
             .navigationDestination(for: AppDestination.self) { destination in
@@ -92,22 +94,28 @@ struct EstimateListView: View {
         VStack(spacing: 0) {
             filterPicker
 
-            List {
-                ForEach(viewModel.filteredEstimates) { summary in
-                    NavigationLink(value: AppDestination.estimateEditor(id: summary.estimate.id)) {
-                        EstimateRowView(summary: summary)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            estimateToDelete = summary.id
-                            showingDeleteConfirmation = true
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+            ScrollView {
+                LazyVStack(spacing: SpacingTokens.sm) {
+                    ForEach(viewModel.filteredEstimates) { summary in
+                        NavigationLink(value: AppDestination.estimateEditor(id: summary.estimate.id)) {
+                            EstimateRowView(summary: summary)
+                                .padding(SpacingTokens.md)
+                                .glassCard()
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                estimateToDelete = summary.id
+                                showingDeleteConfirmation = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                 }
+                .padding(.horizontal, SpacingTokens.md)
+                .padding(.vertical, SpacingTokens.xs)
             }
-            .listStyle(.plain)
         }
     }
 

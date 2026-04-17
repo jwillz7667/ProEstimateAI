@@ -40,10 +40,10 @@ struct FreeUsageMeterView: View {
             )
         }
         .padding(SpacingTokens.md)
-        .background(.white.opacity(0.03), in: RoundedRectangle(cornerRadius: RadiusTokens.card))
+        .background(ColorTokens.onDarkFillSubtle, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
         .overlay(
             RoundedRectangle(cornerRadius: RadiusTokens.card)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(ColorTokens.onDarkFillSubtle, lineWidth: 1)
         )
     }
 
@@ -59,11 +59,11 @@ struct FreeUsageMeterView: View {
             HStack {
                 Image(systemName: icon)
                     .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(ColorTokens.onDarkTertiary)
 
                 Text(label)
                     .font(TypographyTokens.caption)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(ColorTokens.onDarkSecondary)
 
                 Spacer()
 
@@ -78,7 +78,7 @@ struct FreeUsageMeterView: View {
                 ZStack(alignment: .leading) {
                     // Track.
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(.white.opacity(0.08))
+                        .fill(ColorTokens.onDarkFillSubtle)
                         .frame(height: 6)
 
                     // Fill.
@@ -121,7 +121,7 @@ struct FreeUsageMeterView: View {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        ColorTokens.overlayBackground.ignoresSafeArea()
         FreeUsageMeterView()
             .padding()
     }

@@ -3,6 +3,7 @@ import Foundation
 /// Drives the project detail screen. Loads the full project, its AI
 /// generations, material suggestions, linked estimates, and activity log.
 /// Manages generation initiation and polling.
+@MainActor
 @Observable
 final class ProjectDetailViewModel {
     // MARK: - State
@@ -22,7 +23,10 @@ final class ProjectDetailViewModel {
 
     var isGenerating: Bool = false
     var currentGenerationStage: Int = 0
-    var generationProgressTimer: Timer?
+
+    /// Backing tasks for in-flight generation work so we can cancel on view disappear.
+    private var generationTask: Task<Void, Never>?
+    private var progressTask: Task<Void, Never>?
 
     // MARK: - Material Selection
 
@@ -141,10 +145,13 @@ final class ProjectDetailViewModel {
     func startGeneration(prompt: String? = nil, materials: [MaterialSpec]? = nil) async {
         guard let project else { return }
 
+        // If a previous run is still in flight, cancel it before starting a new one.
+        cancelGeneration()
+
         isGenerating = true
         currentGenerationStage = 0
 
-        // Start the timer to animate progress stages
+        // Start the progress simulation.
         startProgressSimulation()
 
         let effectivePrompt = prompt ?? project.description ?? "Generate a remodel preview for \(project.title)"
@@ -157,45 +164,85 @@ final class ProjectDetailViewModel {
             return selected.map { MaterialSpec(from: $0) }
         }()
 
-        do {
-            let generation = try await generationService.startGeneration(
-                projectId: project.id,
-                prompt: effectivePrompt,
-                materials: effectiveMaterials
-            )
-
-            // Poll for completion — PiAPI typically takes 60-130 seconds
-            var completed = generation
-            for _ in 0..<60 {
-                try await Task.sleep(nanoseconds: 3_000_000_000) // 3 second intervals (max 3 min)
-                completed = try await generationService.getGenerationStatus(id: generation.id)
-                if completed.status == .completed || completed.status == .failed {
-                    break
-                }
+        // Drive the actual generation + polling on a cancellable Task so navigating
+        // away tears it down cleanly.
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.stopProgressSimulation()
+                self.isGenerating = false
             }
 
-            generations.insert(completed, at: 0)
+            do {
+                let generation = try await self.generationService.startGeneration(
+                    projectId: project.id,
+                    prompt: effectivePrompt,
+                    materials: effectiveMaterials
+                )
 
-            if completed.status == .completed {
-                // Reload materials from the new generation
-                await loadMaterials()
-                for material in self.materials {
-                    if materialSelectionState[material.id] == nil {
-                        materialSelectionState[material.id] = material.isSelected
+                // Poll for completion — PiAPI typically takes 60-130 seconds.
+                var completed = generation
+                for _ in 0..<60 {
+                    if Task.isCancelled { return }
+                    try await Task.sleep(for: .seconds(3))
+                    if Task.isCancelled { return }
+                    completed = try await self.generationService.getGenerationStatus(id: generation.id)
+                    if completed.status == .completed || completed.status == .failed {
+                        break
                     }
                 }
 
-                // Reload estimates — backend may have auto-created one from materials
-                await loadEstimates(projectId: project.id)
-            } else if completed.status == .failed {
-                errorMessage = completed.errorMessage ?? "Image generation failed. Please try again."
+                if Task.isCancelled { return }
+                self.generations.insert(completed, at: 0)
+
+                if completed.status == .completed {
+                    // Reload materials from the new generation.
+                    await self.loadMaterials()
+                    for material in self.materials {
+                        if self.materialSelectionState[material.id] == nil {
+                            self.materialSelectionState[material.id] = material.isSelected
+                        }
+                    }
+                    // Reload estimates — backend may have auto-created one from materials.
+                    await self.loadEstimates(projectId: project.id)
+                } else if completed.status == .failed {
+                    self.errorMessage = completed.errorMessage ?? "Image generation failed. Please try again."
+                }
+            } catch is CancellationError {
+                // Silent — caller cancelled deliberately.
+            } catch {
+                self.errorMessage = error.localizedDescription
             }
-        } catch {
-            errorMessage = error.localizedDescription
         }
 
-        stopProgressSimulation()
-        isGenerating = false
+        generationTask = task
+        await task.value
+    }
+
+    /// Cancel any in-flight generation polling and progress simulation.
+    /// Call from `.onDisappear` so navigating away doesn't leak background work.
+    func cancelGeneration() {
+        generationTask?.cancel()
+        generationTask = nil
+        progressTask?.cancel()
+        progressTask = nil
+    }
+
+    // MARK: - Deletion
+
+    /// Permanently delete this project (and its cascading generations, assets,
+    /// materials, estimates, proposals, and invoices). Returns `true` on success.
+    @discardableResult
+    func deleteProject() async -> Bool {
+        guard let project else { return false }
+        cancelGeneration()
+        do {
+            try await projectService.deleteProject(id: project.id)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     func refreshGenerationStatus() async {
@@ -301,25 +348,20 @@ final class ProjectDetailViewModel {
 
     private func startProgressSimulation() {
         let totalStages = GenerationStage.allCases.count
-        generationProgressTimer = Timer.scheduledTimer(
-            withTimeInterval: 0.8,
-            repeats: true
-        ) { [weak self] timer in
-            guard let self else {
-                timer.invalidate()
-                return
-            }
-            if self.currentGenerationStage < totalStages - 1 {
-                self.currentGenerationStage += 1
-            } else {
-                timer.invalidate()
+        progressTask?.cancel()
+        progressTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for stage in 1..<totalStages {
+                try? await Task.sleep(for: .milliseconds(800))
+                if Task.isCancelled { return }
+                self.currentGenerationStage = stage
             }
         }
     }
 
     private func stopProgressSimulation() {
-        generationProgressTimer?.invalidate()
-        generationProgressTimer = nil
+        progressTask?.cancel()
+        progressTask = nil
         currentGenerationStage = GenerationStage.allCases.count - 1
     }
 }

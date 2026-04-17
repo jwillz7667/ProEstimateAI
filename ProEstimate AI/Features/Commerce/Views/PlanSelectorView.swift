@@ -38,7 +38,7 @@ struct PlanSelectorView: View {
                 isAnnualSelected = true
             }
         }
-        .background(.white.opacity(0.08), in: Capsule())
+        .background(ColorTokens.onDarkFillSubtle, in: Capsule())
         .padding(.horizontal, SpacingTokens.xxxl)
     }
 
@@ -47,7 +47,7 @@ struct PlanSelectorView: View {
             Text(title)
                 .font(TypographyTokens.subheadline)
                 .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundStyle(isSelected ? .white : .white.opacity(0.5))
+                .foregroundStyle(isSelected ? Color.white : ColorTokens.onDarkTertiary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SpacingTokens.xs)
                 .background(
@@ -93,7 +93,7 @@ struct PlanSelectorView: View {
                 // Billing period.
                 Text(product.billingPeriodLabel)
                     .font(TypographyTokens.caption)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(ColorTokens.onDarkTertiary)
 
                 // Intro offer text.
                 if let introText = product.introOfferDisplayText, product.showsTrialBadge {
@@ -106,12 +106,12 @@ struct PlanSelectorView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: RadiusTokens.card)
-                    .fill(.white.opacity(isSelected ? 0.1 : 0.05))
+                    .fill(isSelected ? ColorTokens.onDarkSeparator : ColorTokens.onDarkFillSubtle)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: RadiusTokens.card)
                     .strokeBorder(
-                        isSelected ? ColorTokens.primaryOrange : .white.opacity(0.1),
+                        isSelected ? ColorTokens.primaryOrange : ColorTokens.onDarkSeparator,
                         lineWidth: isSelected ? 2 : 1
                     )
             )
@@ -144,7 +144,7 @@ struct PlanSelectorView: View {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        ColorTokens.overlayBackground.ignoresSafeArea()
         PlanSelectorView(
             products: [.sampleMonthly, .sampleAnnual],
             selectedProduct: .sampleAnnual,

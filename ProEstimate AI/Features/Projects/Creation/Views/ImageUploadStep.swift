@@ -71,6 +71,10 @@ struct ImageUploadStep: View {
                     }
                     .padding(.vertical, SpacingTokens.md)
                 }
+
+                if let error = viewModel.imageLoadError {
+                    imageErrorBanner(error)
+                }
             }
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.sm)
@@ -157,6 +161,47 @@ struct ImageUploadStep: View {
         }
     }
 
+    // MARK: - Error Banner
+
+    private func imageErrorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: SpacingTokens.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(ColorTokens.warning)
+                .accessibilityHidden(true)
+
+            Text(message)
+                .font(TypographyTokens.caption)
+                .foregroundStyle(ColorTokens.primaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: SpacingTokens.xxs) {
+                Button("Retry") {
+                    Task { await viewModel.loadImages() }
+                }
+                .font(TypographyTokens.caption.weight(.semibold))
+                .foregroundStyle(ColorTokens.primaryOrange)
+                .disabled(viewModel.isLoadingImages)
+
+                Button("Dismiss") {
+                    viewModel.clearImageLoadError()
+                }
+                .font(TypographyTokens.caption2)
+                .foregroundStyle(ColorTokens.secondaryText)
+            }
+        }
+        .padding(SpacingTokens.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: RadiusTokens.small)
+                .fill(ColorTokens.warning.opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: RadiusTokens.small)
+                        .stroke(ColorTokens.warning.opacity(0.35), lineWidth: 1)
+                )
+        )
+    }
+
     private func imageCell(data: Data, index: Int) -> some View {
         ZStack(alignment: .topTrailing) {
             if let uiImage = UIImage(data: data) {
@@ -185,6 +230,7 @@ struct ImageUploadStep: View {
                     .shadow(radius: 2)
             }
             .offset(x: 6, y: -6)
+            .accessibilityLabel("Remove photo \(index + 1)")
         }
     }
 }

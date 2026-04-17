@@ -53,4 +53,23 @@ enum ColorTokens {
 
     // MARK: - Form Inputs
     static let formFieldBackground = Color("InputBackground", bundle: nil)
+
+    // MARK: - Overlay Surfaces (paywall + hero backdrops)
+    /// Deep charcoal used as the primary paywall backdrop.
+    static let overlayBackground = Color(hex: 0x0B0B0C)
+    /// Warm mid-tone accent used as the gradient mid-stop on the paywall backdrop.
+    static let overlayAccent = Color(hex: 0x1A0E05)
+
+    // MARK: - On-Dark Text Opacity Scale
+    /// For text rendered on top of overlayBackground / dark gradients.
+    /// Opacity scale intentionally mirrors Apple's label hierarchy.
+    static let onDarkPrimary = Color.white.opacity(0.92)
+    static let onDarkSecondary = Color.white.opacity(0.70)
+    static let onDarkTertiary = Color.white.opacity(0.55)
+    static let onDarkQuaternary = Color.white.opacity(0.40)
+    static let onDarkDisabled = Color.white.opacity(0.30)
+
+    // MARK: - On-Dark Chrome (separators, hairlines, subtle fills)
+    static let onDarkSeparator = Color.white.opacity(0.15)
+    static let onDarkFillSubtle = Color.white.opacity(0.08)
 }

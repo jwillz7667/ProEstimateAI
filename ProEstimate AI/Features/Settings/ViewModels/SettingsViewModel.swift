@@ -196,6 +196,26 @@ final class SettingsViewModel {
         }
     }
 
+    // MARK: - Account Deletion
+
+    /// Permanently delete the current user's account.
+    /// Required by App Store Review Guideline 5.1.1(v).
+    /// On success, callers should sign the user out so the auth gate is shown.
+    @discardableResult
+    func deleteAccount() async -> Bool {
+        isSaving = true
+        errorMessage = nil
+        do {
+            try await APIClient.shared.request(.deleteMe)
+            isSaving = false
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            isSaving = false
+            return false
+        }
+    }
+
     // MARK: - Private
 
     private func syncAppState(from company: Company) {

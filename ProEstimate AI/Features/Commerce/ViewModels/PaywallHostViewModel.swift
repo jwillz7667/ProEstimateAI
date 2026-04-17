@@ -40,6 +40,10 @@ final class PaywallHostViewModel {
     /// Whether a restore is in progress.
     private(set) var isRestoring: Bool = false
 
+    /// Whether the current Apple ID is eligible for the introductory (free-trial)
+    /// offer on the subscription group. `nil` until products have been loaded.
+    private(set) var isEligibleForTrial: Bool?
+
     /// Error message to display, if any.
     var errorMessage: String?
 
@@ -109,6 +113,7 @@ final class PaywallHostViewModel {
                 let isEligibleForIntro = await catalogService.isEligibleForIntroOffer(
                     groupID: AppConstants.subscriptionGroupID
                 )
+                self.isEligibleForTrial = isEligibleForIntro
 
                 // Map StoreKit products and merge with backend data.
                 let storeModels = storeProducts.map { product in
@@ -279,6 +284,20 @@ final class PaywallHostViewModel {
     /// Whether the paywall is a hard gate (cannot be dismissed without purchase).
     var isBlocking: Bool {
         decision.blocking
+    }
+
+    /// Primary CTA label. When the user is NOT trial-eligible (e.g. they already
+    /// redeemed the intro offer on another device or via Family Sharing), replace
+    /// the "Start Free Trial" copy with an immediate-charge label so the user
+    /// isn't surprised by a charge.
+    var primaryCtaTitle: String {
+        let base = decision.primaryCtaTitle
+        // If eligibility is known-false AND the decision copy implies a trial, override.
+        if isEligibleForTrial == false,
+           base.localizedCaseInsensitiveContains("trial") || base.localizedCaseInsensitiveContains("free") {
+            return "Subscribe Now"
+        }
+        return base
     }
 }
 

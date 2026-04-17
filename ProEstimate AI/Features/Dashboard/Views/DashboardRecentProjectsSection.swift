@@ -55,15 +55,7 @@ struct DashboardRecentProjectsSection: View {
                 statusBadge(for: project.status)
             }
             .padding(SpacingTokens.md)
-            .background(
-                ColorTokens.elevatedSurface,
-                in: RoundedRectangle(cornerRadius: RadiusTokens.card)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: RadiusTokens.card)
-                    .strokeBorder(ColorTokens.primaryOrange.opacity(0.12), lineWidth: 0.5)
-            )
-            .shadow(color: ColorTokens.primaryOrange.opacity(0.04), radius: 3, x: 0, y: 1)
+            .glassCard()
         }
         .buttonStyle(.plain)
     }

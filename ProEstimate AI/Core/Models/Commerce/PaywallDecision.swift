@@ -48,6 +48,8 @@ enum PaywallPlacement: String, Codable, CaseIterable, Sendable {
     case brandingLocked = "BRANDING_LOCKED"
     case approvalShareLocked = "APPROVAL_SHARE_LOCKED"
     case watermarkRemovalLocked = "WATERMARK_REMOVAL_LOCKED"
+    case analyticsLocked = "ANALYTICS_LOCKED"
+    case pricingProfileLocked = "PRICING_PROFILE_LOCKED"
     case settingsUpgrade = "SETTINGS_UPGRADE"
 }
 
@@ -66,7 +68,8 @@ extension PaywallPlacement {
         case .onboardingSoftGate, .postFirstGeneration, .postFirstQuoteExport, .settingsUpgrade:
             return true
         case .generationLimitHit, .quoteLimitHit, .invoiceLocked,
-             .brandingLocked, .approvalShareLocked, .watermarkRemovalLocked:
+             .brandingLocked, .approvalShareLocked, .watermarkRemovalLocked,
+             .analyticsLocked, .pricingProfileLocked:
             return false
         }
     }
@@ -104,6 +107,21 @@ extension PaywallDecision {
         subheadline: "Get unlimited AI previews, branded proposals, invoicing, and more.",
         primaryCtaTitle: "Start Free Trial",
         secondaryCtaTitle: "Not Now",
+        showContinueFree: true,
+        showRestorePurchases: true,
+        recommendedProductId: AppConstants.monthlyProductID,
+        availableProducts: [.sampleMonthly, .sampleAnnual]
+    )
+
+    /// Onboarding soft-gate shown on the final onboarding step as a trial offer.
+    static let onboardingOffer = PaywallDecision(
+        placement: .onboardingSoftGate,
+        triggerReason: "Onboarding subscription offer",
+        blocking: false,
+        headline: "Try Pro Free for 7 Days",
+        subheadline: "Unlimited AI previews, branded proposals, invoicing, and client approvals — no commitment. Cancel anytime before the trial ends.",
+        primaryCtaTitle: "Start Free Trial",
+        secondaryCtaTitle: "Continue with Free Plan",
         showContinueFree: true,
         showRestorePurchases: true,
         recommendedProductId: AppConstants.monthlyProductID,
