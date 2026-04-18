@@ -1,0 +1,96 @@
+name: Bug report
+description: Report a reproducible bug in the iOS app, backend API, or web site.
+title: "[Bug]: "
+labels:
+  - bug
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out the fields below so the team can reproduce and fix it quickly.
+
+        Do **not** include API tokens, passwords, or customer data in this report.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Affected surface
+      description: Which part of the product is affected?
+      options:
+        - iOS app
+        - Backend API
+        - Web (marketing)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: App version, backend build SHA, or web deployment URL.
+      placeholder: "iOS 1.0.0 (42) / api SHA 3dc0171"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Device, OS version, network, and any relevant context.
+      placeholder: "iPhone 16 Pro, iOS 26.4, LTE"
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is the bug? One or two sentences.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Minimal numbered steps.
+      placeholder: |
+        1. Open the Estimates tab.
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include error messages, logs, or screenshots where useful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Anything else we should know (frequency, workarounds, related tickets).
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have searched existing issues and this bug has not already been reported.
+          required: true
+        - label: This report does not contain secrets or customer data.
+          required: true

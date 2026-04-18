@@ -1,0 +1,62 @@
+name: Feature request
+description: Propose a new capability or meaningful improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an improvement. Focus on the problem first — we will figure out the implementation together.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Affected surface
+      options:
+        - iOS app
+        - Backend API
+        - Web (marketing)
+        - Cross-cutting
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What user problem or business need does this address? Who is affected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: High-level description of the feature. Include UX, API contract, or data model impact where relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you consider? Why is this approach preferred?
+    validations:
+      required: false
+
+  - type: textarea
+    id: success
+    attributes:
+      label: Success criteria
+      description: How will we know this feature is working? Metrics, user behavior, or acceptance tests.
+    validations:
+      required: false
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and open questions
+    validations:
+      required: false

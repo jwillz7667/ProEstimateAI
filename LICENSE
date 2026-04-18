@@ -1,0 +1,116 @@
+ProEstimate AI — Proprietary Software License
+
+Copyright (c) 2026 ProEstimate AI. All Rights Reserved.
+
+This software and all associated documentation, source code, object code,
+designs, specifications, data, and other materials contained in this
+repository (collectively, the "Software") are the proprietary and
+confidential property of ProEstimate AI ("the Company") and are protected
+by copyright law, trade secret law, and international treaty provisions.
+
+Possession of a copy of the Software does not transfer any right, title,
+or interest in or to the Software. All rights not expressly granted by the
+Company in a separate written agreement are reserved.
+
+1. Grant of Rights
+   No license, express or implied, is granted to any party by this file.
+   Any use of the Software requires a separate, executed written agreement
+   with the Company.
+
+2. Restrictions
+   Except as expressly permitted in a written agreement signed by an
+   authorized officer of the Company, no party may:
+
+   (a) copy, reproduce, or duplicate the Software, in whole or in part;
+   (b) modify, adapt, translate, or create derivative works based on the
+       Software;
+   (c) merge the Software with other software or incorporate the Software
+       into another product;
+   (d) distribute, sell, sublicense, lease, rent, loan, publish, transmit,
+       host, or otherwise make the Software available to any third party;
+   (e) reverse engineer, decompile, disassemble, or otherwise attempt to
+       derive the source code, algorithms, or internal structure of the
+       Software, except to the extent that such restriction is expressly
+       prohibited by applicable law notwithstanding this limitation;
+   (f) remove, alter, or obscure any proprietary notice, label, trademark,
+       or watermark appearing in or on the Software;
+   (g) use the Software or any portion of it to train, fine-tune, or
+       otherwise develop any machine-learning model, neural network, or
+       artificial-intelligence system;
+   (h) use the Software to build a competing product or service.
+
+3. Confidentiality
+   The Software contains trade secrets and confidential information of the
+   Company. Any party in possession of the Software agrees to maintain the
+   confidentiality of the Software using at least the same degree of care
+   used to protect that party's own confidential information, and in no
+   event less than a reasonable degree of care.
+
+4. Intellectual Property
+   The Company retains all right, title, and interest in and to the
+   Software, including all intellectual property rights therein. No rights
+   are granted to any party under the Company's patents, copyrights,
+   trademarks, trade secrets, or other proprietary rights by implication,
+   estoppel, or otherwise.
+
+5. Third-Party Components
+   The Software may incorporate third-party open-source components, each
+   of which is governed by its own license. Nothing in this LICENSE is
+   intended to modify the terms under which such third-party components
+   are made available. A list of third-party components and their
+   respective licenses is maintained by the Company and is available upon
+   written request.
+
+6. Termination
+   Any rights granted pursuant to a separate written agreement with the
+   Company terminate automatically and without notice if the party holding
+   such rights breaches any term of this LICENSE or of the separate
+   agreement. Upon termination, all copies of the Software in the
+   possession or control of such party must be destroyed or returned to
+   the Company.
+
+7. Disclaimer of Warranty
+   THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTY
+   OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+   IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+   PURPOSE, TITLE, AND NON-INFRINGEMENT. THE COMPANY DOES NOT WARRANT
+   THAT THE SOFTWARE WILL BE UNINTERRUPTED, ERROR-FREE, OR SECURE.
+
+8. Limitation of Liability
+   IN NO EVENT SHALL THE COMPANY, ITS OFFICERS, DIRECTORS, EMPLOYEES,
+   AGENTS, OR AFFILIATES BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL,
+   CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, INCLUDING WITHOUT
+   LIMITATION LOST PROFITS, LOST DATA, OR BUSINESS INTERRUPTION, ARISING
+   OUT OF OR RELATED TO THE SOFTWARE OR THIS LICENSE, EVEN IF THE COMPANY
+   HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. THE COMPANY'S
+   TOTAL CUMULATIVE LIABILITY SHALL NOT EXCEED ONE HUNDRED UNITED STATES
+   DOLLARS (USD $100.00).
+
+9. Export Compliance
+   The Software may be subject to United States and other national export
+   control laws and regulations. No party may export, re-export, or import
+   the Software in violation of any such law or regulation.
+
+10. Governing Law and Venue
+    This LICENSE shall be governed by and construed in accordance with the
+    laws of the State of Delaware, United States, without regard to its
+    conflict-of-laws principles. Any dispute arising under or relating to
+    this LICENSE shall be subject to the exclusive jurisdiction of the
+    state and federal courts located in Delaware, and the parties consent
+    to personal jurisdiction and venue therein.
+
+11. Severability
+    If any provision of this LICENSE is held to be unenforceable, the
+    remaining provisions shall continue in full force and effect.
+
+12. Entire Agreement
+    This LICENSE, together with any separate written agreement executed
+    with the Company, constitutes the entire agreement regarding the
+    Software and supersedes all prior or contemporaneous understandings,
+    whether written or oral.
+
+For licensing inquiries, partnership opportunities, or permission requests,
+contact the Company in writing.
+
+ProEstimate AI
+All Rights Reserved.

@@ -1,0 +1,27 @@
+# CODEOWNERS — automatic reviewer assignment.
+#
+# The rightmost pattern that matches a changed file wins. Owners listed here
+# are automatically requested as reviewers when a pull request changes the
+# matching files, and their approval is required when branch protection is
+# configured with "Require review from Code Owners".
+
+# Default owner for everything not claimed below.
+* @jwillz7667
+
+# iOS
+/ProEstimate\ AI/                           @jwillz7667
+/ProEstimate\ AI.xcodeproj/                 @jwillz7667
+
+# Backend
+/backend/                                    @jwillz7667
+/backend/prisma/                             @jwillz7667
+
+# Web (marketing)
+/web/                                        @jwillz7667
+
+# CI / tooling / governance
+/.github/                                    @jwillz7667
+/LICENSE                                     @jwillz7667
+/SECURITY.md                                 @jwillz7667
+/CONTRIBUTING.md                             @jwillz7667
+/CHANGELOG.md                                @jwillz7667

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/jwillz7667/ProEstimateAI/security/advisories/new
+    about: Report a security issue privately. Do NOT open a public issue for security concerns.
+  - name: Feature request or product feedback
+    url: https://github.com/jwillz7667/ProEstimateAI/discussions
+    about: Start a discussion for non-bug product feedback.

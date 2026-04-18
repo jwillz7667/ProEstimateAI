@@ -1,0 +1,76 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ProEstimate AI/**"
+      - "ProEstimate AI.xcodeproj/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "ProEstimate AI/**"
+      - "ProEstimate AI.xcodeproj/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (iOS Simulator)
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show tool versions
+        run: |
+          sw_vers
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+
+      - name: Resolve Swift package dependencies
+        run: |
+          xcodebuild \
+            -project "ProEstimate AI.xcodeproj" \
+            -scheme "ProEstimate AI" \
+            -resolvePackageDependencies
+
+      - name: Build for iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project "ProEstimate AI.xcodeproj" \
+            -scheme "ProEstimate AI" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -skipPackagePluginValidation \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Run tests
+        if: hashFiles('ProEstimate AI/**/*Tests.swift') != ''
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project "ProEstimate AI.xcodeproj" \
+            -scheme "ProEstimate AI" \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -skipPackagePluginValidation \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test
