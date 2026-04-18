@@ -1,0 +1,15 @@
+# Apple Developer + App Store Connect identifiers for ProEstimate AI.
+# App Store Connect API key lives outside this file — exported via env
+# in the Fastfile — so no private material is committed here.
+
+app_identifier("Res.ProEstimate-AI")
+team_id("487LC4H9U4")
+
+# Leave this blank on purpose — Fastlane uses the App Store Connect API
+# key, not an Apple ID login, for upload and submission. Filling it in
+# would force an interactive two-factor prompt on every CI run.
+# apple_id("you@proestimateai.com")
+
+# Optional: used only if Fastlane needs to match the App Store Connect
+# team by human-readable name instead of the numeric ID above.
+# itc_team_name("Viral Ventures LLC")

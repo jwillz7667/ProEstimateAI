@@ -10,3 +10,22 @@
 
 # macOS
 .DS_Store
+
+# Ruby / Fastlane
+vendor/bundle/
+.bundle/
+
+# Fastlane build artifacts — generated on every run, not worth tracking
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/screenshots/**/*.jpg
+fastlane/test_output/
+
+# Xcode archives and signing artifacts
+*.ipa
+*.xcarchive
+*.dSYM.zip
+*.mobileprovision
+*.p8
+*.p12

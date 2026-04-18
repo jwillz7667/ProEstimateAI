@@ -1,0 +1,10 @@
+ProEstimate AI turns a construction-site photo into an AI-rendered remodel preview and a priced estimate.
+
+- The demo account provided below has a pre-seeded project with a completed preview, materials, an estimate, and an invoice, so the reviewer can explore the flow without waiting on AI generation.
+- Pro-only features (invoicing, AI-generated estimates, watermark-free PDFs, custom branding, client approval links) are gated behind Apple StoreKit 2 in-app purchases. The 7-day free trial on the monthly subscription is disclosed on the paywall before purchase.
+- Sign in with Apple is supported on the login screen.
+- Account deletion is available via Settings → Account → Delete Account, per App Store Review Guideline 5.1.1(v).
+
+If an AI preview generation takes longer than a minute, it is the PiAPI or Google GenAI provider queue — please allow 60–120 seconds for completion.
+
+Thank you for your review.

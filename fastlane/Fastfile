@@ -1,0 +1,100 @@
+default_platform(:ios)
+
+XCODE_PROJECT   = "ProEstimate AI.xcodeproj"
+XCODE_SCHEME    = "ProEstimate AI"
+BUNDLE_ID       = "Res.ProEstimate-AI"
+
+# All authentication runs through an App Store Connect API key. Three env
+# vars are required everywhere:
+#
+#   APP_STORE_CONNECT_API_KEY_ID         — the 10-char Key ID
+#   APP_STORE_CONNECT_API_KEY_ISSUER_ID  — the UUID issuer ID for the key
+#   APP_STORE_CONNECT_API_KEY_CONTENT    — the .p8 file contents, base64-encoded
+#
+# Locally you can source them from ~/.zshrc; in CI they come from GitHub
+# Actions secrets (see .github/workflows/testflight.yml).
+
+def make_api_key
+  app_store_connect_api_key(
+    key_id:                ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+    issuer_id:             ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+    key_content:           ENV.fetch("APP_STORE_CONNECT_API_KEY_CONTENT"),
+    is_key_content_base64: true,
+    in_house:              false
+  )
+end
+
+platform :ios do
+  desc "Build the project from a clean checkout and push it to TestFlight"
+  lane :beta do
+    api_key = make_api_key
+
+    # Align the build number with whatever App Store Connect has most
+    # recently seen for this bundle id, then bump by one. Avoids the
+    # "this build is already uploaded" error on re-runs without needing
+    # to hand-edit CURRENT_PROJECT_VERSION on every iteration.
+    latest = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: BUNDLE_ID
+    )
+    next_build = (latest || 0) + 1
+
+    increment_build_number(
+      xcodeproj: XCODE_PROJECT,
+      build_number: next_build
+    )
+
+    build_ios_app(
+      project:           XCODE_PROJECT,
+      scheme:            XCODE_SCHEME,
+      configuration:     "Release",
+      export_method:     "app-store",
+      clean:             true,
+      include_bitcode:   false,
+      include_symbols:   true,
+      skip_profile_detection: true
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true,
+      distribute_external: false
+    )
+  end
+
+  desc "Push localized metadata and screenshots to App Store Connect (no binary)"
+  lane :metadata do
+    deliver(
+      api_key:                           make_api_key,
+      skip_binary_upload:                true,
+      skip_screenshots:                  false,
+      skip_metadata:                     false,
+      force:                             true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
+  desc "Submit the most recent build for App Store review"
+  lane :submit do
+    deliver(
+      api_key:                           make_api_key,
+      skip_binary_upload:                true,
+      skip_screenshots:                  false,
+      skip_metadata:                     false,
+      force:                             true,
+      submit_for_review:                 true,
+      automatic_release:                 false,
+      precheck_include_in_app_purchases: false,
+      submission_information: {
+        add_id_info_uses_idfa:                     false,
+        export_compliance_encryption_updated:      false,
+        export_compliance_uses_encryption:         false,
+        content_rights_contains_third_party_content: false
+      }
+    )
+  end
+
+  error do |lane, exception|
+    UI.error("Lane #{lane} failed: #{exception}")
+  end
+end

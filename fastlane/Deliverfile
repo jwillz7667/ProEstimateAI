@@ -1,0 +1,21 @@
+app_identifier "Res.ProEstimate-AI"
+team_id        "487LC4H9U4"
+
+# Languages deliver should sync. Matches the app's localizations
+# (Localizable.xcstrings covers en + es-MX).
+languages [
+  "en-US",
+  "es-MX"
+]
+
+# Never auto-submit — let the `submit` lane do that explicitly so
+# `metadata` runs remain safe.
+submit_for_review false
+
+# Precheck catches common rejection reasons before uploading.
+# In-app purchases are managed through the Subscriptions section of
+# App Store Connect rather than Deliver, so skip them.
+precheck_include_in_app_purchases false
+
+# Auto-confirm prompts when driven from CI.
+force true
