@@ -90,15 +90,16 @@ struct AuthGateView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Hard deadline for the cold-launch session restore. If the backend is
+    /// unreachable (Railway cold start, offline, DNS hiccup), we drop the
+    /// stored tokens and show login rather than trap the user at the splash.
+    private static let restoreTimeout: Duration = .seconds(8)
+
     private func restoreSession() async {
         if TokenStore.shared.hasTokens {
-            do {
-                async let userTask: User = APIClient.shared.request(.getMe)
-                async let companyTask: Company = APIClient.shared.request(.getCompany)
-
-                let user = try await userTask
-                let company = try await companyTask
-
+            let result = await fetchSessionWithTimeout()
+            switch result {
+            case .success(let user, let company):
                 appState.currentUser = AppState.CurrentUser(
                     id: user.id,
                     email: user.email,
@@ -111,14 +112,48 @@ struct AuthGateView: View {
                     logoURL: company.logoURL
                 )
                 appState.isAuthenticated = true
-            } catch {
-                // Token refresh failed or network error — clear tokens, show login
+
+            case .failure:
+                // Auth failed, network failed, or the call didn't come back in
+                // time — clear tokens so the user is routed to login instead
+                // of staring at a stuck splash.
                 TokenStore.shared.clearTokens()
             }
         }
 
-        // Brief delay so splash is visible even on fast restore
+        // Brief delay so the splash is visible even on fast restore.
         try? await Task.sleep(for: .milliseconds(400))
         isRestoring = false
+    }
+
+    private enum SessionOutcome {
+        case success(user: User, company: Company)
+        case failure
+    }
+
+    /// Fetch the current user + company, racing against `restoreTimeout` so a
+    /// hanging backend never blocks launch.
+    private func fetchSessionWithTimeout() async -> SessionOutcome {
+        await withTaskGroup(of: SessionOutcome.self) { group in
+            group.addTask {
+                do {
+                    async let userTask: User = APIClient.shared.request(.getMe)
+                    async let companyTask: Company = APIClient.shared.request(.getCompany)
+                    return .success(user: try await userTask, company: try await companyTask)
+                } catch {
+                    return .failure
+                }
+            }
+
+            group.addTask {
+                try? await Task.sleep(for: Self.restoreTimeout)
+                return .failure
+            }
+
+            // Take whichever task completes first, cancel the other.
+            let outcome = await group.next() ?? .failure
+            group.cancelAll()
+            return outcome
+        }
     }
 }

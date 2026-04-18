@@ -26,10 +26,11 @@ final class APIClient: APIClientProtocol {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    /// Serializes concurrent token-refresh attempts so a burst of 401s only
-    /// triggers a single refresh. Protects the Keychain write and prevents
-    /// `originalTransactionId` drift when multiple ViewModels hit auth at once.
-    private let refreshLock = NSLock()
+    /// Single-flight coordinator for token refresh. Dedupes a burst of 401s
+    /// so we only issue ONE `/auth/refresh` call when several requests race.
+    /// Uses an actor rather than a thread-locking primitive because holding
+    /// `NSLock` across `await` is a documented Swift-concurrency deadlock.
+    private let refreshCoordinator = RefreshCoordinator()
 
     /// Callback invoked when token refresh fails and the user must re-authenticate.
     /// Set by the app's auth coordinator.
@@ -44,15 +45,19 @@ final class APIClient: APIClientProtocol {
         self.tokenStore = tokenStore
 
         // Configure a dedicated URLSession so we can tune timeouts.
-        // Request timeout (30s) protects short REST calls; resource timeout (600s)
-        // accommodates the long-running AI generation polling flow.
+        // Request timeout (30s) protects short REST calls; resource timeout (120s)
+        // accommodates AI generation polling without hanging forever.
+        //
+        // We deliberately do NOT set `waitsForConnectivity = true`: that setting
+        // makes requests block indefinitely when the device can't reach the
+        // server (cold-start Railway container, flaky DNS, offline), which
+        // caused the auth-gate splash to hang at launch.
         if let injected = session {
             self.session = injected
         } else {
             let config = URLSessionConfiguration.default
             config.timeoutIntervalForRequest = 30
-            config.timeoutIntervalForResource = 600
-            config.waitsForConnectivity = true
+            config.timeoutIntervalForResource = 120
             config.httpMaximumConnectionsPerHost = 6
             self.session = URLSession(configuration: config)
         }
@@ -255,22 +260,19 @@ final class APIClient: APIClientProtocol {
     /// Attempt to refresh the access token using the stored refresh token.
     /// Returns `true` if the refresh succeeded and new tokens are stored.
     ///
-    /// Serialized via `refreshLock` so concurrent 401s only hit the backend once;
-    /// the second caller observes the newly-stored tokens from the first caller.
+    /// Single-flight via `RefreshCoordinator` — concurrent 401s wait on the
+    /// same in-flight task instead of each making their own refresh call.
     private func attemptTokenRefresh() async -> Bool {
-        let initialRefreshToken = tokenStore.refreshToken
-        guard initialRefreshToken != nil else { return false }
-
-        refreshLock.lock()
-        defer { refreshLock.unlock() }
-
-        // A parallel caller may have refreshed while we waited for the lock.
-        // Detect this by comparing the token we entered with, then short-circuit.
-        if tokenStore.refreshToken != initialRefreshToken,
-           tokenStore.accessToken != nil {
-            return true
+        guard tokenStore.refreshToken != nil else { return false }
+        return await refreshCoordinator.refresh { [weak self] in
+            guard let self else { return false }
+            return await self.performRefresh()
         }
+    }
 
+    /// The actual HTTP work for a refresh. Called at most once at a time by
+    /// `RefreshCoordinator`.
+    private func performRefresh() async -> Bool {
         guard let refreshToken = tokenStore.refreshToken else { return false }
 
         do {
@@ -292,6 +294,25 @@ final class APIClient: APIClientProtocol {
         } catch {
             return false
         }
+    }
+}
+
+// MARK: - Refresh Coordinator
+
+/// Serializes token-refresh attempts so a burst of 401s only triggers one
+/// `/auth/refresh` call. All concurrent callers await the same `Task<Bool, Never>`.
+private actor RefreshCoordinator {
+    private var inFlight: Task<Bool, Never>?
+
+    func refresh(_ operation: @escaping @Sendable () async -> Bool) async -> Bool {
+        if let inFlight {
+            return await inFlight.value
+        }
+        let task = Task { await operation() }
+        inFlight = task
+        let result = await task.value
+        inFlight = nil
+        return result
     }
 }
 

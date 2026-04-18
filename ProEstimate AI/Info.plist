@@ -22,10 +22,6 @@
 	<dict>
 		<key>UIColorName</key>
 		<string>Background</string>
-		<key>UIImageName</key>
-		<string>housd-icon-light</string>
-		<key>UIImageRespectsSafeAreaInsets</key>
-		<true/>
 	</dict>
 </dict>
 </plist>
