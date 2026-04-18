@@ -1,6 +1,6 @@
 import Foundation
 
-/// The 8-state subscription entitlement enum.
+/// The 9-state subscription entitlement enum.
 /// Never collapse these into a single boolean like `isPro`.
 /// The backend is the source of truth, but the client mirrors
 /// this enum for immediate UI responsiveness.
@@ -15,6 +15,8 @@ import Foundation
 /// - PRO_ACTIVE -> CANCELED_ACTIVE (user cancels, still within paid period)
 /// - CANCELED_ACTIVE -> EXPIRED (paid period ends)
 /// - Any active state -> REVOKED (Apple refund/revoke)
+/// - ADMIN_OVERRIDE is set out-of-band by the backend to grant Pro access
+///   without a real StoreKit transaction (comped accounts, internal users).
 enum SubscriptionState: String, Codable, CaseIterable, Sendable {
     case free = "FREE"
     case trialActive = "TRIAL_ACTIVE"
@@ -24,16 +26,18 @@ enum SubscriptionState: String, Codable, CaseIterable, Sendable {
     case canceledActive = "CANCELED_ACTIVE"
     case expired = "EXPIRED"
     case revoked = "REVOKED"
+    case adminOverride = "ADMIN_OVERRIDE"
 }
 
 // MARK: - Convenience
 
 extension SubscriptionState {
     /// Whether the user currently has full Pro feature access.
-    /// This includes trial, active, grace period, billing retry, and canceled-but-active.
+    /// This includes trial, active, grace period, billing retry, canceled-but-active,
+    /// and admin-granted overrides.
     var hasProAccess: Bool {
         switch self {
-        case .trialActive, .proActive, .gracePeriod, .billingRetry, .canceledActive:
+        case .trialActive, .proActive, .gracePeriod, .billingRetry, .canceledActive, .adminOverride:
             return true
         case .free, .expired, .revoked:
             return false
@@ -66,6 +70,7 @@ extension SubscriptionState {
         case .canceledActive: return "Canceled (Active)"
         case .expired: return "Expired"
         case .revoked: return "Revoked"
+        case .adminOverride: return "Pro (Comp)"
         }
     }
 }

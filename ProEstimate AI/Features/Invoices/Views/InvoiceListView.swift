@@ -4,10 +4,8 @@ struct InvoiceListView: View {
     @State private var viewModel = InvoiceListViewModel()
     @State private var showingDeleteConfirmation = false
     @State private var invoiceToDelete: String?
-    @State private var showCreateInvoice = false
-    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
-    @Environment(PaywallPresenter.self) private var paywallPresenter
     @Environment(AppRouter.self) private var router
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         @Bindable var router = router
@@ -23,19 +21,6 @@ struct InvoiceListView: View {
             }
             .navigationTitle("Invoices")
             .searchable(text: $viewModel.searchText, prompt: "Search invoices...")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        handleCreateInvoice()
-                    } label: {
-                        Image(systemName: "plus")
-                            .fontWeight(.semibold)
-                            .foregroundStyle(ColorTokens.primaryOrange)
-                    }
-                    .accessibilityLabel("New invoice")
-                    .accessibilityHint("Create a new invoice")
-                }
-            }
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {
                 case .invoicePreview(let id):
@@ -73,23 +58,6 @@ struct InvoiceListView: View {
             } message: {
                 Text("This action cannot be undone.")
             }
-            .sheet(isPresented: $showCreateInvoice) {
-                Task { await viewModel.loadInvoices() }
-            } content: {
-                InvoiceCreationSheet()
-            }
-        }
-    }
-
-    // MARK: - Feature-Gated Actions
-
-    private func handleCreateInvoice() {
-        let result = featureGateCoordinator.guardCreateInvoice()
-        switch result {
-        case .allowed:
-            showCreateInvoice = true
-        case .blocked(let decision):
-            paywallPresenter.present(decision)
         }
     }
 
@@ -103,10 +71,10 @@ struct InvoiceListView: View {
                 icon: "dollarsign.circle",
                 title: "No Invoices",
                 subtitle: viewModel.searchText.isEmpty
-                    ? "Create your first invoice from an approved estimate."
+                    ? "Invoices are created from an approved estimate inside a project. Open a project to bill from an estimate."
                     : "No invoices match your search.",
-                ctaTitle: viewModel.searchText.isEmpty ? "Create Invoice" : nil,
-                ctaAction: viewModel.searchText.isEmpty ? { handleCreateInvoice() } : nil
+                ctaTitle: viewModel.searchText.isEmpty ? "Go to Projects" : nil,
+                ctaAction: viewModel.searchText.isEmpty ? { appState.selectedTab = .projects } : nil
             )
             Spacer()
         }
@@ -293,6 +261,6 @@ private struct InvoiceRowView: View {
 
 #Preview {
     InvoiceListView()
-        .environment(FeatureGateCoordinator.preview())
-        .environment(PaywallPresenter())
+        .environment(AppRouter())
+        .environment(AppState())
 }

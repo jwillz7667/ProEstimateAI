@@ -5,6 +5,7 @@ struct EstimateListView: View {
     @State private var showingDeleteConfirmation = false
     @State private var estimateToDelete: String?
     @Environment(AppRouter.self) private var router
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         @Bindable var router = router
@@ -20,17 +21,6 @@ struct EstimateListView: View {
             }
             .navigationTitle("Estimates")
             .searchable(text: $viewModel.searchText, prompt: "Search estimates...")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(value: AppDestination.estimateEditor(id: "new")) {
-                        Image(systemName: "plus")
-                            .fontWeight(.semibold)
-                            .foregroundStyle(ColorTokens.primaryOrange)
-                    }
-                    .accessibilityLabel("New estimate")
-                    .accessibilityHint("Create a new estimate")
-                }
-            }
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {
                 case .estimateEditor(let id):
@@ -43,9 +33,14 @@ struct EstimateListView: View {
             }
             .refreshable {
                 await viewModel.loadEstimates()
+                await viewModel.loadProjects()
             }
             .task {
-                await viewModel.loadEstimates()
+                // Load both in parallel — projects are needed to enrich summary
+                // rows with real project titles.
+                async let estimates: Void = viewModel.loadEstimates()
+                async let projects: Void = viewModel.loadProjects()
+                _ = await (estimates, projects)
             }
             .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
                 Button("OK") { viewModel.errorMessage = nil }
@@ -83,8 +78,10 @@ struct EstimateListView: View {
                 icon: "doc.text",
                 title: "No Estimates",
                 subtitle: viewModel.searchText.isEmpty
-                    ? "Create your first estimate from a project's AI-suggested materials."
-                    : "No estimates match your search."
+                    ? "Estimates are created inside a project. Open any project to generate or add an estimate."
+                    : "No estimates match your search.",
+                ctaTitle: viewModel.searchText.isEmpty ? "Go to Projects" : nil,
+                ctaAction: viewModel.searchText.isEmpty ? { appState.selectedTab = .projects } : nil
             )
             Spacer()
         }
@@ -210,4 +207,6 @@ private struct EstimateRowView: View {
 
 #Preview {
     EstimateListView()
+        .environment(AppRouter())
+        .environment(AppState())
 }

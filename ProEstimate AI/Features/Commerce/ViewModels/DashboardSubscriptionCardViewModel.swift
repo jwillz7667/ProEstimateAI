@@ -43,7 +43,7 @@ final class DashboardSubscriptionCardViewModel {
             return .free
         case .trialActive:
             return .trial
-        case .proActive, .canceledActive:
+        case .proActive, .canceledActive, .adminOverride:
             return .pro
         case .gracePeriod, .billingRetry:
             return .gracePeriod

@@ -2,11 +2,13 @@ import SwiftUI
 
 /// Lists estimates linked to this project. Each row shows the estimate
 /// number, version, total amount, and status badge. Includes a
-/// "Create Estimate" button.
+/// "Create Estimate" button and a per-row context menu to spin up an
+/// invoice from any estimate.
 struct ProjectEstimatesSection: View {
     let estimates: [Estimate]
     var onCreateEstimate: (() -> Void)?
     var onEstimateTap: ((String) -> Void)?
+    var onCreateInvoice: ((String) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
@@ -40,6 +42,19 @@ struct ProjectEstimatesSection: View {
                     estimateRow(estimate)
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    Button {
+                        onEstimateTap?(estimate.id)
+                    } label: {
+                        Label("Edit Estimate", systemImage: "pencil")
+                    }
+
+                    Button {
+                        onCreateInvoice?(estimate.id)
+                    } label: {
+                        Label("Create Invoice", systemImage: "dollarsign.circle")
+                    }
+                }
             }
         }
         .padding(.horizontal, SpacingTokens.md)

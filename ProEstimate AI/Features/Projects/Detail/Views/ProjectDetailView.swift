@@ -9,11 +9,26 @@ struct ProjectDetailView: View {
     @State private var viewModel = ProjectDetailViewModel()
     @State private var hasCompletedFirstGeneration = false
     @State private var showEditSheet = false
-    @State private var showEstimateEditor = false
-    @State private var activeEstimateId: String?
+    @State private var activeEstimate: ActiveEstimate?
+    @State private var activeInvoice: ActiveInvoice?
     @State private var isCreatingEstimate = false
+    @State private var isCreatingInvoice = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
+
+    /// Identifiable wrapper used to drive the estimate editor sheet via
+    /// `.sheet(item:)`. This avoids the race where `.sheet(isPresented:)` +
+    /// `if let id = optionalId` can render an empty sheet if the bool flips
+    /// to `true` before the id state commits.
+    private struct ActiveEstimate: Identifiable, Hashable {
+        let id: String
+    }
+
+    /// Identifiable wrapper used to drive the invoice preview sheet the same
+    /// way `ActiveEstimate` drives the estimate-editor sheet.
+    private struct ActiveInvoice: Identifiable, Hashable {
+        let id: String
+    }
     @Environment(AppRouter.self) private var router
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
@@ -98,20 +113,41 @@ struct ProjectDetailView: View {
         } content: {
             ProjectCreationFlowView()
         }
-        .sheet(isPresented: $showEstimateEditor) {
+        .sheet(item: $activeEstimate, onDismiss: {
             Task { await viewModel.loadProject(id: projectId) }
-        } content: {
-            if let estimateId = activeEstimateId {
-                NavigationStack {
-                    EstimateEditorView(estimateId: estimateId, initialDIY: viewModel.isDIY)
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("Done") {
-                                    showEstimateEditor = false
-                                }
-                            }
+        }) { active in
+            NavigationStack {
+                EstimateEditorView(estimateId: active.id, initialDIY: viewModel.isDIY)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { activeEstimate = nil }
                         }
-                }
+                    }
+            }
+        }
+        .sheet(item: $activeInvoice, onDismiss: {
+            Task { await viewModel.loadProject(id: projectId) }
+        }) { active in
+            NavigationStack {
+                InvoicePreviewView(invoiceId: active.id)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { activeInvoice = nil }
+                        }
+                    }
+            }
+        }
+        .alert(
+            "Error",
+            isPresented: Binding(
+                get: { viewModel.project != nil && viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
+            Button("OK") { viewModel.errorMessage = nil }
+        } message: {
+            if let message = viewModel.errorMessage {
+                Text(message)
             }
         }
     }
@@ -153,8 +189,7 @@ struct ProjectDetailView: View {
                     AIEstimateReadyCard(
                         estimate: latestEstimate,
                         onReview: {
-                            activeEstimateId = latestEstimate.id
-                            showEstimateEditor = true
+                            activeEstimate = ActiveEstimate(id: latestEstimate.id)
                         }
                     )
                 }
@@ -181,8 +216,10 @@ struct ProjectDetailView: View {
                         handleCreateEstimate()
                     },
                     onEstimateTap: { estimateId in
-                        activeEstimateId = estimateId
-                        showEstimateEditor = true
+                        activeEstimate = ActiveEstimate(id: estimateId)
+                    },
+                    onCreateInvoice: { estimateId in
+                        handleCreateInvoice(fromEstimateId: estimateId)
                     }
                 )
 
@@ -195,11 +232,11 @@ struct ProjectDetailView: View {
             .padding(.vertical, SpacingTokens.sm)
         }
         .overlay {
-            if isCreatingEstimate {
+            if isCreatingEstimate || isCreatingInvoice {
                 Color.black.opacity(0.2)
                     .ignoresSafeArea()
                     .overlay {
-                        ProgressView("Creating estimate...")
+                        ProgressView(isCreatingInvoice ? "Creating invoice..." : "Creating estimate...")
                             .padding()
                             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                     }
@@ -229,13 +266,30 @@ struct ProjectDetailView: View {
     private func handleCreateEstimate() {
         isCreatingEstimate = true
         Task {
-            if let estimate = await viewModel.createEstimate() {
-                isCreatingEstimate = false
-                activeEstimateId = estimate.id
-                showEstimateEditor = true
-            } else {
-                isCreatingEstimate = false
+            let estimate = await viewModel.createEstimate()
+            isCreatingEstimate = false
+            if let estimate {
+                activeEstimate = ActiveEstimate(id: estimate.id)
             }
+            // On nil: `viewModel.errorMessage` is set by createEstimate() and
+            // surfaces via the `.alert` attached at the top of the view.
+        }
+    }
+
+    private func handleCreateInvoice(fromEstimateId estimateId: String) {
+        let result = featureGateCoordinator.guardCreateInvoice()
+        switch result {
+        case .allowed:
+            isCreatingInvoice = true
+            Task {
+                let invoice = await viewModel.createInvoice(fromEstimateId: estimateId)
+                isCreatingInvoice = false
+                if let invoice {
+                    activeInvoice = ActiveInvoice(id: invoice.id)
+                }
+            }
+        case .blocked(let decision):
+            paywallPresenter.present(decision)
         }
     }
 

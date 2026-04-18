@@ -57,6 +57,7 @@ final class ProjectDetailViewModel {
     private let generationService: GenerationServiceProtocol
     private let estimateService: EstimateServiceProtocol
     private let clientService: ClientServiceProtocol
+    private let invoiceService: InvoiceServiceProtocol
 
     // MARK: - Init
 
@@ -64,12 +65,14 @@ final class ProjectDetailViewModel {
         projectService: ProjectServiceProtocol = LiveProjectService(),
         generationService: GenerationServiceProtocol = LiveGenerationService(),
         estimateService: EstimateServiceProtocol = LiveEstimateService(),
-        clientService: ClientServiceProtocol = LiveClientService()
+        clientService: ClientServiceProtocol = LiveClientService(),
+        invoiceService: InvoiceServiceProtocol = LiveInvoiceService()
     ) {
         self.projectService = projectService
         self.generationService = generationService
         self.estimateService = estimateService
         self.clientService = clientService
+        self.invoiceService = invoiceService
     }
 
     // MARK: - Loading
@@ -299,6 +302,21 @@ final class ProjectDetailViewModel {
 
             estimates.insert(estimate, at: 0)
             return estimate
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    // MARK: - Invoice Creation
+
+    /// Create an invoice from an existing estimate via the backend.
+    /// The backend copies over line items, totals, tax, and discount onto a
+    /// new draft invoice attached to the same project and client.
+    /// Returns the created `Invoice` or nil on failure (see `errorMessage`).
+    func createInvoice(fromEstimateId estimateId: String) async -> Invoice? {
+        do {
+            return try await invoiceService.createFromEstimate(estimateId: estimateId)
         } catch {
             errorMessage = error.localizedDescription
             return nil
