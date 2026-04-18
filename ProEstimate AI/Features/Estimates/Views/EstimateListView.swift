@@ -13,10 +13,10 @@ struct EstimateListView: View {
             Group {
                 if viewModel.isLoading && viewModel.estimates.isEmpty {
                     LoadingStateView(message: "Loading estimates...")
-                } else if viewModel.filteredEstimates.isEmpty {
+                } else if viewModel.estimates.isEmpty {
                     emptyState
                 } else {
-                    estimateList
+                    content
                 }
             }
             .navigationTitle("Estimates")
@@ -36,8 +36,6 @@ struct EstimateListView: View {
                 await viewModel.loadProjects()
             }
             .task {
-                // Load both in parallel — projects are needed to enrich summary
-                // rows with real project titles.
                 async let estimates: Void = viewModel.loadEstimates()
                 async let projects: Void = viewModel.loadProjects()
                 _ = await (estimates, projects)
@@ -68,36 +66,56 @@ struct EstimateListView: View {
         }
     }
 
-    // MARK: - Subviews
+    // MARK: - Content
 
-    private var emptyState: some View {
-        VStack(spacing: 0) {
-            filterPicker
-            Spacer()
-            EmptyStateView(
-                icon: "doc.text",
-                title: "No Estimates",
-                subtitle: viewModel.searchText.isEmpty
-                    ? "Estimates are created inside a project. Open any project to generate or add an estimate."
-                    : "No estimates match your search.",
-                ctaTitle: viewModel.searchText.isEmpty ? "Go to Projects" : nil,
-                ctaAction: viewModel.searchText.isEmpty ? { appState.selectedTab = .projects } : nil
-            )
-            Spacer()
+    private var content: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: SpacingTokens.md) {
+                metricsRow
+                    .padding(.horizontal, SpacingTokens.md)
+
+                filterPicker
+                    .padding(.bottom, SpacingTokens.xxs)
+
+                estimateList
+                    .padding(.horizontal, SpacingTokens.md)
+
+                Color.clear.frame(height: SpacingTokens.xl)
+            }
+            .padding(.top, SpacingTokens.sm)
         }
     }
 
-    private var estimateList: some View {
-        VStack(spacing: 0) {
-            filterPicker
+    // MARK: - Metrics row
 
-            ScrollView {
+    private var metricsRow: some View {
+        HStack(spacing: SpacingTokens.sm) {
+            MetricCard(label: "Total Value", value: formattedTotalValue)
+            MetricCard(label: "Drafts", value: "\(viewModel.draftCount)")
+            MetricCard(label: "Approved", value: "\(viewModel.approvedCount)")
+        }
+    }
+
+    private var formattedTotalValue: String {
+        let total = viewModel.estimates.reduce(Decimal.zero) { $0 + $1.estimate.totalAmount }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: total as NSDecimalNumber) ?? "$0"
+    }
+
+    // MARK: - Estimate list
+
+    private var estimateList: some View {
+        Group {
+            if viewModel.filteredEstimates.isEmpty {
+                filteredEmptyView
+            } else {
                 LazyVStack(spacing: SpacingTokens.sm) {
                     ForEach(viewModel.filteredEstimates) { summary in
                         NavigationLink(value: AppDestination.estimateEditor(id: summary.estimate.id)) {
                             EstimateRowView(summary: summary)
-                                .padding(SpacingTokens.md)
-                                .glassCard()
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
@@ -110,39 +128,104 @@ struct EstimateListView: View {
                         }
                     }
                 }
-                .padding(.horizontal, SpacingTokens.md)
-                .padding(.vertical, SpacingTokens.xs)
             }
         }
     }
+
+    private var filteredEmptyView: some View {
+        VStack(spacing: SpacingTokens.sm) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 36))
+                .foregroundStyle(ColorTokens.secondaryText)
+            Text(viewModel.searchText.isEmpty ? "No estimates in \(viewModel.selectedFilter.title.lowercased())" : "No matches")
+                .font(TypographyTokens.subheadline)
+                .foregroundStyle(ColorTokens.secondaryText)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, SpacingTokens.xxl)
+    }
+
+    // MARK: - Empty state (no estimates at all)
+
+    private var emptyState: some View {
+        EmptyStateView(
+            icon: "doc.text",
+            title: "No Estimates",
+            subtitle: "Estimates are created inside a project. Open any project and tap Generate with AI or Blank Estimate.",
+            ctaTitle: "Go to Projects",
+            ctaAction: { appState.selectedTab = .projects }
+        )
+        .padding(.horizontal, SpacingTokens.md)
+    }
+
+    // MARK: - Filter pills
 
     private var filterPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: SpacingTokens.xs) {
                 ForEach(EstimateStatusFilter.allCases) { filter in
-                    Button {
+                    FilterPill(
+                        title: filter.title,
+                        count: count(for: filter),
+                        isActive: viewModel.selectedFilter == filter
+                    ) {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             viewModel.selectedFilter = filter
                         }
-                    } label: {
-                        Text(filter.title)
-                            .font(TypographyTokens.subheadline)
-                            .fontWeight(viewModel.selectedFilter == filter ? .semibold : .regular)
-                            .padding(.horizontal, SpacingTokens.sm)
-                            .padding(.vertical, SpacingTokens.xs)
-                            .background(
-                                Capsule()
-                                    .fill(viewModel.selectedFilter == filter
-                                        ? ColorTokens.primaryOrange
-                                        : Color.clear)
-                            )
-                            .foregroundStyle(viewModel.selectedFilter == filter ? .white : .primary)
                     }
                 }
             }
             .padding(.horizontal, SpacingTokens.md)
-            .padding(.vertical, SpacingTokens.xs)
         }
+    }
+
+    private func count(for filter: EstimateStatusFilter) -> Int {
+        if filter == .all { return viewModel.estimates.count }
+        return viewModel.estimates.filter { filter.matchingStatuses.contains($0.estimate.status) }.count
+    }
+}
+
+// MARK: - Filter Pill
+
+private struct FilterPill: View {
+    let title: String
+    let count: Int
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: SpacingTokens.xxs) {
+                Text(title)
+                    .font(TypographyTokens.subheadline)
+                    .fontWeight(isActive ? .semibold : .regular)
+
+                Text("\(count)")
+                    .font(TypographyTokens.caption2)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, SpacingTokens.xxs)
+                    .padding(.vertical, 2)
+                    .background(
+                        isActive ? Color.white.opacity(0.25) : ColorTokens.primaryOrange.opacity(0.12),
+                        in: Capsule()
+                    )
+            }
+            .padding(.horizontal, SpacingTokens.sm)
+            .padding(.vertical, SpacingTokens.xs)
+            .background(
+                Capsule()
+                    .fill(isActive ? ColorTokens.primaryOrange : ColorTokens.surface)
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        isActive ? .clear : ColorTokens.primaryOrange.opacity(0.2),
+                        lineWidth: 1
+                    )
+            )
+            .foregroundStyle(isActive ? .white : ColorTokens.primaryText)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -152,54 +235,87 @@ private struct EstimateRowView: View {
     let summary: EstimateSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            HStack {
-                Text(summary.estimate.estimateNumber)
-                    .font(TypographyTokens.headline)
+        HStack(spacing: SpacingTokens.sm) {
+            // Leading icon block
+            Image(systemName: "doc.text")
+                .font(.title3)
+                .foregroundStyle(ColorTokens.primaryOrange)
+                .frame(width: 44, height: 44)
+                .background(
+                    ColorTokens.primaryOrange.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: RadiusTokens.small)
+                )
 
-                if summary.estimate.version > 1 {
-                    Text("v\(summary.estimate.version)")
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, SpacingTokens.xxs)
-                        .padding(.vertical, 2)
-                        .background(ColorTokens.inputBackground, in: Capsule())
+            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                HStack(spacing: SpacingTokens.xxs) {
+                    Text(summary.estimate.estimateNumber)
+                        .font(TypographyTokens.headline)
+                        .foregroundStyle(ColorTokens.primaryText)
+
+                    if summary.estimate.version > 1 {
+                        Text("v\(summary.estimate.version)")
+                            .font(TypographyTokens.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, SpacingTokens.xxs)
+                            .padding(.vertical, 1)
+                            .background(ColorTokens.inputBackground, in: Capsule())
+                    }
                 }
 
-                Spacer()
+                Text(summary.projectTitle)
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.secondaryText)
+                    .lineLimit(1)
 
-                StatusBadge(
-                    text: summary.estimate.status.rawValue.capitalized,
-                    style: statusBadgeStyle(for: summary.estimate.status)
-                )
+                HStack(spacing: SpacingTokens.xs) {
+                    statusBadge(for: summary.estimate.status)
+
+                    Text("·")
+                        .font(TypographyTokens.caption2)
+                        .foregroundStyle(.tertiary)
+
+                    Text(summary.estimate.updatedAt.formatted(as: .relative))
+                        .font(TypographyTokens.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
 
-            Text(summary.projectTitle)
-                .font(TypographyTokens.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            Spacer()
 
-            HStack {
-                CurrencyText(amount: summary.estimate.totalAmount, font: TypographyTokens.moneyMedium)
+            VStack(alignment: .trailing, spacing: SpacingTokens.xxs) {
+                CurrencyText(
+                    amount: summary.estimate.totalAmount,
+                    font: TypographyTokens.moneySmall
+                )
+                .foregroundStyle(ColorTokens.primaryText)
 
-                Spacer()
-
-                Text(summary.estimate.updatedAt.formatted(as: .relative))
-                    .font(TypographyTokens.caption)
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(.vertical, SpacingTokens.xxs)
+        .padding(SpacingTokens.md)
+        .glassCard()
     }
 
-    private func statusBadgeStyle(for status: Estimate.Status) -> StatusBadge.Style {
-        switch status {
-        case .draft: .neutral
-        case .sent: .info
-        case .approved: .success
-        case .declined: .error
-        case .expired: .warning
-        }
+    private func statusBadge(for status: Estimate.Status) -> some View {
+        let (text, color): (String, Color) = {
+            switch status {
+            case .draft: ("Draft", ColorTokens.secondaryText)
+            case .sent: ("Sent", ColorTokens.accentBlue)
+            case .approved: ("Approved", ColorTokens.success)
+            case .declined: ("Declined", ColorTokens.error)
+            case .expired: ("Expired", ColorTokens.warning)
+            }
+        }()
+
+        return Text(text)
+            .font(TypographyTokens.caption2)
+            .fontWeight(.medium)
+            .padding(.horizontal, SpacingTokens.xs)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.14), in: Capsule())
+            .foregroundStyle(color)
     }
 }
 
