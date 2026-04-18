@@ -80,8 +80,11 @@ export async function deleteMe(userId: string) {
 
       await tx.client.deleteMany({ where: { companyId } });
 
+      // LaborRateRule cascades via PricingProfile.onDelete: Cascade, so
+      // deleting the profiles below is sufficient. The explicit deleteMany
+      // here is belt-and-suspenders in case the schema changes.
       await tx.laborRateRule.deleteMany({
-        where: { profile: { companyId } },
+        where: { pricingProfile: { companyId } },
       });
       await tx.pricingProfile.deleteMany({ where: { companyId } });
     }
