@@ -116,10 +116,13 @@ struct ProjectDetailView: View {
             }
             maybeAutoGenerate()
         }
-        .fullScreenCover(isPresented: $showEditSheet) {
-            Task { await viewModel.loadProject(id: projectId) }
-        } content: {
-            ProjectCreationFlowView()
+        .sheet(isPresented: $showEditSheet) {
+            if let project = viewModel.project {
+                ProjectEditSheet(project: project) { updated in
+                    viewModel.project = updated
+                    Task { await viewModel.loadProject(id: projectId) }
+                }
+            }
         }
         .sheet(item: $activeEstimate, onDismiss: {
             Task { await viewModel.loadProject(id: projectId) }

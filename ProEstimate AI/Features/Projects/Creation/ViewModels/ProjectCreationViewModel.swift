@@ -16,9 +16,14 @@ final class ProjectCreationViewModel {
         ProjectCreationStep(rawValue: currentStep) ?? .type
     }
 
-    // MARK: - Step 0: Project Type
+    // MARK: - Step 0: Project Type + Title
 
     var selectedProjectType: Project.ProjectType?
+
+    /// Optional user-supplied project title. When empty, `generatedTitle`
+    /// falls back to a sensible default built from the selected type and
+    /// client name. When non-empty, this wins.
+    var customTitle: String = ""
 
     // MARK: - Step 1: Client Selection
 
@@ -136,8 +141,13 @@ final class ProjectCreationViewModel {
         }
     }
 
-    /// Auto-generated title based on selected type and client.
+    /// Project title that gets sent to the backend. Uses `customTitle`
+    /// when the user has filled it in; otherwise falls back to an
+    /// auto-generated string built from the selected type and client.
     var generatedTitle: String {
+        let trimmed = customTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+
         let typeName: String = {
             guard let type = selectedProjectType else { return "Project" }
             switch type {

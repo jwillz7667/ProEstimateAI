@@ -314,7 +314,9 @@ struct EstimateEditorView: View {
                         .listRowBackground(Color.clear)
                 }
             }
-            .listStyle(.insetGrouped)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(ColorTokens.background)
 
             // Sticky bottom totals bar
             EstimateTotalsView(
