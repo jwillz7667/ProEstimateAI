@@ -4,7 +4,10 @@ import SwiftUI
 /// Shows a progress indicator, step content, and Back/Next navigation
 /// buttons. Dismisses on successful creation or explicit cancel.
 struct ProjectCreationFlowView: View {
-    var onProjectCreated: ((String) -> Void)?
+    /// Fires when the project is successfully created. The second parameter
+    /// mirrors the "auto-generate preview" toggle from the review step so
+    /// the caller can kick off generation right after navigating.
+    var onProjectCreated: ((_ projectId: String, _ autoGenerate: Bool) -> Void)?
     @State private var viewModel = ProjectCreationViewModel()
     @Environment(\.dismiss) private var dismiss
 
@@ -56,7 +59,7 @@ struct ProjectCreationFlowView: View {
             }
             .onChange(of: viewModel.createdProject) { _, newValue in
                 if let project = newValue {
-                    onProjectCreated?(project.id)
+                    onProjectCreated?(project.id, viewModel.autoGenerateEnabled)
                     dismiss()
                 }
             }

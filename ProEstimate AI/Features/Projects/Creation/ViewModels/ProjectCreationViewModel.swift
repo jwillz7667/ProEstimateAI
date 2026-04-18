@@ -66,6 +66,13 @@ final class ProjectCreationViewModel {
     var squareFootageText: String = ""
     var dimensions: String = ""
 
+    // MARK: - Post-creation behavior
+
+    /// When true, the project detail screen will automatically start an AI
+    /// preview generation as soon as the new project is opened, using the
+    /// description the user entered on the prompt step.
+    var autoGenerateEnabled: Bool = true
+
     var budgetMin: Decimal? {
         Decimal(string: budgetMinText)
     }

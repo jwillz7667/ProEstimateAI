@@ -7,6 +7,7 @@ struct ProjectListView: View {
     @State private var viewModel = ProjectListViewModel()
     @State private var showCreation = false
     @State private var navigateToProjectId: String?
+    @State private var navigateAutoGenerate: Bool = false
     @Environment(AppRouter.self) private var router
 
     /// Client names are loaded from the API by the view model.
@@ -22,8 +23,8 @@ struct ProjectListView: View {
                 emptyDetailPlaceholder
                     .navigationDestination(for: AppDestination.self) { destination in
                         switch destination {
-                        case .projectDetail(let id):
-                            ProjectDetailView(projectId: id)
+                        case .projectDetail(let id, let autoGenerate):
+                            ProjectDetailView(projectId: id, autoGenerateOnOpen: autoGenerate)
                         case .clientDetail(let id):
                             ClientDetailView(clientId: id)
                         default:
@@ -70,18 +71,23 @@ struct ProjectListView: View {
             }
         }
         .fullScreenCover(isPresented: $showCreation) {
-            ProjectCreationFlowView { projectId in
+            ProjectCreationFlowView { projectId, autoGenerate in
                 navigateToProjectId = projectId
+                navigateAutoGenerate = autoGenerate
             }
         }
         .onChange(of: showCreation) { wasPresented, isPresented in
             if wasPresented && !isPresented {
                 Task { await viewModel.loadProjects() }
                 if let projectId = navigateToProjectId {
+                    let autoGenerate = navigateAutoGenerate
                     navigateToProjectId = nil
+                    navigateAutoGenerate = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         router.projectsPath = NavigationPath()
-                        router.projectsPath.append(AppDestination.projectDetail(id: projectId))
+                        router.projectsPath.append(
+                            AppDestination.projectDetail(id: projectId, autoGenerate: autoGenerate)
+                        )
                     }
                 }
             }

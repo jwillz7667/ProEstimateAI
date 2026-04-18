@@ -76,6 +76,9 @@ struct ProjectReviewStep: View {
                 // Details
                 detailsSummary
 
+                // Auto-generate toggle
+                autoGenerateToggle
+
                 // Submission error with inline Retry
                 if let error = viewModel.submissionError {
                     submissionErrorBanner(error)
@@ -83,6 +86,34 @@ struct ProjectReviewStep: View {
             }
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.sm)
+        }
+    }
+
+    // MARK: - Auto-generate Toggle
+
+    private var autoGenerateToggle: some View {
+        GlassCard {
+            HStack(spacing: SpacingTokens.sm) {
+                Image(systemName: "wand.and.stars")
+                    .font(.body)
+                    .foregroundStyle(ColorTokens.primaryOrange)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                    Text("Generate AI preview automatically")
+                        .font(TypographyTokens.subheadline)
+                    Text("Start rendering a before-and-after preview as soon as the project opens.")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $viewModel.autoGenerateEnabled)
+                    .labelsHidden()
+                    .tint(ColorTokens.primaryOrange)
+            }
         }
     }
 

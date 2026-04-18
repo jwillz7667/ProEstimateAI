@@ -13,6 +13,7 @@ struct DashboardView: View {
     @State private var showClientForm = false
     @State private var showSettings = false
     @State private var navigateToProjectId: String?
+    @State private var navigateAutoGenerate: Bool = false
 
     var body: some View {
         @Bindable var router = router
@@ -65,13 +66,15 @@ struct DashboardView: View {
                 Task { await viewModel.loadDashboard() }
             }
             .fullScreenCover(isPresented: $showProjectCreation) {
-                ProjectCreationFlowView { projectId in
+                ProjectCreationFlowView { projectId, autoGenerate in
                     navigateToProjectId = projectId
+                    navigateAutoGenerate = autoGenerate
                 }
             }
             .fullScreenCover(isPresented: $showQuickGenerate) {
                 QuickGenerateView { projectId in
                     navigateToProjectId = projectId
+                    navigateAutoGenerate = false
                 }
             }
             .onChange(of: showProjectCreation) { wasPresented, isPresented in
@@ -93,8 +96,8 @@ struct DashboardView: View {
             }
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {
-                case .projectDetail(let id):
-                    ProjectDetailView(projectId: id)
+                case .projectDetail(let id, let autoGenerate):
+                    ProjectDetailView(projectId: id, autoGenerateOnOpen: autoGenerate)
                 default:
                     EmptyView()
                 }
@@ -281,13 +284,17 @@ struct DashboardView: View {
 
     private func navigateToCreatedProject() {
         guard let projectId = navigateToProjectId else { return }
+        let autoGenerate = navigateAutoGenerate
         navigateToProjectId = nil
+        navigateAutoGenerate = false
         // Brief delay lets the fullScreenCover dismiss animation finish
         // before pushing onto the NavigationStack — avoids SwiftUI race.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             // Clear any stale navigation entries first so we don't land on an old project
             router.dashboardPath = NavigationPath()
-            router.dashboardPath.append(AppDestination.projectDetail(id: projectId))
+            router.dashboardPath.append(
+                AppDestination.projectDetail(id: projectId, autoGenerate: autoGenerate)
+            )
         }
     }
 

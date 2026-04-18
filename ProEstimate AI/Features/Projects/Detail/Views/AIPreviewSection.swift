@@ -13,8 +13,7 @@ struct AIPreviewSection: View {
     var assets: [Asset] = []
 
     @State private var selectedGenerationIndex: Int = 0
-    @State private var showRegenerateSheet = false
-    @State private var regeneratePrompt = ""
+    @State private var activePromptEditor: PromptEditorRequest?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
@@ -31,8 +30,26 @@ struct AIPreviewSection: View {
                 completedView
             }
         }
-        .sheet(isPresented: $showRegenerateSheet) {
-            regenerateSheet
+        .sheet(item: $activePromptEditor) { request in
+            GeneratePromptSheet(initialPrompt: request.initialPrompt) { submitted in
+                activePromptEditor = nil
+                onGenerate(submitted)
+            } onCancel: {
+                activePromptEditor = nil
+            }
+        }
+    }
+
+    /// Identifiable trigger used to drive the prompt editor sheet through
+    /// `.sheet(item:)`. The id embeds the initial prompt so presenting with
+    /// a different prefill always re-creates the sheet content.
+    private struct PromptEditorRequest: Identifiable, Hashable {
+        let id: String
+        let initialPrompt: String
+
+        init(initialPrompt: String) {
+            self.initialPrompt = initialPrompt
+            self.id = initialPrompt
         }
     }
 
@@ -45,56 +62,6 @@ struct AIPreviewSection: View {
     /// Best available pre-fill: most recent generation's prompt, or the project-level default.
     private var bestPromptSuggestion: String {
         completedGenerations.first?.prompt ?? defaultPrompt
-    }
-
-    // MARK: - Regenerate Sheet
-
-    private var regenerateSheet: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: SpacingTokens.md) {
-                Text("Describe how you want the remodel to look. Be specific about materials, colors, and style.")
-                    .font(TypographyTokens.subheadline)
-                    .foregroundStyle(.secondary)
-
-                TextEditor(text: $regeneratePrompt)
-                    .font(TypographyTokens.body)
-                    .scrollContentBackground(.hidden)
-                    .padding(SpacingTokens.sm)
-                    .background(ColorTokens.darkSurface.opacity(0.6))
-                    .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.small))
-                    .frame(minHeight: 120, maxHeight: 200)
-
-                Text("\(regeneratePrompt.count)/2000")
-                    .font(TypographyTokens.caption)
-                    .foregroundStyle(regeneratePrompt.count > 2000 ? ColorTokens.error : .secondary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-
-                Spacer()
-
-                PrimaryCTAButton(
-                    title: "Generate",
-                    icon: "wand.and.stars",
-                    isDisabled: regeneratePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || regeneratePrompt.count > 2000
-                ) {
-                    let prompt = regeneratePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-                    showRegenerateSheet = false
-                    onGenerate(prompt)
-                }
-            }
-            .padding(SpacingTokens.lg)
-            .navigationTitle("AI Prompt")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        showRegenerateSheet = false
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
     }
 
     // MARK: - State Views
@@ -117,8 +84,7 @@ struct AIPreviewSection: View {
                 title: "Generate Preview",
                 icon: "wand.and.stars"
             ) {
-                regeneratePrompt = bestPromptSuggestion
-                showRegenerateSheet = true
+                activePromptEditor = PromptEditorRequest(initialPrompt: bestPromptSuggestion)
             }
             .frame(maxWidth: 280)
         }
@@ -180,8 +146,7 @@ struct AIPreviewSection: View {
 
             // Generate another button
             SecondaryButton(title: "Generate Another", icon: "wand.and.stars") {
-                regeneratePrompt = bestPromptSuggestion
-                showRegenerateSheet = true
+                activePromptEditor = PromptEditorRequest(initialPrompt: bestPromptSuggestion)
             }
             .padding(.horizontal, SpacingTokens.md)
         }
@@ -232,6 +197,87 @@ struct AIPreviewSection: View {
             }
             .padding(.horizontal, SpacingTokens.md)
         }
+    }
+}
+
+// MARK: - Generate Prompt Sheet
+
+/// Sheet that lets the user confirm or edit the AI prompt before kicking off
+/// a generation. The `initialPrompt` (usually the project's description or
+/// the most recent generation's prompt) is wired directly into the internal
+/// `@State` via an init-based initializer, so it is always present and
+/// submit-ready when the sheet appears — no "tap to activate" step.
+private struct GeneratePromptSheet: View {
+    @State private var prompt: String
+    let onSubmit: (String) -> Void
+    let onCancel: () -> Void
+
+    init(
+        initialPrompt: String,
+        onSubmit: @escaping (String) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        _prompt = State(initialValue: initialPrompt)
+        self.onSubmit = onSubmit
+        self.onCancel = onCancel
+    }
+
+    private var trimmedPrompt: String {
+        prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isValid: Bool {
+        !trimmedPrompt.isEmpty && prompt.count <= 2000
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: SpacingTokens.md) {
+                Text("Describe how you want the remodel to look. Be specific about materials, colors, and style.")
+                    .font(TypographyTokens.subheadline)
+                    .foregroundStyle(.secondary)
+
+                TextEditor(text: $prompt)
+                    .font(TypographyTokens.body)
+                    .scrollContentBackground(.hidden)
+                    .padding(SpacingTokens.sm)
+                    .background(ColorTokens.darkSurface.opacity(0.6))
+                    .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.small))
+                    .frame(minHeight: 140, maxHeight: 220)
+
+                HStack {
+                    Text("Tap the text to edit")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.tertiary)
+
+                    Spacer()
+
+                    Text("\(prompt.count)/2000")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(prompt.count > 2000 ? ColorTokens.error : .secondary)
+                }
+
+                Spacer(minLength: SpacingTokens.sm)
+
+                PrimaryCTAButton(
+                    title: "Generate",
+                    icon: "wand.and.stars",
+                    isDisabled: !isValid
+                ) {
+                    onSubmit(trimmedPrompt)
+                }
+            }
+            .padding(SpacingTokens.lg)
+            .navigationTitle("AI Prompt")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 

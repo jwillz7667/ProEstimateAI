@@ -2,7 +2,7 @@ import SwiftUI
 
 enum AppDestination: Hashable {
     // Projects
-    case projectDetail(id: String)
+    case projectDetail(id: String, autoGenerate: Bool = false)
     case projectCreation
 
     // Estimates

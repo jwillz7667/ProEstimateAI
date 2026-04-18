@@ -165,27 +165,52 @@ final class QuickGenerateViewModel {
 
     // MARK: - Progress Simulation
 
+    /// Per-stage dwell times tuned to realistic generation latency
+    /// (~60–130s). The timer never advances past `.enhancing`; the final
+    /// `.complete` stage is set by `stopProgressSimulation()` once the
+    /// backend signals completion.
+    private static let stageDwellSeconds: [Double] = [
+        5,    // .uploading -> .analyzing
+        6,    // .analyzing -> .generating
+        45,   // .generating -> .enhancing
+    ]
+
     private func startProgressSimulation() {
-        let totalStages = GenerationStage.allCases.count
+        stopTimer()
+        var stepIndex = 0
         progressTimer = Timer.scheduledTimer(
-            withTimeInterval: 0.8,
-            repeats: true
-        ) { [weak self] timer in
-            guard let self else {
-                timer.invalidate()
-                return
-            }
-            if self.currentStage < totalStages - 1 {
-                self.currentStage += 1
-            } else {
-                timer.invalidate()
-            }
+            withTimeInterval: Self.stageDwellSeconds.first ?? 5,
+            repeats: false
+        ) { [weak self] _ in
+            self?.advanceStage(from: &stepIndex)
         }
     }
 
-    private func stopProgressSimulation() {
+    /// Recursively schedule the next stage transition using the
+    /// next-stage dwell time. Stops after `.enhancing`.
+    private func advanceStage(from stepIndex: inout Int) {
+        guard stepIndex < Self.stageDwellSeconds.count else { return }
+        currentStage = stepIndex + 1
+        let next = stepIndex + 1
+        stepIndex = next
+        guard next < Self.stageDwellSeconds.count else { return }
+        let interval = Self.stageDwellSeconds[next]
+        progressTimer = Timer.scheduledTimer(
+            withTimeInterval: interval,
+            repeats: false
+        ) { [weak self] _ in
+            var mutable = next
+            self?.advanceStage(from: &mutable)
+        }
+    }
+
+    private func stopTimer() {
         progressTimer?.invalidate()
         progressTimer = nil
+    }
+
+    private func stopProgressSimulation() {
+        stopTimer()
         currentStage = GenerationStage.allCases.count - 1
     }
 

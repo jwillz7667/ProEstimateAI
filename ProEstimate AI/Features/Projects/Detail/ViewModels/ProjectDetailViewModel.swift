@@ -364,15 +364,30 @@ final class ProjectDetailViewModel {
 
     // MARK: - Progress Simulation
 
+    /// Dwell time per stage before advancing to the next. Tuned so the
+    /// timeline does not sprint to "Complete" in a few seconds while the
+    /// real generation takes 60–130s. We never advance past `.enhancing`
+    /// from the timer — `stopProgressSimulation()` jumps to `.complete`
+    /// when the backend returns a finished generation.
+    private static let stageDwellSeconds: [Double] = [
+        5,    // .uploading -> .analyzing
+        6,    // .analyzing -> .generating
+        45,   // .generating -> .enhancing
+        // .enhancing is the last timer-driven stage; it stays here until
+        // the backend finishes and stopProgressSimulation fires.
+    ]
+
     private func startProgressSimulation() {
-        let totalStages = GenerationStage.allCases.count
         progressTask?.cancel()
         progressTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            for stage in 1..<totalStages {
-                try? await Task.sleep(for: .milliseconds(800))
+            for (index, dwell) in Self.stageDwellSeconds.enumerated() {
+                try? await Task.sleep(for: .seconds(dwell))
                 if Task.isCancelled { return }
-                self.currentGenerationStage = stage
+                // Advance to the NEXT stage (index + 1). The loop therefore
+                // walks 0 -> 1 -> 2 -> 3, stopping at `.enhancing`.
+                let nextStage = index + 1
+                self.currentGenerationStage = nextStage
             }
         }
     }
