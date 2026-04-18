@@ -150,6 +150,36 @@ final class FeatureGateCoordinator {
         ))
     }
 
+    /// Check whether the user can AI-generate a professional estimate.
+    /// Running the specialized Gemini estimator prompt is a Pro-only feature
+    /// — free users can still build estimates manually ("Blank Estimate")
+    /// but cannot trigger the AI generator.
+    func guardGenerateAIEstimate() -> FeatureGateResult {
+        guard let entitlementStore else {
+            logger.warning("FeatureGateCoordinator not configured. Defaulting to allowed.")
+            return .allowed
+        }
+
+        if entitlementStore.subscriptionState.hasProAccess {
+            return .allowed
+        }
+
+        logger.info("AI estimate generation blocked — Pro required.")
+        return .blocked(PaywallDecision(
+            placement: .aiEstimateLocked,
+            triggerReason: "AI estimate generation requires Pro",
+            blocking: true,
+            headline: "AI-generated estimates are a Pro feature",
+            subheadline: "Hand the project to a specialized AI estimator that writes a complete, client-ready estimate using your branding, materials, and pricing.",
+            primaryCtaTitle: "Upgrade to Pro",
+            secondaryCtaTitle: nil,
+            showContinueFree: false,
+            showRestorePurchases: true,
+            recommendedProductId: AppConstants.monthlyProductID,
+            availableProducts: products
+        ))
+    }
+
     /// Check whether the user can create an invoice.
     /// Invoicing is a Pro-only feature — free users cannot create invoices.
     func guardCreateInvoice() -> FeatureGateResult {

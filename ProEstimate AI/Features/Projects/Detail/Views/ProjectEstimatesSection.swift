@@ -1,11 +1,13 @@
 import SwiftUI
 
 /// Lists estimates linked to this project. Each row shows the estimate
-/// number, version, total amount, and status badge. Includes a
-/// "Create Estimate" button and a per-row context menu to spin up an
-/// invoice from any estimate.
+/// number, version, total amount, and status badge. Includes primary
+/// "Generate with AI" and secondary "Blank Estimate" CTAs, plus a
+/// per-row context menu to spin up an invoice from any estimate.
 struct ProjectEstimatesSection: View {
     let estimates: [Estimate]
+    var isGeneratingAI: Bool = false
+    var onGenerateAI: (() -> Void)?
     var onCreateEstimate: (() -> Void)?
     var onEstimateTap: ((String) -> Void)?
     var onCreateInvoice: ((String) -> Void)?
@@ -23,9 +25,20 @@ struct ProjectEstimatesSection: View {
                 estimatesList
             }
 
-            // Create estimate button
-            SecondaryButton(title: "Create Estimate", icon: "doc.badge.plus") {
-                onCreateEstimate?()
+            // Generate + blank create buttons
+            VStack(spacing: SpacingTokens.xs) {
+                PrimaryCTAButton(
+                    title: "Generate with AI",
+                    icon: "wand.and.stars",
+                    isLoading: isGeneratingAI,
+                    isDisabled: isGeneratingAI
+                ) {
+                    onGenerateAI?()
+                }
+
+                SecondaryButton(title: "Blank Estimate", icon: "doc.badge.plus") {
+                    onCreateEstimate?()
+                }
             }
             .padding(.horizontal, SpacingTokens.md)
         }

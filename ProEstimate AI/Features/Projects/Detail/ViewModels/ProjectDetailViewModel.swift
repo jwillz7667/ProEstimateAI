@@ -308,6 +308,28 @@ final class ProjectDetailViewModel {
         }
     }
 
+    // MARK: - AI-Generated Estimate
+
+    /// POST /v1/estimates/generate — asks the backend to use Gemini with a
+    /// specialized estimator system prompt to produce a full, professional
+    /// estimate (title, overview, materials + labor + other line items,
+    /// assumptions, exclusions, terms) grounded in the project's selected
+    /// materials, the company's branding, and any configured pricing
+    /// profile. The backend persists the estimate + every line item, so on
+    /// success the caller can navigate directly to the editor.
+    func generateAIEstimate() async -> Estimate? {
+        guard let project else { return nil }
+        do {
+            let body = GenerateAIEstimateBody(projectId: project.id)
+            let estimate: Estimate = try await APIClient.shared.request(.generateAIEstimate(body: body))
+            estimates.insert(estimate, at: 0)
+            return estimate
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     // MARK: - Invoice Creation
 
     /// Create an invoice from an existing estimate via the backend.
@@ -403,6 +425,16 @@ final class ProjectDetailViewModel {
 
 /// Body sent to POST /estimates to create a new estimate for a project.
 private struct CreateEstimateBody: Encodable, Sendable {
+    let projectId: String
+
+    enum CodingKeys: String, CodingKey {
+        case projectId = "project_id"
+    }
+}
+
+/// Body sent to POST /estimates/generate to AI-generate a full professional
+/// estimate from the project context, selected materials, and company data.
+private struct GenerateAIEstimateBody: Encodable, Sendable {
     let projectId: String
 
     enum CodingKeys: String, CodingKey {

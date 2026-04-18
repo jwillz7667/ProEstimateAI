@@ -5,9 +5,14 @@ import {
   createHandler,
   updateHandler,
   deleteHandler,
+  generateHandler,
 } from './estimates.controller';
 import { validate } from '../../middleware/validate.middleware';
-import { createEstimateSchema, updateEstimateSchema } from './estimates.validators';
+import {
+  createEstimateSchema,
+  generateEstimateSchema,
+  updateEstimateSchema,
+} from './estimates.validators';
 import estimateLineItemNestedRoutes from '../estimate-line-items/estimate-line-items.nested.routes';
 
 const router = Router();
@@ -17,6 +22,9 @@ function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => P
 }
 
 router.get('/', asyncHandler(listHandler));
+// `POST /v1/estimates/generate` must appear before `:id` to avoid the id
+// param swallowing the literal "generate" path segment.
+router.post('/generate', validate(generateEstimateSchema), asyncHandler(generateHandler));
 router.get('/:id', asyncHandler(getByIdHandler));
 router.post('/', validate(createEstimateSchema), asyncHandler(createHandler));
 router.patch('/:id', validate(updateEstimateSchema), asyncHandler(updateHandler));

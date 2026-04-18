@@ -28,5 +28,10 @@ export const updateEstimateSchema = z.object({
   total_amount: z.number().min(0).optional(),
 });
 
+export const generateEstimateSchema = z.object({
+  project_id: z.string().min(1, 'project_id is required'),
+});
+
 export type CreateEstimateInput = z.infer<typeof createEstimateSchema>;
 export type UpdateEstimateInput = z.infer<typeof updateEstimateSchema>;
+export type GenerateEstimateInput = z.infer<typeof generateEstimateSchema>;

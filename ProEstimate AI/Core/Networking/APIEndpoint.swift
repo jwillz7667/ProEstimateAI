@@ -50,6 +50,9 @@ enum APIEndpoint: Sendable {
     case listEstimates(projectId: String?)
     case getEstimate(id: String)
     case createEstimate(body: Encodable & Sendable)
+    /// AI-generate a complete estimate from the project's materials + the
+    /// company's branding and defaults. Body: `{ project_id: String }`.
+    case generateAIEstimate(body: Encodable & Sendable)
     case updateEstimate(id: String, body: Encodable & Sendable)
     case deleteEstimate(id: String)
 
@@ -166,6 +169,7 @@ extension APIEndpoint {
         case .listEstimates: return "/estimates"
         case .getEstimate(let id): return "/estimates/\(id)"
         case .createEstimate: return "/estimates"
+        case .generateAIEstimate: return "/estimates/generate"
         case .updateEstimate(let id, _): return "/estimates/\(id)"
         case .deleteEstimate(let id): return "/estimates/\(id)"
 
@@ -237,7 +241,7 @@ extension APIEndpoint {
         case .authLogin, .authSignup, .authAppleSignIn, .authRefreshToken, .authLogout,
              .authForgotPassword,
              .createClient, .createProject, .uploadAsset, .createGeneration,
-             .createEstimate, .createEstimateLineItem,
+             .createEstimate, .generateAIEstimate, .createEstimateLineItem,
              .createProposal, .sendProposal,
              .createInvoice, .sendInvoice,
              .createInvoiceLineItem,
@@ -322,7 +326,8 @@ extension APIEndpoint {
              .createProject(let body), .updateProject(_, let body),
              .uploadAsset(_, let body),
              .createGeneration(_, let body),
-             .createEstimate(let body), .updateEstimate(_, let body),
+             .createEstimate(let body), .generateAIEstimate(let body),
+             .updateEstimate(_, let body),
              .createEstimateLineItem(_, let body), .updateEstimateLineItem(_, let body),
              .createProposal(let body),
              .createInvoice(let body), .updateInvoice(_, let body),
