@@ -93,18 +93,60 @@ struct ProposalPreviewView: View {
         let result = featureGateCoordinator.guardExportQuote()
         switch result {
         case .allowed:
-            let allItems = viewModel.lineItems
-            let lineItemTuples: [(name: String, qty: Decimal, unit: String, unitCost: Decimal, total: Decimal)] =
-                allItems.map { ($0.name, $0.quantity, $0.unit, $0.unitCost, $0.lineTotal) }
+            let company = viewModel.company
+            var addressLines: [String] = []
+            if let a = company?.address, !a.isEmpty { addressLines.append(a) }
+            let cityLine = [company?.city, company?.state, company?.zip]
+                .compactMap { $0?.isEmpty == false ? $0 : nil }
+                .joined(separator: ", ")
+            if !cityLine.isEmpty { addressLines.append(cityLine) }
+
+            let branding = PDFGenerator.CompanyBranding(
+                name: company?.name ?? "Company",
+                phone: company?.phone,
+                email: company?.email,
+                addressLines: addressLines,
+                websiteUrl: company?.websiteUrl,
+                logoImage: nil,
+                accentHex: company?.primaryColor ?? "#FF9230"
+            )
+            let clientInfo: PDFGenerator.ClientInfo? = viewModel.client.map { c in
+                PDFGenerator.ClientInfo(
+                    name: c.name,
+                    company: nil,
+                    phone: c.phone,
+                    email: c.email,
+                    addressLines: [c.address].compactMap { $0?.isEmpty == false ? $0 : nil }
+                )
+            }
+
+            let pdfItems: [PDFGenerator.PDFLineItem] = viewModel.lineItems.map { li in
+                let category: PDFGenerator.PDFLineItem.Category = {
+                    switch li.category {
+                    case .materials: return .materials
+                    case .labor: return .labor
+                    case .other: return .other
+                    }
+                }()
+                return PDFGenerator.PDFLineItem(
+                    category: category,
+                    name: li.name,
+                    description: li.description,
+                    quantity: li.quantity,
+                    unit: li.unit,
+                    unitCost: li.unitCost,
+                    total: li.lineTotal
+                )
+            }
 
             if let url = PDFGenerator.generateProposalPDF(
-                companyName: viewModel.company?.name ?? "Company",
+                branding: branding,
+                client: clientInfo,
                 projectTitle: viewModel.project?.title ?? "Project",
-                clientName: viewModel.client?.name,
                 proposalDate: viewModel.proposal?.createdAt ?? Date(),
                 expiresAt: viewModel.proposal?.expiresAt,
                 clientMessage: viewModel.proposal?.clientMessage,
-                lineItems: lineItemTuples,
+                lineItems: pdfItems,
                 subtotalMaterials: viewModel.estimate?.subtotalMaterials ?? 0,
                 subtotalLabor: viewModel.estimate?.subtotalLabor ?? 0,
                 subtotalOther: viewModel.estimate?.subtotalOther ?? 0,

@@ -106,22 +106,60 @@ struct InvoicePreviewView: View {
     private func handleExportPDF() {
         guard let invoice = viewModel.invoice else { return }
 
-        let lineItemTuples: [(name: String, qty: Decimal, unit: String, unitCost: Decimal, total: Decimal)] =
-            viewModel.lineItems.map { ($0.name, $0.quantity, $0.unit, $0.unitCost, $0.lineTotal) }
+        let company = viewModel.company
+        var addressLines: [String] = []
+        if let addr = company?.address, !addr.isEmpty { addressLines.append(addr) }
+        let cityLine = [company?.city, company?.state, company?.zip]
+            .compactMap { $0?.isEmpty == false ? $0 : nil }
+            .joined(separator: ", ")
+        if !cityLine.isEmpty { addressLines.append(cityLine) }
+
+        let branding = PDFGenerator.CompanyBranding(
+            name: company?.name ?? "Company",
+            phone: company?.phone,
+            email: company?.email,
+            addressLines: addressLines,
+            websiteUrl: company?.websiteUrl,
+            logoImage: nil,
+            accentHex: company?.primaryColor ?? "#FF9230"
+        )
+
+        let clientInfo: PDFGenerator.ClientInfo? = viewModel.client.map { c in
+            PDFGenerator.ClientInfo(
+                name: c.name,
+                company: nil,
+                phone: c.phone,
+                email: c.email,
+                addressLines: [c.address].compactMap { $0?.isEmpty == false ? $0 : nil }
+            )
+        }
+
+        let pdfItems: [PDFGenerator.PDFLineItem] = viewModel.lineItems.map { li in
+            PDFGenerator.PDFLineItem(
+                category: .materials, // invoice line items don't carry a category today; fold everything into the body
+                name: li.name,
+                description: li.description,
+                quantity: li.quantity,
+                unit: li.unit,
+                unitCost: li.unitCost,
+                total: li.lineTotal
+            )
+        }
 
         if let url = PDFGenerator.generateInvoicePDF(
-            companyName: viewModel.company?.name ?? "Company",
+            branding: branding,
+            client: clientInfo,
             invoiceNumber: invoice.invoiceNumber,
             date: invoice.createdAt,
             dueDate: invoice.dueDate,
             status: invoice.status.rawValue.capitalized,
-            clientName: viewModel.client?.name,
-            lineItems: lineItemTuples,
+            lineItems: pdfItems,
             subtotal: invoice.subtotal,
             taxAmount: invoice.taxAmount,
             totalAmount: invoice.totalAmount,
             amountPaid: invoice.amountPaid,
             amountDue: invoice.amountDue,
+            paymentInstructions: invoice.paymentInstructions,
             notes: invoice.notes
         ) {
             exportPDFURL = url

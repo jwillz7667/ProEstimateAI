@@ -20,6 +20,7 @@ struct EstimateEditorView: View {
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
     @Environment(AppRouter.self) private var router
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -186,7 +187,8 @@ struct EstimateEditorView: View {
                 // Re-hop to MainActor for the PDF render (UIKit graphics) +
                 // state mutation.
                 await MainActor.run {
-                    if let url = viewModel.generatePDF() {
+                    let branding = brandingFromAppState()
+                    if let url = viewModel.generatePDF(branding: branding, client: nil) {
                         exportedPDF = ExportedPDF(url: url)
                     } else {
                         viewModel.errorMessage = "Couldn't build the PDF. Make sure the estimate has at least one line item and try again."
@@ -197,6 +199,26 @@ struct EstimateEditorView: View {
         case .blocked(let decision):
             paywallPresenter.present(decision)
         }
+    }
+
+    /// Build a `PDFGenerator.CompanyBranding` from the signed-in user's
+    /// company snapshot. AppState only carries a lightweight snapshot
+    /// (id, name, logoURL) — full branding (phone, email, address,
+    /// accent color) would require loading the full `Company` record.
+    /// Uses sensible defaults when those fields aren't available.
+    private func brandingFromAppState() -> PDFGenerator.CompanyBranding {
+        let companyName = appState.currentCompany?.name ?? "ProEstimate AI"
+        // Logo image is deferred — loading via URLSession here would block
+        // the render. If set, future work can preload it into AppState.
+        return PDFGenerator.CompanyBranding(
+            name: companyName,
+            phone: nil,
+            email: nil,
+            addressLines: [],
+            websiteUrl: nil,
+            logoImage: nil,
+            accentHex: "#FF9230"
+        )
     }
 
     private func handleCreateProposal() {

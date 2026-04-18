@@ -291,35 +291,77 @@ final class EstimateEditorViewModel {
 
     // MARK: - PDF Generation
 
-    /// Renders the current estimate data to a PDF and returns a temporary file URL.
-    func generatePDF() -> URL? {
+    /// Render the current estimate to a professional, client-ready PDF. The
+    /// caller supplies the branding + client bundles so this method stays
+    /// platform-pure — the view pulls those values from `AppState` /
+    /// the project and hands them in.
+    func generatePDF(
+        branding: PDFGenerator.CompanyBranding,
+        client: PDFGenerator.ClientInfo? = nil
+    ) -> URL? {
         guard let estimate else { return nil }
 
-        let itemsForPDF: [LineItemDraft] = isDIY
-            ? (materialItems + otherItems)
-            : (materialItems + laborItems + otherItems)
-        let lineItemTuples: [(name: String, qty: Decimal, unit: String, unitCost: Decimal, total: Decimal)] =
-            itemsForPDF.map { item in
-                (name: item.name, qty: item.quantity, unit: item.unit.rawValue, unitCost: item.unitCost, total: item.lineTotal)
-            }
+        // Compose line items grouped by category. In DIY mode we strip labor.
+        var pdfItems: [PDFGenerator.PDFLineItem] = []
+        pdfItems.append(contentsOf: materialItems.map { draft in
+            PDFGenerator.PDFLineItem(
+                category: .materials,
+                name: draft.name,
+                description: draft.description.isEmpty ? nil : draft.description,
+                quantity: draft.quantity,
+                unit: draft.unit.rawValue,
+                unitCost: draft.unitCost,
+                total: draft.lineTotal
+            )
+        })
+        if !isDIY {
+            pdfItems.append(contentsOf: laborItems.map { draft in
+                PDFGenerator.PDFLineItem(
+                    category: .labor,
+                    name: draft.name,
+                    description: draft.description.isEmpty ? nil : draft.description,
+                    quantity: draft.quantity,
+                    unit: draft.unit.rawValue,
+                    unitCost: draft.unitCost,
+                    total: draft.lineTotal
+                )
+            })
+        }
+        pdfItems.append(contentsOf: otherItems.map { draft in
+            PDFGenerator.PDFLineItem(
+                category: .other,
+                name: draft.name,
+                description: draft.description.isEmpty ? nil : draft.description,
+                quantity: draft.quantity,
+                unit: draft.unit.rawValue,
+                unitCost: draft.unitCost,
+                total: draft.lineTotal
+            )
+        })
 
-        let effectiveLabor: Decimal = isDIY ? 0 : subtotalLabor
-        let effectiveTax: Decimal = isDIY ? materialsTaxOnly : taxAmount
-        let effectiveTotal: Decimal = isDIY ? diyGrandTotal : grandTotal
+        let effectiveLabor: Decimal  = isDIY ? 0 : subtotalLabor
+        let effectiveTax: Decimal    = isDIY ? materialsTaxOnly : taxAmount
+        let effectiveTotal: Decimal  = isDIY ? diyGrandTotal : grandTotal
 
         return PDFGenerator.generateEstimatePDF(
-            companyName: "ProEstimate AI",
+            branding: branding,
+            client: client,
             estimateNumber: estimate.estimateNumber + (isDIY ? " (DIY)" : ""),
+            title: estimate.title,
             date: estimate.createdAt,
+            validUntil: estimate.validUntil,
             status: estimate.status.rawValue.capitalized,
-            lineItems: lineItemTuples,
+            lineItems: pdfItems,
             subtotalMaterials: subtotalMaterials,
             subtotalLabor: effectiveLabor,
             subtotalOther: subtotalOther,
             taxAmount: effectiveTax,
             discountAmount: discountAmount,
             totalAmount: effectiveTotal,
-            notes: notes.isEmpty ? nil : notes
+            assumptions: estimate.assumptions,
+            exclusions: estimate.exclusions,
+            notes: notes.isEmpty ? nil : notes,
+            terms: nil
         )
     }
 
