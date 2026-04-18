@@ -38,10 +38,13 @@ struct MetricCard: View {
             Text(label)
                 .font(TypographyTokens.metricLabel)
                 .foregroundStyle(ColorTokens.secondaryText)
+                .lineLimit(1)
 
             Text(value)
                 .font(TypographyTokens.metricValue)
                 .foregroundStyle(ColorTokens.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
 
             if let trend {
                 HStack(spacing: SpacingTokens.xxs) {
@@ -49,6 +52,7 @@ struct MetricCard: View {
                         .font(.caption2)
                     Text(trend.text)
                         .font(TypographyTokens.caption2)
+                        .lineLimit(1)
                 }
                 .foregroundStyle(trend.color)
             }
@@ -56,17 +60,5 @@ struct MetricCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(SpacingTokens.md)
         .glassCard()
-        .overlay(alignment: .top) {
-            // Orange accent bar at top of card
-            RoundedRectangle(cornerRadius: RadiusTokens.card)
-                .fill(ColorTokens.primaryOrange)
-                .frame(height: 3)
-                .mask(alignment: .top) {
-                    VStack {
-                        Rectangle().frame(height: 3)
-                        Spacer()
-                    }
-                }
-        }
     }
 }

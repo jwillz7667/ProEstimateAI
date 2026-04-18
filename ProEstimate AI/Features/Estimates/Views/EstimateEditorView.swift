@@ -4,10 +4,17 @@ struct EstimateEditorView: View {
     let estimateId: String
     var initialDIY: Bool = false
     @State private var viewModel = EstimateEditorViewModel()
-    @State private var exportPDFURL: URL?
-    @State private var showShareSheet = false
+    @State private var exportedPDF: ExportedPDF?
+    @State private var isExportingPDF = false
     @State private var isCreatingProposal = false
     @State private var showDiscardConfirmation = false
+
+    /// Identifiable wrapper so `.sheet(item:)` can drive the share sheet
+    /// without the race that kills `.sheet(isPresented:) + if let url`.
+    private struct ExportedPDF: Identifiable, Hashable {
+        let url: URL
+        var id: URL { url }
+    }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresentedBySheet
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
@@ -73,21 +80,21 @@ struct EstimateEditorView: View {
                     .disabled(viewModel.isSaving || !viewModel.hasUnsavedChanges)
 
                     Menu {
-                        ShareLink(item: "Estimate \(viewModel.estimate?.estimateNumber ?? "")")
-
                         Button {
                             handleExportPDF()
                         } label: {
                             Label("Export PDF", systemImage: "arrow.down.doc")
                         }
+                        .disabled(isExportingPDF)
 
                         Button {
                             handleCreateProposal()
                         } label: {
                             Label("Create Proposal", systemImage: "doc.richtext")
                         }
+                        .disabled(isCreatingProposal)
                     } label: {
-                        if isCreatingProposal {
+                        if isCreatingProposal || isExportingPDF {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
@@ -95,7 +102,7 @@ struct EstimateEditorView: View {
                         }
                     }
                     .accessibilityLabel("Share and export")
-                    .accessibilityHint("Share, export PDF, or create proposal")
+                    .accessibilityHint("Export PDF or create proposal")
                 }
             }
         }
@@ -133,10 +140,8 @@ struct EstimateEditorView: View {
         } message: {
             Text(viewModel.successMessage ?? "")
         }
-        .sheet(isPresented: $showShareSheet) {
-            if let url = exportPDFURL {
-                ActivityViewRepresentable(activityItems: [url])
-            }
+        .sheet(item: $exportedPDF) { pdf in
+            ActivityViewRepresentable(activityItems: [pdf.url])
         }
         .confirmationDialog(
             "Discard changes?",
@@ -167,9 +172,27 @@ struct EstimateEditorView: View {
         let result = featureGateCoordinator.guardExportQuote()
         switch result {
         case .allowed:
-            if let url = viewModel.generatePDF() {
-                exportPDFURL = url
-                showShareSheet = true
+            guard !isExportingPDF else { return }
+            isExportingPDF = true
+            Task {
+                // Save any pending edits first so the PDF reflects what the
+                // user actually sees on screen. If the server-side save
+                // fails, still attempt to export the local snapshot —
+                // better than nothing.
+                if viewModel.hasUnsavedChanges {
+                    await viewModel.save()
+                }
+
+                // Re-hop to MainActor for the PDF render (UIKit graphics) +
+                // state mutation.
+                await MainActor.run {
+                    if let url = viewModel.generatePDF() {
+                        exportedPDF = ExportedPDF(url: url)
+                    } else {
+                        viewModel.errorMessage = "Couldn't build the PDF. Make sure the estimate has at least one line item and try again."
+                    }
+                    isExportingPDF = false
+                }
             }
         case .blocked(let decision):
             paywallPresenter.present(decision)

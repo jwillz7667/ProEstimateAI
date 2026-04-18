@@ -107,6 +107,11 @@ final class ProjectDetailViewModel {
         }
 
         isLoading = false
+
+        // If the project was being generated when we left and is still in
+        // flight, resume polling so the UI catches the completion even if
+        // the original Task died during the first run.
+        resumePollingIfInFlight()
     }
 
     private func loadGenerations(projectId: String) async {
@@ -182,35 +187,7 @@ final class ProjectDetailViewModel {
                     prompt: effectivePrompt,
                     materials: effectiveMaterials
                 )
-
-                // Poll for completion — PiAPI typically takes 60-130 seconds.
-                var completed = generation
-                for _ in 0..<60 {
-                    if Task.isCancelled { return }
-                    try await Task.sleep(for: .seconds(3))
-                    if Task.isCancelled { return }
-                    completed = try await self.generationService.getGenerationStatus(id: generation.id)
-                    if completed.status == .completed || completed.status == .failed {
-                        break
-                    }
-                }
-
-                if Task.isCancelled { return }
-                self.generations.insert(completed, at: 0)
-
-                if completed.status == .completed {
-                    // Reload materials from the new generation.
-                    await self.loadMaterials()
-                    for material in self.materials {
-                        if self.materialSelectionState[material.id] == nil {
-                            self.materialSelectionState[material.id] = material.isSelected
-                        }
-                    }
-                    // Reload estimates — backend may have auto-created one from materials.
-                    await self.loadEstimates(projectId: project.id)
-                } else if completed.status == .failed {
-                    self.errorMessage = completed.errorMessage ?? "Image generation failed. Please try again."
-                }
+                await self.pollUntilFinished(generation: generation, project: project)
             } catch is CancellationError {
                 // Silent — caller cancelled deliberately.
             } catch {
@@ -220,6 +197,97 @@ final class ProjectDetailViewModel {
 
         generationTask = task
         await task.value
+    }
+
+    /// Poll the generation endpoint until the record is either `.completed`
+    /// or `.failed`, survive transient network blips without bailing, and
+    /// surface a clear error + retry when the window expires.
+    ///
+    /// Split out from `startGeneration` so the same logic powers "resume"
+    /// on project re-load (see `resumePollingIfInFlight`).
+    private func pollUntilFinished(generation: AIGeneration, project: Project) async {
+        // PiAPI typically finishes in 60–130s. Google GenAI fallback adds a
+        // bit more. Poll for up to 4 minutes before declaring the run stuck.
+        let maxAttempts = 80          // 80 × 3s = 240s = 4 minutes
+        let pollInterval: Double = 3
+        var transientFailures = 0
+
+        var latest = generation
+        var reachedTerminalState = false
+
+        for _ in 0..<maxAttempts {
+            if Task.isCancelled { return }
+            try? await Task.sleep(for: .seconds(pollInterval))
+            if Task.isCancelled { return }
+
+            do {
+                latest = try await generationService.getGenerationStatus(id: generation.id)
+                transientFailures = 0
+                if latest.status == .completed || latest.status == .failed {
+                    reachedTerminalState = true
+                    break
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                // One dropped request shouldn't kill the whole run. Allow a
+                // short streak of consecutive failures before giving up.
+                transientFailures += 1
+                if transientFailures >= 5 {
+                    errorMessage = "Lost connection to the preview service. Pull down to refresh and we'll pick up where we left off."
+                    return
+                }
+            }
+        }
+
+        if Task.isCancelled { return }
+
+        // Insert whatever we have — either the terminal record or the last
+        // PROCESSING snapshot — so the UI shows something meaningful.
+        generations.insert(latest, at: 0)
+
+        if reachedTerminalState && latest.status == .completed {
+            await loadMaterials()
+            for material in materials {
+                if materialSelectionState[material.id] == nil {
+                    materialSelectionState[material.id] = material.isSelected
+                }
+            }
+            await loadEstimates(projectId: project.id)
+        } else if reachedTerminalState && latest.status == .failed {
+            errorMessage = latest.errorMessage ?? "Image generation failed. Please try again."
+        } else {
+            // Loop exhausted without terminal status. Don't pretend success —
+            // tell the user what happened and point them at the refresh.
+            errorMessage = "Preview is taking longer than expected. Pull down to refresh — if it's done on the server, it'll appear, otherwise tap Generate to try again."
+        }
+    }
+
+    /// If the project has a generation still in `.processing` / `.queued`
+    /// state when the detail view (re)loads, start a background poll for
+    /// it so the UI catches the completion even if the original Task died.
+    /// Idempotent — does nothing if a poll is already running.
+    @MainActor
+    func resumePollingIfInFlight() {
+        guard let project,
+              generationTask == nil,
+              !isGenerating,
+              let inFlight = generations.first(where: { $0.status == .processing || $0.status == .queued })
+        else { return }
+
+        isGenerating = true
+        currentGenerationStage = 2 // show "Render" stage for resumed runs
+        startProgressSimulation()
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.stopProgressSimulation()
+                self.isGenerating = false
+            }
+            await self.pollUntilFinished(generation: inFlight, project: project)
+        }
+        generationTask = task
     }
 
     /// Cancel any in-flight generation polling and progress simulation.

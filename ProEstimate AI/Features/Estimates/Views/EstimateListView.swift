@@ -90,7 +90,7 @@ struct EstimateListView: View {
 
     private var metricsRow: some View {
         HStack(spacing: SpacingTokens.sm) {
-            MetricCard(label: "Total Value", value: formattedTotalValue)
+            MetricCard(label: "Total", value: formattedTotalValue)
             MetricCard(label: "Drafts", value: "\(viewModel.draftCount)")
             MetricCard(label: "Approved", value: "\(viewModel.approvedCount)")
         }
