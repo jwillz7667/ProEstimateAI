@@ -41,8 +41,14 @@
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "ProEstimate AI uses your camera to photograph project sites for AI-powered remodel previews and material estimates."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ProEstimate AI usa tu cámara para fotografiar sitios de proyectos y crear previsualizaciones de remodelación y estimaciones de materiales con IA."
           }
         }
       }
@@ -53,8 +59,14 @@
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "ProEstimate AI saves generated remodel previews and exported PDFs to your photo library when you choose to share them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ProEstimate AI guarda las previsualizaciones de remodelación generadas y los PDFs exportados en tu biblioteca de fotos cuando eliges compartirlos."
           }
         }
       }
@@ -65,8 +77,14 @@
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "ProEstimate AI accesses your photo library to import project reference images and your company logo for branded estimates."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ProEstimate AI accede a tu biblioteca de fotos para importar imágenes de referencia de proyectos y el logo de tu empresa para estimaciones con marca."
           }
         }
       }
