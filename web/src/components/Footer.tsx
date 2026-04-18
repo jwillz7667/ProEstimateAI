@@ -38,7 +38,7 @@ const FOOTER_COLUMNS: FooterColumn[] = [
       { label: "Twitter", href: "https://twitter.com/proestimateai", external: true },
       { label: "Instagram", href: "https://instagram.com/proestimateai", external: true },
       { label: "LinkedIn", href: "https://linkedin.com/company/proestimateai", external: true },
-      { label: "Support", href: "mailto:support@proestimate.ai", external: true },
+      { label: "Support", href: "mailto:support@proestimateai.com", external: true },
     ],
   },
 ];

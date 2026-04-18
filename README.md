@@ -295,8 +295,18 @@ This is a proprietary codebase. Contributions are restricted to authorized team 
 
 Do not file public issues for security concerns. Responsible-disclosure instructions are in [SECURITY.md](./SECURITY.md).
 
+## Contact
+
+| Purpose | Address |
+| :------ | :------ |
+| Licensing, partnerships, legal | `legal@proestimateai.com` |
+| Security disclosures | `security@proestimateai.com` |
+| Customer support | `support@proestimateai.com` |
+| Privacy | `privacy@proestimateai.com` |
+| Website | [proestimateai.com](https://proestimateai.com) |
+
 ## License
 
-Copyright (c) 2026 ProEstimate AI. All Rights Reserved.
+Copyright (c) 2026 Viral Ventures LLC. All Rights Reserved.
 
-This software is proprietary. Unauthorized copying, modification, distribution, or use of this software or any portion of it, via any medium, is strictly prohibited. See [LICENSE](./LICENSE) for the full terms.
+ProEstimate AI is a product of Viral Ventures LLC (Minnesota, United States). The software is proprietary. Unauthorized copying, modification, distribution, or use of this software or any portion of it, via any medium, is strictly prohibited. See [LICENSE](./LICENSE) for the full terms.

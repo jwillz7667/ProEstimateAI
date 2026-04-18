@@ -10,7 +10,7 @@ ProEstimate AI takes the security of its users and their data seriously. This do
 
 Instead, report the issue privately via one of the following channels:
 
-- **Email:** `security@proestimate.ai`
+- **Email:** `security@proestimateai.com`
 - **Encrypted channels:** available on request; contact the address above for our PGP key.
 
 Please include, at minimum:
