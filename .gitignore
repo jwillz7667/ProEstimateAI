@@ -15,11 +15,11 @@
 vendor/bundle/
 .bundle/
 
-# Fastlane build artifacts — generated on every run, not worth tracking
+# Fastlane build artifacts — generated on every run, not worth tracking.
+# Screenshots under fastlane/screenshots/** ARE tracked (hand-curated
+# App Store assets); only auto-generated run artifacts get ignored.
 fastlane/report.xml
 fastlane/Preview.html
-fastlane/screenshots/**/*.png
-fastlane/screenshots/**/*.jpg
 fastlane/test_output/
 
 # Xcode archives and signing artifacts

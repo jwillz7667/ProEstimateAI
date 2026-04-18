@@ -197,22 +197,9 @@ Select your uploaded build (appears after processing).
 
 ### 8b. Screenshots (required sizes)
 
-Upload to App Store Connect. You already have simulator captures in `screenshots/` that can be used directly.
-
-Required for first submission:
-- [ ] **6.9" iPhone (iPhone 17 Pro Max / 16 Pro Max):** 1290 × 2796 px — **3 minimum, 6 max**
-- [ ] **6.5" iPhone (iPhone 14 Plus / 11 Pro Max, legacy):** 1284 × 2778 or 1242 × 2688 — **3 min, 6 max**
-- [ ] **13" iPad (iPad Pro M4):** 2064 × 2752 or 2048 × 2732 — **3 min, 6 max** (required since you target iPad)
-
-Frame each shot in Simulator using **iPhone 17 Pro Max** and **iPad Pro 13"** destinations to get the right dimensions. Tip: Simulator → Device → Screenshot.
-
-Order matters — put the before/after AI render first. Suggested order:
-1. Before/after preview hero
-2. Dashboard
-3. Project type grid / AI generation in progress
-4. Estimate editor (with line items)
-5. Proposal / shareable client page
-6. Paywall (must show subscription terms)
+- [x] **6.9" iPhone (iPhone 17 Pro Max / 16 Pro Max):** 1290 × 2796 — **DONE.** Five screenshots in `fastlane/screenshots/en-US/` + `fastlane/screenshots/es-MX/` (resampled from the originals you dropped in `app-store-listing/`). They upload via `bundle exec fastlane metadata`. Order by filename prefix: 01 Dashboard → 02 Projects → 03 AI Preview → 04 Estimate → 05 Paywall.
+- [ ] **13" iPad (iPad Pro M4):** 2064 × 2752 — **still needed.** The app targets iPad (TARGETED_DEVICE_FAMILY includes 2), so App Store Connect requires at least 3 iPad screenshots. Capture in Simulator with iPad Pro 13" selected (Device → Screenshot) and drop into `app-store-listing/` — I'll resize + place them the same way.
+- Optional: 6.5" iPhone (1284 × 2778) and 5.5" (1242 × 2208). Apple still accepts them but 6.9" is the primary now. Skip unless you want to hold over users on legacy devices.
 
 ### 8c. App Preview videos (optional but conversion-boosting)
 
