@@ -130,9 +130,13 @@ platform :ios do
   desc "Create the Pro subscription group + monthly / annual products via App Store Connect API"
   lane :create_subscriptions do
     require "spaceship"
+    require "net/http"
+    require "json"
+    require "uri"
 
-    # Build a Spaceship::ConnectAPI token directly so we can drive the
-    # raw API for things deliver/pilot don't cover.
+    # Build a Spaceship token so we can reuse its JWT generation, but
+    # drive the raw App Store Connect JSON:API with Net::HTTP — Spaceship's
+    # higher-level models don't expose subscription CRUD.
     key_content = ENV.fetch("APP_STORE_CONNECT_API_KEY_CONTENT").strip
     key_is_pem = key_content.include?("BEGIN PRIVATE KEY")
 
@@ -158,19 +162,44 @@ platform :ios do
 
     UI.message("Found app #{app.id} — #{app.name}")
 
-    # Spaceship's higher-level models don't have subscription CRUD,
-    # so drive the App Store Connect API directly. The request helpers
-    # are thin wrappers around the JSON:API endpoints.
-    client = Spaceship::ConnectAPI
+    api_base = "https://api.appstoreconnect.apple.com/v1"
+
+    # Token auto-refreshes via #text so a long-running lane won't hit
+    # the 20-minute JWT expiry mid-run.
+    asc_request = lambda do |method, path, body = nil|
+      uri = URI.parse(path.start_with?("http") ? path : "#{api_base}/#{path}")
+      req = case method
+            when :get    then Net::HTTP::Get.new(uri)
+            when :post   then Net::HTTP::Post.new(uri)
+            when :patch  then Net::HTTP::Patch.new(uri)
+            when :delete then Net::HTTP::Delete.new(uri)
+            else raise "Unsupported method #{method}"
+            end
+      req["Authorization"] = "Bearer #{Spaceship::ConnectAPI.token.text}"
+      req["Content-Type"]  = "application/json"
+      if body
+        req.body = body.is_a?(String) ? body : body.to_json
+      end
+
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.use_ssl = true
+      res = http.request(req)
+
+      parsed = res.body && !res.body.empty? ? JSON.parse(res.body) : {}
+      unless res.is_a?(Net::HTTPSuccess)
+        UI.user_error!("ASC #{method.upcase} #{path} → #{res.code}: #{parsed.inspect}")
+      end
+      parsed
+    end
 
     # --- Subscription group: "ProEstimate Pro" ---
-    groups_resp = client.get("apps/#{app.id}/subscriptionGroups", limit: 200)
-    groups = groups_resp.body["data"] || []
+    groups_resp = asc_request.call(:get, "apps/#{app.id}/subscriptionGroups?limit=200")
+    groups = groups_resp["data"] || []
     group = groups.find { |g| g.dig("attributes", "referenceName") == "ProEstimate Pro" }
 
     if group.nil?
       UI.message("Creating subscription group ProEstimate Pro...")
-      create_resp = client.post("subscriptionGroups", {
+      create_resp = asc_request.call(:post, "subscriptionGroups", {
         data: {
           type: "subscriptionGroups",
           attributes: { referenceName: "ProEstimate Pro" },
@@ -179,14 +208,14 @@ platform :ios do
           }
         }
       })
-      group = create_resp.body["data"]
+      group = create_resp["data"]
       group_id = group["id"]
 
       %w[en-US es-MX].each do |locale|
-        client.post("subscriptionGroupLocalizations", {
+        asc_request.call(:post, "subscriptionGroupLocalizations", {
           data: {
             type: "subscriptionGroupLocalizations",
-            attributes: { locale: locale, name: "ProEstimate Pro" },
+            attributes: { locale: locale, name: "ProEstimate Pro", customAppName: "ProEstimate AI" },
             relationships: {
               subscriptionGroup: { data: { type: "subscriptionGroups", id: group_id } }
             }
@@ -199,8 +228,8 @@ platform :ios do
     end
 
     # --- Subscription products ---
-    existing_subs_resp = client.get("subscriptionGroups/#{group_id}/subscriptions", limit: 200)
-    existing_subs = existing_subs_resp.body["data"] || []
+    existing_subs_resp = asc_request.call(:get, "subscriptionGroups/#{group_id}/subscriptions?limit=200")
+    existing_subs = existing_subs_resp["data"] || []
 
     products = [
       {
@@ -233,7 +262,7 @@ platform :ios do
       end
 
       UI.message("Creating subscription #{p[:product_id]}...")
-      sub_resp = client.post("subscriptions", {
+      sub_resp = asc_request.call(:post, "subscriptions", {
         data: {
           type: "subscriptions",
           attributes: {
@@ -247,10 +276,10 @@ platform :ios do
           }
         }
       })
-      sub_id = sub_resp.body.dig("data", "id")
+      sub_id = sub_resp.dig("data", "id")
 
       p[:localizations].each do |loc|
-        client.post("subscriptionLocalizations", {
+        asc_request.call(:post, "subscriptionLocalizations", {
           data: {
             type: "subscriptionLocalizations",
             attributes: { locale: loc[:locale], name: loc[:name], description: loc[:description] },
