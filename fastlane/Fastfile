@@ -127,6 +127,115 @@ platform :ios do
     )
   end
 
+  desc "Create the Pro subscription group + monthly / annual products via App Store Connect API"
+  lane :create_subscriptions do
+    require "spaceship"
+
+    # Build a Spaceship::ConnectAPI token directly so we can drive the
+    # raw API for things deliver/pilot don't cover.
+    key_content = ENV.fetch("APP_STORE_CONNECT_API_KEY_CONTENT").strip
+    key_is_pem = key_content.include?("BEGIN PRIVATE KEY")
+
+    if key_is_pem
+      tmp_key = File.join(Dir.mktmpdir("asc_sub"), "AuthKey.p8")
+      File.write(tmp_key, key_content)
+      token = Spaceship::ConnectAPI::Token.create(
+        key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+        issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+        filepath: tmp_key
+      )
+    else
+      token = Spaceship::ConnectAPI::Token.create(
+        key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+        issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+        key: Base64.decode64(key_content)
+      )
+    end
+    Spaceship::ConnectAPI.token = token
+
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("No app with bundle id #{BUNDLE_ID} — create the app record in App Store Connect first.") unless app
+
+    UI.message("Found app #{app.id} — #{app.name}")
+
+    # --- Subscription group: "ProEstimate Pro" ---
+    group = app.get_subscription_groups.find { |g| g.reference_name == "ProEstimate Pro" }
+    if group.nil?
+      UI.message("Creating subscription group ProEstimate Pro...")
+      group = Spaceship::ConnectAPI.post_subscription_group(
+        app_id: app.id,
+        reference_name: "ProEstimate Pro"
+      ).to_models.first
+      # Localizations so the group name renders correctly in each store.
+      Spaceship::ConnectAPI.post_subscription_group_localization(
+        subscription_group_id: group.id,
+        locale: "en-US",
+        name: "ProEstimate Pro"
+      )
+      Spaceship::ConnectAPI.post_subscription_group_localization(
+        subscription_group_id: group.id,
+        locale: "es-MX",
+        name: "ProEstimate Pro"
+      )
+    else
+      UI.success("Subscription group already exists (#{group.id})")
+    end
+
+    # --- Subscription products ---
+    existing = group.get_subscriptions || []
+    products = [
+      {
+        product_id: "proestimate.pro.monthly",
+        name: "Pro Monthly",
+        period: "ONE_MONTH",
+        family_sharable: false,
+        localizations: [
+          { locale: "en-US", name: "Pro Monthly", description: "Full access to all Pro features, billed monthly" },
+          { locale: "es-MX", name: "Pro Mensual", description: "Acceso completo a todas las funciones Pro, facturado mensualmente" },
+        ]
+      },
+      {
+        product_id: "proestimate.pro.annual",
+        name: "Pro Annual",
+        period: "ONE_YEAR",
+        family_sharable: false,
+        localizations: [
+          { locale: "en-US", name: "Pro Annual", description: "Full access to all Pro features, billed annually — save 37%" },
+          { locale: "es-MX", name: "Pro Anual", description: "Acceso completo a todas las funciones Pro, facturado anualmente — ahorra 37%" },
+        ]
+      }
+    ]
+
+    products.each do |p|
+      existing_product = existing.find { |s| s.product_id == p[:product_id] }
+      if existing_product
+        UI.success("Subscription already exists: #{p[:product_id]}")
+        next
+      end
+
+      UI.message("Creating subscription #{p[:product_id]}...")
+      created = Spaceship::ConnectAPI.post_subscription(
+        subscription_group_id: group.id,
+        name: p[:name],
+        product_id: p[:product_id],
+        family_sharable: p[:family_sharable],
+        subscription_period: p[:period]
+      ).to_models.first
+
+      p[:localizations].each do |loc|
+        Spaceship::ConnectAPI.post_subscription_localization(
+          subscription_id: created.id,
+          locale: loc[:locale],
+          name: loc[:name],
+          description: loc[:description]
+        )
+      end
+    end
+
+    UI.success("✅ Subscriptions created/verified.")
+    UI.important("Pricing + introductory offer (7-day free trial on Monthly) must still be set in App Store Connect — the API requires pricing tier selection that's easier to do in the web UI.")
+  end
+
   error do |lane, exception|
     UI.error("Lane #{lane} failed: #{exception}")
   end
