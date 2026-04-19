@@ -107,6 +107,30 @@ platform :ios do
     )
   end
 
+  desc "Push text metadata only (name/subtitle/keywords/description/promo/notes). Skips screenshots for fast ASO iteration."
+  lane :metadata_copy do
+    deliver(
+      api_key:                           make_api_key,
+      skip_binary_upload:                true,
+      skip_screenshots:                  true,
+      skip_metadata:                     false,
+      force:                             true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
+  desc "Push screenshots only (no metadata)."
+  lane :metadata_screenshots do
+    deliver(
+      api_key:                           make_api_key,
+      skip_binary_upload:                true,
+      skip_screenshots:                  false,
+      skip_metadata:                     true,
+      force:                             true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
   desc "Submit the most recent build for App Store review"
   lane :submit do
     deliver(

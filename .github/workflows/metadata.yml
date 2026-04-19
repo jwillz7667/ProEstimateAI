@@ -2,6 +2,16 @@ name: App Store Metadata
 
 on:
   workflow_dispatch:
+    inputs:
+      scope:
+        description: "What to push"
+        required: true
+        default: "copy"
+        type: choice
+        options:
+          - copy            # fast: text only, skips screenshots
+          - screenshots     # screenshots only
+          - all             # text + screenshots (slow, Apple-flaky)
 
 concurrency:
   group: metadata-${{ github.ref }}
@@ -12,9 +22,9 @@ permissions:
 
 jobs:
   push:
-    name: Upload metadata + screenshots to App Store Connect
+    name: Upload metadata to App Store Connect
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     env:
       APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -42,5 +52,15 @@ jobs:
             fi
           done
 
-      - name: Push metadata + screenshots
-        run: bundle exec fastlane metadata
+      - name: Pick lane
+        id: lane
+        run: |
+          case "${{ inputs.scope }}" in
+            copy)        echo "name=metadata_copy" >> "$GITHUB_OUTPUT" ;;
+            screenshots) echo "name=metadata_screenshots" >> "$GITHUB_OUTPUT" ;;
+            all)         echo "name=metadata" >> "$GITHUB_OUTPUT" ;;
+            *)           echo "::error::Unknown scope ${{ inputs.scope }}"; exit 1 ;;
+          esac
+
+      - name: Run ${{ steps.lane.outputs.name }} lane
+        run: bundle exec fastlane ${{ steps.lane.outputs.name }}
