@@ -1,1 +1,12 @@
-Initial release.
+Welcome to ProEstimate AI.
+
+Snap a photo of any room and see a photoreal remodel preview — plus a full materials and labor estimate — in under a minute.
+
+Launch features:
+• AI remodel previews for kitchen, bathroom, flooring, roofing, siding, painting, and custom projects
+• Auto-priced materials at Standard, Premium, and Luxury tiers
+• DIY mode to strip labor costs
+• Branded PDF estimates, proposals, and invoices
+• English and Mexican Spanish throughout
+
+Thanks for being here on day one. Tell us what you build: support@proestimateai.com

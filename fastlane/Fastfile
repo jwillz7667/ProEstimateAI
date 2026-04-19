@@ -238,8 +238,8 @@ platform :ios do
         period: "ONE_MONTH",
         family_sharable: false,
         localizations: [
-          { locale: "en-US", name: "Pro Monthly", description: "Full access to all Pro features, billed monthly" },
-          { locale: "es-MX", name: "Pro Mensual", description: "Acceso completo a todas las funciones Pro, facturado mensualmente" },
+          { locale: "en-US", name: "Pro Monthly", description: "Unlimited AI remodels & estimates" },
+          { locale: "es-MX", name: "Pro Mensual", description: "Remodelaciones y cotizaciones IA ilimitadas" },
         ]
       },
       {
@@ -248,8 +248,8 @@ platform :ios do
         period: "ONE_YEAR",
         family_sharable: false,
         localizations: [
-          { locale: "en-US", name: "Pro Annual", description: "Full access to all Pro features, billed annually — save 37%" },
-          { locale: "es-MX", name: "Pro Anual", description: "Acceso completo a todas las funciones Pro, facturado anualmente — ahorra 37%" },
+          { locale: "en-US", name: "Pro Annual", description: "Save 37% — all Pro tools, one price" },
+          { locale: "es-MX", name: "Pro Anual", description: "Ahorra 37% — todo Pro en un pago" },
         ]
       }
     ]
@@ -257,37 +257,54 @@ platform :ios do
     products.each do |p|
       match = existing_subs.find { |s| s.dig("attributes", "productId") == p[:product_id] }
       if match
-        UI.success("Subscription already exists: #{p[:product_id]}")
-        next
-      end
-
-      UI.message("Creating subscription #{p[:product_id]}...")
-      sub_resp = asc_request.call(:post, "subscriptions", {
-        data: {
-          type: "subscriptions",
-          attributes: {
-            productId:          p[:product_id],
-            name:               p[:name],
-            subscriptionPeriod: p[:period],
-            familySharable:     p[:family_sharable]
-          },
-          relationships: {
-            group: { data: { type: "subscriptionGroups", id: group_id } }
-          }
-        }
-      })
-      sub_id = sub_resp.dig("data", "id")
-
-      p[:localizations].each do |loc|
-        asc_request.call(:post, "subscriptionLocalizations", {
+        sub_id = match["id"]
+        UI.success("Subscription already exists: #{p[:product_id]} (#{sub_id})")
+      else
+        UI.message("Creating subscription #{p[:product_id]}...")
+        sub_resp = asc_request.call(:post, "subscriptions", {
           data: {
-            type: "subscriptionLocalizations",
-            attributes: { locale: loc[:locale], name: loc[:name], description: loc[:description] },
+            type: "subscriptions",
+            attributes: {
+              productId:          p[:product_id],
+              name:               p[:name],
+              subscriptionPeriod: p[:period],
+              familySharable:     p[:family_sharable]
+            },
             relationships: {
-              subscription: { data: { type: "subscriptions", id: sub_id } }
+              group: { data: { type: "subscriptionGroups", id: group_id } }
             }
           }
         })
+        sub_id = sub_resp.dig("data", "id")
+      end
+
+      # Idempotent localization pass — fetch existing, PATCH or POST per locale.
+      existing_locs_resp = asc_request.call(:get, "subscriptions/#{sub_id}/subscriptionLocalizations?limit=200")
+      existing_locs = existing_locs_resp["data"] || []
+
+      p[:localizations].each do |loc|
+        existing = existing_locs.find { |l| l.dig("attributes", "locale") == loc[:locale] }
+        if existing
+          UI.message("Updating #{p[:product_id]} [#{loc[:locale]}] localization...")
+          asc_request.call(:patch, "subscriptionLocalizations/#{existing['id']}", {
+            data: {
+              type: "subscriptionLocalizations",
+              id: existing["id"],
+              attributes: { name: loc[:name], description: loc[:description] }
+            }
+          })
+        else
+          UI.message("Creating #{p[:product_id]} [#{loc[:locale]}] localization...")
+          asc_request.call(:post, "subscriptionLocalizations", {
+            data: {
+              type: "subscriptionLocalizations",
+              attributes: { locale: loc[:locale], name: loc[:name], description: loc[:description] },
+              relationships: {
+                subscription: { data: { type: "subscriptions", id: sub_id } }
+              }
+            }
+          })
+        end
       end
     end
 

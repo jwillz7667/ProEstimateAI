@@ -1,1 +1,12 @@
-Versión inicial.
+Bienvenido a ProEstimate AI.
+
+Toma una foto de cualquier espacio y mira una previsualización fotorrealista de tu remodelación — con materiales y mano de obra con precios — en menos de un minuto.
+
+Funciones de lanzamiento:
+• Previsualizaciones IA para cocina, baño, pisos, techos, siding, pintura y proyectos personalizados
+• Materiales con precios automáticos en niveles Estándar, Premium y Lujo
+• Modo DIY para eliminar mano de obra
+• PDFs con tu marca: cotizaciones, propuestas y facturas
+• Inglés y español mexicano en toda la app
+
+Gracias por estar aquí el día uno. Cuéntanos qué construyes: support@proestimateai.com

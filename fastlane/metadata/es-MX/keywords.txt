@@ -1,1 +1,1 @@
-hogar,renovacion,plomero,electricista,carpintero,pintor,obra,cotizacion,oficio,factura,handyman,flip
+cocina,baño,piso,techo,pintura,albañil,bricolaje,construir,casa,presupuesto,cotizar,obra,factura

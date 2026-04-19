@@ -1,1 +1,1 @@
-remodel,renovation,flip,repair,handyman,contractor,estimator,plumber,electrician,quote,project,paint
+kitchen,bathroom,flooring,roofing,siding,diy,bid,materials,labor,budget,house,renovate,reno,flip
