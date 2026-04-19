@@ -1,25 +1,44 @@
-ProEstimate AI convierte una sola foto del sitio en una estimación completamente calculada, una propuesta con tu marca y una factura lista para cobrar — en el tiempo que antes tomaba abrir una hoja de cálculo.
+Mira tu remodelación antes de gastar un dólar. Cotiza cualquier proyecto en menos de dos minutos.
 
-Diseñado para contratistas, remodeladores, trabajadores de oficios y profesionales que quieren ganar más trabajos con menos papeleo. Toma una foto del espacio, deja que la IA genere una previsualización fotorrealista de "antes y después", y la app sugiere automáticamente materiales y mano de obra con precios para tu nivel de calidad.
+ProEstimate AI convierte una sola foto de tu cocina, baño o cualquier espacio en una previsualización fotorrealista generada con IA — junto con una lista completa de materiales y mano de obra con precios, para que sepas exactamente cuánto cuesta el proyecto antes de empezar.
 
-QUÉ PUEDES HACER
-• Captura fotos desde el dispositivo y obtén una previsualización fotorrealista con IA en segundos
-• Elige entre nueve categorías de proyecto: Cocina, Baño, Pisos, Techos, Pintura, Siding, Remodelación de habitación, Exterior y Personalizado
-• Líneas de materiales y mano de obra generadas automáticamente, con niveles Estándar, Premium y Lujo
-• Editor de estimaciones estructurado con líneas agrupadas, margen por ítem, impuestos, descuentos y modo DIY
-• Propuestas con tu marca y un enlace de aprobación compartible para el cliente
-• Facturas creadas desde estimaciones aprobadas, con seguimiento de pagos parciales y avisos de vencimiento
+Diseñado para dueños de casa que planean remodelar, flippers y gente que hace sus propios proyectos. También funciona como un sistema completo de cotización y facturación para handymen, contratistas y personal de oficios.
+
+LO QUE PUEDES HACER
+• Toma una foto y mira tu remodelación terminada en segundos (antes y después generado por IA)
+• Obtén una lista instantánea de materiales con precios reales 2026 para acabados Estándar, Premium o Lujo
+• Estimación automática de mano de obra — o activa el modo DIY y elimina la mano de obra para ver solo el costo de materiales
+• Guarda proyectos para cada espacio en el que estés trabajando
+• Exporta un PDF limpio de la cotización para tus registros, tu pareja o para comparar ofertas de contratistas
+
+PARA DUEÑOS DE CASA Y DIYERS
+• Planea remodelaciones de cocina, renovaciones de baño, cambio de pisos, pintura, techos, siding y proyectos personalizados
+• Sabe cuánto cuesta una remodelación real en cada nivel de calidad antes de comprometerte
+• Obtén una lista de compras para Home Depot o Lowe's generada automáticamente por la IA
+• Compara cotizaciones de contratistas con una referencia real calculada por IA para que nadie te cobre de más
+
+PARA CONTRATISTAS Y HANDYMEN
+• Cotiza más rápido, gana más trabajos
+• Proyéctate como una empresa grande aunque seas tú solo
+• Envía propuestas con tu marca y un enlace de aprobación público para el cliente
+• Facturación en un toque desde cualquier estimación aprobada, con seguimiento de pagos parciales
 • Disponible en inglés y español
 
+CÓMO FUNCIONA
+1. Toma o importa una foto del espacio
+2. La IA genera una previsualización fotorrealista de antes y después
+3. Materiales y mano de obra sugeridos con precios según tu nivel de calidad
+4. Guarda, exporta o envía una cotización con tu marca
+
 SUSCRIPCIÓN PRO
-Descarga gratis. Una suscripción Pro desbloquea previsualizaciones AI ilimitadas, estimaciones generadas por IA, facturación, marca personalizada, PDFs sin marca de agua, enlaces de aprobación para clientes y enlaces a materiales.
+Descarga gratis con 3 previsualizaciones AI y 3 exportaciones de cotización incluidas. Pro desbloquea previsualizaciones ilimitadas, estimaciones generadas por IA, facturación, marca personalizada, PDFs sin marca de agua, enlaces de aprobación para clientes y enlaces a materiales.
 
 • Pro Mensual — $19.99 al mes (7 días de prueba gratuita para nuevos suscriptores)
 • Pro Anual — $149.99 al año (ahorra 37%)
 
-El pago se cobrará a tu Apple ID al confirmar la compra. La suscripción se renueva automáticamente a menos que la renovación automática se desactive al menos 24 horas antes del final del período actual. Puedes gestionar y cancelar tu suscripción en la configuración de tu Apple ID.
+El pago se cobrará a tu Apple ID al confirmar la compra. La suscripción se renueva automáticamente a menos que la renovación automática se desactive al menos 24 horas antes del final del período actual. Gestiona o cancela en cualquier momento en los ajustes de suscripciones de tu Apple ID.
 
 Política de Privacidad: https://proestimateai.com/privacy
 Términos de Uso: https://proestimateai.com/terms
 
-ProEstimate AI es un producto de Viral Ventures LLC.
+ProEstimate AI es un producto de Viral Ventures LLC. ¿Preguntas o comentarios? support@proestimateai.com

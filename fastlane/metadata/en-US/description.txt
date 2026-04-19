@@ -1,25 +1,44 @@
-ProEstimate AI turns a single job-site photo into a fully costed estimate, branded proposal, and billable invoice — in the time it used to take to open a spreadsheet.
+See your remodel before you spend a dollar. Price any project in under two minutes.
 
-Built for contractors, remodelers, handypeople, and trade professionals who want to win more jobs with less paperwork. Snap a photo of the space, let the AI render a photoreal before-and-after preview, and the app automatically suggests materials and labor priced for your quality tier.
+ProEstimate AI turns a single photo of your kitchen, bathroom, or any room into a photoreal AI-rendered remodel preview — plus a fully priced materials and labor list so you know exactly what the project costs before you start.
+
+Built for DIYers, flippers, and homeowners planning their next remodel. Also works as a full estimating and invoicing system for handymen, contractors, and trade pros.
 
 WHAT YOU CAN DO
-• Capture photos on device and see a photoreal AI remodel preview in seconds
-• Choose from nine project categories: Kitchen, Bathroom, Flooring, Roofing, Painting, Siding, Room Remodel, Exterior, and Custom
-• Auto-generated materials and labor line items with Standard, Premium, and Luxury quality tiers
-• Structured estimate editor with grouped line items, per-item markup, taxation, discounts, and a DIY mode for owner-operated jobs
-• Branded proposals with a shareable client-approval link
-• Invoices created from approved estimates, with partial-payment tracking and overdue reminders
+• Snap a photo, see your finished remodel in seconds (AI-generated before-and-after)
+• Get an instant materials list with realistic 2026 pricing for Standard, Premium, or Luxury finishes
+• Auto-estimate labor — or flip on DIY mode to strip labor and see the materials-only budget
+• Save projects for every room you're working on
+• Export a clean PDF estimate for your records, your spouse, or your contractor bids
+
+FOR HOMEOWNERS & DIYERS
+• Plan kitchen remodels, bathroom renovations, flooring replacements, paint jobs, roof work, siding, and custom projects
+• Know what a real remodel costs at every quality tier before you commit
+• Get a shopping list for Home Depot or Lowe's generated automatically from the AI
+• Compare quotes from contractors against a real AI-priced baseline so nobody overcharges you
+
+FOR CONTRACTORS & HANDYMEN
+• Bid faster, win more jobs
+• Look like a $5M company even if you're a one-truck operation
+• Send branded proposals with a public client approval link
+• One-tap invoicing from any approved estimate, with partial-payment tracking
 • English and Spanish throughout
 
+HOW IT WORKS
+1. Snap or import a photo of the space
+2. AI renders a photoreal before-and-after preview
+3. Auto-suggested materials and labor priced to your quality tier
+4. Save, export, or send a branded estimate
+
 PRO SUBSCRIPTION
-Free to download. A Pro subscription unlocks unlimited AI previews, AI-generated estimates, invoices, custom branding, watermark-free PDFs, client approval links, and material purchase links.
+Free to download with 3 AI previews and 3 quote exports included. Pro unlocks unlimited AI previews, AI-generated estimates, invoicing, custom branding, watermark-free PDFs, shareable approval links, and material purchase links.
 
 • Pro Monthly — $19.99 per month (7-day free trial for new subscribers)
 • Pro Annual — $149.99 per year (save 37%)
 
-Payment is charged to your Apple ID at confirmation of purchase. Your subscription renews automatically unless auto-renew is turned off at least 24 hours before the end of the current period. You can manage and cancel your subscription in your Apple ID account settings.
+Payment is charged to your Apple ID at confirmation of purchase. Subscription renews automatically unless auto-renew is turned off at least 24 hours before the end of the current period. Manage or cancel anytime in your Apple ID subscription settings.
 
 Privacy Policy: https://proestimateai.com/privacy
 Terms of Use: https://proestimateai.com/terms
 
-ProEstimate AI is a product of Viral Ventures LLC.
+ProEstimate AI is a product of Viral Ventures LLC. Questions or feedback? support@proestimateai.com

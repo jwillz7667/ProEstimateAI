@@ -1,1 +1,1 @@
-estimate,contractor,construction,remodel,invoice,proposal,AI,quote,materials,labor,bid,handyman,renovation,pricing,trades
+remodel,renovation,flip,repair,handyman,contractor,estimator,plumber,electrician,quote,project,paint
