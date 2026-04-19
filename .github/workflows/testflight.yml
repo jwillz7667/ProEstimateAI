@@ -61,7 +61,25 @@ jobs:
             fi
           done
 
+      - name: Materialize API key file for xcodebuild code-signing
+        id: api_key_file
+        run: |
+          dir="$RUNNER_TEMP/appstoreconnect"
+          mkdir -p "$dir"
+          path="$dir/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          # Auto-detect whether the secret is raw PEM or base64.
+          # xcodebuild needs the file to contain actual PEM text.
+          if printf '%s' "$APP_STORE_CONNECT_API_KEY_CONTENT" | grep -q 'BEGIN PRIVATE KEY'; then
+            printf '%s' "$APP_STORE_CONNECT_API_KEY_CONTENT" > "$path"
+          else
+            printf '%s' "$APP_STORE_CONNECT_API_KEY_CONTENT" | base64 --decode > "$path"
+          fi
+          chmod 600 "$path"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
       - name: Run beta lane
+        env:
+          APP_STORE_CONNECT_API_KEY_PATH: ${{ steps.api_key_file.outputs.path }}
         run: bundle exec fastlane beta
 
       - name: Upload ipa as workflow artifact
