@@ -158,31 +158,50 @@ platform :ios do
 
     UI.message("Found app #{app.id} — #{app.name}")
 
+    # Spaceship's higher-level models don't have subscription CRUD,
+    # so drive the App Store Connect API directly. The request helpers
+    # are thin wrappers around the JSON:API endpoints.
+    client = Spaceship::ConnectAPI
+
     # --- Subscription group: "ProEstimate Pro" ---
-    group = app.get_subscription_groups.find { |g| g.reference_name == "ProEstimate Pro" }
+    groups_resp = client.get("apps/#{app.id}/subscriptionGroups", limit: 200)
+    groups = groups_resp.body["data"] || []
+    group = groups.find { |g| g.dig("attributes", "referenceName") == "ProEstimate Pro" }
+
     if group.nil?
       UI.message("Creating subscription group ProEstimate Pro...")
-      group = Spaceship::ConnectAPI.post_subscription_group(
-        app_id: app.id,
-        reference_name: "ProEstimate Pro"
-      ).to_models.first
-      # Localizations so the group name renders correctly in each store.
-      Spaceship::ConnectAPI.post_subscription_group_localization(
-        subscription_group_id: group.id,
-        locale: "en-US",
-        name: "ProEstimate Pro"
-      )
-      Spaceship::ConnectAPI.post_subscription_group_localization(
-        subscription_group_id: group.id,
-        locale: "es-MX",
-        name: "ProEstimate Pro"
-      )
+      create_resp = client.post("subscriptionGroups", {
+        data: {
+          type: "subscriptionGroups",
+          attributes: { referenceName: "ProEstimate Pro" },
+          relationships: {
+            app: { data: { type: "apps", id: app.id } }
+          }
+        }
+      })
+      group = create_resp.body["data"]
+      group_id = group["id"]
+
+      %w[en-US es-MX].each do |locale|
+        client.post("subscriptionGroupLocalizations", {
+          data: {
+            type: "subscriptionGroupLocalizations",
+            attributes: { locale: locale, name: "ProEstimate Pro" },
+            relationships: {
+              subscriptionGroup: { data: { type: "subscriptionGroups", id: group_id } }
+            }
+          }
+        })
+      end
     else
-      UI.success("Subscription group already exists (#{group.id})")
+      group_id = group["id"]
+      UI.success("Subscription group already exists (#{group_id})")
     end
 
     # --- Subscription products ---
-    existing = group.get_subscriptions || []
+    existing_subs_resp = client.get("subscriptionGroups/#{group_id}/subscriptions", limit: 200)
+    existing_subs = existing_subs_resp.body["data"] || []
+
     products = [
       {
         product_id: "proestimate.pro.monthly",
@@ -207,33 +226,44 @@ platform :ios do
     ]
 
     products.each do |p|
-      existing_product = existing.find { |s| s.product_id == p[:product_id] }
-      if existing_product
+      match = existing_subs.find { |s| s.dig("attributes", "productId") == p[:product_id] }
+      if match
         UI.success("Subscription already exists: #{p[:product_id]}")
         next
       end
 
       UI.message("Creating subscription #{p[:product_id]}...")
-      created = Spaceship::ConnectAPI.post_subscription(
-        subscription_group_id: group.id,
-        name: p[:name],
-        product_id: p[:product_id],
-        family_sharable: p[:family_sharable],
-        subscription_period: p[:period]
-      ).to_models.first
+      sub_resp = client.post("subscriptions", {
+        data: {
+          type: "subscriptions",
+          attributes: {
+            productId:          p[:product_id],
+            name:               p[:name],
+            subscriptionPeriod: p[:period],
+            familySharable:     p[:family_sharable]
+          },
+          relationships: {
+            group: { data: { type: "subscriptionGroups", id: group_id } }
+          }
+        }
+      })
+      sub_id = sub_resp.body.dig("data", "id")
 
       p[:localizations].each do |loc|
-        Spaceship::ConnectAPI.post_subscription_localization(
-          subscription_id: created.id,
-          locale: loc[:locale],
-          name: loc[:name],
-          description: loc[:description]
-        )
+        client.post("subscriptionLocalizations", {
+          data: {
+            type: "subscriptionLocalizations",
+            attributes: { locale: loc[:locale], name: loc[:name], description: loc[:description] },
+            relationships: {
+              subscription: { data: { type: "subscriptions", id: sub_id } }
+            }
+          }
+        })
       end
     end
 
-    UI.success("✅ Subscriptions created/verified.")
-    UI.important("Pricing + introductory offer (7-day free trial on Monthly) must still be set in App Store Connect — the API requires pricing tier selection that's easier to do in the web UI.")
+    UI.success("Subscriptions created/verified.")
+    UI.important("Set pricing + the 7-day free trial introductory offer in App Store Connect — pricing tier picks and intro offers don't have clean API equivalents.")
   end
 
   error do |lane, exception|
