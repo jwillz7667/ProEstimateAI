@@ -37,14 +37,36 @@ platform :ios do
   lane :beta do
     api_key = make_api_key
 
+    # Ensure the app record exists in App Store Connect (first-time
+    # setup only — no-op once the app is registered). Also registers
+    # the bundle id on the developer portal if it isn't already there.
+    # Wrapped so repeated runs don't fail if produce raises on an
+    # already-created app.
+    begin
+      produce(
+        api_key:        api_key,
+        app_identifier: BUNDLE_ID,
+        app_name:       "ProEstimate AI",
+        language:       "en-US",
+        sku:            "proestimate-ios-1",
+        skip_itc:       false,
+        skip_devcenter: false
+      )
+    rescue => e
+      UI.message("produce step skipped: #{e.message}")
+    end
+
     # Align the build number with whatever App Store Connect has most
     # recently seen for this bundle id, then bump by one. Avoids the
     # "this build is already uploaded" error on re-runs without needing
-    # to hand-edit CURRENT_PROJECT_VERSION on every iteration.
-    latest = latest_testflight_build_number(
-      api_key: api_key,
-      app_identifier: BUNDLE_ID
-    )
+    # to hand-edit CURRENT_PROJECT_VERSION on every iteration. If this
+    # is literally the first upload, latest comes back as nil and we
+    # start at 1 — the local pbxproj already tracks a valid default.
+    latest = (latest_testflight_build_number(
+      api_key:        api_key,
+      app_identifier: BUNDLE_ID,
+      initial_build_number: 0
+    ) rescue 0)
     next_build = (latest || 0) + 1
 
     increment_build_number(
