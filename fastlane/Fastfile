@@ -191,7 +191,7 @@ platform :ios do
     end
 
     # Ensure Sign In with Apple + In-App Purchase capabilities are enabled.
-    wanted = %w[APPLE_ID IN_APP_PURCHASE]
+    wanted = %w[APPLE_ID_AUTH IN_APP_PURCHASE]
     existing_caps = bundle.get_capabilities.map(&:capability_type)
     wanted.each do |cap|
       if existing_caps.include?(cap)
