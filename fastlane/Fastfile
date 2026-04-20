@@ -84,9 +84,23 @@ platform :ios do
       force:           false
     )
 
+    # sigh only exposes the file path via lane_context — the profile's
+    # internal "Name" field (what xcodebuild's PROVISIONING_PROFILE_SPECIFIER
+    # matches against) has to be read out of the signed plist. Skipping this
+    # and relying on SharedValues::SIGH_NAME silently returns nil, which
+    # passes PROVISIONING_PROFILE_SPECIFIER="" to xcodebuild — xcodebuild then
+    # auto-matches a stale profile without Sign in with Apple and the archive
+    # dies with "requires a provisioning profile with the Sign in with Apple
+    # feature."
+    require "plist"
     profile_path = lane_context[SharedValues::SIGH_PROFILE_PATH]
-    profile_name = lane_context[SharedValues::SIGH_NAME]
-    UI.important("Using profile '#{profile_name}' at #{profile_path}")
+    profile_xml  = `security cms -D -i "#{profile_path}"`
+    UI.user_error!("Could not decode #{profile_path}") if profile_xml.empty?
+    profile_plist = Plist.parse_xml(profile_xml)
+    profile_name  = profile_plist["Name"]
+    profile_uuid  = profile_plist["UUID"]
+    UI.user_error!("Provisioning profile at #{profile_path} has no Name field") if profile_name.nil? || profile_name.empty?
+    UI.important("Using profile '#{profile_name}' (UUID #{profile_uuid}) at #{profile_path}")
 
     # Switch to manual signing just for this build so xcodebuild uses
     # the profile sigh just created instead of its own cloud path.
