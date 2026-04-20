@@ -111,13 +111,22 @@ platform :ios do
       )
     end
 
+    # force:true regenerates the canonical `Res.ProEstimate-AI AppStore`
+    # profile against whichever Distribution cert is now in the keychain.
+    # Without it, sigh refuses to touch an existing profile whose cert we
+    # don't have locally and instead creates a timestamp-suffixed duplicate
+    # that drifts further every run.
+    #
+    # skip_install defaults to false — we need the default. xcodebuild reads
+    # profiles from ~/Library/MobileDevice/Provisioning Profiles/ during
+    # `archive`, and if the freshly downloaded profile isn't installed
+    # there, the archive fails with "No profile for team ... matching ...".
     sigh(
       api_key:         api_key,
       app_identifier:  BUNDLE_ID,
       platform:        "ios",
       output_path:     "./fastlane/signing",
-      skip_install:    true,
-      force:           false
+      force:           true
     )
 
     # sigh only exposes the file path via lane_context — the profile's
