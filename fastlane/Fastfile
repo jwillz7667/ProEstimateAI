@@ -62,18 +62,54 @@ platform :ios do
       build_number: next_build
     )
 
-    # xcodebuild's "cloud signing" path fails on fresh teams with
-    # "No profiles found" / "Cloud signing permission error" because
-    # Apple will not autogenerate a distribution certificate on
-    # behalf of the API key — it only reuses existing ones. Drive
-    # Fastlane's cert + sigh explicitly so a Distribution certificate
-    # and App Store provisioning profile exist before xcodebuild runs.
-    cert(
-      api_key:              api_key,
-      output_path:          "./fastlane/signing",
-      generate_apple_certs: true,
-      force:                false
-    )
+    # Distribution cert strategy:
+    #   - In CI the runner's keychain is ephemeral. Apple caps the team at
+    #     three Distribution certificates, so calling `cert` every run
+    #     quickly hits "reached the maximum number of available Distribution
+    #     certificates." Instead we package the cert + private key once as
+    #     a .p12, stash it in DIST_CERT_P12_BASE64 + DIST_CERT_P12_PASSWORD,
+    #     and import it into a fresh keychain on each run.
+    #   - Locally the dev's login.keychain already has the cert, so we fall
+    #     through to the plain `cert` path.
+    p12_base64   = ENV["DIST_CERT_P12_BASE64"]
+    p12_password = ENV["DIST_CERT_P12_PASSWORD"]
+    ci_keychain  = nil
+
+    if p12_base64 && !p12_base64.empty?
+      require "securerandom"
+      require "base64"
+      ci_keychain      = "proestimate-ci.keychain"
+      ci_keychain_pass = SecureRandom.hex(16)
+
+      create_keychain(
+        name:               ci_keychain,
+        password:           ci_keychain_pass,
+        default_keychain:   true,
+        unlock:             true,
+        timeout:            3600,
+        lock_when_sleeps:   false,
+        add_to_search_list: true
+      )
+
+      p12_path = File.join(Dir.mktmpdir("p12"), "dist.p12")
+      File.write(p12_path, Base64.decode64(p12_base64))
+
+      import_certificate(
+        certificate_path:     p12_path,
+        certificate_password: p12_password.to_s,
+        keychain_name:        ci_keychain,
+        keychain_password:    ci_keychain_pass
+      )
+
+      UI.success("Imported Distribution cert from DIST_CERT_P12_BASE64 into #{ci_keychain}")
+    else
+      cert(
+        api_key:              api_key,
+        output_path:          "./fastlane/signing",
+        generate_apple_certs: true,
+        force:                false
+      )
+    end
 
     sigh(
       api_key:         api_key,
@@ -142,6 +178,10 @@ platform :ios do
       skip_waiting_for_build_processing: true,
       distribute_external: false
     )
+
+    # Runner keychains are ephemeral so this is belt-and-suspenders, but it
+    # also matters for the rare self-hosted-runner case where state persists.
+    delete_keychain(name: ci_keychain) if ci_keychain
   end
 
   desc "Push localized metadata and screenshots to App Store Connect (no binary)"

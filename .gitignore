@@ -29,3 +29,4 @@ fastlane/test_output/
 *.mobileprovision
 *.p8
 *.p12
+.secrets-staging/
