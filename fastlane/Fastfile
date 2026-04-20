@@ -62,15 +62,38 @@ platform :ios do
       build_number: next_build
     )
 
-    # Code signing on CI uses App Store Connect API key auth so xcodebuild
-    # can create / fetch profiles without a login prompt. The workflow
-    # writes the .p8 content out before invoking this lane and exports
-    # APP_STORE_CONNECT_API_KEY_PATH to point at it.
+    # xcodebuild's "cloud signing" path fails on fresh teams with
+    # "No profiles found" / "Cloud signing permission error" because
+    # Apple will not autogenerate a distribution certificate on
+    # behalf of the API key — it only reuses existing ones. Drive
+    # Fastlane's cert + sigh explicitly so a Distribution certificate
+    # and App Store provisioning profile exist before xcodebuild runs.
+    cert(
+      api_key:              api_key,
+      output_path:          "./fastlane/signing",
+      generate_apple_certs: true,
+      force:                false
+    )
+
+    sigh(
+      api_key:         api_key,
+      app_identifier:  BUNDLE_ID,
+      platform:        "ios",
+      output_path:     "./fastlane/signing",
+      skip_install:    true,
+      force:           false
+    )
+
+    profile_path = lane_context[SharedValues::SIGH_PROFILE_PATH]
+    profile_name = lane_context[SharedValues::SIGH_NAME]
+    UI.important("Using profile '#{profile_name}' at #{profile_path}")
+
+    # Switch to manual signing just for this build so xcodebuild uses
+    # the profile sigh just created instead of its own cloud path.
     key_id        = ENV.fetch("APP_STORE_CONNECT_API_KEY_ID")
     key_issuer_id = ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID")
     key_path      = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
     signing_args = [
-      "-allowProvisioningUpdates",
       "-authenticationKeyID", key_id,
       "-authenticationKeyIssuerID", key_issuer_id,
     ]
@@ -85,7 +108,19 @@ platform :ios do
       include_bitcode:        false,
       include_symbols:        true,
       skip_profile_detection: true,
-      xcargs:                 signing_args.join(" ")
+      export_options: {
+        method: "app-store",
+        signingStyle: "manual",
+        provisioningProfiles: {
+          BUNDLE_ID => profile_name
+        }
+      },
+      xcargs: [
+        signing_args.join(" "),
+        "CODE_SIGN_STYLE=Manual",
+        "PROVISIONING_PROFILE_SPECIFIER=\"#{profile_name}\"",
+        "CODE_SIGN_IDENTITY=\"Apple Distribution\""
+      ].join(" ")
     )
 
     upload_to_testflight(
