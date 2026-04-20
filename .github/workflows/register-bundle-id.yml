@@ -1,0 +1,46 @@
+name: Register Bundle ID
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: register-bundle-id-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    name: Register bundle id + capabilities in Developer Portal
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+      LC_ALL: en_US.UTF-8
+      LANG: en_US.UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Sanity-check required secrets
+        run: |
+          for var in APP_STORE_CONNECT_API_KEY_ID APP_STORE_CONNECT_API_KEY_ISSUER_ID APP_STORE_CONNECT_API_KEY_CONTENT; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Required secret $var is not set"
+              exit 1
+            fi
+          done
+
+      - name: Run register_bundle_id lane
+        run: bundle exec fastlane register_bundle_id

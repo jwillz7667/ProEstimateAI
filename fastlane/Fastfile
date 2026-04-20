@@ -151,6 +151,63 @@ platform :ios do
     )
   end
 
+  desc "Register the bundle id in the Developer Portal (one-time). Enables Sign In with Apple and In-App Purchase capabilities."
+  lane :register_bundle_id do
+    require "spaceship"
+
+    key_content = ENV.fetch("APP_STORE_CONNECT_API_KEY_CONTENT").strip
+    key_is_pem = key_content.include?("BEGIN PRIVATE KEY")
+
+    if key_is_pem
+      tmp_key = File.join(Dir.mktmpdir("asc_bid"), "AuthKey.p8")
+      File.write(tmp_key, key_content)
+      token = Spaceship::ConnectAPI::Token.create(
+        key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+        issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+        filepath: tmp_key
+      )
+    else
+      token = Spaceship::ConnectAPI::Token.create(
+        key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+        issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+        key: Base64.decode64(key_content)
+      )
+    end
+    Spaceship::ConnectAPI.token = token
+
+    existing = Spaceship::ConnectAPI::BundleId.all(filter: { identifier: BUNDLE_ID }).first
+    if existing
+      UI.success("Bundle ID #{BUNDLE_ID} already registered (#{existing.id})")
+      bundle = existing
+    else
+      UI.message("Registering #{BUNDLE_ID} in the Developer Portal...")
+      bundle = Spaceship::ConnectAPI::BundleId.create(
+        name:       "ProEstimate AI",
+        identifier: BUNDLE_ID,
+        platform:   "IOS",
+        seed_id:    nil
+      )
+      UI.success("Created bundle id #{bundle.id}")
+    end
+
+    # Ensure Sign In with Apple + In-App Purchase capabilities are enabled.
+    wanted = %w[APPLE_ID IN_APP_PURCHASE]
+    existing_caps = bundle.get_capabilities.map(&:capability_type)
+    wanted.each do |cap|
+      if existing_caps.include?(cap)
+        UI.success("Capability #{cap} already enabled")
+      else
+        UI.message("Enabling capability #{cap}...")
+        Spaceship::ConnectAPI::BundleIdCapability.create(
+          bundle_id_id:    bundle.id,
+          capability_type: cap
+        )
+      end
+    end
+
+    UI.success("Bundle ID #{BUNDLE_ID} is ready for signing.")
+  end
+
   desc "Create the Pro subscription group + monthly / annual products via App Store Connect API"
   lane :create_subscriptions do
     require "spaceship"
