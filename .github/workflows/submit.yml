@@ -1,0 +1,57 @@
+name: App Store Submit
+
+# Pushes metadata + screenshots and submits the most recent processed build
+# in App Store Connect for App Store review. Run this AFTER a TestFlight
+# upload has finished processing (Apple usually takes 5-30 minutes once the
+# `testflight` workflow's upload step completes).
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "ship" to confirm App Store review submission'
+        required: true
+        default: ''
+
+concurrency:
+  group: submit-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    name: Submit latest build for App Store review
+    runs-on: macos-15
+    timeout-minutes: 30
+    if: ${{ inputs.confirm == 'ship' }}
+
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+      LC_ALL: en_US.UTF-8
+      LANG: en_US.UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Sanity-check required secrets
+        run: |
+          for var in APP_STORE_CONNECT_API_KEY_ID APP_STORE_CONNECT_API_KEY_ISSUER_ID APP_STORE_CONNECT_API_KEY_CONTENT; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Required secret $var is not set"
+              exit 1
+            fi
+          done
+
+      - name: Run submit lane
+        run: bundle exec fastlane submit
