@@ -1,7 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getMeHandler, updateMeHandler } from './companies.controller';
+import {
+  getMeHandler,
+  updateMeHandler,
+  uploadLogoHandler,
+  deleteLogoHandler,
+} from './companies.controller';
 import { validate } from '../../middleware/validate.middleware';
-import { updateCompanySchema } from './companies.validators';
+import { updateCompanySchema, uploadLogoSchema } from './companies.validators';
 
 const router = Router();
 
@@ -11,5 +16,7 @@ function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => P
 
 router.get('/me', asyncHandler(getMeHandler));
 router.patch('/me', validate(updateCompanySchema), asyncHandler(updateMeHandler));
+router.post('/me/logo', validate(uploadLogoSchema), asyncHandler(uploadLogoHandler));
+router.delete('/me/logo', asyncHandler(deleteLogoHandler));
 
 export default router;

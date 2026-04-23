@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// Lists estimates linked to this project. Each row shows the estimate
-/// number, version, total amount, and status badge. Includes primary
-/// "Generate with AI" and secondary "Blank Estimate" CTAs, plus a
-/// per-row context menu to spin up an invoice from any estimate.
+/// number, version, total amount, and status badge. Exposes a single
+/// primary "Generate Estimate" CTA that uses AI with any selected
+/// materials as context; a secondary menu houses the blank-estimate
+/// escape hatch for power users who want to start from scratch.
 struct ProjectEstimatesSection: View {
     let estimates: [Estimate]
     var isGeneratingAI: Bool = false
@@ -25,10 +26,11 @@ struct ProjectEstimatesSection: View {
                 estimatesList
             }
 
-            // Generate + blank create buttons
+            // One primary action. Users who explicitly want an empty
+            // estimate can reach it via the overflow menu.
             VStack(spacing: SpacingTokens.xs) {
                 PrimaryCTAButton(
-                    title: "Generate with AI",
+                    title: estimates.isEmpty ? "Generate Estimate" : "Generate New Estimate",
                     icon: "wand.and.stars",
                     isLoading: isGeneratingAI,
                     isDisabled: isGeneratingAI
@@ -36,9 +38,19 @@ struct ProjectEstimatesSection: View {
                     onGenerateAI?()
                 }
 
-                SecondaryButton(title: "Blank Estimate", icon: "doc.badge.plus") {
-                    onCreateEstimate?()
+                Menu {
+                    Button {
+                        onCreateEstimate?()
+                    } label: {
+                        Label("Start from blank estimate", systemImage: "doc.badge.plus")
+                    }
+                } label: {
+                    Text("More options")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, SpacingTokens.xxs)
                 }
+                .disabled(isGeneratingAI)
             }
             .padding(.horizontal, SpacingTokens.md)
         }

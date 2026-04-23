@@ -106,11 +106,7 @@ struct AuthGateView: View {
                     fullName: user.fullName,
                     avatarURL: user.avatarURL
                 )
-                appState.currentCompany = AppState.CurrentCompany(
-                    id: company.id,
-                    name: company.name,
-                    logoURL: company.logoURL
-                )
+                appState.currentCompany = AppState.CurrentCompany.from(company)
                 appState.isAuthenticated = true
 
             case .failure:

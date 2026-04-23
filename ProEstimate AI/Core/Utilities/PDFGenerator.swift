@@ -134,7 +134,10 @@ enum PDFGenerator {
         assumptions: String? = nil,
         exclusions: String? = nil,
         notes: String? = nil,
-        terms: String? = nil
+        terms: String? = nil,
+        beforeImage: UIImage? = nil,
+        afterImage: UIImage? = nil,
+        projectTitle: String? = nil
     ) -> URL? {
         let data = render { ctx in
             Renderer(ctx: ctx, branding: branding).drawEstimate(
@@ -154,7 +157,10 @@ enum PDFGenerator {
                 assumptions: assumptions,
                 exclusions: exclusions,
                 notes: notes,
-                terms: terms
+                terms: terms,
+                beforeImage: beforeImage,
+                afterImage: afterImage,
+                projectTitle: projectTitle
             )
         }
         return writeToTemp(data: data, filename: "\(estimateNumber).pdf")
@@ -309,7 +315,10 @@ enum PDFGenerator {
             assumptions: String?,
             exclusions: String?,
             notes: String?,
-            terms: String?
+            terms: String?,
+            beforeImage: UIImage?,
+            afterImage: UIImage?,
+            projectTitle: String?
         ) {
             drawHeader(
                 documentKind: "ESTIMATE",
@@ -323,8 +332,18 @@ enum PDFGenerator {
             )
             if let client { drawClientBlock(client: client) }
 
+            drawProjectVisuals(
+                projectTitle: projectTitle,
+                before: beforeImage,
+                after: afterImage
+            )
+
             drawGroupedLineItemsTable(lineItems: lineItems)
 
+            // Always render Materials, Labor, and Other subtotals — even at
+            // zero — so the reader can see at a glance what the categories
+            // contributed. Matters for DIY estimates, where Labor = $0.00
+            // is a meaningful statement rather than an omission.
             drawTotalsPanel(rows: [
                 TotalRow(label: "Materials", amount: subtotalMaterials),
                 TotalRow(label: "Labor", amount: subtotalLabor),
@@ -589,6 +608,97 @@ enum PDFGenerator {
                 y += 12
             }
             y += 14
+        }
+
+        /// Renders a "Project Visuals" section with before/after photos side
+        /// by side. Skips the whole section if neither image is provided.
+        /// Falls back to a single full-width image if only one side is
+        /// available. Forces a page break if the section wouldn't fit on the
+        /// current page.
+        private func drawProjectVisuals(
+            projectTitle: String?,
+            before: UIImage?,
+            after: UIImage?
+        ) {
+            guard before != nil || after != nil else { return }
+
+            let sectionLabel = (projectTitle?.isEmpty == false)
+                ? "Project Visuals — \(projectTitle!)"
+                : "Project Visuals"
+
+            let imageAreaHeight: CGFloat = 170
+            let captionHeight: CGFloat = 14
+            let sectionTitleBlock: CGFloat = 26 // title + accent rule + padding
+            let estimatedBlockHeight = sectionTitleBlock + imageAreaHeight + captionHeight + 20
+            if y + estimatedBlockHeight > pageBottom - 40 { newPage() }
+
+            drawSectionTitle(sectionLabel)
+
+            if let before, let after {
+                let gap: CGFloat = 12
+                let slotWidth = (contentWidth - gap) / 2
+                drawImageSlot(image: before, caption: "Before", x: margin, width: slotWidth, maxHeight: imageAreaHeight)
+                drawImageSlot(image: after,  caption: "After",  x: margin + slotWidth + gap, width: slotWidth, maxHeight: imageAreaHeight)
+                y += imageAreaHeight + captionHeight + 12
+            } else if let single = before ?? after {
+                let caption = before != nil ? "Before" : "After"
+                drawImageSlot(image: single, caption: caption, x: margin, width: contentWidth, maxHeight: imageAreaHeight)
+                y += imageAreaHeight + captionHeight + 12
+            }
+        }
+
+        /// Draws one project-visual slot: the image aspect-fitted within the
+        /// slot, a hairline border, and a caption chip below. Image origin is
+        /// current `y`.
+        private func drawImageSlot(
+            image: UIImage,
+            caption: String,
+            x: CGFloat,
+            width: CGFloat,
+            maxHeight: CGFloat
+        ) {
+            let aspect = image.size.width / max(image.size.height, 1)
+            var drawWidth = width
+            var drawHeight = width / aspect
+            if drawHeight > maxHeight {
+                drawHeight = maxHeight
+                drawWidth = maxHeight * aspect
+            }
+            let drawX = x + (width - drawWidth) / 2
+            let drawY = y + (maxHeight - drawHeight) / 2
+
+            // Subtle frame behind the image so slots read as cards even if the
+            // image has a transparent background.
+            let frame = CGRect(x: x, y: y, width: width, height: maxHeight)
+            UIColor(white: 0.96, alpha: 1.0).setFill()
+            UIRectFill(frame)
+
+            image.draw(in: CGRect(x: drawX, y: drawY, width: drawWidth, height: drawHeight))
+
+            // Border
+            let border = UIBezierPath(rect: frame)
+            border.lineWidth = 0.5
+            hairlineColor.setStroke()
+            border.stroke()
+
+            // Caption chip below
+            let captionY = y + maxHeight + 4
+            let chipHeight: CGFloat = 14
+            let captionAttrs: [NSAttributedString.Key: Any] = [
+                .font: tableHeaderFont,
+                .foregroundColor: branding.accentColor,
+                .kern: 1.3 as NSNumber,
+            ]
+            let captionStr = caption.uppercased() as NSString
+            let captionSize = captionStr.size(withAttributes: captionAttrs)
+            let chipWidth = captionSize.width + 14
+            let chipRect = CGRect(x: x, y: captionY, width: chipWidth, height: chipHeight)
+            branding.accentColor.withAlphaComponent(0.1).setFill()
+            UIBezierPath(roundedRect: chipRect, cornerRadius: 3).fill()
+            captionStr.draw(
+                at: CGPoint(x: x + 7, y: captionY + 1),
+                withAttributes: captionAttrs
+            )
         }
 
         private func drawGroupedLineItemsTable(lineItems: [PDFLineItem]) {

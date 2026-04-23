@@ -1,6 +1,9 @@
 import Foundation
 import Observation
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @Observable
 final class SettingsViewModel {
@@ -15,6 +18,7 @@ final class SettingsViewModel {
     var pricingProfiles: [PricingProfile] = []
     var isLoading: Bool = false
     var isSaving: Bool = false
+    var isUploadingLogo: Bool = false
     var errorMessage: String?
     var successMessage: String?
 
@@ -27,8 +31,17 @@ final class SettingsViewModel {
     var companyCity: String = ""
     var companyState: String = ""
     var companyZip: String = ""
+    var companyWebsite: String = ""
     var primaryColor: Color = ColorTokens.primaryOrange
     var secondaryColor: Color = Color(hex: 0x1E293B)
+
+    /// Locally selected logo (set immediately on PhotosPicker pick so the UI
+    /// reflects the new image before the upload round-trip completes). Nil
+    /// once the uploaded URL is the source of truth.
+    var companyLogoImage: UIImage?
+    /// The persisted logo URL from the backend — used by `AsyncImage` to
+    /// render the saved logo when `companyLogoImage` is nil.
+    var companyLogoURL: URL?
 
     // MARK: - Tax Settings Fields
 
@@ -69,6 +82,18 @@ final class SettingsViewModel {
         secondaryColor.toHex()
     }
 
+    /// True when enough branding is saved to produce a polished PDF —
+    /// driver for the incomplete-branding banner in the estimate editor.
+    var isBrandingComplete: Bool {
+        guard !companyName.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        let hasContact = !companyPhone.trimmingCharacters(in: .whitespaces).isEmpty
+            || !companyEmail.trimmingCharacters(in: .whitespaces).isEmpty
+        let hasAddress = !companyCity.trimmingCharacters(in: .whitespaces).isEmpty
+            && !companyState.trimmingCharacters(in: .whitespaces).isEmpty
+        let hasLogo = companyLogoURL != nil
+        return hasContact && hasAddress && hasLogo
+    }
+
     // MARK: - Init
 
     init(service: SettingsServiceProtocol = LiveSettingsService()) {
@@ -106,6 +131,7 @@ final class SettingsViewModel {
                 city: companyCity.isEmpty ? nil : companyCity,
                 state: companyState.isEmpty ? nil : companyState,
                 zip: companyZip.isEmpty ? nil : companyZip,
+                websiteUrl: companyWebsite.isEmpty ? nil : companyWebsite,
                 primaryColor: primaryColorHex,
                 secondaryColor: secondaryColorHex
             )
@@ -117,6 +143,42 @@ final class SettingsViewModel {
             errorMessage = error.localizedDescription
         }
         isSaving = false
+    }
+
+    /// Upload the selected logo image and persist the resulting Company
+    /// snapshot. The local `companyLogoImage` is kept so the UI shows the
+    /// crisp, freshly-picked bytes rather than waiting for `AsyncImage` to
+    /// re-download what the server just accepted.
+    func uploadCompanyLogo(data: Data, mimeType: String) async {
+        isUploadingLogo = true
+        errorMessage = nil
+        do {
+            let updated = try await service.uploadLogo(imageData: data, mimeType: mimeType)
+            company = updated
+            companyLogoURL = updated.logoURL
+            companyLogoImage = UIImage(data: data)
+            syncAppState(from: updated)
+            successMessage = "Logo uploaded."
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isUploadingLogo = false
+    }
+
+    func removeCompanyLogo() async {
+        isUploadingLogo = true
+        errorMessage = nil
+        do {
+            let updated = try await service.deleteLogo()
+            company = updated
+            companyLogoURL = nil
+            companyLogoImage = nil
+            syncAppState(from: updated)
+            successMessage = "Logo removed."
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isUploadingLogo = false
     }
 
     func saveTaxSettings() async {
@@ -219,11 +281,7 @@ final class SettingsViewModel {
     // MARK: - Private
 
     private func syncAppState(from company: Company) {
-        appState?.currentCompany = AppState.CurrentCompany(
-            id: company.id,
-            name: company.name,
-            logoURL: company.logoURL
-        )
+        appState?.currentCompany = AppState.CurrentCompany.from(company)
     }
 
     private func populateFields(from company: Company) {
@@ -234,6 +292,8 @@ final class SettingsViewModel {
         companyCity = company.city ?? ""
         companyState = company.state ?? ""
         companyZip = company.zip ?? ""
+        companyWebsite = company.websiteUrl ?? ""
+        companyLogoURL = company.logoURL
         defaultTaxRate = company.defaultTaxRate ?? 8.25
         taxRateText = "\(NSDecimalNumber(decimal: company.defaultTaxRate ?? 8.25).doubleValue)"
         estimatePrefix = company.estimatePrefix ?? "EST"

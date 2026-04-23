@@ -98,6 +98,19 @@ export function createApp() {
       res.send(imageResult.data);
     } catch (err) { next(err); }
   });
+  v1.get('/companies/:id/logo', async (req, res, next) => {
+    try {
+      const { getPublicCompanyLogo } = await import('./modules/companies/companies.service');
+      const imageResult = await getPublicCompanyLogo(req.params.id);
+      if (!imageResult) {
+        res.status(404).json({ ok: false, error: { code: 'NOT_FOUND', message: 'No logo set for this company' } });
+        return;
+      }
+      res.set('Content-Type', imageResult.mimeType);
+      res.set('Cache-Control', 'public, max-age=86400, immutable');
+      res.send(imageResult.data);
+    } catch (err) { next(err); }
+  });
 
   // Public proposal share page (no auth — accessed by clients via share link)
   v1.use('/proposals/share', proposalsShareRoutes);

@@ -28,6 +28,7 @@ final class LiveSettingsService: SettingsServiceProtocol, Sendable {
             city: settings.city,
             state: settings.state,
             zip: settings.zip,
+            websiteUrl: settings.websiteUrl,
             primaryColor: settings.primaryColor,
             secondaryColor: settings.secondaryColor
         )
@@ -50,6 +51,18 @@ final class LiveSettingsService: SettingsServiceProtocol, Sendable {
             nextInvoiceNumber: settings.nextInvoiceNumber
         )
         return try await apiClient.request(.updateCompany(body: body))
+    }
+
+    func uploadLogo(imageData: Data, mimeType: String) async throws -> Company {
+        let body = CompanyLogoUploadBody(
+            imageData: imageData.base64EncodedString(),
+            mimeType: mimeType
+        )
+        return try await apiClient.request(.uploadCompanyLogo(body: body))
+    }
+
+    func deleteLogo() async throws -> Company {
+        try await apiClient.request(.deleteCompanyLogo)
     }
 
     func loadPricingProfiles() async throws -> [PricingProfile] {
@@ -102,6 +115,7 @@ private struct CompanyBrandingBody: Encodable, Sendable {
     let city: String?
     let state: String?
     let zip: String?
+    let websiteUrl: String?
     let primaryColor: String?
     let secondaryColor: String?
 }
@@ -118,4 +132,11 @@ private struct NumberingSettingsBody: Encodable, Sendable {
     let invoicePrefix: String
     let nextEstimateNumber: Int
     let nextInvoiceNumber: Int
+}
+
+/// Logo upload body — base64-encoded payload + explicit MIME so the server
+/// can validate the image type without sniffing bytes.
+private struct CompanyLogoUploadBody: Encodable, Sendable {
+    let imageData: String
+    let mimeType: String
 }

@@ -17,6 +17,8 @@ enum APIEndpoint: Sendable {
     case deleteMe
     case getCompany
     case updateCompany(body: Encodable & Sendable)
+    case uploadCompanyLogo(body: Encodable & Sendable)
+    case deleteCompanyLogo
 
     // MARK: - Clients
     case listClients(cursor: String?)
@@ -136,6 +138,8 @@ extension APIEndpoint {
         case .deleteMe: return "/users/me"
         case .getCompany: return "/companies/me"
         case .updateCompany: return "/companies/me"
+        case .uploadCompanyLogo: return "/companies/me/logo"
+        case .deleteCompanyLogo: return "/companies/me/logo"
 
         // Clients
         case .listClients: return "/clients"
@@ -240,6 +244,7 @@ extension APIEndpoint {
         switch self {
         case .authLogin, .authSignup, .authAppleSignIn, .authRefreshToken, .authLogout,
              .authForgotPassword,
+             .uploadCompanyLogo,
              .createClient, .createProject, .uploadAsset, .createGeneration,
              .createEstimate, .generateAIEstimate, .createEstimateLineItem,
              .createProposal, .sendProposal,
@@ -257,6 +262,7 @@ extension APIEndpoint {
             return .patch
 
         case .deleteMe,
+             .deleteCompanyLogo,
              .deleteClient, .deleteProject, .deleteAsset,
              .deleteEstimate, .deleteEstimateLineItem,
              .deleteInvoice, .deleteInvoiceLineItem,
@@ -322,6 +328,7 @@ extension APIEndpoint {
         case .authForgotPassword(let email):
             return ForgotPasswordBody(email: email)
         case .updateCompany(let body),
+             .uploadCompanyLogo(let body),
              .createClient(let body), .updateClient(_, let body),
              .createProject(let body), .updateProject(_, let body),
              .uploadAsset(_, let body),
