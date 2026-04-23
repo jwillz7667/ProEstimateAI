@@ -107,18 +107,15 @@ struct MaterialSuggestionsSection: View {
                 }
 
                 if selectedCount > 0 {
-                    let title: String = {
-                        if hasExistingEstimate {
-                            return "Create Custom Estimate"
-                        }
-                        return isDIY ? "Create DIY Estimate" : "Create Professional Estimate"
-                    }()
-
-                    PrimaryCTAButton(
-                        title: title,
-                        icon: "doc.text.fill"
-                    ) {
-                        onAddToEstimate?()
+                    HStack(spacing: SpacingTokens.xs) {
+                        Image(systemName: "arrow.down")
+                            .font(.caption2)
+                            .foregroundStyle(ColorTokens.primaryOrange)
+                        Text("Tap Generate Estimate below to include these materials.")
+                            .font(TypographyTokens.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer()
                     }
                 }
             }

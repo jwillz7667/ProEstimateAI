@@ -23,3 +23,12 @@ export const updateCompanySchema = z.object({
 });
 
 export type UpdateCompanyInput = z.infer<typeof updateCompanySchema>;
+
+// Max encoded base64 length ≈ 2.85 MB (roughly 2 MB decoded). Keeps the
+// Company row + Postgres toast overhead well inside the 10mb JSON body limit.
+export const uploadLogoSchema = z.object({
+  image_data: z.string().min(1).max(3_000_000),
+  mime_type: z.enum(['image/png', 'image/jpeg', 'image/webp']),
+});
+
+export type UploadLogoInput = z.infer<typeof uploadLogoSchema>;

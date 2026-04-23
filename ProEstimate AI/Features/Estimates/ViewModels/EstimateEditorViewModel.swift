@@ -1,6 +1,9 @@
 import Foundation
 import Observation
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @Observable
 final class EstimateEditorViewModel {
@@ -292,16 +295,21 @@ final class EstimateEditorViewModel {
     // MARK: - PDF Generation
 
     /// Render the current estimate to a professional, client-ready PDF. The
-    /// caller supplies the branding + client bundles so this method stays
-    /// platform-pure — the view pulls those values from `AppState` /
-    /// the project and hands them in.
+    /// caller supplies branding + client + project images so this method
+    /// stays platform-pure — the view orchestrates the async fetches and
+    /// hands in fully-resolved values.
     func generatePDF(
         branding: PDFGenerator.CompanyBranding,
-        client: PDFGenerator.ClientInfo? = nil
+        client: PDFGenerator.ClientInfo? = nil,
+        beforeImage: UIImage? = nil,
+        afterImage: UIImage? = nil,
+        projectTitle: String? = nil
     ) -> URL? {
         guard let estimate else { return nil }
 
-        // Compose line items grouped by category. In DIY mode we strip labor.
+        // Compose line items grouped by category. In DIY mode we strip labor
+        // from the line item list but the PDF still prints the Labor
+        // subtotal row ($0.00) so the reader sees the omission explicitly.
         var pdfItems: [PDFGenerator.PDFLineItem] = []
         pdfItems.append(contentsOf: materialItems.map { draft in
             PDFGenerator.PDFLineItem(
@@ -361,7 +369,10 @@ final class EstimateEditorViewModel {
             assumptions: estimate.assumptions,
             exclusions: estimate.exclusions,
             notes: notes.isEmpty ? nil : notes,
-            terms: nil
+            terms: nil,
+            beforeImage: beforeImage,
+            afterImage: afterImage,
+            projectTitle: projectTitle
         )
     }
 

@@ -354,7 +354,10 @@ export async function generateAI(companyId: string, userId: string, projectId: s
           unit: item.unit,
           unitCost: item.unitCost,
           markupPercent: item.markupPercent,
-          taxRate: item.taxRate * 100, // stored as percent, context uses fraction
+          // Canonical: tax_rate stored as a fraction (e.g. 0.0825 for 8.25%),
+          // matching the validator (max 1.0) and the recalc logic that
+          // treats the DB value as a multiplier.
+          taxRate: item.taxRate,
           lineTotal,
           sortOrder: i,
         },

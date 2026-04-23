@@ -208,6 +208,8 @@ model Company {
   state                String?
   zip                  String?
   logoUrl              String?
+  logoImageData        String?  @db.Text
+  logoImageMimeType    String?
   primaryColor         String?  @default("#F97316")
   secondaryColor       String?
   defaultTaxRate       Decimal? @db.Decimal(5, 4)

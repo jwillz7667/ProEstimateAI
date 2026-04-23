@@ -8,6 +8,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   CORS_ORIGIN: z.string().default('*'),
   GOOGLE_AI_API_KEY: z.string().min(1).optional(),
+  DEEPSEEK_API_KEY: z.string().min(1).optional(),
   PIAPI_API_KEY: z.string().min(1).optional(),
   ADMIN_EMAILS: z.string().optional().default(''),
   GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),

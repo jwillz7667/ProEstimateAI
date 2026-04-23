@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct EstimateEditorView: View {
     let estimateId: String
@@ -8,6 +11,7 @@ struct EstimateEditorView: View {
     @State private var isExportingPDF = false
     @State private var isCreatingProposal = false
     @State private var showDiscardConfirmation = false
+    @State private var exportProgressMessage: String?
 
     /// Identifiable wrapper so `.sheet(item:)` can drive the share sheet
     /// without the race that kills `.sheet(isPresented:) + if let url`.
@@ -40,6 +44,10 @@ struct EstimateEditorView: View {
                         subtitle: "This estimate could not be loaded."
                     )
                 }
+            }
+
+            if isExportingPDF, let message = exportProgressMessage {
+                exportProgressOverlay(message: message)
             }
         }
         .navigationTitle(viewModel.estimate?.estimateNumber ?? "New Estimate")
@@ -169,31 +177,32 @@ struct EstimateEditorView: View {
 
     // MARK: - Feature-Gated Actions
 
+    /// Export the current estimate to a fully branded PDF. The heavy lift
+    /// lives in `performBrandedExport`: it asynchronously pulls the full
+    /// company record, the project + its client, and downloads the logo
+    /// plus before/after images in parallel, then hands everything to
+    /// `PDFGenerator`. Any individual fetch can fail — the PDF still goes
+    /// out, just with fewer adornments — so the user always gets a file.
     private func handleExportPDF() {
         let result = featureGateCoordinator.guardExportQuote()
         switch result {
         case .allowed:
             guard !isExportingPDF else { return }
             isExportingPDF = true
+            exportProgressMessage = "Preparing estimate..."
             Task {
-                // Save any pending edits first so the PDF reflects what the
-                // user actually sees on screen. If the server-side save
-                // fails, still attempt to export the local snapshot —
-                // better than nothing.
                 if viewModel.hasUnsavedChanges {
                     await viewModel.save()
                 }
-
-                // Re-hop to MainActor for the PDF render (UIKit graphics) +
-                // state mutation.
+                let url = await performBrandedExport()
                 await MainActor.run {
-                    let branding = brandingFromAppState()
-                    if let url = viewModel.generatePDF(branding: branding, client: nil) {
+                    if let url {
                         exportedPDF = ExportedPDF(url: url)
                     } else {
                         viewModel.errorMessage = "Couldn't build the PDF. Make sure the estimate has at least one line item and try again."
                     }
                     isExportingPDF = false
+                    exportProgressMessage = nil
                 }
             }
         case .blocked(let decision):
@@ -201,24 +210,145 @@ struct EstimateEditorView: View {
         }
     }
 
-    /// Build a `PDFGenerator.CompanyBranding` from the signed-in user's
-    /// company snapshot. AppState only carries a lightweight snapshot
-    /// (id, name, logoURL) — full branding (phone, email, address,
-    /// accent color) would require loading the full `Company` record.
-    /// Uses sensible defaults when those fields aren't available.
-    private func brandingFromAppState() -> PDFGenerator.CompanyBranding {
-        let companyName = appState.currentCompany?.name ?? "ProEstimate AI"
-        // Logo image is deferred — loading via URLSession here would block
-        // the render. If set, future work can preload it into AppState.
-        return PDFGenerator.CompanyBranding(
-            name: companyName,
-            phone: nil,
-            email: nil,
-            addressLines: [],
-            websiteUrl: nil,
-            logoImage: nil,
-            accentHex: "#FF9230"
+    /// Fetches every piece of contextual data the estimate PDF needs and
+    /// then renders it. Fail-soft: each optional fetch is independent, so a
+    /// missing logo or generation doesn't kill the export.
+    private func performBrandedExport() async -> URL? {
+        guard let estimate = viewModel.estimate else { return nil }
+        let projectId = estimate.projectId
+
+        await setProgress("Fetching branding...")
+
+        // 1. Full Company (may not be in AppState if the user hasn't visited
+        // Settings yet). Fail-soft: fall back to the minimal AppState
+        // snapshot if this 404s or the network drops.
+        let settingsService = LiveSettingsService()
+        let projectService = LiveProjectService()
+
+        async let companyTask: Company? = try? await settingsService.loadCompanySettings()
+        async let projectTask: Project? = try? await projectService.getProject(id: projectId)
+        async let assetsTask: [Asset] = (try? await APIClient.shared.request(.listAssets(projectId: projectId))) ?? []
+        async let generationsTask: [AIGeneration] = (try? await APIClient.shared.request(.listGenerations(projectId: projectId))) ?? []
+
+        let company = await companyTask
+        let project = await projectTask
+        let assets = await assetsTask
+        let generations = await generationsTask
+
+        await setProgress("Downloading images...")
+
+        // 2. Identify images to fetch.
+        let beforeURL = assets
+            .filter { $0.assetType == .original }
+            .sorted { $0.sortOrder < $1.sortOrder || ($0.sortOrder == $1.sortOrder && $0.createdAt < $1.createdAt) }
+            .first?
+            .url
+
+        let afterURL = generations
+            .filter { $0.status == .completed }
+            .sorted { $0.createdAt > $1.createdAt }
+            .first?
+            .previewURL
+
+        let logoURL = company?.logoURL ?? appState.currentCompany?.logoURL
+
+        // Parallel image downloads. Each fetch is independently optional.
+        async let logoFetch: UIImage? = logoURL.flatMap { url in Task { try? await ImageFetcher.fetch(url) } }?.value
+        async let beforeFetch: UIImage? = beforeURL.flatMap { url in Task { try? await ImageFetcher.fetch(url) } }?.value
+        async let afterFetch: UIImage? = afterURL.flatMap { url in Task { try? await ImageFetcher.fetch(url) } }?.value
+
+        let logoImage = await logoFetch
+        let beforeImage = await beforeFetch
+        let afterImage = await afterFetch
+
+        // 3. Client resolution for the "Prepared For" block.
+        let client = await resolveClient(for: project)
+
+        // 4. Branding composition — prefer the freshly-fetched Company; fall
+        // back to the AppState snapshot; fall back to bare defaults.
+        let branding = buildBranding(from: company, logoImage: logoImage)
+
+        await setProgress("Rendering PDF...")
+
+        return await MainActor.run {
+            viewModel.generatePDF(
+                branding: branding,
+                client: client,
+                beforeImage: beforeImage,
+                afterImage: afterImage,
+                projectTitle: project?.title
+            )
+        }
+    }
+
+    @MainActor
+    private func setProgress(_ message: String) {
+        exportProgressMessage = message
+    }
+
+    private func resolveClient(for project: Project?) async -> PDFGenerator.ClientInfo? {
+        guard let clientId = project?.clientId, !clientId.isEmpty else { return nil }
+        guard let record: Client = try? await APIClient.shared.request(.getClient(id: clientId)) else {
+            return nil
+        }
+        let addressLines = AppState.CurrentCompany.composeAddressLines(
+            street: record.address,
+            city: record.city,
+            state: record.state,
+            zip: record.zip
         )
+        return PDFGenerator.ClientInfo(
+            name: record.name,
+            company: nil,
+            phone: record.phone,
+            email: record.email,
+            addressLines: addressLines
+        )
+    }
+
+    private func buildBranding(from company: Company?, logoImage: UIImage?) -> PDFGenerator.CompanyBranding {
+        if let company {
+            let addressLines = AppState.CurrentCompany.composeAddressLines(
+                street: company.address,
+                city: company.city,
+                state: company.state,
+                zip: company.zip
+            )
+            return PDFGenerator.CompanyBranding(
+                name: company.name,
+                phone: company.phone,
+                email: company.email,
+                addressLines: addressLines,
+                websiteUrl: company.websiteUrl,
+                logoImage: logoImage,
+                accentHex: company.primaryColor
+            )
+        }
+        let snapshot = appState.currentCompany
+        return PDFGenerator.CompanyBranding(
+            name: snapshot?.name ?? "ProEstimate AI",
+            phone: snapshot?.phone,
+            email: snapshot?.email,
+            addressLines: snapshot?.addressLines ?? [],
+            websiteUrl: snapshot?.websiteUrl,
+            logoImage: logoImage,
+            accentHex: snapshot?.primaryColorHex
+        )
+    }
+
+    // MARK: - Branding Completeness
+
+    /// Derived from the AppState snapshot; drives the incomplete-branding
+    /// banner and the PDF hardening guidance. Mirrors the
+    /// `SettingsViewModel.isBrandingComplete` rule so the user sees the same
+    /// criteria here and in Settings.
+    private var isBrandingComplete: Bool {
+        guard let snapshot = appState.currentCompany else { return false }
+        guard !snapshot.name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        let hasContact = (snapshot.phone?.isEmpty == false) || (snapshot.email?.isEmpty == false)
+        let hasAddress = snapshot.addressLines.contains { !$0.isEmpty }
+        let hasLogo = snapshot.logoURL != nil
+        return hasContact && hasAddress && hasLogo
     }
 
     private func handleCreateProposal() {
@@ -253,6 +383,13 @@ struct EstimateEditorView: View {
             List {
                 // Header summary
                 headerSection
+
+                // Incomplete branding nudge — shown before the DIY toggle so
+                // it's the first thing a contractor sees when about to ship
+                // a bare-bones PDF.
+                if !isBrandingComplete {
+                    brandingNudgeSection
+                }
 
                 // DIY / Professional toggle
                 diyToggleSection
@@ -362,6 +499,47 @@ struct EstimateEditorView: View {
         }
     }
 
+    private var brandingNudgeSection: some View {
+        Section {
+            HStack(alignment: .top, spacing: SpacingTokens.sm) {
+                Image(systemName: "paintbrush.pointed")
+                    .font(.title3)
+                    .foregroundStyle(ColorTokens.primaryOrange)
+                    .padding(.top, 2)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Complete your branding")
+                        .font(TypographyTokens.headline)
+                    Text("Add your logo, address, and contact info in Settings so every estimate PDF goes out on a professional letterhead.")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Button {
+                        openBrandingSettings()
+                    } label: {
+                        Text("Complete in Settings")
+                            .font(TypographyTokens.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(ColorTokens.primaryOrange)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
+            }
+            .padding(.vertical, SpacingTokens.xs)
+        }
+    }
+
+    private func openBrandingSettings() {
+        dismiss()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            appState.selectedTab = .settings
+            router.settingsPath.append(AppDestination.companyBranding)
+        }
+    }
+
     private var headerSection: some View {
         Section {
             HStack(spacing: SpacingTokens.md) {
@@ -392,6 +570,19 @@ struct EstimateEditorView: View {
         }
     }
 
+    private func exportProgressOverlay(message: String) -> some View {
+        VStack(spacing: SpacingTokens.sm) {
+            ProgressView()
+                .controlSize(.large)
+            Text(message)
+                .font(TypographyTokens.subheadline)
+                .foregroundStyle(.primary)
+        }
+        .padding(SpacingTokens.lg)
+        .frame(maxWidth: 260)
+        .glassCard()
+        .padding(SpacingTokens.md)
+    }
 }
 
 // MARK: - Preview
@@ -403,4 +594,5 @@ struct EstimateEditorView: View {
     .environment(FeatureGateCoordinator.preview())
     .environment(PaywallPresenter())
     .environment(AppRouter())
+    .environment(AppState())
 }

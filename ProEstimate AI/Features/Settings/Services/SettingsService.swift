@@ -7,6 +7,8 @@ protocol SettingsServiceProtocol: Sendable {
     func saveCompanyBranding(_ settings: CompanyBrandingUpdate) async throws -> Company
     func saveTaxSettings(_ settings: TaxSettingsUpdate) async throws -> Company
     func saveNumberingSettings(_ settings: NumberingSettingsUpdate) async throws -> Company
+    func uploadLogo(imageData: Data, mimeType: String) async throws -> Company
+    func deleteLogo() async throws -> Company
     func loadPricingProfiles() async throws -> [PricingProfile]
     func savePricingProfile(_ profile: PricingProfile) async throws -> PricingProfile
     func deletePricingProfile(id: String) async throws
@@ -23,6 +25,7 @@ struct CompanyBrandingUpdate: Sendable {
     let city: String?
     let state: String?
     let zip: String?
+    let websiteUrl: String?
     let primaryColor: String?
     let secondaryColor: String?
 }
@@ -96,11 +99,21 @@ final class MockSettingsService: SettingsServiceProtocol {
             nextProposalNumber: 3001,
             defaultLanguage: "en",
             timezone: "America/New_York",
-            websiteUrl: nil,
+            websiteUrl: settings.websiteUrl,
             taxLabel: "Tax",
             createdAt: Date(),
             updatedAt: Date()
         )
+    }
+
+    func uploadLogo(imageData: Data, mimeType: String) async throws -> Company {
+        try await Task.sleep(nanoseconds: simulatedDelay)
+        return Company.sample
+    }
+
+    func deleteLogo() async throws -> Company {
+        try await Task.sleep(nanoseconds: simulatedDelay)
+        return Company.sample
     }
 
     func saveTaxSettings(_ settings: TaxSettingsUpdate) async throws -> Company {
