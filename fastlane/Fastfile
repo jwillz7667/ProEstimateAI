@@ -563,15 +563,29 @@ platform :ios do
 
       # ----------------------------------------------------------------
       # Introductory offer — monthly only gets the 7-day free trial.
-      # Idempotent: skip if an intro offer already exists in any territory.
+      # ASC scopes intro offers per-territory, so we create one entry
+      # per storefront we care about. USA is the launch priority;
+      # additional territories can be layered on by extending the list.
+      # Idempotent: skip if an intro offer already exists for that
+      # territory.
       # ----------------------------------------------------------------
       intro = p[:intro_offer]
       if intro
-        intros_resp = asc_request.call(:get, "subscriptions/#{sub_id}/introductoryOffers?limit=50")
-        if (intros_resp["data"] || []).any?
-          UI.success("#{p[:product_id]} already has an introductory offer")
-        else
-          UI.message("Creating 7-day free trial for #{p[:product_id]}...")
+        intros_resp = asc_request.call(:get, "subscriptions/#{sub_id}/introductoryOffers?include=territory&limit=200")
+        existing_intros = intros_resp["data"] || []
+
+        intro_territories = ["USA"]
+        intro_territories.each do |territory_id|
+          already_present = existing_intros.any? do |offer|
+            offer.dig("relationships", "territory", "data", "id") == territory_id
+          end
+
+          if already_present
+            UI.success("#{p[:product_id]} already has an intro offer in #{territory_id}")
+            next
+          end
+
+          UI.message("Creating 7-day free trial for #{p[:product_id]} in #{territory_id}...")
           asc_request.call(:post, "subscriptionIntroductoryOffers", {
             data: {
               type: "subscriptionIntroductoryOffers",
@@ -581,12 +595,12 @@ platform :ios do
                 offerMode:       intro[:offerMode],
               },
               relationships: {
-                subscription: { data: { type: "subscriptions", id: sub_id } },
-                # No territory → applies to every storefront Apple supports.
+                subscription: { data: { type: "subscriptions", id: sub_id       } },
+                territory:    { data: { type: "territories",   id: territory_id } },
               }
             }
           })
-          UI.success("Intro offer created for #{p[:product_id]}")
+          UI.success("Intro offer created for #{p[:product_id]} in #{territory_id}")
         end
       end
 
