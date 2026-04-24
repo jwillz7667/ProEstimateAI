@@ -307,6 +307,54 @@ platform :ios do
       sleep 30
     end
 
+    # ------------------------------------------------------------------
+    # Clear any stale review submissions before calling deliver.
+    # ASC will reject `deliver(submit_for_review: true)` with
+    # "A review submission is already in progress" if a prior submission
+    # is still open — commonly a READY_FOR_REVIEW that was never sent or
+    # a submission leftover from a developer-rejected build. We find and
+    # cancel those so the new submission can take its place.
+    # Submissions already IN_REVIEW cannot be cancelled via API; in that
+    # case we bail out with a clear message.
+    # ------------------------------------------------------------------
+    asc_patch = lambda do |path, body|
+      uri = URI.parse("https://api.appstoreconnect.apple.com/v1/#{path}")
+      req = Net::HTTP::Patch.new(uri)
+      req["Authorization"] = "Bearer #{Spaceship::ConnectAPI.token.text}"
+      req["Content-Type"]  = "application/json"
+      req.body = body.to_json
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.use_ssl = true
+      res = http.request(req)
+      parsed = res.body && !res.body.empty? ? JSON.parse(res.body) : {}
+      UI.user_error!("ASC PATCH #{path} → #{res.code}: #{parsed.inspect}") unless res.is_a?(Net::HTTPSuccess)
+      parsed
+    end
+
+    submissions_resp = asc_get.call("reviewSubmissions?filter[app]=#{submit_app.id}&limit=50")
+    open_submissions = (submissions_resp["data"] || []).select do |s|
+      %w[READY_FOR_REVIEW WAITING_FOR_REVIEW UNRESOLVED_ISSUES].include?(s.dig("attributes", "state"))
+    end
+
+    in_review = (submissions_resp["data"] || []).select do |s|
+      s.dig("attributes", "state") == "IN_REVIEW"
+    end
+    unless in_review.empty?
+      UI.user_error!("A review submission is currently IN_REVIEW — wait for Apple to finish (or explicitly reject via the ASC UI) before re-dispatching.")
+    end
+
+    open_submissions.each do |sub|
+      sub_id    = sub["id"]
+      sub_state = sub.dig("attributes", "state")
+      UI.message("Cancelling stale review submission #{sub_id} (state: #{sub_state})...")
+      asc_patch.call("reviewSubmissions/#{sub_id}", {
+        data: { type: "reviewSubmissions", id: sub_id, attributes: { cancelled: true } }
+      })
+    end
+
+    # Give ASC a beat to flip state out of CANCELING before deliver runs.
+    sleep 10 unless open_submissions.empty?
+
     deliver(
       api_key:                           api_key,
       skip_binary_upload:                true,
