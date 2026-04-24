@@ -328,6 +328,7 @@ platform :ios do
     require "net/http"
     require "json"
     require "uri"
+    require "digest"
 
     # Build a Spaceship token so we can reuse its JWT generation, but
     # drive the raw App Store Connect JSON:API with Net::HTTP — Spaceship's
@@ -432,6 +433,15 @@ platform :ios do
         name: "Pro Monthly",
         period: "ONE_MONTH",
         family_sharable: false,
+        # Base USA price — ASC propagates per-territory via its price matrix.
+        base_price_usd: "19.99",
+        # Seven-day free trial introductory offer. `numberOfPeriods: 1` with
+        # `duration: ONE_WEEK` gives exactly seven days free.
+        intro_offer: {
+          offerMode:       "FREE_TRIAL",
+          duration:        "ONE_WEEK",
+          numberOfPeriods: 1,
+        },
         localizations: [
           { locale: "en-US", name: "Pro Monthly", description: "Unlimited AI remodels & estimates" },
           { locale: "es-MX", name: "Pro Mensual", description: "Remodelaciones y cotizaciones IA ilimitadas" },
@@ -442,12 +452,18 @@ platform :ios do
         name: "Pro Annual",
         period: "ONE_YEAR",
         family_sharable: false,
+        base_price_usd: "149.99",
+        intro_offer: nil,
         localizations: [
           { locale: "en-US", name: "Pro Annual", description: "Save 37% — all Pro tools, one price" },
           { locale: "es-MX", name: "Pro Anual", description: "Ahorra 37% — todo Pro en un pago" },
         ]
       }
     ]
+
+    # App Review screenshot — same paywall image is attached to every product
+    # so the reviewer can always locate the purchase surface.
+    screenshot_path = File.expand_path("../app-store-listing/paywall.png", __dir__)
 
     products.each do |p|
       match = existing_subs.find { |s| s.dig("attributes", "productId") == p[:product_id] }
@@ -501,10 +517,151 @@ platform :ios do
           })
         end
       end
+
+      # ----------------------------------------------------------------
+      # USA baseline price.
+      # Every subscription needs a price anchor in at least one territory;
+      # Apple's pricing matrix fans it out to every other storefront via
+      # the customer-price equivalence map. We target USA @ $19.99 / $149.99.
+      # Idempotent: if any USA price already exists we leave it alone.
+      # ----------------------------------------------------------------
+      target_price = p[:base_price_usd]
+      if target_price
+        existing_prices_resp = asc_request.call(:get, "subscriptions/#{sub_id}/prices?include=territory&limit=200")
+        has_usa_price = (existing_prices_resp["data"] || []).any? do |pr|
+          pr.dig("relationships", "territory", "data", "id") == "USA"
+        end
+
+        if has_usa_price
+          UI.success("#{p[:product_id]} already has USA pricing set")
+        else
+          # Find the USA price point whose customerPrice matches our target.
+          pp_resp = asc_request.call(:get, "subscriptions/#{sub_id}/pricePoints?filter[territory]=USA&limit=8000")
+          price_point = (pp_resp["data"] || []).find do |pp|
+            pp.dig("attributes", "customerPrice").to_f == target_price.to_f
+          end
+
+          if price_point.nil?
+            UI.important("No $#{target_price} USD price point found for #{p[:product_id]} — skipping pricing. Check ASC manually.")
+          else
+            UI.message("Setting #{p[:product_id]} USA price to $#{target_price}...")
+            asc_request.call(:post, "subscriptionPrices", {
+              data: {
+                type: "subscriptionPrices",
+                attributes: { preserveCurrentPrice: false },
+                relationships: {
+                  subscription:           { data: { type: "subscriptions",          id: sub_id             } },
+                  subscriptionPricePoint: { data: { type: "subscriptionPricePoints", id: price_point["id"] } },
+                  territory:              { data: { type: "territories",             id: "USA"             } },
+                }
+              }
+            })
+            UI.success("USA price set for #{p[:product_id]}")
+          end
+        end
+      end
+
+      # ----------------------------------------------------------------
+      # Introductory offer — monthly only gets the 7-day free trial.
+      # Idempotent: skip if an intro offer already exists in any territory.
+      # ----------------------------------------------------------------
+      intro = p[:intro_offer]
+      if intro
+        intros_resp = asc_request.call(:get, "subscriptions/#{sub_id}/introductoryOffers?limit=50")
+        if (intros_resp["data"] || []).any?
+          UI.success("#{p[:product_id]} already has an introductory offer")
+        else
+          UI.message("Creating 7-day free trial for #{p[:product_id]}...")
+          asc_request.call(:post, "subscriptionIntroductoryOffers", {
+            data: {
+              type: "subscriptionIntroductoryOffers",
+              attributes: {
+                duration:        intro[:duration],
+                numberOfPeriods: intro[:numberOfPeriods],
+                offerMode:       intro[:offerMode],
+              },
+              relationships: {
+                subscription: { data: { type: "subscriptions", id: sub_id } },
+                # No territory → applies to every storefront Apple supports.
+              }
+            }
+          })
+          UI.success("Intro offer created for #{p[:product_id]}")
+        end
+      end
+
+      # ----------------------------------------------------------------
+      # App Review screenshot — 2.1(b) blocker. Apple won't review an IAP
+      # without a screenshot showing the purchase surface. Uploaded via
+      # the reservation → PUT → commit flow documented on the
+      # subscriptionAppStoreReviewScreenshots resource.
+      # Idempotent: skip if the subscription already has a screenshot.
+      # ----------------------------------------------------------------
+      if File.exist?(screenshot_path)
+        existing_shots_resp = asc_request.call(:get, "subscriptions/#{sub_id}/appStoreReviewScreenshot")
+        already_has_screenshot = !existing_shots_resp.dig("data").nil?
+
+        if already_has_screenshot
+          UI.success("#{p[:product_id]} already has a review screenshot")
+        else
+          UI.message("Uploading review screenshot for #{p[:product_id]}...")
+          file_bytes = File.binread(screenshot_path)
+          file_size  = file_bytes.bytesize
+          file_name  = File.basename(screenshot_path)
+
+          # 1. Reserve — Apple returns an upload plan with one or more PUT URLs.
+          create_resp = asc_request.call(:post, "subscriptionAppStoreReviewScreenshots", {
+            data: {
+              type: "subscriptionAppStoreReviewScreenshots",
+              attributes: { fileName: file_name, fileSize: file_size },
+              relationships: {
+                subscription: { data: { type: "subscriptions", id: sub_id } }
+              }
+            }
+          })
+          screenshot_id = create_resp.dig("data", "id")
+          upload_ops    = create_resp.dig("data", "attributes", "uploadOperations") || []
+
+          if screenshot_id.nil? || upload_ops.empty?
+            UI.user_error!("ASC didn't return upload operations for #{p[:product_id]} screenshot: #{create_resp.inspect}")
+          end
+
+          # 2. Stream bytes to each upload URL — large files may be chunked.
+          upload_ops.each do |op|
+            uri = URI.parse(op["url"])
+            http = Net::HTTP.new(uri.host, uri.port)
+            http.use_ssl = uri.scheme == "https"
+            req = Net::HTTP::Put.new(uri)
+            (op["requestHeaders"] || []).each { |h| req[h["name"]] = h["value"] }
+            req.body = if op["offset"] && op["length"]
+                         file_bytes.byteslice(op["offset"], op["length"])
+                       else
+                         file_bytes
+                       end
+            upload_res = http.request(req)
+            unless upload_res.is_a?(Net::HTTPSuccess)
+              UI.user_error!("Screenshot upload failed (#{upload_res.code}): #{upload_res.body.to_s[0..500]}")
+            end
+          end
+
+          # 3. Commit — ASC verifies the uploaded bytes via the MD5 checksum.
+          checksum = Digest::MD5.hexdigest(file_bytes)
+          asc_request.call(:patch, "subscriptionAppStoreReviewScreenshots/#{screenshot_id}", {
+            data: {
+              type: "subscriptionAppStoreReviewScreenshots",
+              id:   screenshot_id,
+              attributes: { uploaded: true, sourceFileChecksum: checksum }
+            }
+          })
+          UI.success("Review screenshot uploaded for #{p[:product_id]}")
+        end
+      else
+        UI.important("Review screenshot not found at #{screenshot_path} — upload manually in ASC.")
+      end
     end
 
-    UI.success("Subscriptions created/verified.")
-    UI.important("Set pricing + the 7-day free trial introductory offer in App Store Connect — pricing tier picks and intro offers don't have clean API equivalents.")
+    UI.success("Subscriptions created, priced, trial configured, screenshots uploaded.")
+    UI.important("Products are now 'Ready to Submit' — they'll be bundled with the next App Store submission.")
   end
 
   error do |lane, exception|
