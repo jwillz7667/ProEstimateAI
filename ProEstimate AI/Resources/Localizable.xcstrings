@@ -4930,6 +4930,9 @@
         }
       }
     },
+    "Start from blank estimate" : {
+
+    },
     "Start rendering a before-and-after preview as soon as the project opens." : {
 
     },
@@ -5050,6 +5053,9 @@
       }
     },
     "Tap a row to review and send a reminder." : {
+
+    },
+    "Tap Generate Estimate below to include these materials." : {
 
     },
     "Tap the text to edit" : {

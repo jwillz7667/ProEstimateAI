@@ -753,8 +753,36 @@ enum PDFGenerator {
             col3: CGFloat,
             col4: CGFloat
         ) {
+            let nameColumnWidth = col3 - col1 - 18
             let hasDescription = (item.description?.isEmpty == false)
-            let rowHeight: CGFloat = hasDescription ? 30 : 20
+
+            // Measure the description with word-wrap so long descriptions
+            // grow the row downward rather than overflowing into the next
+            // item or the totals panel below.
+            let descParagraph = NSMutableParagraphStyle()
+            descParagraph.lineBreakMode = .byWordWrapping
+            descParagraph.lineSpacing = 1
+            let descAttrs: [NSAttributedString.Key: Any] = [
+                .font: lineItemDescFont,
+                .foregroundColor: mutedColor,
+                .paragraphStyle: descParagraph,
+            ]
+            let descHeight: CGFloat
+            if hasDescription, let desc = item.description {
+                let bounded = (desc as NSString).boundingRect(
+                    with: CGSize(width: nameColumnWidth, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    attributes: descAttrs,
+                    context: nil
+                )
+                // Floor at one line-height so a single-line desc still gets
+                // the same vertical room the old fixed layout gave it.
+                descHeight = max(ceil(bounded.height), 12)
+            } else {
+                descHeight = 0
+            }
+
+            let rowHeight: CGFloat = hasDescription ? (20 + descHeight) : 20
             if y + rowHeight > pageBottom - 60 { newPage() }
 
             if zebra {
@@ -763,20 +791,20 @@ enum PDFGenerator {
                 UIRectFill(bg)
             }
 
-            let nameColumnWidth = col3 - col1 - 18
             drawTextConstrained(
                 item.name,
                 in: CGRect(x: col1 + 6, y: y + 2, width: nameColumnWidth, height: 14),
                 font: lineItemNameFont,
                 color: bodyColor
             )
-            if let desc = item.description, !desc.isEmpty {
-                drawTextConstrained(
-                    desc,
-                    in: CGRect(x: col1 + 6, y: y + 16, width: nameColumnWidth, height: 12),
-                    font: lineItemDescFont,
-                    color: mutedColor
+            if hasDescription, let desc = item.description {
+                let descRect = CGRect(
+                    x: col1 + 6,
+                    y: y + 16,
+                    width: nameColumnWidth,
+                    height: descHeight
                 )
+                (desc as NSString).draw(in: descRect, withAttributes: descAttrs)
             }
 
             let qtyText = "\(formatDecimal(item.quantity)) \(item.unit)"

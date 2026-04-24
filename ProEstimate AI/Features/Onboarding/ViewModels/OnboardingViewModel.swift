@@ -39,7 +39,7 @@ final class OnboardingViewModel {
 
     /// Advance to the next page if one exists. Callers should check
     /// `currentPage.isLast` when they need to branch on terminal state
-    /// (e.g. the permission page's "Enable Camera" button finishes the flow).
+    /// (e.g. the permission page's Continue button advances to the offer).
     func advance() {
         guard let next = currentPage.next else { return }
         currentPage = next

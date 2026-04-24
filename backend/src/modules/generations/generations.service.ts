@@ -335,31 +335,58 @@ async function autoCreateEstimate(
     logger.info({ estimateId, projectId }, 'Created new auto-estimate');
   }
 
-  // Convert MaterialSuggestions to line item inputs
-  const lineItems: CreateEstimateLineItemInput[] = materials.map((m, index) => ({
-    category: 'materials' as const,
-    name: m.name,
-    quantity: Number(m.quantity),
-    unit: m.unit,
-    unit_cost: Number(m.estimatedCost),
-    markup_percent: 0,
-    tax_rate: 0.0825,
-    sort_order: index,
-    source_material_suggestion_id: m.id,
-  }));
-
-  // Add default labor line item based on project type
-  const labor = DEFAULT_LABOR_BY_PROJECT_TYPE[projectType] ?? DEFAULT_LABOR_BY_PROJECT_TYPE.CUSTOM;
-  lineItems.push({
-    category: 'labor' as const,
-    name: `${projectType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())} Labor`,
-    quantity: labor.hours,
-    unit: 'hour',
-    unit_cost: labor.rate,
-    markup_percent: 0,
-    tax_rate: 0,
-    sort_order: materials.length,
+  // Convert MaterialSuggestions to line items. Gemini labor estimates are
+  // stored in the same MaterialSuggestion table with a "Labor - <trade>"
+  // category prefix, so we detect those and route them into the 'labor'
+  // line-item category (previously they were all routed to 'materials',
+  // which inflated the Materials subtotal and caused double-counting when
+  // combined with the default-labor line item below).
+  let hasGeneratedLabor = false;
+  const lineItems: CreateEstimateLineItemInput[] = materials.map((m, index) => {
+    const isLabor = typeof m.category === 'string'
+      && m.category.trim().toLowerCase().startsWith('labor');
+    if (isLabor) {
+      hasGeneratedLabor = true;
+      return {
+        category: 'labor' as const,
+        name: m.name,
+        quantity: Number(m.quantity),
+        unit: m.unit || 'hour',
+        unit_cost: Number(m.estimatedCost),
+        markup_percent: 0,
+        tax_rate: 0,
+        sort_order: index,
+        source_material_suggestion_id: m.id,
+      };
+    }
+    return {
+      category: 'materials' as const,
+      name: m.name,
+      quantity: Number(m.quantity),
+      unit: m.unit,
+      unit_cost: Number(m.estimatedCost),
+      markup_percent: 0,
+      tax_rate: 0.0825,
+      sort_order: index,
+      source_material_suggestion_id: m.id,
+    };
   });
+
+  // Only add a default flat labor line if Gemini did not already provide
+  // labor estimates — otherwise the estimate double-counts labor.
+  if (!hasGeneratedLabor) {
+    const labor = DEFAULT_LABOR_BY_PROJECT_TYPE[projectType] ?? DEFAULT_LABOR_BY_PROJECT_TYPE.CUSTOM;
+    lineItems.push({
+      category: 'labor' as const,
+      name: `${projectType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())} Labor`,
+      quantity: labor.hours,
+      unit: 'hour',
+      unit_cost: labor.rate,
+      markup_percent: 0,
+      tax_rate: 0,
+      sort_order: materials.length,
+    });
+  }
 
   // Batch create all line items and recalculate totals once
   await estimateLineItemsService.createBatch(estimateId, companyId, lineItems);

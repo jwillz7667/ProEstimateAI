@@ -1,11 +1,14 @@
 import SwiftUI
 
-/// Full-screen 3-page onboarding carousel shown once after signup.
+/// Full-screen 4-page onboarding carousel shown once after signup.
 ///
 /// Hosts a paged `TabView` over `OnboardingViewModel.Page`, a shared
-/// orange-tinted gradient backdrop, and a persistent top-right Skip button.
-/// The `onComplete` closure is invoked exactly once — either from the final
-/// page's CTA, from Skip on any page, or from the "Not Now" permission button.
+/// orange-tinted gradient backdrop, and a top-right Skip button that
+/// hides on both the permissions page (App Store Guideline 5.1.1(iv)
+/// compliance — the user must always proceed to the system permission
+/// prompt) and the final offer page. The `onComplete` closure is invoked
+/// exactly once — from Skip, from the offer page's continue-free path,
+/// or after the trial paywall closes.
 struct OnboardingFlowView: View {
     @State private var viewModel = OnboardingViewModel()
     @State private var trialPaywall: PaywallDecision?
@@ -117,9 +120,10 @@ struct OnboardingFlowView: View {
             HStack {
                 Spacer()
 
-                // Skip is suppressed on the terminal page because the
-                // "Not Now" secondary button already fulfills that role.
-                if !viewModel.currentPage.isLast {
+                // Skip is suppressed on the permissions page (App Store
+                // 5.1.1(iv) requires the user to always proceed to the
+                // system permission prompt) and on the terminal offer page.
+                if viewModel.currentPage != .permissions && !viewModel.currentPage.isLast {
                     Button(action: complete) {
                         Text("Skip")
                             .font(TypographyTokens.subheadline)

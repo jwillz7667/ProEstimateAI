@@ -1,20 +1,16 @@
-import { GoogleGenAI } from '@google/genai';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
 
-const GEMINI_TEXT_MODEL = 'gemini-2.5-flash';
+// DeepSeek is OpenAI-compatible. `deepseek-chat` supports JSON-mode output
+// via `response_format: { type: 'json_object' }`. We reuse the same transport
+// shape as estimate-gen.ts (native fetch + retry/backoff) to keep the
+// dependency surface small and the failure modes consistent.
+const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com/chat/completions';
+const DEEPSEEK_MODEL = 'deepseek-chat';
 
-let genAI: GoogleGenAI | null = null;
-
-function getClient(): GoogleGenAI {
-  if (!genAI) {
-    if (!env.GOOGLE_AI_API_KEY) {
-      throw new Error('GOOGLE_AI_API_KEY is not configured');
-    }
-    genAI = new GoogleGenAI({ apiKey: env.GOOGLE_AI_API_KEY });
-  }
-  return genAI;
-}
+const MAX_ATTEMPTS = 3;
+const INITIAL_BACKOFF_MS = 500;
+const REQUEST_TIMEOUT_MS = 60_000;
 
 export interface GeneratedMaterial {
   name: string;
@@ -35,20 +31,33 @@ export interface MaterialGenContext {
   projectDescription?: string;
 }
 
+export interface LaborEstimate {
+  taskName: string;
+  hoursEstimate: number;
+  ratePerHour: number;
+  category: string;
+}
+
 /**
- * Use Gemini text model to generate a detailed material list for a remodel project.
- * Returns structured JSON with materials, estimated costs, quantities, and categories.
+ * Use DeepSeek to generate a detailed material list for a remodel project.
+ * Returns structured JSON with materials, estimated costs, quantities, and
+ * categories. Pricing is anchored to low-end US retail (Home Depot / Lowe's
+ * sale pricing) so the generated estimates stay competitive for small
+ * contractors rather than drifting toward MSRP.
  */
 export async function generateMaterialSuggestions(
   userPrompt: string,
   context: MaterialGenContext
 ): Promise<GeneratedMaterial[]> {
-  try {
-    const ai = getClient();
-    const projectType = context.projectType.replace(/_/g, ' ').toLowerCase();
-    const qualityTier = context.qualityTier.toLowerCase();
+  if (!env.DEEPSEEK_API_KEY) {
+    logger.warn('DEEPSEEK_API_KEY not configured — skipping material generation');
+    return [];
+  }
 
-    const prompt = `You are a professional construction estimator helping homeowners and small contractors get accurate, competitive material pricing. Generate a materials list with realistic 2025-2026 US retail pricing that a homeowner would actually pay at Home Depot or Lowe's.
+  const projectType = context.projectType.replace(/_/g, ' ').toLowerCase();
+  const qualityTier = context.qualityTier.toLowerCase();
+
+  const systemPrompt = `You are a professional construction estimator helping a small contractor win a job with COMPETITIVE, HOMEOWNER-FRIENDLY pricing. This is a fast quote — not a full general-contractor bid. Every price you pick must be at the LOW end of realistic 2025-2026 US retail, because the contractor is trying to beat other bids on price.
 
 PROJECT:
 - Type: ${projectType}
@@ -59,60 +68,84 @@ ${context.squareFootage ? `- Area: ${context.squareFootage} sq ft` : ''}
 ${context.dimensions ? `- Dimensions: ${context.dimensions}` : ''}
 - User's request: "${userPrompt}"
 
-IMPORTANT PRICING RULES:
-- Use the LOWEST reasonable retail price for the quality tier — what someone would actually pay, not MSRP or inflated contractor-supply pricing.
-- Standard tier = budget-friendly big-box store pricing. Think sale prices and value lines.
-- Do NOT inflate prices. A gallon of interior paint is $25-40, not $50+. Vinyl plank flooring is $1.50-3.50/sq ft, not $5+. Basic ceramic tile is $1-3/sq ft.
-- The total project cost for materials should feel reasonable to a homeowner — a standard bathroom should be $1,500-4,000 in materials, a standard kitchen $3,000-8,000, painting a room $200-500.
-- Include a 5% waste factor in quantities (not 10%).
+STRICT PRICING RULES (follow these exactly — the app's usefulness depends on it):
+- ALWAYS pick the LOW end of any realistic retail range. Never the middle. Never the top. If a gallon of paint runs $22-40, pick $22-28.
+- Use Home Depot / Lowe's SALE or VALUE-LINE pricing — never MSRP, never contractor supply houses, never luxury brands (unless tier = luxury).
+- Be CONSERVATIVE with quantities. A 10x12 room has 120 sq ft, not 150. Do NOT round up aggressively.
+- Include only a 5% waste factor baked into quantities.
 
-Generate only PRIMARY materials (5-12 items). Group minor items (fasteners, adhesives, caulk, tape) into one "Miscellaneous Supplies" line at $50-150.
+CONCRETE PRICE ANCHORS (standard tier, pick at or below these):
+- Interior paint: $22-30/gallon
+- Exterior paint: $28-40/gallon
+- Vinyl plank flooring: $1.29-2.49/sq ft
+- Basic ceramic tile: $0.79-1.99/sq ft
+- Porcelain tile: $1.49-2.99/sq ft
+- Laminate flooring: $0.99-2.29/sq ft
+- Quartz counter slab (material only): $28-45/sq ft
+- Stock kitchen cabinets: $70-140/linear ft
+- Drywall 4x8 sheet: $11-14
+- Bathroom vanity (24-36"): $150-380
+- Toilet: $110-210
+- Kitchen/bath faucet: $50-130
+- Shower valve + trim: $80-170
+- Standard vinyl window (36x48): $160-260
+- Entry door: $200-360
+- Interior door slab: $35-85
+- Trim/baseboard: $0.65-1.25/linear ft
+- Miscellaneous Supplies (fasteners, caulk, tape, drop cloths, sandpaper combined): $30-90 total
+
+TOTAL PROJECT TARGETS (standard tier — aim at or BELOW these totals):
+- Paint a single room: $120-280
+- Bathroom refresh (paint, vanity, fixtures, no retile): $500-1,600
+- Full bathroom remodel (tile, tub, fixtures): $1,400-3,200
+- Kitchen cabinet refresh (paint + new hardware): $250-600
+- Kitchen refresh (counters + fixtures, keep cabinets): $1,500-3,500
+- Full kitchen remodel (new cabinets, counters, fixtures, no appliances): $2,500-5,500
+- Flooring replace, ~200 sq ft: $350-850
+- Single-face siding refresh: $1,400-3,200
+- Small roof patch: $400-900
+
+QUALITY TIER MULTIPLIER:
+- standard: the anchors above as-is — low-end retail.
+- premium: multiply each anchor by ~1.3x (mid-range retail: Delta, Moen, LifeProof, Allen+Roth).
+- luxury: multiply each anchor by ~1.75x (upper retail: Kohler, KitchenAid). Never more than 2x.
+
+OUTPUT:
+- Generate 5-12 PRIMARY materials only. Do NOT pad the list with tiny incidental items.
+- Group ALL minor items (fasteners, adhesives, caulk, tape, drop cloths, sandpaper, shims) into ONE "Miscellaneous Supplies" line at $30-90 standard / $50-130 premium / $80-180 luxury.
 
 For each material:
 - name: specific product (e.g. "LVP Flooring - Oak Look" not just "flooring")
 - category: one of "Countertops", "Cabinets", "Flooring", "Tile", "Fixtures", "Lighting", "Plumbing", "Electrical", "Paint", "Hardware", "Appliances", "Lumber", "Drywall", "Insulation", "Roofing", "Siding", "Windows", "Doors", "Trim", "Other"
-- estimatedCost: per-unit cost in USD — use the LOW END of realistic retail pricing for the tier
+- estimatedCost: per-unit cost in USD — ALWAYS the LOW end of realistic retail for the tier
 - unit: "sq ft", "linear ft", "each", "gallon", "box", "sheet", "bundle", "roll", "bag", "set"
-- quantity: conservative estimate (don't over-order)
-- supplierName: Home Depot, Lowe's, Floor & Decor, etc.
+- quantity: conservative, not padded
+- supplierName: Home Depot, Lowe's, Floor & Decor, Menards, etc.
 
-QUALITY TIER PRICING:
-- standard: lowest reasonable retail (Home Depot/Lowe's value lines, e.g. Hampton Bay, StyleSelections, TrafficMaster)
-- premium: mid-range retail (e.g. Delta, Moen, LifeProof, Allen + Roth)
-- luxury: upper retail (e.g. Kohler, KitchenAid, custom options)
+Respond with ONLY a JSON object shaped exactly like this — no prose, no markdown, no preamble:
+{"materials":[{"name":"...","category":"...","estimatedCost":0.00,"unit":"...","quantity":0,"supplierName":"..."}]}`;
 
-Respond with ONLY a JSON array:
-[{"name":"...","category":"...","estimatedCost":0.00,"unit":"...","quantity":0,"supplierName":"..."}]`;
+  logger.info({ projectType, qualityTier, provider: 'deepseek' }, 'Generating material suggestions');
 
-    logger.info({ projectType, qualityTier }, 'Generating material suggestions via Gemini');
+  try {
+    const text = await callDeepSeekWithRetry(systemPrompt, 'Produce the materials JSON now. Output the JSON object only.');
+    const parsed = JSON.parse(text) as { materials?: unknown };
+    const arr = Array.isArray(parsed?.materials) ? parsed.materials : [];
 
-    const response = await ai.models.generateContent({
-      model: GEMINI_TEXT_MODEL,
-      contents: prompt,
-      config: {
-        temperature: 0.3,
-        maxOutputTokens: 8192,
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const text = response.text?.trim();
-    if (!text) {
-      logger.warn('Material generation returned no text');
-      return [];
-    }
-
-    const materials: GeneratedMaterial[] = JSON.parse(text).map(
-      (m: any, i: number) => ({
-        name: String(m.name || 'Unknown Material'),
-        category: String(m.category || 'Other'),
+    const materials: GeneratedMaterial[] = arr.map((raw, i) => {
+      const m = (raw ?? {}) as Record<string, unknown>;
+      return {
+        name: String(m.name ?? 'Unknown Material'),
+        category: String(m.category ?? 'Other'),
         estimatedCost: Number(m.estimatedCost) || 0,
-        unit: String(m.unit || 'each'),
+        unit: String(m.unit ?? 'each'),
         quantity: Number(m.quantity) || 1,
-        supplierName: m.supplierName ? String(m.supplierName) : undefined,
+        supplierName: typeof m.supplierName === 'string' && m.supplierName.trim()
+          ? String(m.supplierName)
+          : undefined,
         sortOrder: i,
-      })
-    );
+      };
+    });
 
     logger.info({ count: materials.length }, 'Material suggestions generated');
     return materials;
@@ -123,24 +156,23 @@ Respond with ONLY a JSON array:
 }
 
 /**
- * Use Gemini to estimate labor hours and rates for a project.
+ * Use DeepSeek to estimate labor needed for a remodel project.
+ * Rates are anchored to competitive small-contractor pricing — NOT
+ * general-contractor markup — so the resulting estimates stay winnable
+ * against independent trades and handyman bids.
  */
-export interface LaborEstimate {
-  taskName: string;
-  hoursEstimate: number;
-  ratePerHour: number;
-  category: string;
-}
-
 export async function generateLaborEstimates(
   context: MaterialGenContext
 ): Promise<LaborEstimate[]> {
-  try {
-    const ai = getClient();
-    const projectType = context.projectType.replace(/_/g, ' ').toLowerCase();
-    const qualityTier = context.qualityTier.toLowerCase();
+  if (!env.DEEPSEEK_API_KEY) {
+    logger.warn('DEEPSEEK_API_KEY not configured — skipping labor generation');
+    return [];
+  }
 
-    const prompt = `You are a professional construction estimator. Estimate the labor needed for this remodel project with competitive 2025-2026 US rates. Use rates that a small contractor or handyman would charge — NOT high-end general contractor rates.
+  const projectType = context.projectType.replace(/_/g, ' ').toLowerCase();
+  const qualityTier = context.qualityTier.toLowerCase();
+
+  const systemPrompt = `You are a professional construction estimator. Estimate the labor needed for this remodel project with COMPETITIVE 2025-2026 US rates. Use rates that a small contractor or handyman crew would charge — NOT high-end general contractor rates. Hours must be LEAN, never padded.
 
 PROJECT:
 - Type: ${projectType}
@@ -148,49 +180,141 @@ PROJECT:
 - Title: "${context.projectTitle}"
 ${context.squareFootage ? `- Area: ${context.squareFootage} sq ft` : ''}
 
-Generate labor line items for only the trades actually needed. Don't add trades that aren't relevant to this project type. Be conservative with hours — don't pad estimates.
+RULES:
+- Only include trades actually required by the scope. No padding, no "just in case" line items.
+- Hours should reflect a skilled 2-person crew working efficiently.
+- For the standard tier, use the LOW end of each rate range below. Premium = mid range. Luxury = upper range.
+- Do not add markup — the caller handles markup separately.
+
+RATE GUIDE (per hour, USD):
+- General labor / demolition / cleanup: $25-40
+- Carpentry / framing: $35-55
+- Plumbing: $45-75
+- Electrical: $45-70
+- Tile / stone: $40-60
+- Drywall / patch: $30-48
+- Painting: $25-45
+- HVAC: $50-80
+- Roofing: $35-55
+- Flooring install: $30-50
+
+TYPICAL HOURS (small crew, standard tier — use AT or BELOW these):
+- Paint a single room: 4-8 hrs
+- Bathroom refresh: 10-18 hrs
+- Full bathroom remodel: 28-55 hrs
+- Kitchen cabinet refresh (paint + hardware): 8-14 hrs
+- Kitchen counter + fixture swap: 12-22 hrs
+- Full kitchen remodel: 40-80 hrs
+- Flooring ~200 sq ft: 8-14 hrs
+- Small roof patch: 6-12 hrs
 
 For each task:
 - taskName: descriptive name (e.g. "Tile Installation - Floor")
 - hoursEstimate: realistic hours (lean, not padded)
-- ratePerHour: competitive rate in USD (use the LOW END of the range)
+- ratePerHour: USD — use the LOW end of the range for standard tier
 - category: the trade
 
-RATE GUIDE (per hour — use the low end for standard tier):
-- General labor/demolition/cleanup: $25-40
-- Carpentry/framing: $35-55
-- Plumbing: $45-75
-- Electrical: $45-70
-- Tile/stone: $40-60
-- Painting: $25-45
-- HVAC: $50-80
-- Premium tier: use mid-range of these rates
-- Luxury tier: use upper range
+Respond with ONLY a JSON object shaped exactly like this — no prose, no markdown, no preamble:
+{"laborItems":[{"taskName":"...","hoursEstimate":0,"ratePerHour":0,"category":"..."}]}`;
 
-Respond with ONLY a JSON array:
-[{"taskName":"...","hoursEstimate":0,"ratePerHour":0,"category":"..."}]`;
+  logger.info({ projectType, qualityTier, provider: 'deepseek' }, 'Generating labor estimates');
 
-    const response = await ai.models.generateContent({
-      model: GEMINI_TEXT_MODEL,
-      contents: prompt,
-      config: {
-        temperature: 0.3,
-        maxOutputTokens: 4096,
-        responseMimeType: 'application/json',
-      },
+  try {
+    const text = await callDeepSeekWithRetry(systemPrompt, 'Produce the labor JSON now. Output the JSON object only.');
+    const parsed = JSON.parse(text) as { laborItems?: unknown };
+    const arr = Array.isArray(parsed?.laborItems) ? parsed.laborItems : [];
+
+    const items: LaborEstimate[] = arr.map((raw) => {
+      const l = (raw ?? {}) as Record<string, unknown>;
+      return {
+        taskName: String(l.taskName ?? 'General Labor'),
+        hoursEstimate: Number(l.hoursEstimate) || 1,
+        ratePerHour: Number(l.ratePerHour) || 40,
+        category: String(l.category ?? 'General Labor'),
+      };
     });
 
-    const text = response.text?.trim();
-    if (!text) return [];
-
-    return JSON.parse(text).map((l: any) => ({
-      taskName: String(l.taskName || 'General Labor'),
-      hoursEstimate: Number(l.hoursEstimate) || 1,
-      ratePerHour: Number(l.ratePerHour) || 50,
-      category: String(l.category || 'General Labor'),
-    }));
+    logger.info({ count: items.length }, 'Labor estimates generated');
+    return items;
   } catch (err) {
     logger.error({ err }, 'Labor estimate generation failed');
     return [];
   }
+}
+
+// ---------------------------------------------------------------------------
+// DeepSeek transport with retry/backoff
+// ---------------------------------------------------------------------------
+
+async function callDeepSeekWithRetry(systemPrompt: string, userKickoff: string): Promise<string> {
+  let lastErr: unknown;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      const text = await callDeepSeek(systemPrompt, userKickoff);
+      if (!text.trim()) {
+        throw new Error('DeepSeek returned an empty response');
+      }
+      return text;
+    } catch (err) {
+      lastErr = err;
+      const isLastAttempt = attempt === MAX_ATTEMPTS - 1;
+      if (isLastAttempt) break;
+      const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+      logger.warn({ attempt: attempt + 1, delayMs: delay }, 'DeepSeek call failed — retrying');
+      await sleep(delay);
+    }
+  }
+
+  throw lastErr ?? new Error('DeepSeek call failed');
+}
+
+async function callDeepSeek(systemPrompt: string, userKickoff: string): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(DEEPSEEK_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userKickoff },
+        ],
+        // Low temperature locks the model onto the price anchors in the
+        // prompt — higher values cause it to drift toward MSRP-style
+        // numbers. 0.2 keeps variety between items without letting the
+        // model reinvent the pricing scale.
+        temperature: 0.2,
+        response_format: { type: 'json_object' },
+        max_tokens: 4096,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(`DeepSeek HTTP ${response.status}${body ? `: ${body.slice(0, 500)}` : ''}`);
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+    };
+    const choice = payload.choices?.[0];
+    if (choice?.finish_reason === 'length') {
+      throw new Error('DeepSeek response truncated before completion');
+    }
+    return choice?.message?.content ?? '';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

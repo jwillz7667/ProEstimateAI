@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Third onboarding screen — primes the camera permission request.
-/// Tapping "Enable Camera" triggers the AVFoundation system prompt; the
-/// flow advances regardless of the user's decision so they are never
-/// trapped on this screen.
+/// Third onboarding screen — informs the user about the camera feature,
+/// then triggers the iOS system permission prompt. Per App Store
+/// Guideline 5.1.1(iv), this screen must NOT offer a dismiss button:
+/// tapping the primary CTA always proceeds to the system prompt, and
+/// the flow advances regardless of the user's decision.
 struct OnboardingPermissionsPage: View {
     @Bindable var viewModel: OnboardingViewModel
     let onContinue: () -> Void
@@ -42,12 +43,12 @@ struct OnboardingPermissionsPage: View {
             .padding(.bottom, SpacingTokens.md)
 
             VStack(spacing: SpacingTokens.sm) {
-                Text("Enable Camera Access")
+                Text("Capture Your Projects")
                     .font(TypographyTokens.largeTitle)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(ColorTokens.onDarkPrimary)
 
-                Text("ProEstimate AI works best when you can snap project photos directly from the app. You can always skip and add photos later.")
+                Text("ProEstimate AI uses your camera to snap before‑and‑after photos of every job and turn them straight into AI‑powered estimates and client‑ready proposals.")
                     .font(TypographyTokens.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(ColorTokens.onDarkSecondary)
@@ -57,28 +58,16 @@ struct OnboardingPermissionsPage: View {
 
             Spacer()
 
-            VStack(spacing: SpacingTokens.sm) {
-                PrimaryCTAButton(
-                    title: "Enable Camera",
-                    icon: "camera.fill",
-                    isLoading: viewModel.isRequestingPermission,
-                    action: {
-                        Task {
-                            await viewModel.requestCameraAccess()
-                            onContinue()
-                        }
+            PrimaryCTAButton(
+                title: "Continue",
+                isLoading: viewModel.isRequestingPermission,
+                action: {
+                    Task {
+                        await viewModel.requestCameraAccess()
+                        onContinue()
                     }
-                )
-
-                Button {
-                    onContinue()
-                } label: {
-                    Text("Not Now")
-                        .font(TypographyTokens.subheadline)
-                        .foregroundStyle(ColorTokens.onDarkSecondary)
-                        .padding(.vertical, SpacingTokens.xs)
                 }
-            }
+            )
             .padding(.bottom, SpacingTokens.xxl)
         }
         .padding(.horizontal, SpacingTokens.xl)
