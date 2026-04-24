@@ -309,51 +309,74 @@ platform :ios do
 
     # ------------------------------------------------------------------
     # Clear any stale review submissions before calling deliver.
-    # ASC will reject `deliver(submit_for_review: true)` with
-    # "A review submission is already in progress" if a prior submission
-    # is still open — commonly a READY_FOR_REVIEW that was never sent or
-    # a submission leftover from a developer-rejected build. We find and
-    # cancel those so the new submission can take its place.
-    # Submissions already IN_REVIEW cannot be cancelled via API; in that
-    # case we bail out with a clear message.
+    # ASC rejects `deliver(submit_for_review: true)` with
+    # "A review submission is already in progress" whenever a prior
+    # submission is still open — typically a READY_FOR_REVIEW that was
+    # never sent, or a submission sitting in UNRESOLVED_ISSUES after a
+    # rejection. We DELETE first (works for not-yet-submitted), fall
+    # back to PATCH state: CANCELING (for submissions Apple has touched),
+    # and abort cleanly if neither works.
+    # Submissions already IN_REVIEW cannot be cancelled via API.
     # ------------------------------------------------------------------
-    asc_patch = lambda do |path, body|
+    asc_raw = lambda do |method, path, body = nil|
       uri = URI.parse("https://api.appstoreconnect.apple.com/v1/#{path}")
-      req = Net::HTTP::Patch.new(uri)
+      req = case method
+            when :get    then Net::HTTP::Get.new(uri)
+            when :post   then Net::HTTP::Post.new(uri)
+            when :patch  then Net::HTTP::Patch.new(uri)
+            when :delete then Net::HTTP::Delete.new(uri)
+            else raise "Unsupported HTTP method #{method}"
+            end
       req["Authorization"] = "Bearer #{Spaceship::ConnectAPI.token.text}"
       req["Content-Type"]  = "application/json"
-      req.body = body.to_json
+      req.body = body.to_json if body
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = true
       res = http.request(req)
       parsed = res.body && !res.body.empty? ? JSON.parse(res.body) : {}
-      UI.user_error!("ASC PATCH #{path} → #{res.code}: #{parsed.inspect}") unless res.is_a?(Net::HTTPSuccess)
-      parsed
+      [res.code.to_i, parsed]
     end
 
     submissions_resp = asc_get.call("reviewSubmissions?filter[app]=#{submit_app.id}&limit=50")
-    open_submissions = (submissions_resp["data"] || []).select do |s|
+    all_submissions = submissions_resp["data"] || []
+    open_submissions = all_submissions.select do |s|
       %w[READY_FOR_REVIEW WAITING_FOR_REVIEW UNRESOLVED_ISSUES].include?(s.dig("attributes", "state"))
     end
 
-    in_review = (submissions_resp["data"] || []).select do |s|
-      s.dig("attributes", "state") == "IN_REVIEW"
-    end
+    in_review = all_submissions.select { |s| s.dig("attributes", "state") == "IN_REVIEW" }
     unless in_review.empty?
-      UI.user_error!("A review submission is currently IN_REVIEW — wait for Apple to finish (or explicitly reject via the ASC UI) before re-dispatching.")
+      UI.user_error!("A review submission is currently IN_REVIEW — wait for Apple to finish (or reject it in ASC UI) before re-dispatching.")
     end
 
     open_submissions.each do |sub|
       sub_id    = sub["id"]
       sub_state = sub.dig("attributes", "state")
-      UI.message("Cancelling stale review submission #{sub_id} (state: #{sub_state})...")
-      asc_patch.call("reviewSubmissions/#{sub_id}", {
-        data: { type: "reviewSubmissions", id: sub_id, attributes: { cancelled: true } }
+      UI.message("Clearing stale review submission #{sub_id} (state: #{sub_state})...")
+
+      # Strategy 1: DELETE (works for READY_FOR_REVIEW, often also for
+      # UNRESOLVED_ISSUES since the developer still owns the record).
+      del_code, del_body = asc_raw.call(:delete, "reviewSubmissions/#{sub_id}")
+      if del_code < 400
+        UI.success("Deleted submission #{sub_id}")
+        next
+      end
+      UI.important("DELETE returned #{del_code}: #{(del_body.dig('errors') || []).map { |e| e['detail'] }.join('; ')}")
+
+      # Strategy 2: PATCH state → CANCELING (ASC flips it asynchronously).
+      patch_code, patch_body = asc_raw.call(:patch, "reviewSubmissions/#{sub_id}", {
+        data: { type: "reviewSubmissions", id: sub_id, attributes: { state: "CANCELING" } }
       })
+      if patch_code < 400
+        UI.success("Patched submission #{sub_id} to CANCELING")
+        next
+      end
+      UI.important("PATCH state returned #{patch_code}: #{(patch_body.dig('errors') || []).map { |e| e['detail'] }.join('; ')}")
+
+      UI.user_error!("Could not close stale submission #{sub_id} (state: #{sub_state}) via API. Open App Store Connect → App Review → Resolution Center and cancel/reply manually, then re-run this workflow.")
     end
 
-    # Give ASC a beat to flip state out of CANCELING before deliver runs.
-    sleep 10 unless open_submissions.empty?
+    # Give ASC a beat to flip state before deliver's pre-check runs.
+    sleep 15 unless open_submissions.empty?
 
     deliver(
       api_key:                           api_key,
