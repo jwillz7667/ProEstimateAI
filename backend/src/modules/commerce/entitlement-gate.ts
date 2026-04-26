@@ -82,11 +82,11 @@ function buildSubscribeNoTrialPaywall(metric: UsageMetric) {
       ? 'AI quote export requires Pro (trial already used)'
       : 'AI generation requires Pro (trial already used)',
     blocking: true,
-    headline: 'Subscribe to Continue',
+    headline: 'Upgrade to Pro',
     subheadline: isExport
-      ? 'Your free trial has ended. Subscribe to keep generating AI estimates and branded exports.'
-      : 'Your free trial has ended. Subscribe to keep using AI previews and estimates.',
-    primary_cta_title: 'Subscribe',
+      ? 'Your free trial has ended. Upgrade to keep generating AI estimates and branded exports.'
+      : 'Your free trial has ended. Upgrade to keep using AI previews and estimates.',
+    primary_cta_title: 'Upgrade',
     secondary_cta_title: 'Restore Purchases',
     show_continue_free: false,
     show_restore_purchases: true,
