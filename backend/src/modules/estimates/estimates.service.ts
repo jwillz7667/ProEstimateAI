@@ -4,6 +4,8 @@ import { PaginationParams, paginateResults, buildCursorWhere } from '../../lib/p
 import { CreateEstimateInput, UpdateEstimateInput } from './estimates.validators';
 import { EstimateStatus, LineItemCategory } from '@prisma/client';
 import { generateEstimate, type EstimateGenContext } from '../../lib/estimate-gen';
+import { gateAIAction } from '../commerce/entitlement-gate';
+import { recordUsage } from '../../lib/usage-limits';
 
 export async function list(companyId: string, pagination: PaginationParams, projectId?: string) {
   const { cursor, pageSize = 25 } = pagination;
@@ -190,6 +192,11 @@ export async function remove(id: string, companyId: string) {
  * persisted as an Estimate plus its line items in a single transaction.
  */
 export async function generateAI(companyId: string, userId: string, projectId: string) {
+  // Gate AI work behind subscription + rolling-window usage caps.
+  // Counts toward the same AI_GENERATION metric as image previews so a single
+  // pool of AI calls applies regardless of which AI feature the user invokes.
+  await gateAIAction({ userId, companyId, metric: 'AI_GENERATION' });
+
   const project = await prisma.project.findFirst({
     where: { id: projectId, companyId },
   });
@@ -374,6 +381,13 @@ export async function generateAI(companyId: string, userId: string, projectId: s
     });
 
     return created;
+  });
+
+  // Record usage AFTER the estimate is committed so a failed write doesn't burn cap.
+  await recordUsage(userId, companyId, 'AI_GENERATION', {
+    projectId,
+    estimateId: estimate.id,
+    kind: 'ai_estimate',
   });
 
   return estimate;

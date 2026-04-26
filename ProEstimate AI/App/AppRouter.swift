@@ -12,10 +12,6 @@ enum AppDestination: Hashable {
     // Proposals
     case proposalPreview(id: String)
 
-    // Invoices
-    case invoiceDetail(id: String)
-    case invoicePreview(id: String)
-
     // Clients
     case clientDetail(id: String)
     case clientForm(id: String?)
@@ -38,7 +34,6 @@ final class AppRouter {
     var dashboardPath = NavigationPath()
     var projectsPath = NavigationPath()
     var estimatesPath = NavigationPath()
-    var invoicesPath = NavigationPath()
     var clientsPath = NavigationPath()
     var settingsPath = NavigationPath()
 

@@ -1,31 +1,15 @@
 import { prisma } from '../../config/database';
 import { logger } from '../../config/logger';
-import { NotFoundError, PaywallError } from '../../lib/errors';
-import { isAdminUser } from '../../lib/admin';
+import { NotFoundError } from '../../lib/errors';
 import { generatePreviewImage, getSystemPrompt, ImageGenContext, MaterialSpec, ReferencePhoto } from '../../lib/image-gen';
 import { generateMaterialSuggestions, generateLaborEstimates, MaterialGenContext } from '../../lib/material-gen';
+import { recordUsage } from '../../lib/usage-limits';
+import { gateAIAction } from '../commerce/entitlement-gate';
 import { env } from '../../config/env';
 import { CreateGenerationInput } from './generations.validators';
 import * as estimatesService from '../estimates/estimates.service';
 import * as estimateLineItemsService from '../estimate-line-items/estimate-line-items.service';
 import { CreateEstimateLineItemInput } from '../estimate-line-items/estimate-line-items.validators';
-
-/**
- * PaywallDecision payload returned when a free user exhausts AI generation credits.
- */
-const GENERATION_LIMIT_PAYWALL = {
-  placement: 'GENERATION_LIMIT_HIT',
-  trigger_reason: 'Free AI generation credits exhausted',
-  blocking: true,
-  headline: "You've Used All Free Previews",
-  subheadline: 'Upgrade to Pro for unlimited AI-powered remodel previews',
-  primary_cta_title: 'Start Free Trial',
-  secondary_cta_title: 'View Plans',
-  show_continue_free: false,
-  show_restore_purchases: true,
-  recommended_product_id: 'proestimate.pro.monthly',
-  available_products: null, // iOS loads from StoreKit
-};
 
 /**
  * Verifies that a project exists and belongs to the given company.
@@ -465,15 +449,14 @@ export async function getImageData(generationId: string, companyId: string) {
 /**
  * Create a new AI generation for a project.
  *
- * Entitlement check flow:
- * 1. Find the user's entitlement and associated plan
- * 2. If plan feature CAN_GENERATE_PREVIEW is true (Pro user) -> proceed
- * 3. If plan feature CAN_GENERATE_PREVIEW is "CREDIT_GATED" -> check UsageBucket
- *    - If remaining > 0 -> atomically consume a credit, create UsageEvent, proceed
- *    - If remaining <= 0 -> throw PaywallError
- * 4. Create the generation with status QUEUED
- * 5. Log activity: GENERATION_STARTED
- * 6. Fire-and-forget: call Nano Banana 2 to generate the image asynchronously
+ * Entitlement model (post-credit-removal):
+ * - The shared `gateAIAction` enforces subscription state and rolling-window
+ *   usage caps (daily/weekly/monthly) drawn from the user's plan.
+ * - On block, gateAIAction throws PaywallError with the variant
+ *   (TRIAL_OFFER / SUBSCRIBE_NO_TRIAL / USAGE_LIMIT_<window>) the iOS client
+ *   should render.
+ * - On allow, we create the generation, log activity, and record a UsageEvent
+ *   so the rolling cap reflects this call.
  */
 export async function create(
   projectId: string,
@@ -486,151 +469,31 @@ export async function create(
   imageContext.materials = toMaterialSpecs(data.materials);
   const systemPrompt = getSystemPrompt(imageContext);
 
-  // ── Admin bypass — skip entitlement gate entirely ──────────────────
-  if (await isAdminUser(userId)) {
-    const generation = await prisma.$transaction(async (tx) => {
-      const gen = await tx.aIGeneration.create({
-        data: { projectId, prompt: data.prompt, systemPrompt, status: 'QUEUED' },
-      });
-      await tx.activityLogEntry.create({
-        data: {
-          projectId, userId,
-          action: 'GENERATION_STARTED',
-          description: `AI generation started: ${data.prompt.substring(0, 100)}`,
-        },
-      });
-      return gen;
-    });
-    processGeneration(generation.id, data.prompt, imageContext, projectId, companyId, userId).catch(() => {});
-    return generation;
-  }
+  // Throws PaywallError on block (admin, trial, or pro within caps → returns).
+  await gateAIAction({ userId, companyId, metric: 'AI_GENERATION' });
 
-  // ── Entitlement check ──────────────────────────────────────────────
-  const entitlement = await prisma.userEntitlement.findUnique({
-    where: { userId },
-    include: { plan: true },
-  });
-
-  if (!entitlement) {
-    throw new PaywallError(
-      'No entitlement found. Please set up your account.',
-      GENERATION_LIMIT_PAYWALL
-    );
-  }
-
-  const features = entitlement.plan.featuresJson as Record<string, unknown>;
-  const canGenerate = features.CAN_GENERATE_PREVIEW;
-
-  if (canGenerate !== true) {
-    if (canGenerate === 'CREDIT_GATED') {
-      // Atomically check and consume a credit inside a transaction
-      const generation = await prisma.$transaction(async (tx) => {
-        // Find the first bucket with remaining credits for this metric
-        const buckets = await tx.usageBucket.findMany({
-          where: { userId, metricCode: 'AI_GENERATION' },
-          orderBy: { source: 'asc' },
-        });
-        const bucket = buckets.find(
-          (b) => b.includedQuantity - b.consumedQuantity > 0,
-        ) ?? buckets[0] ?? null;
-
-        if (!bucket) {
-          throw new PaywallError(
-            'No usage bucket found for AI generations.',
-            GENERATION_LIMIT_PAYWALL
-          );
-        }
-
-        const remaining = bucket.includedQuantity - bucket.consumedQuantity;
-
-        if (remaining <= 0) {
-          throw new PaywallError(
-            'Free AI generation credits exhausted.',
-            GENERATION_LIMIT_PAYWALL
-          );
-        }
-
-        // Atomically increment consumedQuantity
-        await tx.usageBucket.update({
-          where: { id: bucket.id },
-          data: { consumedQuantity: { increment: 1 } },
-        });
-
-        // Record the usage event
-        await tx.usageEvent.create({
-          data: {
-            userId,
-            companyId,
-            metricCode: 'AI_GENERATION',
-            quantity: 1,
-            metadata: {
-              projectId,
-              prompt: data.prompt.substring(0, 200),
-            },
-          },
-        });
-
-        // Create the generation with QUEUED status
-        const gen = await tx.aIGeneration.create({
-          data: {
-            projectId,
-            prompt: data.prompt,
-            systemPrompt,
-            status: 'QUEUED',
-          },
-        });
-
-        // Log activity
-        await tx.activityLogEntry.create({
-          data: {
-            projectId,
-            userId,
-            action: 'GENERATION_STARTED',
-            description: `AI generation started: ${data.prompt.substring(0, 100)}`,
-          },
-        });
-
-        return gen;
-      });
-
-      // Fire-and-forget: process the generation asynchronously
-      processGeneration(generation.id, data.prompt, imageContext, projectId, companyId, userId).catch(() => {});
-
-      return generation;
-    }
-
-    // Feature is neither true nor CREDIT_GATED -- block access
-    throw new PaywallError(
-      'AI generation is not available on your current plan.',
-      GENERATION_LIMIT_PAYWALL
-    );
-  }
-
-  // ── Pro user: unlimited generations ────────────────────────────────
   const generation = await prisma.$transaction(async (tx) => {
     const gen = await tx.aIGeneration.create({
-      data: {
-        projectId,
-        prompt: data.prompt,
-        systemPrompt,
-        status: 'QUEUED',
-      },
+      data: { projectId, prompt: data.prompt, systemPrompt, status: 'QUEUED' },
     });
-
-    // Log activity
     await tx.activityLogEntry.create({
       data: {
-        projectId,
-        userId,
+        projectId, userId,
         action: 'GENERATION_STARTED',
         description: `AI generation started: ${data.prompt.substring(0, 100)}`,
       },
     });
-
     return gen;
   });
 
-  // Fire-and-forget: process the generation asynchronously
+  // Record usage AFTER successful creation so a failed write doesn't burn cap.
+  await recordUsage(userId, companyId, 'AI_GENERATION', {
+    projectId,
+    generationId: generation.id,
+    kind: 'image_preview',
+  });
+
+  // Fire-and-forget background image generation.
   processGeneration(generation.id, data.prompt, imageContext, projectId, companyId, userId).catch(() => {});
 
   return generation;

@@ -19,6 +19,10 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     let language: String?
     let createdAt: Date
     let updatedAt: Date
+    /// Resolves to the project's most recent COMPLETED generation preview, or
+    /// the first ORIGINAL asset image if no generation exists. Server-provided
+    /// (see backend `projects.dto.ts → thumbnail_url`); nil for new projects.
+    let thumbnailURL: URL?
 
     // MARK: - Nested Enums
 
@@ -73,6 +77,63 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         case language
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case thumbnailURL = "thumbnail_url"
+    }
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        companyId = try c.decode(String.self, forKey: .companyId)
+        clientId = try c.decodeIfPresent(String.self, forKey: .clientId)
+        title = try c.decode(String.self, forKey: .title)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        projectType = try c.decode(ProjectType.self, forKey: .projectType)
+        status = try c.decode(Status.self, forKey: .status)
+        budgetMin = try c.decodeIfPresent(Decimal.self, forKey: .budgetMin)
+        budgetMax = try c.decodeIfPresent(Decimal.self, forKey: .budgetMax)
+        qualityTier = try c.decode(QualityTier.self, forKey: .qualityTier)
+        squareFootage = try c.decodeIfPresent(Decimal.self, forKey: .squareFootage)
+        dimensions = try c.decodeIfPresent(String.self, forKey: .dimensions)
+        language = try c.decodeIfPresent(String.self, forKey: .language)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        thumbnailURL = try c.decodeIfPresent(URL.self, forKey: .thumbnailURL)
+    }
+
+    init(
+        id: String,
+        companyId: String,
+        clientId: String?,
+        title: String,
+        description: String?,
+        projectType: ProjectType,
+        status: Status,
+        budgetMin: Decimal?,
+        budgetMax: Decimal?,
+        qualityTier: QualityTier,
+        squareFootage: Decimal?,
+        dimensions: String?,
+        language: String?,
+        createdAt: Date,
+        updatedAt: Date,
+        thumbnailURL: URL? = nil
+    ) {
+        self.id = id
+        self.companyId = companyId
+        self.clientId = clientId
+        self.title = title
+        self.description = description
+        self.projectType = projectType
+        self.status = status
+        self.budgetMin = budgetMin
+        self.budgetMax = budgetMax
+        self.qualityTier = qualityTier
+        self.squareFootage = squareFootage
+        self.dimensions = dimensions
+        self.language = language
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.thumbnailURL = thumbnailURL
     }
 }
 

@@ -16,9 +16,14 @@ export interface ProjectDto {
   language: string | null;
   created_at: string;
   updated_at: string;
+  // Public preview thumbnail used by the iOS Projects list. Resolves to the most
+  // recent COMPLETED AIGeneration's preview image, falling back to the first
+  // ORIGINAL asset, or null when neither exists. Always nullable so legacy
+  // clients that ignore the field don't break.
+  thumbnail_url?: string | null;
 }
 
-export function toProjectDto(project: Project): ProjectDto {
+export function toProjectDto(project: Project, thumbnailUrl?: string | null): ProjectDto {
   return {
     id: project.id,
     company_id: project.companyId,
@@ -35,5 +40,6 @@ export function toProjectDto(project: Project): ProjectDto {
     language: project.language,
     created_at: project.createdAt.toISOString(),
     updated_at: project.updatedAt.toISOString(),
+    thumbnail_url: thumbnailUrl ?? null,
   };
 }

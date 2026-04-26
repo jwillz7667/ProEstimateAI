@@ -70,20 +70,6 @@ enum APIEndpoint: Sendable {
     case sendProposal(id: String)
     case listProposals(projectId: String?)
 
-    // MARK: - Invoices
-    case listInvoices(projectId: String?)
-    case getInvoice(id: String)
-    case createInvoice(body: Encodable & Sendable)
-    case updateInvoice(id: String, body: Encodable & Sendable)
-    case sendInvoice(id: String)
-    case deleteInvoice(id: String)
-
-    // MARK: - Invoice Line Items
-    case listInvoiceLineItems(invoiceId: String)
-    case createInvoiceLineItem(invoiceId: String, body: Encodable & Sendable)
-    case updateInvoiceLineItem(id: String, body: Encodable & Sendable)
-    case deleteInvoiceLineItem(id: String)
-
     // MARK: - Pricing Profiles
     case listPricingProfiles
     case getPricingProfile(id: String)
@@ -189,20 +175,6 @@ extension APIEndpoint {
         case .sendProposal(let id): return "/proposals/\(id)/send"
         case .listProposals: return "/proposals"
 
-        // Invoices
-        case .listInvoices: return "/invoices"
-        case .getInvoice(let id): return "/invoices/\(id)"
-        case .createInvoice: return "/invoices"
-        case .updateInvoice(let id, _): return "/invoices/\(id)"
-        case .sendInvoice(let id): return "/invoices/\(id)/send"
-        case .deleteInvoice(let id): return "/invoices/\(id)"
-
-        // Invoice Line Items
-        case .listInvoiceLineItems(let invoiceId): return "/invoices/\(invoiceId)/line-items"
-        case .createInvoiceLineItem(let invoiceId, _): return "/invoices/\(invoiceId)/line-items"
-        case .updateInvoiceLineItem(let id, _): return "/invoice-line-items/\(id)"
-        case .deleteInvoiceLineItem(let id): return "/invoice-line-items/\(id)"
-
         // Pricing Profiles
         case .listPricingProfiles: return "/pricing-profiles"
         case .getPricingProfile(let id): return "/pricing-profiles/\(id)"
@@ -248,8 +220,6 @@ extension APIEndpoint {
              .createClient, .createProject, .uploadAsset, .createGeneration,
              .createEstimate, .generateAIEstimate, .createEstimateLineItem,
              .createProposal, .sendProposal,
-             .createInvoice, .sendInvoice,
-             .createInvoiceLineItem,
              .createPricingProfile, .createLaborRateRule,
              .createPurchaseAttempt, .syncTransaction, .restorePurchases,
              .checkUsage:
@@ -257,7 +227,6 @@ extension APIEndpoint {
 
         case .updateCompany, .updateClient, .updateProject,
              .updateMaterialSelection, .updateEstimate, .updateEstimateLineItem,
-             .updateInvoice, .updateInvoiceLineItem,
              .updatePricingProfile, .updateLaborRateRule:
             return .patch
 
@@ -265,7 +234,6 @@ extension APIEndpoint {
              .deleteCompanyLogo,
              .deleteClient, .deleteProject, .deleteAsset,
              .deleteEstimate, .deleteEstimateLineItem,
-             .deleteInvoice, .deleteInvoiceLineItem,
              .deletePricingProfile, .deleteLaborRateRule:
             return .delete
 
@@ -294,8 +262,6 @@ extension APIEndpoint {
         case .listEstimates(let projectId):
             return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
         case .listProposals(let projectId):
-            return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
-        case .listInvoices(let projectId):
             return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
         case .listActivityLog(_, let cursor):
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
@@ -337,8 +303,6 @@ extension APIEndpoint {
              .updateEstimate(_, let body),
              .createEstimateLineItem(_, let body), .updateEstimateLineItem(_, let body),
              .createProposal(let body),
-             .createInvoice(let body), .updateInvoice(_, let body),
-             .createInvoiceLineItem(_, let body), .updateInvoiceLineItem(_, let body),
              .createPricingProfile(let body), .updatePricingProfile(_, let body),
              .createLaborRateRule(_, let body), .updateLaborRateRule(_, let body),
              .createPurchaseAttempt(let body), .syncTransaction(let body),

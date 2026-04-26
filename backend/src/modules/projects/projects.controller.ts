@@ -7,17 +7,19 @@ import { toProjectDto } from './projects.dto';
 export async function listHandler(req: Request, res: Response) {
   const pagination = parsePagination(req.query as { cursor?: string; page_size?: string });
   const result = await projectsService.list(req.companyId!, pagination);
+  const thumbnails = await projectsService.buildThumbnailMap(result.items.map((p) => p.id));
 
   sendSuccess(
     res,
-    result.items.map(toProjectDto),
+    result.items.map((p) => toProjectDto(p, thumbnails.get(p.id) ?? null)),
     { pagination: { next_cursor: result.nextCursor } }
   );
 }
 
 export async function getByIdHandler(req: Request, res: Response) {
   const project = await projectsService.getById(req.params.id as string, req.companyId!);
-  sendSuccess(res, toProjectDto(project));
+  const thumbnails = await projectsService.buildThumbnailMap([project.id]);
+  sendSuccess(res, toProjectDto(project, thumbnails.get(project.id) ?? null));
 }
 
 export async function createHandler(req: Request, res: Response) {

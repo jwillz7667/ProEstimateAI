@@ -61,7 +61,7 @@ struct DashboardView: View {
                 }
             }
             // Reload revenue metrics when an invoice payment event fires
-            // from another screen (e.g. InvoicePreviewView "Mark as Paid").
+            // from another screen.
             .onChange(of: eventBus.paymentEventToken) { _, _ in
                 Task { await viewModel.loadDashboard() }
             }
@@ -172,15 +172,18 @@ struct DashboardView: View {
     private var greetingSection: some View {
         VStack(spacing: SpacingTokens.sm) {
             ZStack {
+                // Always-white circle so the brand icon stays legible in both
+                // light and dark mode. (ColorTokens.surface goes near-black in
+                // dark mode and made the icon disappear.)
                 Circle()
-                    .fill(ColorTokens.surface)
+                    .fill(Color.white)
                     .frame(width: 80, height: 80)
                     .shadow(color: ColorTokens.primaryOrange.opacity(0.25), radius: 12, x: 0, y: 4)
 
                 Image("housd-icon-light")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(height: 48)
+                    .frame(width: 48, height: 48)
             }
 
             VStack(spacing: SpacingTokens.xxs) {
@@ -308,8 +311,6 @@ struct DashboardView: View {
             showClientForm = true
         case .viewEstimates:
             appState.selectedTab = .estimates
-        case .viewInvoices:
-            appState.selectedTab = .invoices
         }
     }
 }

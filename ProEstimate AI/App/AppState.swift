@@ -17,7 +17,7 @@ final class AppState {
 
     /// Lightweight branding snapshot used wherever the full `Company` model
     /// isn't loaded (dashboards, PDF headers, quick status checks). Mirrors
-    /// the subset of fields that the estimate/invoice/proposal PDFs render.
+    /// the subset of fields that the estimate/proposal PDFs render.
     struct CurrentCompany: Sendable {
         let id: String
         let name: String
@@ -95,7 +95,6 @@ enum AppTab: Int, CaseIterable, Identifiable {
     case dashboard
     case projects
     case estimates
-    case invoices
     case clients
     case settings
 
@@ -106,7 +105,6 @@ enum AppTab: Int, CaseIterable, Identifiable {
         case .dashboard: "Dashboard"
         case .projects: "Projects"
         case .estimates: "Estimates"
-        case .invoices: "Invoices"
         case .clients: "Clients"
         case .settings: "Settings"
         }
@@ -117,7 +115,6 @@ enum AppTab: Int, CaseIterable, Identifiable {
         case .dashboard: "square.grid.2x2"
         case .projects: "folder"
         case .estimates: "doc.text"
-        case .invoices: "dollarsign.circle"
         case .clients: "person.2"
         case .settings: "gearshape"
         }

@@ -11,7 +11,6 @@ struct ProjectEstimatesSection: View {
     var onGenerateAI: (() -> Void)?
     var onCreateEstimate: (() -> Void)?
     var onEstimateTap: ((String) -> Void)?
-    var onCreateInvoice: ((String) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
@@ -72,12 +71,6 @@ struct ProjectEstimatesSection: View {
                         onEstimateTap?(estimate.id)
                     } label: {
                         Label("Edit Estimate", systemImage: "pencil")
-                    }
-
-                    Button {
-                        onCreateInvoice?(estimate.id)
-                    } label: {
-                        Label("Create Invoice", systemImage: "dollarsign.circle")
                     }
                 }
             }

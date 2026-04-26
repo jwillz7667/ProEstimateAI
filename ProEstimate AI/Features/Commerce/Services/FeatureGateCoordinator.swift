@@ -180,34 +180,6 @@ final class FeatureGateCoordinator {
         ))
     }
 
-    /// Check whether the user can create an invoice.
-    /// Invoicing is a Pro-only feature — free users cannot create invoices.
-    func guardCreateInvoice() -> FeatureGateResult {
-        guard let entitlementStore else {
-            logger.warning("FeatureGateCoordinator not configured. Defaulting to allowed.")
-            return .allowed
-        }
-
-        if entitlementStore.hasFeature(.canCreateInvoice) {
-            return .allowed
-        }
-
-        logger.info("Invoice creation blocked — Pro required.")
-        return .blocked(PaywallDecision(
-            placement: .invoiceLocked,
-            triggerReason: "Invoice creation requires Pro",
-            blocking: true,
-            headline: "Invoicing is a Pro feature",
-            subheadline: "Create and send professional invoices with automatic payment tracking.",
-            primaryCtaTitle: "Upgrade to Pro",
-            secondaryCtaTitle: nil,
-            showContinueFree: false,
-            showRestorePurchases: true,
-            recommendedProductId: AppConstants.monthlyProductID,
-            availableProducts: products
-        ))
-    }
-
     /// Check whether the user can use custom branding.
     /// Branding is a Pro-only feature.
     func guardUseBranding() -> FeatureGateResult {

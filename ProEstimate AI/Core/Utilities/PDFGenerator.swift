@@ -166,42 +166,6 @@ enum PDFGenerator {
         return writeToTemp(data: data, filename: "\(estimateNumber).pdf")
     }
 
-    static func generateInvoicePDF(
-        branding: CompanyBranding,
-        client: ClientInfo? = nil,
-        invoiceNumber: String,
-        date: Date,
-        dueDate: Date?,
-        status: String,
-        lineItems: [PDFLineItem],
-        subtotal: Decimal,
-        taxAmount: Decimal,
-        totalAmount: Decimal,
-        amountPaid: Decimal,
-        amountDue: Decimal,
-        paymentInstructions: String? = nil,
-        notes: String? = nil
-    ) -> URL? {
-        let data = render { ctx in
-            Renderer(ctx: ctx, branding: branding).drawInvoice(
-                client: client,
-                number: invoiceNumber,
-                date: date,
-                dueDate: dueDate,
-                status: status,
-                lineItems: lineItems,
-                subtotal: subtotal,
-                taxAmount: taxAmount,
-                totalAmount: totalAmount,
-                amountPaid: amountPaid,
-                amountDue: amountDue,
-                paymentInstructions: paymentInstructions,
-                notes: notes
-            )
-        }
-        return writeToTemp(data: data, filename: "\(invoiceNumber).pdf")
-    }
-
     static func generateProposalPDF(
         branding: CompanyBranding,
         client: ClientInfo? = nil,
@@ -357,52 +321,6 @@ enum PDFGenerator {
                 ("Exclusions", exclusions),
                 ("Notes", notes),
                 ("Terms", terms),
-            ])
-
-            drawFooter()
-        }
-
-        // MARK: - Invoice
-
-        func drawInvoice(
-            client: ClientInfo?,
-            number: String,
-            date: Date,
-            dueDate: Date?,
-            status: String,
-            lineItems: [PDFLineItem],
-            subtotal: Decimal,
-            taxAmount: Decimal,
-            totalAmount: Decimal,
-            amountPaid: Decimal,
-            amountDue: Decimal,
-            paymentInstructions: String?,
-            notes: String?
-        ) {
-            drawHeader(
-                documentKind: "INVOICE",
-                documentNumber: number,
-                documentTitle: nil,
-                primaryDate: date,
-                primaryDateLabel: "Issued",
-                secondaryDate: dueDate,
-                secondaryDateLabel: "Due",
-                statusText: status
-            )
-            if let client { drawClientBlock(client: client) }
-
-            drawGroupedLineItemsTable(lineItems: lineItems)
-
-            drawTotalsPanel(rows: [
-                TotalRow(label: "Subtotal", amount: subtotal),
-                TotalRow(label: "Tax", amount: taxAmount),
-                TotalRow(label: "Total", amount: totalAmount, style: .emphasized),
-                TotalRow(label: "Payments Received", amount: -amountPaid, hideIf: amountPaid == 0),
-            ], grandTotalLabel: "Amount Due", grandTotal: amountDue)
-
-            drawNotesBlocks([
-                ("Payment Instructions", paymentInstructions),
-                ("Notes", notes),
             ])
 
             drawFooter()

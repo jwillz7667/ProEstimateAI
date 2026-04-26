@@ -31,32 +31,6 @@ struct NumberingSettingsView: View {
                 Text("Next estimate will be: \(viewModel.nextEstimateDisplay)")
             }
 
-            // Invoice Numbering
-            Section {
-                HStack {
-                    Text("Prefix")
-                    Spacer()
-                    TextField("INV", text: $viewModel.invoicePrefix)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 100)
-                        .autocapitalization(.allCharacters)
-                }
-
-                Stepper(value: $viewModel.nextInvoiceNumber, in: 1...999999) {
-                    HStack {
-                        Text("Next Number")
-                        Spacer()
-                        Text("\(viewModel.nextInvoiceNumber)")
-                            .font(TypographyTokens.moneySmall)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            } header: {
-                Text("Invoices")
-            } footer: {
-                Text("Next invoice will be: \(viewModel.nextInvoiceDisplay)")
-            }
-
             // Preview Section
             Section("Preview") {
                 VStack(spacing: SpacingTokens.md) {
@@ -65,15 +39,6 @@ struct NumberingSettingsView: View {
                         color: ColorTokens.primaryOrange,
                         label: "Next Estimate",
                         value: viewModel.nextEstimateDisplay
-                    )
-
-                    Divider()
-
-                    previewRow(
-                        icon: "dollarsign.circle",
-                        color: .blue,
-                        label: "Next Invoice",
-                        value: viewModel.nextInvoiceDisplay
                     )
                 }
                 .padding(.vertical, SpacingTokens.xxs)

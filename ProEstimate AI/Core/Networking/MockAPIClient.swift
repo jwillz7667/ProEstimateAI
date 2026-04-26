@@ -92,14 +92,6 @@ final class MockAPIClient: APIClientProtocol {
             return Proposal.sample as? T
         case is [Proposal].Type:
             return [Proposal.sample] as? T
-        case is Invoice.Type:
-            return Invoice.sample as? T
-        case is [Invoice].Type:
-            return [Invoice.sample] as? T
-        case is InvoiceLineItem.Type:
-            return InvoiceLineItem.sample as? T
-        case is [InvoiceLineItem].Type:
-            return [InvoiceLineItem.sample] as? T
         case is PricingProfile.Type:
             return PricingProfile.sample as? T
         case is [PricingProfile].Type:

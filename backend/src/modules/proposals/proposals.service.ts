@@ -45,13 +45,21 @@ export async function create(companyId: string, data: CreateProposalInput) {
     throw new NotFoundError('Estimate', data.estimate_id);
   }
 
+  // project_id is optional in the request — derive it from the estimate when missing.
+  // If the caller did pass a project_id, it must match the estimate's project to prevent
+  // accidentally creating a proposal that references a project the estimate doesn't belong to.
+  const projectId = data.project_id ?? estimate.projectId;
+  if (data.project_id && data.project_id !== estimate.projectId) {
+    throw new ValidationError('project_id does not match the estimate\'s project');
+  }
+
   // Verify the project belongs to this company
   const project = await prisma.project.findFirst({
-    where: { id: data.project_id, companyId },
+    where: { id: projectId, companyId },
   });
 
   if (!project) {
-    throw new NotFoundError('Project', data.project_id);
+    throw new NotFoundError('Project', projectId);
   }
 
   // Generate a unique share token
@@ -60,7 +68,7 @@ export async function create(companyId: string, data: CreateProposalInput) {
   const proposal = await prisma.proposal.create({
     data: {
       estimateId: data.estimate_id,
-      projectId: data.project_id,
+      projectId,
       companyId,
       shareToken,
       heroImageUrl: data.hero_image_url ?? null,

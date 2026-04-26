@@ -151,9 +151,10 @@ export interface ReferencePhoto {
  * Generate a preview image using the best available provider.
  *
  * Provider strategy (primary → fallback):
- *   1. PiAPI Nano Banana Pro (if PIAPI_API_KEY is set) — best quality, safety controls
- *      - Internal fallback: PiAPI Nano Banana 2
- *   2. Google GenAI direct (if GOOGLE_AI_API_KEY is set) — original provider
+ *   1. Google GenAI direct (if GOOGLE_AI_API_KEY is set) — Gemini 3.1 Flash Image,
+ *      lowest latency, billed via Google Cloud
+ *   2. PiAPI Nano Banana Pro (if PIAPI_API_KEY is set) — async task-based,
+ *      used when Google is unavailable. Internal fallback: PiAPI Nano Banana 2
  *
  * Both providers produce the same GeneratedImage output (base64 + mimeType + durationMs).
  * The caller is unaware of which provider fulfilled the request.
@@ -165,10 +166,27 @@ export async function generatePreviewImage(
   referenceAssetUrl?: string
 ): Promise<GeneratedImage | null> {
 
-  // ── Provider 1: PiAPI (primary) ─────────────────────────────────────────
+  // ── Provider 1: Google GenAI (primary) ──────────────────────────────────
+  if (env.GOOGLE_AI_API_KEY) {
+    try {
+      logger.info({ provider: 'google' }, 'Attempting Google GenAI image generation (primary)');
+      const googleResult = await generatePreviewImageGoogle(userPrompt, context, referencePhoto);
+
+      if (googleResult) {
+        logger.info({ provider: 'google', durationMs: googleResult.durationMs }, 'Google GenAI generation succeeded');
+        return googleResult;
+      }
+
+      logger.warn({ provider: 'google' }, 'Google GenAI returned null — falling through to PiAPI');
+    } catch (googleErr) {
+      logger.error({ err: googleErr, provider: 'google' }, 'Google GenAI generation failed — falling through to PiAPI');
+    }
+  }
+
+  // ── Provider 2: PiAPI (fallback) ────────────────────────────────────────
   if (env.PIAPI_API_KEY) {
     try {
-      logger.info({ provider: 'piapi' }, 'Attempting PiAPI image generation (primary)');
+      logger.info({ provider: 'piapi' }, 'Attempting PiAPI image generation (fallback)');
       const piResult = await generatePreviewImagePiAPI({
         userPrompt,
         context,
@@ -181,25 +199,20 @@ export async function generatePreviewImage(
         return piResult;
       }
 
-      logger.warn({ provider: 'piapi' }, 'PiAPI returned null — falling through to Google GenAI');
+      logger.warn({ provider: 'piapi' }, 'PiAPI returned null — no provider produced an image');
     } catch (piErr) {
-      logger.error({ err: piErr, provider: 'piapi' }, 'PiAPI generation failed — falling through to Google GenAI');
+      logger.error({ err: piErr, provider: 'piapi' }, 'PiAPI generation failed');
     }
   }
 
-  // ── Provider 2: Google GenAI (fallback) ─────────────────────────────────
-  if (env.GOOGLE_AI_API_KEY) {
-    return generatePreviewImageGoogle(userPrompt, context, referencePhoto);
-  }
-
   // ── No provider configured ──────────────────────────────────────────────
-  logger.error('No image generation provider configured (need PIAPI_API_KEY or GOOGLE_AI_API_KEY)');
+  logger.error('No image generation provider produced an image (need GOOGLE_AI_API_KEY or PIAPI_API_KEY)');
   return null;
 }
 
 /**
- * Google GenAI direct implementation (original Nano Banana 2 path).
- * Used as fallback when PiAPI is unavailable.
+ * Google GenAI direct implementation (Nano Banana 2 / Gemini 3.1 Flash Image).
+ * Primary provider — used first; PiAPI is the fallback on null/error.
  */
 async function generatePreviewImageGoogle(
   userPrompt: string,
@@ -215,7 +228,7 @@ async function generatePreviewImageGoogle(
 
     logger.info(
       { model: NANO_BANANA_2_MODEL, provider: 'google', projectType: context.projectType, qualityTier: context.qualityTier, aspectRatio, imageSize: '2K', hasReferencePhoto: !!referencePhoto },
-      'Starting Google GenAI image generation (fallback)'
+      'Starting Google GenAI image generation (primary)'
     );
 
     const contents = referencePhoto

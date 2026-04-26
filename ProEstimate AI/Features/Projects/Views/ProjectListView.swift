@@ -171,7 +171,8 @@ struct ProjectListView: View {
                     NavigationLink(value: AppDestination.projectDetail(id: project.id)) {
                         ProjectRowView(
                             project: project,
-                            clientName: project.clientId.flatMap { viewModel.clientLookup[$0] }
+                            clientName: project.clientId.flatMap { viewModel.clientLookup[$0] },
+                            thumbnailURL: project.thumbnailURL
                         )
                     }
                     .buttonStyle(.plain)

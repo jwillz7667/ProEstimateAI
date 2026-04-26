@@ -50,63 +50,66 @@ async function main() {
   // =========================================================================
   console.log('  Plans & products...');
 
+  // Per-plan AI/export caps. Stored under featuresJson.LIMITS and enforced by
+  // backend/src/modules/commerce/entitlement-gate.ts via rolling-window checks.
+  const proLimits = {
+    AI_GENERATION: { daily: 20, weekly: 75,  monthly: 200 },
+    QUOTE_EXPORT:  { daily: 30, weekly: 150, monthly: 400 },
+  };
+
+  const freePlanFeatures = {
+    CAN_GENERATE_PREVIEW: false,
+    CAN_EXPORT_QUOTE: false,
+    CAN_REMOVE_WATERMARK: false,
+    CAN_USE_BRANDING: false,
+    CAN_CREATE_INVOICE: false,
+    CAN_SHARE_APPROVAL_LINK: false,
+    CAN_EXPORT_MATERIAL_LINKS: false,
+    CAN_USE_HIGH_RES_PREVIEW: false,
+  };
+
+  const proPlanFeatures = {
+    CAN_GENERATE_PREVIEW: true,
+    CAN_EXPORT_QUOTE: true,
+    CAN_REMOVE_WATERMARK: true,
+    CAN_USE_BRANDING: true,
+    CAN_CREATE_INVOICE: true,
+    CAN_SHARE_APPROVAL_LINK: true,
+    CAN_EXPORT_MATERIAL_LINKS: true,
+    CAN_USE_HIGH_RES_PREVIEW: true,
+    LIMITS: proLimits,
+  };
+
   const freePlan = await prisma.plan.upsert({
     where: { code: PlanCode.FREE_STARTER },
-    update: {},
+    update: { featuresJson: freePlanFeatures },
     create: {
       code: PlanCode.FREE_STARTER,
-      displayName: 'Free Starter',
-      description: 'Get started with 3 AI generations and 3 quote exports',
-      featuresJson: {
-        CAN_GENERATE_PREVIEW: 'CREDIT_GATED',
-        CAN_EXPORT_QUOTE: 'CREDIT_GATED',
-        CAN_REMOVE_WATERMARK: false,
-        CAN_USE_BRANDING: false,
-        CAN_CREATE_INVOICE: false,
-        CAN_SHARE_APPROVAL_LINK: false,
-        CAN_EXPORT_MATERIAL_LINKS: false,
-        CAN_USE_HIGH_RES_PREVIEW: false,
-      },
+      displayName: 'Free',
+      description: 'Manual estimating only. AI features require a subscription.',
+      featuresJson: freePlanFeatures,
     },
   });
 
   const proMonthlyPlan = await prisma.plan.upsert({
     where: { code: PlanCode.PRO_MONTHLY },
-    update: {},
+    update: { featuresJson: proPlanFeatures },
     create: {
       code: PlanCode.PRO_MONTHLY,
       displayName: 'Pro Monthly',
-      description: 'Unlimited AI generations, invoicing, and branding',
-      featuresJson: {
-        CAN_GENERATE_PREVIEW: true,
-        CAN_EXPORT_QUOTE: true,
-        CAN_REMOVE_WATERMARK: true,
-        CAN_USE_BRANDING: true,
-        CAN_CREATE_INVOICE: true,
-        CAN_SHARE_APPROVAL_LINK: true,
-        CAN_EXPORT_MATERIAL_LINKS: true,
-        CAN_USE_HIGH_RES_PREVIEW: true,
-      },
+      description: 'Unlimited AI within fair-use caps, branding, and invoicing',
+      featuresJson: proPlanFeatures,
     },
   });
 
   const proAnnualPlan = await prisma.plan.upsert({
     where: { code: PlanCode.PRO_ANNUAL },
-    update: {},
+    update: { featuresJson: proPlanFeatures },
     create: {
       code: PlanCode.PRO_ANNUAL,
       displayName: 'Pro Annual',
-      description: 'Everything in Pro Monthly — save 30%',
-      featuresJson: {
-        CAN_GENERATE_PREVIEW: true,
-        CAN_EXPORT_QUOTE: true,
-        CAN_REMOVE_WATERMARK: true,
-        CAN_USE_BRANDING: true,
-        CAN_CREATE_INVOICE: true,
-        CAN_SHARE_APPROVAL_LINK: true,
-        CAN_EXPORT_MATERIAL_LINKS: true,
-        CAN_USE_HIGH_RES_PREVIEW: true,
-      },
+      description: 'Everything in Pro Monthly — save 17%',
+      featuresJson: proPlanFeatures,
     },
   });
 

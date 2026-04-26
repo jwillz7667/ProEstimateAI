@@ -47,7 +47,6 @@ enum QuickAction: String, CaseIterable, Identifiable {
     case newProject
     case newClient
     case viewEstimates
-    case viewInvoices
 
     var id: String { rawValue }
 
@@ -56,7 +55,6 @@ enum QuickAction: String, CaseIterable, Identifiable {
         case .newProject: "New Project"
         case .newClient: "New Client"
         case .viewEstimates: "Estimates"
-        case .viewInvoices: "Invoices"
         }
     }
 
@@ -65,7 +63,6 @@ enum QuickAction: String, CaseIterable, Identifiable {
         case .newProject: "folder.badge.plus"
         case .newClient: "person.badge.plus"
         case .viewEstimates: "doc.text"
-        case .viewInvoices: "dollarsign.circle"
         }
     }
 }
