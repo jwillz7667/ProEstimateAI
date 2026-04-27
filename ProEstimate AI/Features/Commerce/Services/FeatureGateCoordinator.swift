@@ -160,6 +160,23 @@ final class FeatureGateCoordinator {
         )
     }
 
+    /// Check whether the user can use the lawn polygon / roof scouting
+    /// maps tools. These hit billable Google APIs (Geocoding + Solar
+    /// Building Insights) so they share the standard subscription gate.
+    /// Catches downgraded users who still have an inherited project but
+    /// have lost their entitlement.
+    func guardUseMaps() -> FeatureGateResult {
+        guard let entitlementStore else { return .allowed }
+        if entitlementStore.hasProAccess { return .allowed }
+        logger.info("Property maps blocked — subscription required.")
+        return blockWithTrialOffer(
+            placement: .generationLimitHit,
+            triggerReason: "Property maps require a subscription",
+            headline: "Measure Lawns & Scout Roofs",
+            subheadline: "Pull lawn area from a satellite polygon. Pull roof outlines from Google Solar imagery. Both included with any subscription."
+        )
+    }
+
     /// Check whether the user can use custom branding.
     func guardUseBranding() -> FeatureGateResult {
         guard let entitlementStore else { return .allowed }

@@ -315,7 +315,7 @@ struct ProjectDetailView: View {
                             icon: "leaf.fill",
                             tint: ColorTokens.accentGreen
                         ) {
-                            showLawnMeasurement = true
+                            handleOpenMaps { showLawnMeasurement = true }
                         }
                     }
                     if showRoof {
@@ -329,7 +329,7 @@ struct ProjectDetailView: View {
                             icon: "house.fill",
                             tint: ColorTokens.primaryOrange
                         ) {
-                            showRoofScouting = true
+                            handleOpenMaps { showRoofScouting = true }
                         }
                     }
                 }
@@ -392,6 +392,20 @@ struct ProjectDetailView: View {
     }
 
     // MARK: - Feature-Gated Actions
+
+    /// Gate the lawn / roof scouting fullscreen presentations. Both
+    /// hit billable Google APIs so a free user must upgrade first.
+    /// Subscribed users (and trialing users) are passed through to
+    /// the original `present` closure unchanged.
+    private func handleOpenMaps(present: () -> Void) {
+        let result = featureGateCoordinator.guardUseMaps()
+        switch result {
+        case .allowed:
+            present()
+        case let .blocked(decision):
+            paywallPresenter.present(decision)
+        }
+    }
 
     private func handleGenerate(prompt: String) {
         let result = featureGateCoordinator.guardGeneratePreview()

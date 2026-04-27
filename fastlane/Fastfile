@@ -589,6 +589,37 @@ platform :ios do
           { locale: "en-US", name: "Pro Annual", description: "Save 37% — all Pro tools, one price" },
           { locale: "es-MX", name: "Pro Anual", description: "Ahorra 37% — todo Pro en un pago" },
         ]
+      },
+      # ── Premium tier — unlimited within fair-use caps ──
+      {
+        product_id: "proestimate.premium.monthly",
+        name: "Premium Monthly",
+        period: "ONE_MONTH",
+        family_sharable: false,
+        base_price_usd: "49.99",
+        # No intro offer on Premium — the trial lives on Pro Monthly so
+        # users don't burn 7 free days at the more expensive tier.
+        intro_offer: nil,
+        localizations: [
+          { locale: "en-US", name: "Premium Monthly",
+            description: "Unlimited projects, image gens, and estimates. Priority generation queue." },
+          { locale: "es-MX", name: "Premium Mensual",
+            description: "Proyectos, imágenes y presupuestos ilimitados. Cola prioritaria." },
+        ]
+      },
+      {
+        product_id: "proestimate.premium.annual",
+        name: "Premium Annual",
+        period: "ONE_YEAR",
+        family_sharable: false,
+        base_price_usd: "499.99",
+        intro_offer: nil,
+        localizations: [
+          { locale: "en-US", name: "Premium Annual",
+            description: "Everything in Premium — save 17% billed annually" },
+          { locale: "es-MX", name: "Premium Anual",
+            description: "Todo en Premium — ahorra 17% facturado anualmente" },
+        ]
       }
     ]
 

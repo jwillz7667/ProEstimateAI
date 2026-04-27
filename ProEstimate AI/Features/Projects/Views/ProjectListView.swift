@@ -10,6 +10,8 @@ struct ProjectListView: View {
     @State private var navigateToProjectId: String?
     @State private var navigateAutoGenerate: Bool = false
     @Environment(AppRouter.self) private var router
+    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
+    @Environment(PaywallPresenter.self) private var paywallPresenter
 
     // Client names are loaded from the API by the view model.
 
@@ -73,7 +75,7 @@ struct ProjectListView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showCreation = true
+                    handleCreateProject()
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -172,7 +174,7 @@ struct ProjectListView: View {
                     subtitle: "Create your first project to start generating AI remodel previews and estimates.",
                     ctaTitle: "New Project"
                 ) {
-                    showCreation = true
+                    handleCreateProject()
                 }
             } else {
                 EmptyStateView(
@@ -207,6 +209,23 @@ struct ProjectListView: View {
             }
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.xs)
+        }
+    }
+
+    // MARK: - Feature-Gated Actions
+
+    /// Gate the project creation flow. Free users see the paywall instead
+    /// of the creation form; subscribed users (and trialing users) skip
+    /// straight into the wizard. The backend re-runs the same gate
+    /// server-side, so a subscriber who exceeds their monthly cap still
+    /// hits the right paywall when they actually create the project.
+    private func handleCreateProject() {
+        let result = featureGateCoordinator.guardCreateProject()
+        switch result {
+        case .allowed:
+            showCreation = true
+        case let .blocked(decision):
+            paywallPresenter.present(decision)
         }
     }
 }
