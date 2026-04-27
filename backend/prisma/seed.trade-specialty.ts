@@ -213,7 +213,7 @@ export async function seedTradeSpecialty(
     });
 
     let planId = freePlan.id;
-    let status = EntitlementStatus.FREE;
+    let status: EntitlementStatus = EntitlementStatus.FREE;
     let storeProductId: string | undefined;
     let trialEndsAt: Date | undefined;
     let renewalDate: Date | undefined;
@@ -1246,37 +1246,37 @@ export async function seedTradeSpecialty(
       {
         userId: liam.id,
         companyId: companyC.id,
-        storeProductId: "proestimate.pro.monthly",
+        productId: "proestimate.pro.monthly",
         appAccountToken: "seed-token-liam",
       },
       {
         userId: marcusC.id,
         companyId: companyD.id,
-        storeProductId: "proestimate.pro.annual",
+        productId: "proestimate.pro.annual",
         appAccountToken: "seed-token-marcusc",
       },
       {
         userId: william.id,
         companyId: companyE.id,
-        storeProductId: "proestimate.pro.monthly",
+        productId: "proestimate.pro.monthly",
         appAccountToken: "seed-token-william",
       },
       {
         userId: anthony.id,
         companyId: companyF.id,
-        storeProductId: "proestimate.pro.annual",
+        productId: "proestimate.pro.annual",
         appAccountToken: "seed-token-anthony",
       },
       {
         userId: diana.id,
         companyId: companyD.id,
-        storeProductId: "proestimate.pro.monthly",
+        productId: "proestimate.pro.monthly",
         appAccountToken: "seed-token-diana",
       },
       {
         userId: mariaG.id,
         companyId: companyF.id,
-        storeProductId: "proestimate.pro.monthly",
+        productId: "proestimate.pro.monthly",
         appAccountToken: "seed-token-maria",
       },
     ],
