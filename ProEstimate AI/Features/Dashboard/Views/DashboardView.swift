@@ -6,6 +6,7 @@ struct DashboardView: View {
     @Environment(EntitlementStore.self) private var entitlementStore
     @Environment(UsageMeterStore.self) private var usageMeterStore
     @Environment(PaywallPresenter.self) private var paywallPresenter
+    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @State private var eventBus = AppEventBus.shared
     @State private var viewModel = DashboardViewModel()
     @State private var showProjectCreation = false
@@ -130,7 +131,7 @@ struct DashboardView: View {
                 // MARK: - New Project CTA
 
                 SecondaryButton(title: "New Project", icon: "plus.circle.fill") {
-                    showProjectCreation = true
+                    handleCreateProject()
                 }
                 .padding(.horizontal, SpacingTokens.md)
 
@@ -205,10 +206,9 @@ struct DashboardView: View {
 
     private var quickGenerateCard: some View {
         Button {
-            showQuickGenerate = true
+            handleQuickGenerate()
         } label: {
             HStack(spacing: SpacingTokens.md) {
-                // Icon
                 ZStack {
                     Circle()
                         .fill(
@@ -220,37 +220,15 @@ struct DashboardView: View {
                         )
                         .frame(width: 56, height: 56)
 
-                    Image(systemName: "wand.and.stars")
+                    Image(systemName: entitlementStore.hasProAccess ? "wand.and.stars" : "lock.fill")
                         .font(.system(size: 24))
                         .foregroundStyle(.white)
                 }
 
-                // Text
                 VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    HStack(spacing: SpacingTokens.xs) {
-                        Text("AI Remodel Preview")
-                            .font(TypographyTokens.headline)
-                            .foregroundStyle(ColorTokens.primaryText)
-
-                        if !entitlementStore.hasProAccess {
-                            Text("\(usageMeterStore.generationsRemaining) left")
-                                .font(TypographyTokens.caption2)
-                                .fontWeight(.semibold)
-                                .padding(.horizontal, SpacingTokens.xs)
-                                .padding(.vertical, 2)
-                                .background(
-                                    usageMeterStore.generationsRemaining <= 2
-                                        ? ColorTokens.warning.opacity(0.15)
-                                        : ColorTokens.primaryOrange.opacity(0.12),
-                                    in: Capsule()
-                                )
-                                .foregroundStyle(
-                                    usageMeterStore.generationsRemaining <= 2
-                                        ? ColorTokens.warning
-                                        : ColorTokens.primaryOrange
-                                )
-                        }
-                    }
+                    Text("AI Remodel Preview")
+                        .font(TypographyTokens.headline)
+                        .foregroundStyle(ColorTokens.primaryText)
 
                     Text("Upload a photo and see your remodel in seconds")
                         .font(TypographyTokens.caption)
@@ -282,6 +260,26 @@ struct DashboardView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Feature-Gated Actions
+
+    private func handleQuickGenerate() {
+        switch featureGateCoordinator.guardGeneratePreview() {
+        case .allowed:
+            showQuickGenerate = true
+        case let .blocked(decision):
+            paywallPresenter.present(decision)
+        }
+    }
+
+    private func handleCreateProject() {
+        switch featureGateCoordinator.guardCreateProject() {
+        case .allowed:
+            showProjectCreation = true
+        case let .blocked(decision):
+            paywallPresenter.present(decision)
+        }
     }
 
     // MARK: - Post-Creation Navigation

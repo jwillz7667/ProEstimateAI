@@ -57,7 +57,9 @@ enum PaywallPlacement: String, Codable, CaseIterable, Sendable {
 // MARK: - Identifiable
 
 extension PaywallDecision: Identifiable {
-    var id: String { placement.rawValue }
+    var id: String {
+        placement.rawValue
+    }
 }
 
 // MARK: - Convenience
@@ -129,14 +131,14 @@ extension PaywallDecision {
         availableProducts: [.sampleMonthly, .sampleAnnual]
     )
 
-    /// Sample hard-gate decision shown when generation credits are exhausted.
+    /// Sample hard-gate decision used by previews and tests.
     static let sampleHardGate = PaywallDecision(
         placement: .generationLimitHit,
-        triggerReason: "Free generation credits exhausted",
+        triggerReason: "AI preview requires a subscription",
         blocking: true,
-        headline: "You've used all 3 free AI previews",
-        subheadline: "Start your free trial to keep generating remodel previews.",
-        primaryCtaTitle: "Start Free Trial",
+        headline: "Unlock AI Remodel Previews",
+        subheadline: "See realistic AI-generated previews of your finished project, instantly. Start a 7-day free trial — cancel anytime.",
+        primaryCtaTitle: "Start 7-Day Free Trial",
         secondaryCtaTitle: nil,
         showContinueFree: false,
         showRestorePurchases: true,
