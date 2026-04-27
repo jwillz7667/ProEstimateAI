@@ -58,77 +58,29 @@ struct DashboardSubscriptionCard: View {
 
     // MARK: - Free Content
 
+    /// Free users see no credit progress bars (the "3 free previews"
+    /// model is gone). The card is now a clean upgrade CTA — every paid
+    /// action route gates them to the same paywall on first tap.
     private var freeContent: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.md) {
-            HStack {
-                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("Free Plan")
-                        .font(TypographyTokens.headline)
+            HStack(alignment: .top, spacing: SpacingTokens.md) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 28))
+                    .foregroundStyle(ColorTokens.primaryOrange)
 
-                    Text("Upgrade to Pro for unlimited access")
+                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                    Text("Get the Full ProEstimate AI")
+                        .font(TypographyTokens.headline)
+                    Text("Unlock AI previews, instant estimates, branded proposals, and lawn / roof scouting. Start a 7-day free trial.")
                         .font(TypographyTokens.caption)
                         .foregroundStyle(ColorTokens.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-
-                Spacer()
-
-                Image(systemName: "sparkles")
-                    .font(.system(size: 24))
-                    .foregroundStyle(ColorTokens.primaryOrange)
             }
 
-            // AI Generations progress
-            creditRow(
-                label: "AI Generations",
-                remaining: generationsRemaining,
-                total: AppConstants.freeGenerationCredits
-            )
-
-            // Quote Exports progress
-            creditRow(
-                label: "Quote Exports",
-                remaining: quotesRemaining,
-                total: AppConstants.freeQuoteExportCredits
-            )
-
-            PrimaryCTAButton(title: "Upgrade to Pro", icon: "crown") {
+            PrimaryCTAButton(title: "Start 7-Day Free Trial", icon: "crown") {
                 onUpgrade?()
             }
-        }
-    }
-
-    // MARK: - Credit Row
-
-    private func creditRow(label: String, remaining: Int, total: Int) -> some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-            HStack {
-                Text(label)
-                    .font(TypographyTokens.caption)
-                    .foregroundStyle(ColorTokens.secondaryText)
-
-                Spacer()
-
-                Text("\(remaining)/\(total) remaining")
-                    .font(TypographyTokens.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(remaining > 0 ? ColorTokens.primaryOrange : ColorTokens.error)
-            }
-
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(ColorTokens.progressTrack)
-                        .frame(height: 6)
-
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(remaining > 0 ? ColorTokens.primaryOrange : ColorTokens.error)
-                        .frame(
-                            width: geometry.size.width * CGFloat(remaining) / CGFloat(max(total, 1)),
-                            height: 6
-                        )
-                }
-            }
-            .frame(height: 6)
         }
     }
 }

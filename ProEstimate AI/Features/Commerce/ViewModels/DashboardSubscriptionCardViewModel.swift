@@ -98,13 +98,11 @@ final class DashboardSubscriptionCardViewModel {
         entitlementStore.subscriptionState == .canceledActive
     }
 
-    /// Human-readable plan label.
+    /// Human-readable plan label. Uses each PlanCode's own displayName
+    /// so adding tiers (e.g. Premium) doesn't require updating this
+    /// switch every time.
     var planLabel: String {
-        switch entitlementStore.currentPlanCode {
-        case .proMonthly: return "Pro Monthly"
-        case .proAnnual: return "Pro Annual"
-        case .freeStarter: return "Free"
-        }
+        entitlementStore.currentPlanCode.displayName
     }
 
     /// Formatted renewal date.

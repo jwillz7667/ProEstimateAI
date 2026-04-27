@@ -1,122 +1,204 @@
 import SwiftUI
 
-/// Toggle between Monthly and Annual subscription plans.
-/// Each plan card shows: price, billing period, trial badge (if eligible),
-/// and "Save X%" badge on annual. The selected plan has an orange border.
+/// Tier + period subscription picker.
+///
+/// Two segmented controls drive the selection:
+///   1. Tier (Pro vs Premium) — the headline product family.
+///   2. Period (Monthly vs Annual) — billing cadence.
+///
+/// The view picks the right product from `products` for whatever
+/// combination is selected and forwards it through `onSelect`. Pro
+/// Monthly is the default since that's where the 7-day trial lives;
+/// Premium gets a "Most Popular" tag and the trailing 12-mo savings.
 struct PlanSelectorView: View {
     let products: [StoreProductModel]
     let selectedProduct: StoreProductModel?
+    @Binding var selectedTier: PlanTier
     @Binding var isAnnualSelected: Bool
     let onSelect: (StoreProductModel) -> Void
 
     var body: some View {
-        VStack(spacing: SpacingTokens.sm) {
-            // Period toggle.
+        VStack(spacing: SpacingTokens.md) {
+            tierToggle
             periodToggle
-
-            // Plan cards.
-            HStack(spacing: SpacingTokens.sm) {
-                if let monthly = products.first(where: { $0.isMonthly }) {
-                    planCard(product: monthly)
-                }
-                if let annual = products.first(where: { $0.isAnnual }) {
-                    planCard(product: annual)
-                }
-            }
+            currentProductCard
         }
     }
 
-    // MARK: - Period Toggle
+    // MARK: - Tier toggle (Pro vs Premium)
+
+    private var tierToggle: some View {
+        HStack(spacing: 0) {
+            tierButton(.pro)
+            tierButton(.premium)
+        }
+        .padding(2)
+        .background(ColorTokens.onDarkFillSubtle, in: Capsule())
+    }
+
+    private func tierButton(_ tier: PlanTier) -> some View {
+        let isSelected = selectedTier == tier
+        return Button {
+            selectedTier = tier
+            applySelection()
+        } label: {
+            HStack(spacing: SpacingTokens.xxs) {
+                if tier == .premium && !isSelected {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(ColorTokens.primaryOrange)
+                }
+                Text(tier.displayName.uppercased())
+                    .font(TypographyTokens.caption.weight(.bold))
+                    .tracking(0.5)
+                    .foregroundStyle(isSelected ? .white : ColorTokens.onDarkSecondary)
+                if tier == .premium && isSelected {
+                    Text("MOST POPULAR")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.white.opacity(0.18), in: Capsule())
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, SpacingTokens.xs)
+            .background(
+                isSelected
+                    ? Capsule().fill(tier == .premium ? ColorTokens.primaryOrange : ColorTokens.accentBlue)
+                    : Capsule().fill(Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Period toggle (Monthly vs Annual)
 
     private var periodToggle: some View {
         HStack(spacing: 0) {
-            toggleButton(title: "Monthly", isSelected: !isAnnualSelected) {
+            periodButton(title: "Monthly", isSelected: !isAnnualSelected) {
                 isAnnualSelected = false
+                applySelection()
             }
-
-            toggleButton(title: "Annual", isSelected: isAnnualSelected) {
+            periodButton(title: "Annual", isSelected: isAnnualSelected, badge: annualSavingsBadge) {
                 isAnnualSelected = true
+                applySelection()
             }
         }
         .background(ColorTokens.onDarkFillSubtle, in: Capsule())
-        .padding(.horizontal, SpacingTokens.xxxl)
     }
 
-    private func toggleButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    /// Annual savings badge string, e.g. "Save 17%". Pulled from the
+    /// matching annual product so we never hard-code a percentage.
+    private var annualSavingsBadge: String? {
+        let candidate = products.first { $0.tier == selectedTier && $0.isAnnual }
+        return candidate?.savingsText
+    }
+
+    private func periodButton(
+        title: String,
+        isSelected: Bool,
+        badge: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
-            Text(title)
-                .font(TypographyTokens.subheadline)
-                .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundStyle(isSelected ? Color.white : ColorTokens.onDarkTertiary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, SpacingTokens.xs)
-                .background(
-                    isSelected
-                        ? Capsule().fill(ColorTokens.primaryOrange)
-                        : Capsule().fill(Color.clear)
-                )
+            HStack(spacing: SpacingTokens.xxs) {
+                Text(title)
+                    .font(TypographyTokens.subheadline)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .foregroundStyle(isSelected ? .white : ColorTokens.onDarkTertiary)
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(ColorTokens.success, in: Capsule())
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, SpacingTokens.xs)
+            .background(
+                isSelected
+                    ? Capsule().fill(ColorTokens.primaryOrange)
+                    : Capsule().fill(Color.clear)
+            )
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - Plan Card
+    // MARK: - Selected product card
 
-    private func planCard(product: StoreProductModel) -> some View {
-        let isSelected = selectedProduct?.productId == product.productId
-
-        return Button {
-            onSelect(product)
-        } label: {
+    @ViewBuilder
+    private var currentProductCard: some View {
+        if let product = currentProduct {
             VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-                // Plan name + badges.
                 HStack(spacing: SpacingTokens.xxs) {
                     Text(product.displayName)
                         .font(TypographyTokens.subheadline)
                         .fontWeight(.semibold)
                         .foregroundStyle(.white)
-
                     Spacer()
-
                     if product.showsTrialBadge {
                         trialBadge
-                    }
-
-                    if let savings = product.savingsText {
+                    } else if let savings = product.savingsText, product.isAnnual {
                         savingsBadge(savings)
                     }
                 }
 
-                // Price.
                 Text(product.priceDisplay)
                     .font(TypographyTokens.title2)
                     .foregroundStyle(.white)
 
-                // Billing period.
                 Text(product.billingPeriodLabel)
                     .font(TypographyTokens.caption)
                     .foregroundStyle(ColorTokens.onDarkTertiary)
 
-                // Intro offer text.
-                if let introText = product.introOfferDisplayText, product.showsTrialBadge {
-                    Text(introText)
+                if let intro = product.introOfferDisplayText, product.showsTrialBadge {
+                    Text(intro)
                         .font(TypographyTokens.caption)
                         .foregroundStyle(ColorTokens.primaryOrange)
                 }
+
+                Text(product.description)
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.onDarkSecondary)
+                    .padding(.top, SpacingTokens.xxs)
             }
             .padding(SpacingTokens.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: RadiusTokens.card)
-                    .fill(isSelected ? ColorTokens.onDarkSeparator : ColorTokens.onDarkFillSubtle)
+                    .fill(ColorTokens.onDarkSeparator)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: RadiusTokens.card)
-                    .strokeBorder(
-                        isSelected ? ColorTokens.primaryOrange : ColorTokens.onDarkSeparator,
-                        lineWidth: isSelected ? 2 : 1
-                    )
+                    .strokeBorder(ColorTokens.primaryOrange, lineWidth: 2)
             )
+        } else {
+            // Empty placeholder while products load.
+            RoundedRectangle(cornerRadius: RadiusTokens.card)
+                .fill(ColorTokens.onDarkFillSubtle)
+                .frame(height: 130)
+                .overlay {
+                    ProgressView().tint(.white)
+                }
         }
-        .buttonStyle(.plain)
+    }
+
+    /// Resolve the product matching the current (tier, period) selection.
+    /// Falls back to the existing `selectedProduct` when no match found
+    /// (e.g. backend hasn't shipped Premium yet).
+    private var currentProduct: StoreProductModel? {
+        let match = products.first { $0.tier == selectedTier && $0.isAnnual == isAnnualSelected }
+        return match ?? selectedProduct
+    }
+
+    /// Push the (tier, period) → product resolution back up via
+    /// `onSelect` so the host view model knows which product to charge.
+    private func applySelection() {
+        guard let resolved = currentProduct else { return }
+        onSelect(resolved)
     }
 
     // MARK: - Badges
@@ -146,8 +228,9 @@ struct PlanSelectorView: View {
     ZStack {
         ColorTokens.overlayBackground.ignoresSafeArea()
         PlanSelectorView(
-            products: [.sampleMonthly, .sampleAnnual],
-            selectedProduct: .sampleAnnual,
+            products: StoreProductModel.sampleAll,
+            selectedProduct: .samplePremiumAnnual,
+            selectedTier: .constant(.premium),
             isAnnualSelected: .constant(true),
             onSelect: { _ in }
         )

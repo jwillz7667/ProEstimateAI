@@ -36,6 +36,8 @@ enum PlanCode: String, Codable, CaseIterable, Sendable {
     case freeStarter = "FREE_STARTER"
     case proMonthly = "PRO_MONTHLY"
     case proAnnual = "PRO_ANNUAL"
+    case premiumMonthly = "PREMIUM_MONTHLY"
+    case premiumAnnual = "PREMIUM_ANNUAL"
 }
 
 extension PlanCode {
@@ -44,6 +46,55 @@ extension PlanCode {
         case .freeStarter: "Free"
         case .proMonthly: "Pro Monthly"
         case .proAnnual: "Pro Annual"
+        case .premiumMonthly: "Premium Monthly"
+        case .premiumAnnual: "Premium Annual"
+        }
+    }
+
+    /// Which tier this plan belongs to. Drives the tier badge on the
+    /// dashboard, paywall picker segmentation, and feature comparison
+    /// rendering.
+    var tier: PlanTier {
+        switch self {
+        case .freeStarter: .free
+        case .proMonthly, .proAnnual: .pro
+        case .premiumMonthly, .premiumAnnual: .premium
+        }
+    }
+
+    /// Billing period (monthly or annual). Nil for free.
+    var period: BillingPeriod? {
+        switch self {
+        case .freeStarter: nil
+        case .proMonthly, .premiumMonthly: .monthly
+        case .proAnnual, .premiumAnnual: .annual
+        }
+    }
+}
+
+/// Top-level subscription tier — drives tier-aware UI everywhere.
+enum PlanTier: String, CaseIterable, Sendable {
+    case free
+    case pro
+    case premium
+
+    var displayName: String {
+        switch self {
+        case .free: "Free"
+        case .pro: "Pro"
+        case .premium: "Premium"
+        }
+    }
+}
+
+enum BillingPeriod: String, CaseIterable, Sendable {
+    case monthly
+    case annual
+
+    var displayName: String {
+        switch self {
+        case .monthly: "Monthly"
+        case .annual: "Annual"
         }
     }
 }

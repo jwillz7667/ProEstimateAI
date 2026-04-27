@@ -20,13 +20,13 @@ struct PaywallHostView: View {
         decision: PaywallDecision,
         onPurchaseComplete: (() -> Void)? = nil
     ) {
-        self._viewModel = State(initialValue: PaywallHostViewModel(decision: decision))
+        _viewModel = State(initialValue: PaywallHostViewModel(decision: decision))
         self.onPurchaseComplete = onPurchaseComplete
     }
 
     /// Preview-only initializer that accepts a pre-built view model.
     init(viewModel: PaywallHostViewModel, onPurchaseComplete: (() -> Void)? = nil) {
-        self._viewModel = State(initialValue: viewModel)
+        _viewModel = State(initialValue: viewModel)
         self.onPurchaseComplete = onPurchaseComplete
     }
 
@@ -41,23 +41,19 @@ struct PaywallHostView: View {
                     PaywallHeroSection(decision: viewModel.decision)
 
                     VStack(spacing: SpacingTokens.xl) {
-                        // Plan toggle and pricing.
+                        // Tier + period picker.
                         if !viewModel.products.isEmpty {
                             PlanSelectorView(
                                 products: viewModel.products,
                                 selectedProduct: viewModel.selectedProduct,
+                                selectedTier: $viewModel.selectedTier,
                                 isAnnualSelected: $viewModel.isAnnualSelected,
                                 onSelect: { viewModel.selectProduct($0) }
                             )
                         }
 
-                        // Feature comparison.
+                        // Feature comparison — Free vs Pro vs Premium.
                         FeatureComparisonListView()
-
-                        // Usage meter for free users.
-                        if !viewModel.decision.blocking {
-                            FreeUsageMeterView()
-                        }
 
                         // Error message with inline retry.
                         if let errorMessage = viewModel.errorMessage {
@@ -116,7 +112,7 @@ struct PaywallHostView: View {
             colors: [
                 ColorTokens.overlayBackground,
                 ColorTokens.overlayAccent,
-                ColorTokens.overlayBackground
+                ColorTokens.overlayBackground,
             ],
             startPoint: .top,
             endPoint: .bottom

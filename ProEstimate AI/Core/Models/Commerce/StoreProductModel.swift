@@ -6,7 +6,9 @@ import Foundation
 /// Product IDs and plan codes are centralized in `AppConstants`.
 struct StoreProductModel: Codable, Identifiable, Equatable, Sendable {
     /// Unique identifier — uses `productId` for Identifiable conformance.
-    var id: String { productId }
+    var id: String {
+        productId
+    }
 
     let productId: String
     let planCode: PlanCode
@@ -43,14 +45,30 @@ extension StoreProductModel {
         hasIntroOffer && (isEligibleForIntroOffer ?? false)
     }
 
-    /// Whether this is the monthly plan.
-    var isMonthly: Bool {
-        planCode == .proMonthly
+    /// Tier (Pro vs Premium). Derived from the plan code so the UI
+    /// stays in sync with the backend's authoritative classification.
+    var tier: PlanTier {
+        planCode.tier
     }
 
-    /// Whether this is the annual plan.
+    /// True for any monthly subscription (Pro Monthly OR Premium Monthly).
+    var isMonthly: Bool {
+        planCode.period == .monthly
+    }
+
+    /// True for any annual subscription (Pro Annual OR Premium Annual).
     var isAnnual: Bool {
-        planCode == .proAnnual
+        planCode.period == .annual
+    }
+
+    /// True specifically for the two Pro tier products.
+    var isPro: Bool {
+        tier == .pro
+    }
+
+    /// True specifically for the two Premium tier products.
+    var isPremium: Bool {
+        tier == .premium
     }
 }
 
@@ -72,7 +90,7 @@ extension StoreProductModel {
     )
 
     static let sampleAnnual = StoreProductModel(
-        productId: AppConstants.annualProductID,
+        productId: AppConstants.proAnnualProductID,
         planCode: .proAnnual,
         displayName: "Pro Annual",
         description: "Full access, billed annually",
@@ -81,7 +99,43 @@ extension StoreProductModel {
         hasIntroOffer: false,
         introOfferDisplayText: nil,
         isEligibleForIntroOffer: nil,
-        isFeatured: true,
+        isFeatured: false,
         savingsText: "Save 30%"
     )
+
+    static let samplePremiumMonthly = StoreProductModel(
+        productId: AppConstants.premiumMonthlyProductID,
+        planCode: .premiumMonthly,
+        displayName: "Premium Monthly",
+        description: "Unlimited projects, image gens, and estimates",
+        priceDisplay: "$49.99/mo",
+        billingPeriodLabel: "per month",
+        hasIntroOffer: false,
+        introOfferDisplayText: nil,
+        isEligibleForIntroOffer: nil,
+        isFeatured: true,
+        savingsText: nil
+    )
+
+    static let samplePremiumAnnual = StoreProductModel(
+        productId: AppConstants.premiumAnnualProductID,
+        planCode: .premiumAnnual,
+        displayName: "Premium Annual",
+        description: "Everything in Premium — save 17% over monthly",
+        priceDisplay: "$499.99/yr",
+        billingPeriodLabel: "per year",
+        hasIntroOffer: false,
+        introOfferDisplayText: nil,
+        isEligibleForIntroOffer: nil,
+        isFeatured: false,
+        savingsText: "Save 17%"
+    )
+
+    /// Convenience array for previews / mocks.
+    static let sampleAll: [StoreProductModel] = [
+        .sampleMonthly,
+        .sampleAnnual,
+        .samplePremiumMonthly,
+        .samplePremiumAnnual,
+    ]
 }
