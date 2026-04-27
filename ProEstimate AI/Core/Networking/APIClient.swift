@@ -66,7 +66,7 @@ final class APIClient: APIClientProtocol {
         let enc = JSONEncoder()
         enc.keyEncodingStrategy = .convertToSnakeCase
         enc.dateEncodingStrategy = .iso8601
-        self.encoder = enc
+        encoder = enc
 
         // Configure decoder with snake_case keys for inbound responses.
         let dec = JSONDecoder()
@@ -92,7 +92,7 @@ final class APIClient: APIClientProtocol {
                 debugDescription: "Cannot decode date: \(dateString)"
             )
         }
-        self.decoder = dec
+        decoder = dec
     }
 
     // MARK: - APIClientProtocol
@@ -150,15 +150,15 @@ final class APIClient: APIClientProtocol {
     }
 
     /// Process the HTTP status code and return data on success, or throw on error.
+    /// On 401 we surface the server-supplied message (e.g. "Invalid email or
+    /// password") rather than the generic "session expired" — the auth-flow
+    /// endpoints (login, signup, apple/google sign-in) use 401 for credential
+    /// failures and the user needs the real reason.
     private func handleHTTPResponse(_ response: HTTPURLResponse, data: Data) throws -> Data {
         switch response.statusCode {
-        case 200...299:
+        case 200 ... 299:
             return data
-        case 401:
-            throw APIError.unauthorized
-        case 400...499:
-            throw try decodeError(data: data)
-        case 500...599:
+        case 400 ... 499, 500 ... 599:
             throw try decodeError(data: data)
         default:
             throw APIError.unknown("Unexpected status code: \(response.statusCode)")
@@ -217,18 +217,18 @@ final class APIClient: APIClientProtocol {
 
     /// Produce a concise, developer-friendly description of a `DecodingError`
     /// that identifies the exact key path and failure reason.
-    private static func describe<T>(_ error: DecodingError, type: T.Type) -> String {
+    private static func describe<T>(_ error: DecodingError, type _: T.Type) -> String {
         switch error {
-        case .typeMismatch(let type, let context):
+        case let .typeMismatch(type, context):
             let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
             return "\(T.self): type mismatch at '\(path)' — expected \(type). \(context.debugDescription)"
-        case .valueNotFound(let type, let context):
+        case let .valueNotFound(type, context):
             let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
             return "\(T.self): missing \(type) at '\(path)'. \(context.debugDescription)"
-        case .keyNotFound(let key, let context):
+        case let .keyNotFound(key, context):
             let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
             return "\(T.self): missing key '\(key.stringValue)' at '\(path)'."
-        case .dataCorrupted(let context):
+        case let .dataCorrupted(context):
             let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
             return "\(T.self): corrupted data at '\(path)'. \(context.debugDescription)"
         @unknown default:
@@ -281,7 +281,8 @@ final class APIClient: APIClientProtocol {
             let (data, response) = try await execute(request)
 
             guard let httpResponse = response as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode) else {
+                  (200 ... 299).contains(httpResponse.statusCode)
+            else {
                 return false
             }
 

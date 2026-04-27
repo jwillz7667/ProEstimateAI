@@ -410,28 +410,9 @@ export async function googleSignIn(
       },
     });
 
-    await tx.usageBucket.createMany({
-      data: [
-        {
-          userId: createdUser.id,
-          companyId: createdCompany.id,
-          metricCode: "AI_GENERATION",
-          includedQuantity: 3,
-          consumedQuantity: 0,
-          resetPolicy: "NEVER",
-          source: "STARTER_CREDITS",
-        },
-        {
-          userId: createdUser.id,
-          companyId: createdCompany.id,
-          metricCode: "QUOTE_EXPORT",
-          includedQuantity: 3,
-          consumedQuantity: 0,
-          resetPolicy: "NEVER",
-          source: "STARTER_CREDITS",
-        },
-      ],
-    });
+    // No starter credits — free users hit the paywall on every paid
+    // action and must start a 7-day trial or subscribe to use the app.
+    // The "3 free previews" pattern is gone.
 
     return { user: createdUser, company: createdCompany };
   });
