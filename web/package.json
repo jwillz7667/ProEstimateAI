@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "^15.3.2",
+    "next": "^16.2.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "framer-motion": "^12.12.1",
@@ -29,7 +29,7 @@
     "@tailwindcss/postcss": "^4.1.6",
     "postcss": "^8.5.3",
     "eslint": "^9.27.0",
-    "eslint-config-next": "^15.3.2",
+    "eslint-config-next": "^16.2.4",
     "@eslint/eslintrc": "^3.3.1"
   }
 }
