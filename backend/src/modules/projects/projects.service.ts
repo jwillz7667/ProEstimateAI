@@ -2,6 +2,8 @@ import { ProjectType, ProjectStatus, QualityTier } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
 import { NotFoundError } from "../../lib/errors";
+import { gateAIAction } from "../commerce/entitlement-gate";
+import { recordUsage } from "../../lib/usage-limits";
 import {
   PaginationParams,
   paginateResults,
@@ -87,7 +89,17 @@ export async function getById(id: string, companyId: string) {
   return project;
 }
 
-export async function create(companyId: string, data: CreateProjectInput) {
+export async function create(
+  companyId: string,
+  userId: string,
+  data: CreateProjectInput,
+) {
+  // Free users hit the paywall here; Pro users hit it after they
+  // exceed 2 projects/month. Premium users have a generous fair-use
+  // ceiling. The gate throws PaywallError(402) which the iOS client
+  // renders as the upgrade sheet.
+  await gateAIAction({ userId, companyId, metric: "PROJECT_CREATED" });
+
   const project = await prisma.project.create({
     data: {
       companyId,
@@ -121,6 +133,15 @@ export async function create(companyId: string, data: CreateProjectInput) {
         : null,
     },
   });
+
+  // Record the usage event so the rolling-window cap reflects this
+  // project. Non-fatal: if it fails the project still exists; the
+  // user's next attempt would just be one closer to the cap edge.
+  try {
+    await recordUsage(userId, companyId, "PROJECT_CREATED");
+  } catch {
+    // swallowed intentionally — see comment above
+  }
 
   return project;
 }

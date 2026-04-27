@@ -76,3 +76,17 @@ struct AppleSignInRequest: Codable, Sendable {
         case email
     }
 }
+
+// MARK: - Google Sign In
+
+struct GoogleSignInRequest: Codable, Sendable {
+    let identityToken: String
+    let fullName: String?
+    let email: String?
+
+    enum CodingKeys: String, CodingKey {
+        case identityToken = "identity_token"
+        case fullName = "full_name"
+        case email
+    }
+}

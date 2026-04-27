@@ -6,13 +6,14 @@ protocol AuthServiceProtocol: Sendable {
     func login(request: LoginRequest) async throws -> LoginResponse
     func signUp(request: SignUpRequest) async throws -> SignUpResponse
     func signInWithApple(request: AppleSignInRequest) async throws -> LoginResponse
+    func signInWithGoogle(request: GoogleSignInRequest) async throws -> LoginResponse
     func forgotPassword(request: ForgotPasswordRequest) async throws -> ForgotPasswordResponse
 }
 
 // MARK: - Mock Implementation
 
 struct MockAuthService: AuthServiceProtocol {
-    func login(request: LoginRequest) async throws -> LoginResponse {
+    func login(request _: LoginRequest) async throws -> LoginResponse {
         // Simulate network delay
         try await Task.sleep(for: .seconds(1))
 
@@ -75,7 +76,7 @@ struct MockAuthService: AuthServiceProtocol {
         )
     }
 
-    func signInWithApple(request: AppleSignInRequest) async throws -> LoginResponse {
+    func signInWithApple(request _: AppleSignInRequest) async throws -> LoginResponse {
         try await Task.sleep(for: .seconds(0.8))
 
         return LoginResponse(
@@ -86,7 +87,18 @@ struct MockAuthService: AuthServiceProtocol {
         )
     }
 
-    func forgotPassword(request: ForgotPasswordRequest) async throws -> ForgotPasswordResponse {
+    func signInWithGoogle(request _: GoogleSignInRequest) async throws -> LoginResponse {
+        try await Task.sleep(for: .seconds(0.8))
+
+        return LoginResponse(
+            user: User.sample,
+            company: Company.sample,
+            accessToken: "mock-google-access-token-\(UUID().uuidString)",
+            refreshToken: "mock-google-refresh-token-\(UUID().uuidString)"
+        )
+    }
+
+    func forgotPassword(request _: ForgotPasswordRequest) async throws -> ForgotPasswordResponse {
         try await Task.sleep(for: .seconds(0.8))
 
         return ForgotPasswordResponse(

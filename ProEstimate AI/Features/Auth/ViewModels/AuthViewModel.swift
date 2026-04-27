@@ -22,6 +22,7 @@ final class AuthViewModel {
 
     private let authService: AuthServiceProtocol
     private let appleSignInCoordinator = AppleSignInCoordinator()
+    @MainActor private let googleSignInCoordinator = GoogleSignInCoordinator()
 
     // MARK: - Init
 
@@ -37,9 +38,12 @@ final class AuthViewModel {
     }
 
     var isSignUpFormValid: Bool {
+        // Company name is no longer collected during sign-up — onboarding
+        // captures it after the account exists. We auto-fill a placeholder
+        // ("<Full Name>'s Company") so the backend signup contract is
+        // unchanged.
         !fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !companyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && password.count >= 8
     }
 
@@ -83,10 +87,19 @@ final class AuthViewModel {
         errorMessage = nil
 
         do {
+            // Auto-generate the placeholder company name so the backend
+            // contract stays the same; the user names their real company
+            // during onboarding after the account is provisioned.
+            let trimmedFullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let resolvedCompanyName: String = {
+                let trimmedCompany = companyName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedCompany.isEmpty { return trimmedCompany }
+                return "\(trimmedFullName)'s Company"
+            }()
             let request = SignUpRequest(
-                fullName: fullName.trimmingCharacters(in: .whitespacesAndNewlines),
+                fullName: trimmedFullName,
                 email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-                companyName: companyName.trimmingCharacters(in: .whitespacesAndNewlines),
+                companyName: resolvedCompanyName,
                 password: password
             )
             let response = try await authService.signUp(request: request)
@@ -114,6 +127,38 @@ final class AuthViewModel {
             applyAuthResponse(user: response.user, company: response.company, accessToken: response.accessToken, refreshToken: response.refreshToken, appState: appState)
         } catch let error as AppleSignInError where error == .cancelled {
             // User cancelled — no error message needed
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    /// Native Google sign-in via OAuth 2.0 + PKCE (no Google SDK
+    /// required). The coordinator returns a Google-signed ID token; the
+    /// backend re-verifies it against Google's JWKS, then logs in or
+    /// provisions a fresh account.
+    func signInWithGoogle(appState: AppState) async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let result = try await googleSignInCoordinator.signIn()
+            let request = GoogleSignInRequest(
+                identityToken: result.identityToken,
+                fullName: result.fullName,
+                email: result.email
+            )
+            let response = try await authService.signInWithGoogle(request: request)
+            applyAuthResponse(
+                user: response.user,
+                company: response.company,
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken,
+                appState: appState
+            )
+        } catch GoogleSignInError.cancelled {
+            // User cancelled — no error toast.
         } catch {
             errorMessage = error.localizedDescription
         }

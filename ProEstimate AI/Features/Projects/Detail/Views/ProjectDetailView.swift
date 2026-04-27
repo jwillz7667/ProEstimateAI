@@ -1,3 +1,4 @@
+import CoreLocation
 import SwiftUI
 
 /// Full project detail screen. Shows overview, images, AI preview,
@@ -20,6 +21,14 @@ struct ProjectDetailView: View {
     @State private var isGeneratingAIEstimate = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
+
+    /// Map measurement sheets. Presenting these as full-screen covers
+    /// avoids a NavigationSplitView quirk where the first
+    /// `router.projectsPath.append(...)` from a deep view is swallowed
+    /// until something else triggers a layout pass (which is why the
+    /// button "did nothing" until the user switched tabs).
+    @State private var showLawnMeasurement = false
+    @State private var showRoofScouting = false
 
     /// Identifiable wrapper used to drive the estimate editor sheet via
     /// `.sheet(item:)`. This avoids the race where `.sheet(isPresented:)` +
@@ -127,6 +136,37 @@ struct ProjectDetailView: View {
                             Button("Done") { activeEstimate = nil }
                         }
                     }
+            }
+        }
+        .fullScreenCover(isPresented: $showLawnMeasurement, onDismiss: {
+            // Project may have a fresh lawn_area / lat-lng after the user
+            // saves — refresh so the detail screen shows the new value.
+            Task { await viewModel.loadProject(id: projectId) }
+        }) {
+            if let project = viewModel.project {
+                NavigationStack {
+                    LawnMeasurementView(
+                        viewModel: LawnMeasurementViewModel(
+                            projectId: project.id,
+                            initialCenter: lawnInitialCenter(for: project)
+                        )
+                    )
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showRoofScouting, onDismiss: {
+            Task { await viewModel.loadProject(id: projectId) }
+        }) {
+            if let project = viewModel.project {
+                NavigationStack {
+                    RoofScoutingView(
+                        viewModel: RoofScoutingViewModel(
+                            projectId: project.id,
+                            initialAddress: nil,
+                            initialCoordinate: lawnInitialCenter(for: project)
+                        )
+                    )
+                }
             }
         }
         .alert(
@@ -275,15 +315,7 @@ struct ProjectDetailView: View {
                             icon: "leaf.fill",
                             tint: ColorTokens.accentGreen
                         ) {
-                            let lat = project.propertyLatitude.map(decimalToDouble)
-                            let lng = project.propertyLongitude.map(decimalToDouble)
-                            router.projectsPath.append(
-                                AppDestination.lawnMeasurement(
-                                    projectId: project.id,
-                                    latitude: lat,
-                                    longitude: lng
-                                )
-                            )
+                            showLawnMeasurement = true
                         }
                     }
                     if showRoof {
@@ -297,16 +329,7 @@ struct ProjectDetailView: View {
                             icon: "house.fill",
                             tint: ColorTokens.primaryOrange
                         ) {
-                            let lat = project.propertyLatitude.map(decimalToDouble)
-                            let lng = project.propertyLongitude.map(decimalToDouble)
-                            router.projectsPath.append(
-                                AppDestination.roofScouting(
-                                    projectId: project.id,
-                                    address: nil,
-                                    latitude: lat,
-                                    longitude: lng
-                                )
-                            )
+                            showRoofScouting = true
                         }
                     }
                 }
@@ -317,6 +340,20 @@ struct ProjectDetailView: View {
 
     private func decimalToDouble(_ d: Decimal) -> Double {
         NSDecimalNumber(decimal: d).doubleValue
+    }
+
+    /// Resolves the best initial map center for the lawn / roof sheets.
+    /// Prefers the project's saved lat/lng, otherwise nil so the
+    /// measurement view falls back to its own search-driven flow.
+    private func lawnInitialCenter(for project: Project) -> CLLocationCoordinate2D? {
+        guard
+            let lat = project.propertyLatitude,
+            let lng = project.propertyLongitude
+        else { return nil }
+        return CLLocationCoordinate2D(
+            latitude: NSDecimalNumber(decimal: lat).doubleValue,
+            longitude: NSDecimalNumber(decimal: lng).doubleValue
+        )
     }
 
     private func scoutingButton(

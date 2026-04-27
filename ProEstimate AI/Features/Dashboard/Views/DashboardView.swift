@@ -96,7 +96,7 @@ struct DashboardView: View {
             }
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {
-                case .projectDetail(let id, let autoGenerate):
+                case let .projectDetail(id, autoGenerate):
                     ProjectDetailView(projectId: id, autoGenerateOnOpen: autoGenerate)
                 default:
                     EmptyView()
@@ -111,31 +111,31 @@ struct DashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
                 // MARK: - Billing issue banner (grace period / retry)
+
                 if entitlementStore.hasBillingIssue {
                     BillingIssueBanner()
                         .padding(.horizontal, SpacingTokens.md)
                 }
 
                 // MARK: - Greeting
+
                 greetingSection
                     .padding(.horizontal, SpacingTokens.md)
 
                 // MARK: - Quick AI Generate (Hero CTA)
+
                 quickGenerateCard
                     .padding(.horizontal, SpacingTokens.md)
 
                 // MARK: - New Project CTA
+
                 SecondaryButton(title: "New Project", icon: "plus.circle.fill") {
                     showProjectCreation = true
                 }
                 .padding(.horizontal, SpacingTokens.md)
 
-                // MARK: - Quick Actions
-                DashboardQuickActionsSection { action in
-                    handleQuickAction(action)
-                }
-
                 // MARK: - Recent Projects
+
                 DashboardRecentProjectsSection(
                     projects: viewModel.recentProjects,
                     thumbnails: viewModel.projectThumbnails,
@@ -145,6 +145,7 @@ struct DashboardView: View {
                 )
 
                 // MARK: - Subscription Card
+
                 DashboardSubscriptionCard(
                     generationsRemaining: entitlementStore.hasProAccess
                         ? Int.max
@@ -298,19 +299,6 @@ struct DashboardView: View {
             router.dashboardPath.append(
                 AppDestination.projectDetail(id: projectId, autoGenerate: autoGenerate)
             )
-        }
-    }
-
-    // MARK: - Quick Action Handler
-
-    private func handleQuickAction(_ action: QuickAction) {
-        switch action {
-        case .newProject:
-            showProjectCreation = true
-        case .newClient:
-            showClientForm = true
-        case .viewEstimates:
-            appState.selectedTab = .estimates
         }
     }
 }

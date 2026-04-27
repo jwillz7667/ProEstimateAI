@@ -45,13 +45,15 @@ struct RoofScoutingView: View {
 
     private var addressSection: some View {
         Section {
-            TextField("Property address", text: $viewModel.addressInput)
-                .textContentType(.fullStreetAddress)
-                .autocapitalization(.words)
-                .submitLabel(.search)
-                .onSubmit {
-                    Task { await viewModel.scout() }
-                }
+            // Native address autocomplete — picking a result pre-fills
+            // the input AND immediately runs the scout against the
+            // resolved coordinates (no need to also press the button).
+            AddressSearchField(placeholder: "Property address") { result in
+                viewModel.addressInput = result.formattedAddress
+                Task { await viewModel.scout() }
+            }
+            .listRowInsets(EdgeInsets())
+            .padding(.vertical, SpacingTokens.xxs)
 
             Button {
                 Task { await viewModel.scout() }
@@ -106,7 +108,13 @@ struct RoofScoutingView: View {
                     }
                 }
             }
-            .mapStyle(.imagery(elevation: .realistic))
+            // Hybrid = satellite + roads + labels; lets the contractor
+            // see street names alongside the roof segment overlay.
+            .mapStyle(.hybrid(elevation: .realistic, pointsOfInterest: .all))
+            .mapControls {
+                MapCompass()
+                MapScaleView()
+            }
             .frame(height: 240)
             .cornerRadius(RadiusTokens.card)
         }

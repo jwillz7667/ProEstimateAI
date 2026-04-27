@@ -9,13 +9,16 @@ struct LoginView: View {
             ScrollView {
                 VStack(spacing: SpacingTokens.xl) {
                     // MARK: - Logo / Header
+
                     logoSection
                         .padding(.top, SpacingTokens.huge)
 
                     // MARK: - Form
+
                     formSection
 
                     // MARK: - Sign In Button
+
                     PrimaryCTAButton(
                         title: "Sign In",
                         icon: "arrow.right",
@@ -27,12 +30,16 @@ struct LoginView: View {
                     )
 
                     // MARK: - Divider
+
                     dividerSection
 
-                    // MARK: - Sign in with Apple
+                    // MARK: - Sign in with Apple / Google
+
                     appleSignInButton
+                    googleSignInButton
 
                     // MARK: - Forgot Password
+
                     Button {
                         viewModel.showForgotPassword = true
                     } label: {
@@ -42,6 +49,7 @@ struct LoginView: View {
                     }
 
                     // MARK: - Sign Up Link
+
                     HStack(spacing: SpacingTokens.xxs) {
                         Text("Don't have an account?")
                             .font(TypographyTokens.subheadline)
@@ -156,7 +164,6 @@ struct LoginView: View {
 
     // MARK: - Apple Sign In
 
-    @ViewBuilder
     private var appleSignInButton: some View {
         Button {
             Task { await viewModel.signInWithApple(appState: appState) }
@@ -174,6 +181,32 @@ struct LoginView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: RadiusTokens.button)
                     .strokeBorder(ColorTokens.primaryOrange.opacity(0.35), lineWidth: 1)
+            )
+            .foregroundStyle(ColorTokens.primaryText)
+        }
+        .disabled(viewModel.isLoading)
+    }
+
+    // MARK: - Google Sign In
+
+    private var googleSignInButton: some View {
+        Button {
+            Task { await viewModel.signInWithGoogle(appState: appState) }
+        } label: {
+            HStack(spacing: SpacingTokens.xs) {
+                Text("G")
+                    .font(.system(size: 18, weight: .heavy))
+                    .foregroundStyle(.blue)
+                Text("Sign in with Google")
+                    .font(TypographyTokens.headline)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, SpacingTokens.sm)
+            .padding(.horizontal, SpacingTokens.md)
+            .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.button)
+                    .strokeBorder(ColorTokens.subtleBorder, lineWidth: 1)
             )
             .foregroundStyle(ColorTokens.primaryText)
         }

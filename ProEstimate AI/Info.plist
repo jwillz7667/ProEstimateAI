@@ -25,5 +25,21 @@
 		<key>UIColorName</key>
 		<string>Background</string>
 	</dict>
+	<!-- Google Sign-In: the iOS Client ID + its reversed form as a custom
+	     URL scheme. The reversed form is the redirect target for the
+	     OAuth 2.0 + PKCE flow run by GoogleSignInCoordinator. -->
+	<key>GIDClientID</key>
+	<string>592060414830-7imhi9mdvm6gpufabi6mfo3f0qchc0hd.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.proestimate.google-signin</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.592060414830-7imhi9mdvm6gpufabi6mfo3f0qchc0hd</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

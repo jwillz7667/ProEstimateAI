@@ -95,30 +95,9 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
       },
     });
 
-    // Initialize starter credits: 3 AI generations, 3 quote exports
-    // (matches monitization-spec.md; iOS AppConstants must stay in sync).
-    await tx.usageBucket.createMany({
-      data: [
-        {
-          userId: createdUser.id,
-          companyId: createdCompany.id,
-          metricCode: "AI_GENERATION",
-          includedQuantity: 3,
-          consumedQuantity: 0,
-          resetPolicy: "NEVER",
-          source: "STARTER_CREDITS",
-        },
-        {
-          userId: createdUser.id,
-          companyId: createdCompany.id,
-          metricCode: "QUOTE_EXPORT",
-          includedQuantity: 3,
-          consumedQuantity: 0,
-          resetPolicy: "NEVER",
-          source: "STARTER_CREDITS",
-        },
-      ],
-    });
+    // No starter credits — free users hit the paywall on every paid
+    // action and must start a 7-day trial or subscribe to use the app.
+    // The "3 free previews" pattern is gone.
 
     return { user: createdUser, company: createdCompany };
   });
@@ -307,30 +286,9 @@ export async function appleSignIn(
       },
     });
 
-    // Initialize starter credits: 3 AI generations, 3 quote exports
-    // (matches monitization-spec.md; iOS AppConstants must stay in sync).
-    await tx.usageBucket.createMany({
-      data: [
-        {
-          userId: createdUser.id,
-          companyId: createdCompany.id,
-          metricCode: "AI_GENERATION",
-          includedQuantity: 3,
-          consumedQuantity: 0,
-          resetPolicy: "NEVER",
-          source: "STARTER_CREDITS",
-        },
-        {
-          userId: createdUser.id,
-          companyId: createdCompany.id,
-          metricCode: "QUOTE_EXPORT",
-          includedQuantity: 3,
-          consumedQuantity: 0,
-          resetPolicy: "NEVER",
-          source: "STARTER_CREDITS",
-        },
-      ],
-    });
+    // No starter credits — free users hit the paywall on every paid
+    // action and must start a 7-day trial or subscribe to use the app.
+    // The "3 free previews" pattern is gone.
 
     return { user: createdUser, company: createdCompany };
   });

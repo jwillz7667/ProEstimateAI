@@ -9,6 +9,7 @@ struct SignUpView: View {
         ScrollView {
             VStack(spacing: SpacingTokens.xl) {
                 // MARK: - Header
+
                 VStack(spacing: SpacingTokens.sm) {
                     Image(systemName: "person.badge.plus")
                         .font(.system(size: 48))
@@ -17,14 +18,38 @@ struct SignUpView: View {
                     Text("Create Account")
                         .font(TypographyTokens.title)
 
-                    Text("Get started with your first 3 free AI estimates")
+                    Text("Get started with ProEstimate AI")
                         .font(TypographyTokens.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
                 .padding(.top, SpacingTokens.xxl)
 
+                // MARK: - One-tap providers (preferred path)
+
+                VStack(spacing: SpacingTokens.sm) {
+                    appleSignUpButton
+                    googleSignUpButton
+                }
+
+                // MARK: - Divider
+
+                HStack {
+                    Rectangle()
+                        .fill(ColorTokens.subtleBorder)
+                        .frame(height: 1)
+                    Text("OR SIGN UP WITH EMAIL")
+                        .font(TypographyTokens.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                    Rectangle()
+                        .fill(ColorTokens.subtleBorder)
+                        .frame(height: 1)
+                }
+                .padding(.vertical, SpacingTokens.xs)
+
                 // MARK: - Form Fields
+
                 VStack(spacing: SpacingTokens.md) {
                     VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
                         Text("Full Name")
@@ -57,17 +82,6 @@ struct SignUpView: View {
                     }
 
                     VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                        Text("Company Name")
-                            .font(TypographyTokens.caption)
-                            .foregroundStyle(.secondary)
-
-                        TextField("Apex Remodeling Co.", text: $viewModel.companyName)
-                            .formField()
-                            .textContentType(.organizationName)
-                            .textInputAutocapitalization(.words)
-                    }
-
-                    VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
                         Text("Password")
                             .font(TypographyTokens.caption)
                             .foregroundStyle(.secondary)
@@ -85,6 +99,7 @@ struct SignUpView: View {
                 }
 
                 // MARK: - Create Account Button
+
                 PrimaryCTAButton(
                     title: "Create Account",
                     icon: "checkmark.circle",
@@ -96,6 +111,7 @@ struct SignUpView: View {
                 )
 
                 // MARK: - Back to Login
+
                 HStack(spacing: SpacingTokens.xxs) {
                     Text("Already have an account?")
                         .font(TypographyTokens.subheadline)
@@ -137,5 +153,52 @@ struct SignUpView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+    }
+
+    // MARK: - Provider buttons
+
+    private var appleSignUpButton: some View {
+        Button {
+            Task { await viewModel.signInWithApple(appState: appState) }
+        } label: {
+            HStack(spacing: SpacingTokens.xs) {
+                Image(systemName: "apple.logo")
+                    .font(.system(size: 18, weight: .medium))
+                Text("Continue with Apple")
+                    .font(TypographyTokens.headline)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, SpacingTokens.sm)
+            .padding(.horizontal, SpacingTokens.md)
+            .background(.black, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
+            .foregroundStyle(.white)
+        }
+        .disabled(viewModel.isLoading)
+        .accessibilityLabel("Continue with Apple")
+    }
+
+    private var googleSignUpButton: some View {
+        Button {
+            Task { await viewModel.signInWithGoogle(appState: appState) }
+        } label: {
+            HStack(spacing: SpacingTokens.xs) {
+                Text("G")
+                    .font(.system(size: 18, weight: .heavy))
+                    .foregroundStyle(.blue)
+                Text("Continue with Google")
+                    .font(TypographyTokens.headline)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, SpacingTokens.sm)
+            .padding(.horizontal, SpacingTokens.md)
+            .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.button)
+                    .strokeBorder(ColorTokens.subtleBorder, lineWidth: 1)
+            )
+            .foregroundStyle(ColorTokens.primaryText)
+        }
+        .disabled(viewModel.isLoading)
+        .accessibilityLabel("Continue with Google")
     }
 }

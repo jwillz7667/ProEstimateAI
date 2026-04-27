@@ -73,6 +73,23 @@ final class LawnMeasurementViewModel {
         vertices.removeAll()
     }
 
+    /// Recenter the map on a specific coordinate. Called when the
+    /// contractor picks an address from the search dropdown — we zoom
+    /// to a property-scale region (~100 m on each side) so the lawn
+    /// is immediately visible without further panning.
+    func recenter(on coordinate: CLLocationCoordinate2D, zoomedIn: Bool) {
+        let delta = zoomedIn ? 0.0015 : 0.05
+        cameraPosition = .region(
+            MKCoordinateRegion(
+                center: coordinate,
+                span: MKCoordinateSpan(
+                    latitudeDelta: delta,
+                    longitudeDelta: delta
+                )
+            )
+        )
+    }
+
     // MARK: - Save
 
     func save() async -> Bool {

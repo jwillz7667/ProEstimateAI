@@ -32,6 +32,10 @@ final class LiveAuthService: AuthServiceProtocol, Sendable {
         try await apiClient.request(.authAppleSignIn(body: request))
     }
 
+    func signInWithGoogle(request: GoogleSignInRequest) async throws -> LoginResponse {
+        try await apiClient.request(.authGoogleSignIn(body: request))
+    }
+
     func forgotPassword(request: ForgotPasswordRequest) async throws -> ForgotPasswordResponse {
         try await apiClient.request(.authForgotPassword(email: request.email))
     }
