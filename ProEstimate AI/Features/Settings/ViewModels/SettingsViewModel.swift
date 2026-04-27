@@ -2,8 +2,18 @@ import Foundation
 import Observation
 import SwiftUI
 #if canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
+
+/// State of the autosave pipeline. Surfaced to the UI so the user gets
+/// continuous feedback that their edits are being persisted server-side.
+enum SettingsSaveStatus: Equatable {
+    case idle
+    case pending
+    case saving
+    case saved(at: Date)
+    case failed(message: String)
+}
 
 @Observable
 final class SettingsViewModel {
@@ -11,16 +21,16 @@ final class SettingsViewModel {
 
     private let service: SettingsServiceProtocol
     weak var appState: AppState?
+    weak var appearanceStore: AppearanceStore?
 
     // MARK: - State
 
     var company: Company?
     var pricingProfiles: [PricingProfile] = []
     var isLoading: Bool = false
-    var isSaving: Bool = false
     var isUploadingLogo: Bool = false
     var errorMessage: String?
-    var successMessage: String?
+    var saveStatus: SettingsSaveStatus = .idle
 
     // MARK: - Company Branding Fields
 
@@ -33,7 +43,7 @@ final class SettingsViewModel {
     var companyZip: String = ""
     var companyWebsite: String = ""
     var primaryColor: Color = ColorTokens.primaryOrange
-    var secondaryColor: Color = Color(hex: 0x1E293B)
+    var secondaryColor: Color = .init(hex: 0x1E293B)
 
     /// Locally selected logo (set immediately on PhotosPicker pick so the UI
     /// reflects the new image before the upload round-trip completes). Nil
@@ -94,6 +104,24 @@ final class SettingsViewModel {
         return hasContact && hasAddress && hasLogo
     }
 
+    // MARK: - Internal Save Pipeline
+
+    /// While `true`, scheduled saves are suppressed. We flip this on while
+    /// `populateFields(from:)` overwrites every published field — without it,
+    /// each assignment would queue a no-op autosave and we'd round-trip the
+    /// server immediately after `loadSettings()`.
+    private var isHydrating: Bool = false
+
+    /// Outstanding debounced save tasks, one per logical group, so a fast
+    /// stream of edits collapses into a single PATCH instead of N PATCHes.
+    private var brandingSaveTask: Task<Void, Never>?
+    private var taxSaveTask: Task<Void, Never>?
+    private var numberingSaveTask: Task<Void, Never>?
+    /// Debounce window for text field edits. Long enough that typing doesn't
+    /// fire a request per keystroke; short enough that the user perceives
+    /// changes as immediately saved when they pause.
+    private let debounceNanoseconds: UInt64 = 600_000_000
+
     // MARK: - Init
 
     init(service: SettingsServiceProtocol = LiveSettingsService()) {
@@ -117,11 +145,84 @@ final class SettingsViewModel {
         isLoading = false
     }
 
-    // MARK: - Save Actions
+    // MARK: - Auto-save Schedulers
 
-    func saveCompanyBranding() async {
-        isSaving = true
-        errorMessage = nil
+    /// Debounce a branding save. Called from view `.onChange` handlers for
+    /// every editable branding field (text inputs and color pickers).
+    func scheduleSaveBranding() {
+        guard !isHydrating else { return }
+        saveStatus = .pending
+        brandingSaveTask?.cancel()
+        brandingSaveTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: self.debounceNanoseconds)
+            if Task.isCancelled { return }
+            await self.commitBranding()
+        }
+    }
+
+    /// Debounce a tax save. Called from `.onChange` of the tax rate text
+    /// field and slider; the toggle uses the same scheduler since back-to-back
+    /// toggle/edit changes should still coalesce.
+    func scheduleSaveTax() {
+        guard !isHydrating else { return }
+        saveStatus = .pending
+        taxSaveTask?.cancel()
+        taxSaveTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: self.debounceNanoseconds)
+            if Task.isCancelled { return }
+            await self.commitTax()
+        }
+    }
+
+    /// Debounce a numbering save. Stepper increments fire many `onChange`
+    /// events — debouncing collapses a held-down stepper into one PATCH.
+    func scheduleSaveNumbering() {
+        guard !isHydrating else { return }
+        saveStatus = .pending
+        numberingSaveTask?.cancel()
+        numberingSaveTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: self.debounceNanoseconds)
+            if Task.isCancelled { return }
+            await self.commitNumbering()
+        }
+    }
+
+    /// Save the language preference immediately. Picker selections are a
+    /// single, deliberate user action — no need to debounce them.
+    func saveLanguageImmediately() async {
+        guard !isHydrating else { return }
+        saveStatus = .saving
+        do {
+            let updated = try await service.saveLanguagePreference(selectedLanguage)
+            apply(updated: updated)
+            markSaved()
+        } catch {
+            saveStatus = .failed(message: error.localizedDescription)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Save the appearance mode immediately on user pick.
+    func saveAppearanceImmediately(_ mode: AppearanceMode) async {
+        guard !isHydrating else { return }
+        saveStatus = .saving
+        do {
+            let updated = try await service.saveAppearanceMode(mode)
+            apply(updated: updated)
+            markSaved()
+        } catch {
+            saveStatus = .failed(message: error.localizedDescription)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Commit (executed after debounce)
+
+    private func commitBranding() async {
+        saveStatus = .saving
         do {
             let update = CompanyBrandingUpdate(
                 name: companyName,
@@ -136,14 +237,54 @@ final class SettingsViewModel {
                 secondaryColor: secondaryColorHex
             )
             let updated = try await service.saveCompanyBranding(update)
-            company = updated
-            syncAppState(from: updated)
-            successMessage = "Branding saved successfully."
+            apply(updated: updated)
+            markSaved()
         } catch {
+            saveStatus = .failed(message: error.localizedDescription)
             errorMessage = error.localizedDescription
         }
-        isSaving = false
     }
+
+    private func commitTax() async {
+        // Sync the free-form text field into the canonical decimal so the
+        // server sees what the user actually typed.
+        if let parsed = Decimal(string: taxRateText) {
+            defaultTaxRate = parsed
+        }
+        saveStatus = .saving
+        do {
+            let update = TaxSettingsUpdate(
+                defaultTaxRate: defaultTaxRate,
+                taxInclusivePricing: taxInclusivePricing
+            )
+            let updated = try await service.saveTaxSettings(update)
+            apply(updated: updated)
+            markSaved()
+        } catch {
+            saveStatus = .failed(message: error.localizedDescription)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func commitNumbering() async {
+        saveStatus = .saving
+        do {
+            let update = NumberingSettingsUpdate(
+                estimatePrefix: estimatePrefix,
+                invoicePrefix: invoicePrefix,
+                nextEstimateNumber: nextEstimateNumber,
+                nextInvoiceNumber: nextInvoiceNumber
+            )
+            let updated = try await service.saveNumberingSettings(update)
+            apply(updated: updated)
+            markSaved()
+        } catch {
+            saveStatus = .failed(message: error.localizedDescription)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Logo Operations (kept explicit — file I/O is naturally event-driven)
 
     /// Upload the selected logo image and persist the resulting Company
     /// snapshot. The local `companyLogoImage` is kept so the UI shows the
@@ -158,7 +299,6 @@ final class SettingsViewModel {
             companyLogoURL = updated.logoURL
             companyLogoImage = UIImage(data: data)
             syncAppState(from: updated)
-            successMessage = "Logo uploaded."
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -174,67 +314,16 @@ final class SettingsViewModel {
             companyLogoURL = nil
             companyLogoImage = nil
             syncAppState(from: updated)
-            successMessage = "Logo removed."
         } catch {
             errorMessage = error.localizedDescription
         }
         isUploadingLogo = false
     }
 
-    func saveTaxSettings() async {
-        isSaving = true
-        errorMessage = nil
-        do {
-            // Sync text field to decimal
-            if let parsed = Decimal(string: taxRateText) {
-                defaultTaxRate = parsed
-            }
-            let update = TaxSettingsUpdate(
-                defaultTaxRate: defaultTaxRate,
-                taxInclusivePricing: taxInclusivePricing
-            )
-            let updated = try await service.saveTaxSettings(update)
-            company = updated
-            syncAppState(from: updated)
-            successMessage = "Tax settings saved."
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        isSaving = false
-    }
-
-    func saveNumbering() async {
-        isSaving = true
-        errorMessage = nil
-        do {
-            let update = NumberingSettingsUpdate(
-                estimatePrefix: estimatePrefix,
-                invoicePrefix: invoicePrefix,
-                nextEstimateNumber: nextEstimateNumber,
-                nextInvoiceNumber: nextInvoiceNumber
-            )
-            let updated = try await service.saveNumberingSettings(update)
-            company = updated
-            syncAppState(from: updated)
-            successMessage = "Numbering settings saved."
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        isSaving = false
-    }
-
-    func saveLanguage() async {
-        do {
-            try await service.saveLanguagePreference(selectedLanguage)
-            successMessage = "Language preference saved."
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
+    // MARK: - Pricing Profiles
 
     func savePricingProfile(_ profile: PricingProfile) async {
-        isSaving = true
-        errorMessage = nil
+        saveStatus = .saving
         do {
             let saved = try await service.savePricingProfile(profile)
             if let index = pricingProfiles.firstIndex(where: { $0.id == saved.id }) {
@@ -242,11 +331,11 @@ final class SettingsViewModel {
             } else {
                 pricingProfiles.append(saved)
             }
-            successMessage = "Profile saved."
+            markSaved()
         } catch {
+            saveStatus = .failed(message: error.localizedDescription)
             errorMessage = error.localizedDescription
         }
-        isSaving = false
     }
 
     func deletePricingProfile(id: String) async {
@@ -265,26 +354,45 @@ final class SettingsViewModel {
     /// On success, callers should sign the user out so the auth gate is shown.
     @discardableResult
     func deleteAccount() async -> Bool {
-        isSaving = true
-        errorMessage = nil
         do {
             try await APIClient.shared.request(.deleteMe)
-            isSaving = false
             return true
         } catch {
             errorMessage = error.localizedDescription
-            isSaving = false
             return false
         }
     }
 
     // MARK: - Private
 
+    private func apply(updated: Company) {
+        company = updated
+        syncAppState(from: updated)
+        // Reflect any server-side normalization (e.g., trimmed whitespace,
+        // canonicalized hex casing, default fallbacks) back into the form
+        // without re-triggering autosave.
+        isHydrating = true
+        defer { isHydrating = false }
+        if let mode = updated.appearanceMode, let parsed = AppearanceMode(stringValue: mode) {
+            appearanceStore?.applyRemote(mode: parsed)
+        }
+        if let lang = updated.defaultLanguage, let parsed = AppLanguage(rawValue: lang) {
+            selectedLanguage = parsed
+        }
+    }
+
+    private func markSaved() {
+        saveStatus = .saved(at: Date())
+    }
+
     private func syncAppState(from company: Company) {
         appState?.currentCompany = AppState.CurrentCompany.from(company)
     }
 
     private func populateFields(from company: Company) {
+        isHydrating = true
+        defer { isHydrating = false }
+
         companyName = company.name
         companyPhone = company.phone ?? ""
         companyEmail = company.email ?? ""
@@ -295,7 +403,8 @@ final class SettingsViewModel {
         companyWebsite = company.websiteUrl ?? ""
         companyLogoURL = company.logoURL
         defaultTaxRate = company.defaultTaxRate ?? 8.25
-        taxRateText = "\(NSDecimalNumber(decimal: company.defaultTaxRate ?? 8.25).doubleValue)"
+        taxRateText = String(format: "%.2f", NSDecimalNumber(decimal: company.defaultTaxRate ?? 8.25).doubleValue)
+        taxInclusivePricing = company.taxInclusivePricing
         estimatePrefix = company.estimatePrefix ?? "EST"
         invoicePrefix = company.invoicePrefix ?? "INV"
         nextEstimateNumber = company.nextEstimateNumber
@@ -306,6 +415,13 @@ final class SettingsViewModel {
         }
         if let hex = company.secondaryColor {
             secondaryColor = Color(hex: UInt(hex.dropFirst(), radix: 16) ?? 0x1E293B)
+        }
+
+        if let lang = company.defaultLanguage, let parsed = AppLanguage(rawValue: lang) {
+            selectedLanguage = parsed
+        }
+        if let mode = company.appearanceMode, let parsed = AppearanceMode(stringValue: mode) {
+            appearanceStore?.applyRemote(mode: parsed)
         }
     }
 }

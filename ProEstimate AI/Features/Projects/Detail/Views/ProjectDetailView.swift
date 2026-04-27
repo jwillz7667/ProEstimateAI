@@ -28,6 +28,7 @@ struct ProjectDetailView: View {
     private struct ActiveEstimate: Identifiable, Hashable {
         let id: String
     }
+
     @Environment(AppRouter.self) private var router
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
@@ -160,6 +161,12 @@ struct ProjectDetailView: View {
                 )
                 .padding(.horizontal, SpacingTokens.md)
 
+                // Property scouting tools — surfaced for project types
+                // where measured area materially changes the bid. Tapping
+                // either button opens a dedicated screen that PATCHes the
+                // result back onto the project.
+                propertyScoutingSection(for: project)
+
                 // Images
                 ProjectImagesSection(assets: viewModel.assets)
 
@@ -212,7 +219,7 @@ struct ProjectDetailView: View {
                     },
                     onEstimateTap: { estimateId in
                         activeEstimate = ActiveEstimate(id: estimateId)
-                    },
+                    }
                 )
 
                 // Activity
@@ -236,6 +243,117 @@ struct ProjectDetailView: View {
         }
     }
 
+    // MARK: - Property Scouting
+
+    /// Lawn measurement is exposed for landscape / lawn-care projects;
+    /// roof scouting for roofing / siding / exterior projects (anything
+    /// with overhead work). Other types skip the section entirely so the
+    /// detail page doesn't grow buttons no contractor would tap.
+    @ViewBuilder
+    private func propertyScoutingSection(for project: Project) -> some View {
+        let showLawn = project.projectType == .lawnCare
+            || project.projectType == .landscaping
+        let showRoof = project.projectType == .roofing
+            || project.projectType == .exterior
+            || project.projectType == .siding
+
+        if showLawn || showRoof {
+            VStack(alignment: .leading, spacing: SpacingTokens.sm) {
+                Text("Property Scouting")
+                    .font(TypographyTokens.headline)
+                    .padding(.horizontal, SpacingTokens.md)
+
+                HStack(spacing: SpacingTokens.sm) {
+                    if showLawn {
+                        scoutingButton(
+                            title: project.lawnAreaSqFt != nil
+                                ? "Re-Measure Lawn"
+                                : "Measure Lawn",
+                            subtitle: project.lawnAreaSqFt != nil
+                                ? "\(Int(NSDecimalNumber(decimal: project.lawnAreaSqFt!).doubleValue)) sq ft"
+                                : "Tap to outline on map",
+                            icon: "leaf.fill",
+                            tint: ColorTokens.accentGreen
+                        ) {
+                            let lat = project.propertyLatitude.map(decimalToDouble)
+                            let lng = project.propertyLongitude.map(decimalToDouble)
+                            router.projectsPath.append(
+                                AppDestination.lawnMeasurement(
+                                    projectId: project.id,
+                                    latitude: lat,
+                                    longitude: lng
+                                )
+                            )
+                        }
+                    }
+                    if showRoof {
+                        scoutingButton(
+                            title: project.roofAreaSqFt != nil
+                                ? "Re-Scout Roof"
+                                : "Scout Roof",
+                            subtitle: project.roofAreaSqFt != nil
+                                ? String(format: "%.1f squares", NSDecimalNumber(decimal: project.roofAreaSqFt!).doubleValue / 100)
+                                : "Solar API report",
+                            icon: "house.fill",
+                            tint: ColorTokens.primaryOrange
+                        ) {
+                            let lat = project.propertyLatitude.map(decimalToDouble)
+                            let lng = project.propertyLongitude.map(decimalToDouble)
+                            router.projectsPath.append(
+                                AppDestination.roofScouting(
+                                    projectId: project.id,
+                                    address: nil,
+                                    latitude: lat,
+                                    longitude: lng
+                                )
+                            )
+                        }
+                    }
+                }
+                .padding(.horizontal, SpacingTokens.md)
+            }
+        }
+    }
+
+    private func decimalToDouble(_ d: Decimal) -> Double {
+        NSDecimalNumber(decimal: d).doubleValue
+    }
+
+    private func scoutingButton(
+        title: String,
+        subtitle: String,
+        icon: String,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: SpacingTokens.sm) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+                    .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: RadiusTokens.small))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(TypographyTokens.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(ColorTokens.primaryText)
+                    Text(subtitle)
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(SpacingTokens.sm)
+            .frame(maxWidth: .infinity)
+            .glassCard(cornerRadius: RadiusTokens.card)
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Feature-Gated Actions
 
     private func handleGenerate(prompt: String) {
@@ -250,7 +368,7 @@ struct ProjectDetailView: View {
                     paywallPresenter.present(.sampleSoftGate)
                 }
             }
-        case .blocked(let decision):
+        case let .blocked(decision):
             paywallPresenter.present(decision)
         }
     }
@@ -310,7 +428,7 @@ struct ProjectDetailView: View {
                     activeEstimate = ActiveEstimate(id: estimate.id)
                 }
             }
-        case .blocked(let decision):
+        case let .blocked(decision):
             paywallPresenter.present(decision)
         }
     }

@@ -1,9 +1,19 @@
-import { Request, Response, NextFunction } from 'express';
-import { sendSuccess } from '../../lib/envelope';
-import { toUserDto, toCompanyDto } from './auth.dto';
-import type { AuthResponseDto, TokenPairDto } from './auth.dto';
-import type { SignupInput, LoginInput, AppleSignInInput, RefreshInput, LogoutInput, ForgotPasswordInput, ResetPasswordInput } from './auth.validators';
-import * as authService from './auth.service';
+import { Request, Response, NextFunction } from "express";
+import { sendSuccess } from "../../lib/envelope";
+import { toUserDto, toCompanyDto } from "./auth.dto";
+import type { AuthResponseDto, TokenPairDto } from "./auth.dto";
+import type {
+  SignupInput,
+  LoginInput,
+  AppleSignInInput,
+  GoogleSignInInput,
+  RefreshInput,
+  LogoutInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
+} from "./auth.validators";
+import * as authService from "./auth.service";
+import { GoogleAuthNotConfiguredError } from "../../lib/google-auth";
 
 // ─── Async handler ───────────────────────────────────────────────────────────
 // Wraps async route handlers so rejected promises are forwarded to Express
@@ -74,6 +84,43 @@ export const appleSignInHandler = asyncHandler(
   },
 );
 
+// ─── POST /v1/auth/google-signin ────────────────────────────────────────────
+
+export const googleSignInHandler = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const input = req.body as GoogleSignInInput;
+
+    let result;
+    try {
+      result = await authService.googleSignIn(input);
+    } catch (err) {
+      if (err instanceof GoogleAuthNotConfiguredError) {
+        // OAuth client IDs missing on the server. Surface as 503 so the
+        // iOS client can hide the "Continue with Google" button gracefully
+        // instead of treating this as an invalid-credential 401.
+        res.status(503).json({
+          ok: false,
+          error: {
+            code: "GOOGLE_AUTH_NOT_CONFIGURED",
+            message: "Google sign-in is not configured on this server",
+          },
+        });
+        return;
+      }
+      throw err;
+    }
+
+    const data: AuthResponseDto = {
+      user: toUserDto(result.user),
+      company: toCompanyDto(result.company),
+      access_token: result.accessToken,
+      refresh_token: result.refreshToken,
+    };
+
+    sendSuccess(res, data);
+  },
+);
+
 // ─── POST /v1/auth/refresh ──────────────────────────────────────────────────
 
 export const refreshHandler = asyncHandler(
@@ -114,7 +161,8 @@ export const forgotPasswordHandler = asyncHandler(
 
     // Always return success regardless of whether the email exists
     sendSuccess(res, {
-      message: 'If an account exists with that email, a reset link has been sent.',
+      message:
+        "If an account exists with that email, a reset link has been sent.",
     });
   },
 );
@@ -128,7 +176,7 @@ export const resetPasswordHandler = asyncHandler(
     await authService.resetPassword(input);
 
     sendSuccess(res, {
-      message: 'Password has been reset successfully.',
+      message: "Password has been reset successfully.",
     });
   },
 );

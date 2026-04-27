@@ -54,32 +54,14 @@ struct ProjectTypeCard: View {
 
     // MARK: - Helpers
 
+    /// Delegate to the enum's own iconName / displayName so the picker
+    /// automatically tracks any new project types added to the model.
     private var iconName: String {
-        switch projectType {
-        case .kitchen: "fork.knife"
-        case .bathroom: "shower"
-        case .flooring: "square.grid.3x3.fill"
-        case .roofing: "house"
-        case .painting: "paintbrush"
-        case .siding: "building.2"
-        case .roomRemodel: "bed.double"
-        case .exterior: "tree"
-        case .custom: "wrench.and.screwdriver"
-        }
+        projectType.iconName
     }
 
     private var displayName: String {
-        switch projectType {
-        case .kitchen: "Kitchen"
-        case .bathroom: "Bathroom"
-        case .flooring: "Flooring"
-        case .roofing: "Roofing"
-        case .painting: "Painting"
-        case .siding: "Siding"
-        case .roomRemodel: "Room Remodel"
-        case .exterior: "Exterior"
-        case .custom: "Custom"
-        }
+        projectType.displayName
     }
 }
 

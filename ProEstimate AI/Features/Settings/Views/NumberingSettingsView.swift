@@ -14,9 +14,10 @@ struct NumberingSettingsView: View {
                         .multilineTextAlignment(.trailing)
                         .frame(width: 100)
                         .autocapitalization(.allCharacters)
+                        .onChange(of: viewModel.estimatePrefix) { _, _ in viewModel.scheduleSaveNumbering() }
                 }
 
-                Stepper(value: $viewModel.nextEstimateNumber, in: 1...999999) {
+                Stepper(value: $viewModel.nextEstimateNumber, in: 1 ... 999_999) {
                     HStack {
                         Text("Next Number")
                         Spacer()
@@ -25,10 +26,41 @@ struct NumberingSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .onChange(of: viewModel.nextEstimateNumber) { _, _ in viewModel.scheduleSaveNumbering() }
             } header: {
                 Text("Estimates")
             } footer: {
                 Text("Next estimate will be: \(viewModel.nextEstimateDisplay)")
+            }
+
+            // Invoice Numbering — exposed in the iOS UI so a contractor whose
+            // billing system already uses a particular invoice number can
+            // continue from that sequence rather than restarting at 1001.
+            Section {
+                HStack {
+                    Text("Prefix")
+                    Spacer()
+                    TextField("INV", text: $viewModel.invoicePrefix)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 100)
+                        .autocapitalization(.allCharacters)
+                        .onChange(of: viewModel.invoicePrefix) { _, _ in viewModel.scheduleSaveNumbering() }
+                }
+
+                Stepper(value: $viewModel.nextInvoiceNumber, in: 1 ... 999_999) {
+                    HStack {
+                        Text("Next Number")
+                        Spacer()
+                        Text("\(viewModel.nextInvoiceNumber)")
+                            .font(TypographyTokens.moneySmall)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .onChange(of: viewModel.nextInvoiceNumber) { _, _ in viewModel.scheduleSaveNumbering() }
+            } header: {
+                Text("Invoices")
+            } footer: {
+                Text("Next invoice will be: \(viewModel.nextInvoiceDisplay)")
             }
 
             // Preview Section
@@ -40,32 +72,22 @@ struct NumberingSettingsView: View {
                         label: "Next Estimate",
                         value: viewModel.nextEstimateDisplay
                     )
+                    previewRow(
+                        icon: "doc.plaintext",
+                        color: ColorTokens.accentGreen,
+                        label: "Next Invoice",
+                        value: viewModel.nextInvoiceDisplay
+                    )
                 }
                 .padding(.vertical, SpacingTokens.xxs)
-            }
-
-            // Save
-            Section {
-                PrimaryCTAButton(
-                    title: "Save Numbering",
-                    icon: "checkmark.circle",
-                    isLoading: viewModel.isSaving
-                ) {
-                    Task { await viewModel.saveNumbering() }
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
             }
         }
         .navigationTitle("Document Numbering")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Success", isPresented: .init(
-            get: { viewModel.successMessage != nil },
-            set: { if !$0 { viewModel.successMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { viewModel.successMessage = nil }
-        } message: {
-            Text(viewModel.successMessage ?? "")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                SettingsSaveStatusView(status: viewModel.saveStatus)
+            }
         }
     }
 

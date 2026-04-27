@@ -1,12 +1,41 @@
 import SwiftUI
 
 struct EstimateTotalsView: View {
+    /// Recurring-contract rollup. When passed, the totals view relabels
+    /// "Total" → "Per Visit" and exposes monthly + annual + contract-total
+    /// rows so the contractor sees what the property manager will sign.
+    struct RecurringContext: Equatable {
+        let perVisit: Decimal
+        let visitsPerMonth: Decimal
+        let contractMonths: Int
+        let frequency: Project.RecurrenceFrequency?
+
+        var monthlyTotal: Decimal {
+            perVisit * visitsPerMonth
+        }
+
+        var contractTotal: Decimal {
+            monthlyTotal * Decimal(contractMonths)
+        }
+
+        var annualTotal: Decimal {
+            monthlyTotal * 12
+        }
+
+        var frequencyLabel: String {
+            frequency?.displayName ?? "Recurring"
+        }
+    }
+
     let subtotalMaterials: Decimal
     let subtotalLabor: Decimal
     let subtotalOther: Decimal
     let taxAmount: Decimal
     @Binding var discountAmount: Decimal
     let grandTotal: Decimal
+    /// When non-nil, the view renders recurring-contract rollups instead
+    /// of treating `grandTotal` as a one-time total.
+    var recurring: RecurringContext? = nil
 
     @State private var discountText: String = ""
     @State private var isExpanded: Bool = false
@@ -27,7 +56,7 @@ struct EstimateTotalsView: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
 
-                        Text("Total")
+                        Text(recurring == nil ? "Total" : "Per Visit")
                             .font(TypographyTokens.headline)
                             .foregroundStyle(.primary)
 
@@ -53,6 +82,11 @@ struct EstimateTotalsView: View {
                         discountRow
 
                         Divider()
+
+                        if let recurring {
+                            recurringRollupRows(recurring)
+                            Divider()
+                        }
                     }
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
@@ -86,6 +120,40 @@ struct EstimateTotalsView: View {
             CurrencyText(amount: amount, font: TypographyTokens.moneySmall)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func recurringRollupRows(_ ctx: RecurringContext) -> some View {
+        VStack(spacing: SpacingTokens.xs) {
+            HStack {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.caption)
+                    .foregroundStyle(ColorTokens.primaryOrange)
+                    .frame(width: 20)
+                Text("\(ctx.frequencyLabel) · \(visitsCountLabel(ctx)) visits/mo · \(ctx.contractMonths) mo contract")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            totalsRow(label: "Monthly", amount: ctx.monthlyTotal, icon: "calendar")
+            totalsRow(label: "Annual", amount: ctx.annualTotal, icon: "calendar.circle")
+            HStack {
+                Image(systemName: "doc.text.fill")
+                    .font(.caption)
+                    .foregroundStyle(ColorTokens.primaryOrange)
+                    .frame(width: 20)
+                Text("Contract Total")
+                    .font(TypographyTokens.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+                CurrencyText(amount: ctx.contractTotal, font: TypographyTokens.moneyMedium)
+                    .foregroundStyle(ColorTokens.primaryOrange)
+            }
+        }
+    }
+
+    private func visitsCountLabel(_ ctx: RecurringContext) -> String {
+        let n = NSDecimalNumber(decimal: ctx.visitsPerMonth).doubleValue
+        return n.rounded() == n ? String(Int(n)) : String(format: "%.2f", n)
     }
 
     private var discountRow: some View {

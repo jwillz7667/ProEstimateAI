@@ -67,7 +67,7 @@ struct DashboardRecentProjectsSection: View {
             if let url = thumbnails[project.id] {
                 AsyncImage(url: url) { phase in
                     switch phase {
-                    case .success(let image):
+                    case let .success(image):
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -116,17 +116,7 @@ struct DashboardRecentProjectsSection: View {
     // MARK: - Helpers
 
     private func iconForProjectType(_ type: Project.ProjectType) -> String {
-        switch type {
-        case .kitchen: "fork.knife"
-        case .bathroom: "shower"
-        case .flooring: "square.grid.3x3.topleft.filled"
-        case .roofing: "house"
-        case .painting: "paintbrush"
-        case .siding: "building.2"
-        case .roomRemodel: "bed.double"
-        case .exterior: "tree"
-        case .custom: "wrench.and.screwdriver"
-        }
+        type.iconName
     }
 
     private func statusBadge(for status: Project.Status) -> some View {

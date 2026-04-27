@@ -1,4 +1,4 @@
-import { MaterialSuggestion } from '@prisma/client';
+import { MaterialSuggestion } from "@prisma/client";
 
 export interface MaterialDto {
   id: string;
@@ -11,6 +11,13 @@ export interface MaterialDto {
   quantity: number;
   supplier_name: string | null;
   supplier_url: string | null;
+  /**
+   * Retailer-friendly query string the iOS client deep-links into a
+   * supplier search page so the contractor can verify the AI-estimated
+   * price against live retail before sending the bid. Nullable for
+   * pre-prompt-library generation rows.
+   */
+  supplier_search_query: string | null;
   is_selected: boolean;
   sort_order: number;
 }
@@ -27,6 +34,7 @@ export function toMaterialDto(material: MaterialSuggestion): MaterialDto {
     quantity: Number(material.quantity),
     supplier_name: material.supplierName,
     supplier_url: material.supplierUrl,
+    supplier_search_query: material.supplierSearchQuery,
     is_selected: material.isSelected,
     sort_order: material.sortOrder,
   };

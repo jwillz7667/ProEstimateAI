@@ -1,8 +1,14 @@
-import { env } from '../config/env';
-import { logger } from '../config/logger';
-import type { GeneratedImage, ImageGenContext, ReferencePhoto } from './image-gen';
+import { env } from "../config/env";
+import { logger } from "../config/logger";
+import type {
+  GeneratedImage,
+  ImageGenContext,
+  ReferencePhoto,
+} from "./image-gen";
+import { toPromptContext } from "./image-gen";
+import { getImagePrompt } from "./prompts";
 
-const PIAPI_BASE_URL = 'https://api.piapi.ai/api/v1';
+const PIAPI_BASE_URL = "https://api.piapi.ai/api/v1";
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLL_ATTEMPTS = 40; // 40 * 3s = 2 minutes max
 const IMAGE_DOWNLOAD_TIMEOUT_MS = 30000;
@@ -29,7 +35,7 @@ interface PiAPITaskResponse {
   message: string;
   data: {
     task_id: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'staged';
+    status: "pending" | "processing" | "completed" | "failed" | "staged";
     output: {
       image_urls?: string[];
       image_url?: string;
@@ -52,18 +58,20 @@ interface PiAPITaskResponse {
 function aspectRatioForProjectType(projectType: string): string {
   const type = projectType.toUpperCase();
   switch (type) {
-    case 'EXTERIOR':
-    case 'ROOFING':
-    case 'SIDING':
-      return '16:9';
-    case 'BATHROOM':
-      return '3:4';
-    case 'KITCHEN':
-    case 'ROOM_REMODEL':
-    case 'FLOORING':
-    case 'PAINTING':
+    case "EXTERIOR":
+    case "ROOFING":
+    case "SIDING":
+    case "LANDSCAPING":
+    case "LAWN_CARE":
+      return "16:9";
+    case "BATHROOM":
+      return "3:4";
+    case "KITCHEN":
+    case "ROOM_REMODEL":
+    case "FLOORING":
+    case "PAINTING":
     default:
-      return '4:3';
+      return "4:3";
   }
 }
 
@@ -72,42 +80,51 @@ function aspectRatioForProjectType(projectType: string): string {
 async function piapiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const apiKey = env.PIAPI_API_KEY;
   if (!apiKey) {
-    throw new Error('PIAPI_API_KEY is not configured');
+    throw new Error("PIAPI_API_KEY is not configured");
   }
 
   const url = `${PIAPI_BASE_URL}${path}`;
   const response = await fetch(url, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': apiKey,
+      "Content-Type": "application/json",
+      "X-API-Key": apiKey,
       ...options?.headers,
     },
   });
 
   if (!response.ok) {
-    const text = await response.text().catch(() => 'no body');
-    throw new Error(`PiAPI request failed: ${response.status} ${response.statusText} — ${text}`);
+    const text = await response.text().catch(() => "no body");
+    throw new Error(
+      `PiAPI request failed: ${response.status} ${response.statusText} — ${text}`,
+    );
   }
 
   return response.json() as Promise<T>;
 }
 
-async function downloadImageAsBase64(imageUrl: string): Promise<{ base64Data: string; mimeType: string }> {
+async function downloadImageAsBase64(
+  imageUrl: string,
+): Promise<{ base64Data: string; mimeType: string }> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), IMAGE_DOWNLOAD_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    IMAGE_DOWNLOAD_TIMEOUT_MS,
+  );
 
   try {
     const response = await fetch(imageUrl, { signal: controller.signal });
     if (!response.ok) {
-      throw new Error(`Image download failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Image download failed: ${response.status} ${response.statusText}`,
+      );
     }
 
-    const contentType = response.headers.get('content-type') || 'image/png';
+    const contentType = response.headers.get("content-type") || "image/png";
     const arrayBuffer = await response.arrayBuffer();
-    const base64Data = Buffer.from(arrayBuffer).toString('base64');
+    const base64Data = Buffer.from(arrayBuffer).toString("base64");
 
-    return { base64Data, mimeType: contentType.split(';')[0].trim() };
+    return { base64Data, mimeType: contentType.split(";")[0].trim() };
   } finally {
     clearTimeout(timeout);
   }
@@ -116,30 +133,35 @@ async function downloadImageAsBase64(imageUrl: string): Promise<{ base64Data: st
 // ─── Task Lifecycle ─────────────────────────────────────────────────────────
 
 async function createTask(request: PiAPICreateRequest): Promise<string> {
-  const result = await piapiFetch<PiAPITaskResponse>('/task', {
-    method: 'POST',
+  const result = await piapiFetch<PiAPITaskResponse>("/task", {
+    method: "POST",
     body: JSON.stringify(request),
   });
 
   if (result.code !== 200 || !result.data?.task_id) {
-    throw new Error(`PiAPI create task failed: code=${result.code} message=${result.message}`);
+    throw new Error(
+      `PiAPI create task failed: code=${result.code} message=${result.message}`,
+    );
   }
 
   return result.data.task_id;
 }
 
-async function pollTask(taskId: string): Promise<PiAPITaskResponse['data']> {
+async function pollTask(taskId: string): Promise<PiAPITaskResponse["data"]> {
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
     const result = await piapiFetch<PiAPITaskResponse>(`/task/${taskId}`);
 
     const status = result.data?.status;
 
-    if (status === 'completed') {
+    if (status === "completed") {
       return result.data;
     }
 
-    if (status === 'failed') {
-      const errMsg = result.data?.error?.message || result.data?.error?.raw_message || 'Unknown error';
+    if (status === "failed") {
+      const errMsg =
+        result.data?.error?.message ||
+        result.data?.error?.raw_message ||
+        "Unknown error";
       throw new Error(`PiAPI task failed: ${errMsg}`);
     }
 
@@ -147,7 +169,9 @@ async function pollTask(taskId: string): Promise<PiAPITaskResponse['data']> {
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
 
-  throw new Error(`PiAPI task ${taskId} timed out after ${MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS / 1000}s`);
+  throw new Error(
+    `PiAPI task ${taskId} timed out after ${(MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s`,
+  );
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -172,7 +196,7 @@ export interface PiAPIGenerateOptions {
  * Fallback within PiAPI: nano-banana-2 if pro fails.
  */
 export async function generatePreviewImagePiAPI(
-  options: PiAPIGenerateOptions
+  options: PiAPIGenerateOptions,
 ): Promise<GeneratedImage | null> {
   const { userPrompt, context, referenceAssetUrl } = options;
   const startMs = Date.now();
@@ -188,35 +212,63 @@ export async function generatePreviewImagePiAPI(
     imageUrls.push(referenceAssetUrl);
   }
 
-  const taskType = 'nano-banana-pro';
+  const taskType = "nano-banana-pro";
 
   logger.info(
-    { taskType, projectType: context.projectType, qualityTier: context.qualityTier, aspectRatio, hasRefPhoto: imageUrls.length > 0 },
-    'Starting PiAPI image generation'
+    {
+      taskType,
+      projectType: context.projectType,
+      qualityTier: context.qualityTier,
+      aspectRatio,
+      hasRefPhoto: imageUrls.length > 0,
+    },
+    "Starting PiAPI image generation",
   );
 
   try {
     // Attempt with nano-banana-pro first
-    const result = await attemptGeneration(taskType, prompt, imageUrls, aspectRatio);
+    const result = await attemptGeneration(
+      taskType,
+      prompt,
+      imageUrls,
+      aspectRatio,
+    );
     if (result) {
       const durationMs = Date.now() - startMs;
-      logger.info({ durationMs, taskType, provider: 'piapi' }, 'PiAPI generation completed');
+      logger.info(
+        { durationMs, taskType, provider: "piapi" },
+        "PiAPI generation completed",
+      );
       return { ...result, durationMs };
     }
   } catch (proErr) {
-    logger.warn({ err: proErr, taskType }, 'PiAPI nano-banana-pro failed, trying nano-banana-2 fallback');
+    logger.warn(
+      { err: proErr, taskType },
+      "PiAPI nano-banana-pro failed, trying nano-banana-2 fallback",
+    );
   }
 
   // Fallback: try nano-banana-2 within PiAPI
   try {
-    const fallbackResult = await attemptGeneration('nano-banana-2', prompt, imageUrls, aspectRatio);
+    const fallbackResult = await attemptGeneration(
+      "nano-banana-2",
+      prompt,
+      imageUrls,
+      aspectRatio,
+    );
     if (fallbackResult) {
       const durationMs = Date.now() - startMs;
-      logger.info({ durationMs, taskType: 'nano-banana-2', provider: 'piapi-fallback' }, 'PiAPI fallback generation completed');
+      logger.info(
+        { durationMs, taskType: "nano-banana-2", provider: "piapi-fallback" },
+        "PiAPI fallback generation completed",
+      );
       return { ...fallbackResult, durationMs };
     }
   } catch (fallbackErr) {
-    logger.error({ err: fallbackErr }, 'PiAPI nano-banana-2 fallback also failed');
+    logger.error(
+      { err: fallbackErr },
+      "PiAPI nano-banana-2 fallback also failed",
+    );
   }
 
   return null;
@@ -227,32 +279,37 @@ async function attemptGeneration(
   prompt: string,
   imageUrls: string[],
   aspectRatio: string,
-): Promise<Omit<GeneratedImage, 'durationMs'> | null> {
+): Promise<Omit<GeneratedImage, "durationMs"> | null> {
   const request: PiAPICreateRequest = {
-    model: 'gemini',
+    model: "gemini",
     task_type: taskType,
     input: {
       prompt,
-      output_format: 'png',
+      output_format: "png",
       aspect_ratio: aspectRatio,
-      resolution: '2K',
+      resolution: "2K",
       ...(imageUrls.length > 0 ? { image_urls: imageUrls } : {}),
-      ...(taskType === 'nano-banana-pro' ? { safety_level: 'high' } : {}),
+      ...(taskType === "nano-banana-pro" ? { safety_level: "high" } : {}),
     },
   };
 
   const taskId = await createTask(request);
-  logger.info({ taskId, taskType }, 'PiAPI task created, polling for completion');
+  logger.info(
+    { taskId, taskType },
+    "PiAPI task created, polling for completion",
+  );
 
   const completedTask = await pollTask(taskId);
 
   // Extract image URL from output
   const imageUrl =
-    completedTask.output?.image_urls?.[0] ||
-    completedTask.output?.image_url;
+    completedTask.output?.image_urls?.[0] || completedTask.output?.image_url;
 
   if (!imageUrl) {
-    logger.warn({ taskId, taskType }, 'PiAPI task completed but no image URL in output');
+    logger.warn(
+      { taskId, taskType },
+      "PiAPI task completed but no image URL in output",
+    );
     return null;
   }
 
@@ -262,58 +319,40 @@ async function attemptGeneration(
 }
 
 // ─── Prompt Building ────────────────────────────────────────────────────────
+//
+// PiAPI used to maintain its own slim system prompt for nano-banana. We've
+// moved that to the per-ProjectType prompt library so the same trade-aware
+// language drives both Google GenAI and PiAPI generations. Reference-photo
+// edits append a tight preservation directive on top.
 
-function buildPiAPIPrompt(userPrompt: string, context: ImageGenContext, hasReferencePhoto: boolean): string {
+function buildPiAPIPrompt(
+  userPrompt: string,
+  context: ImageGenContext,
+  hasReferencePhoto: boolean,
+): string {
+  const promptCtx = toPromptContext(context);
+  const systemPrompt = getImagePrompt(promptCtx);
+
   if (hasReferencePhoto) {
-    const qualityTier = context.qualityTier.toLowerCase();
-    const projectType = context.projectType.replace(/_/g, ' ').toLowerCase();
+    return `${systemPrompt}
 
-    return `Edit this photo to show a completed ${projectType} remodel. ${userPrompt}
+EDIT INSTRUCTION
+The provided photo is the actual property/room. Edit it in place: keep
+the same camera angle, same vantage point, same structural elements
+(walls, windows, roofline, lot boundaries, plant beds present). Only
+change the finishes, plants, materials, and surfaces to show the
+COMPLETED project as described below.
 
-Keep the exact same room, same layout, same camera angle, same perspective, same windows and doors. Only change the finishes, materials, and fixtures to show a beautiful ${qualityTier}-grade ${projectType} renovation. The result must look like a real photo of this exact same space after a professional remodel. Photorealistic only, no text or labels.`;
+Contractor's request: "${userPrompt}"
+
+Photorealistic only. No text, no labels, no watermarks.`;
   }
 
-  // Build full system prompt for text-to-image
-  return buildPiAPISystemPrompt(userPrompt, context);
-}
+  return `${systemPrompt}
 
-function buildPiAPISystemPrompt(userPrompt: string, context: ImageGenContext): string {
-  const qualityTierDescriptions: Record<string, string> = {
-    budget: 'Clean and functional with cost-effective builder-grade materials — laminate countertops, basic ceramic tile, painted MDF cabinetry, chrome fixtures.',
-    standard: 'Mid-range materials with tasteful design — quartz countertops, engineered hardwood or quality luxury vinyl plank flooring, semi-custom shaker cabinetry, brushed nickel or matte black fixtures.',
-    premium: 'High-end finishes — natural marble or quartzite countertops, solid hardwood flooring, custom cabinetry with soft-close hardware, designer lighting fixtures, frameless glass shower enclosures.',
-    luxury: 'Ultra-premium — exotic stone slabs with dramatic veining, bespoke millwork, statement chandelier lighting, imported European fixtures, architectural ceiling features.',
-  };
+CONTRACTOR'S REQUEST
+"${userPrompt}"
 
-  const tierDesc = qualityTierDescriptions[context.qualityTier.toLowerCase()] ?? qualityTierDescriptions['standard'];
-  const projectType = context.projectType.replace(/_/g, ' ').toLowerCase();
-
-  let prompt = `Generate a single photorealistic photograph of a beautifully completed ${projectType} remodel. This image will be presented to a homeowner in a professional contractor's proposal.
-
-Shoot the scene with a full-frame camera and a 28mm wide-angle lens at eye level. Frame using the rule of thirds. Keep all vertical lines straight.
-
-Light with warm natural daylight through windows, supplemented by recessed downlights. Bright, inviting, aspirational mood.
-
-Render every material with photorealistic detail — wood grain, stone veining, tile grout lines, metal reflections. The finish level is ${context.qualityTier.toLowerCase()} grade: ${tierDesc}
-
-Project: "${context.projectTitle}" — a ${projectType} project.`;
-
-  if (context.projectDescription) {
-    prompt += `\nThe homeowner's vision: ${context.projectDescription}`;
-  }
-  if (context.squareFootage) {
-    prompt += `\nSpace: approximately ${context.squareFootage} square feet.`;
-  }
-  if (context.dimensions) {
-    prompt += `\nDimensions: ${context.dimensions}.`;
-  }
-  if (context.materials && context.materials.length > 0) {
-    prompt += `\n\nMaterials that MUST be visible:\n${context.materials.map((m, i) => `${i + 1}. ${m.name}${m.category ? ` (${m.category})` : ''}`).join('\n')}`;
-  }
-
-  prompt += `\n\nThe homeowner wants: "${userPrompt}"
-
-Show only the finished, move-in-ready result. No construction debris, tools, people, pets, text, labels, watermarks, or logos. Single photorealistic image only.`;
-
-  return prompt;
+Photograph this completed project from the most flattering angle that
+satisfies the framing rules above. Photorealistic only.`;
 }

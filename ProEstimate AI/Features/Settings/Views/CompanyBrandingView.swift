@@ -1,5 +1,5 @@
-import SwiftUI
 import PhotosUI
+import SwiftUI
 
 struct CompanyBrandingView: View {
     @Bindable var viewModel: SettingsViewModel
@@ -62,70 +62,58 @@ struct CompanyBrandingView: View {
             // Company Info Section
             Section("Company Information") {
                 TextField("Company Name", text: $viewModel.companyName)
+                    .onChange(of: viewModel.companyName) { _, _ in viewModel.scheduleSaveBranding() }
                 TextField("Phone", text: $viewModel.companyPhone)
                     .keyboardType(.phonePad)
+                    .onChange(of: viewModel.companyPhone) { _, _ in viewModel.scheduleSaveBranding() }
                 TextField("Email", text: $viewModel.companyEmail)
                     .keyboardType(.emailAddress)
                     .textContentType(.emailAddress)
                     .autocapitalization(.none)
+                    .onChange(of: viewModel.companyEmail) { _, _ in viewModel.scheduleSaveBranding() }
                 TextField("Website", text: $viewModel.companyWebsite)
                     .keyboardType(.URL)
                     .textContentType(.URL)
                     .autocapitalization(.none)
+                    .onChange(of: viewModel.companyWebsite) { _, _ in viewModel.scheduleSaveBranding() }
             }
 
             // Address Section
             Section("Address") {
                 TextField("Street Address", text: $viewModel.companyAddress)
                     .textContentType(.streetAddressLine1)
+                    .onChange(of: viewModel.companyAddress) { _, _ in viewModel.scheduleSaveBranding() }
                 TextField("City", text: $viewModel.companyCity)
                     .textContentType(.addressCity)
+                    .onChange(of: viewModel.companyCity) { _, _ in viewModel.scheduleSaveBranding() }
                 TextField("State", text: $viewModel.companyState)
                     .textContentType(.addressState)
+                    .onChange(of: viewModel.companyState) { _, _ in viewModel.scheduleSaveBranding() }
                 TextField("ZIP Code", text: $viewModel.companyZip)
                     .textContentType(.postalCode)
                     .keyboardType(.numberPad)
+                    .onChange(of: viewModel.companyZip) { _, _ in viewModel.scheduleSaveBranding() }
             }
 
             // Brand Colors Section
             Section("Brand Colors") {
                 ColorPicker("Primary Color", selection: $viewModel.primaryColor)
+                    .onChange(of: viewModel.primaryColor) { _, _ in viewModel.scheduleSaveBranding() }
                 ColorPicker("Secondary Color", selection: $viewModel.secondaryColor)
+                    .onChange(of: viewModel.secondaryColor) { _, _ in viewModel.scheduleSaveBranding() }
             }
 
             // Live Preview Section
             Section("Preview") {
                 brandingPreview
             }
-
-            // Save Button
-            Section {
-                PrimaryCTAButton(
-                    title: "Save Branding",
-                    icon: "checkmark.circle",
-                    isLoading: viewModel.isSaving
-                ) {
-                    let result = featureGateCoordinator.guardUseBranding()
-                    switch result {
-                    case .allowed:
-                        Task { await viewModel.saveCompanyBranding() }
-                    case .blocked(let decision):
-                        paywallPresenter.present(decision)
-                    }
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-            }
         }
         .navigationTitle("Branding")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Success", isPresented: .init(
-            get: { viewModel.successMessage != nil },
-            set: { if !$0 { viewModel.successMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { viewModel.successMessage = nil }
-        } message: {
-            Text(viewModel.successMessage ?? "")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                SettingsSaveStatusView(status: viewModel.saveStatus)
+            }
         }
         .alert("Error", isPresented: .init(
             get: { viewModel.errorMessage != nil },
@@ -151,7 +139,7 @@ struct CompanyBrandingView: View {
         } else if let url = viewModel.companyLogoURL {
             AsyncImage(url: url) { phase in
                 switch phase {
-                case .success(let image):
+                case let .success(image):
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -182,7 +170,7 @@ struct CompanyBrandingView: View {
     /// view model's `errorMessage`.
     private func handleLogoSelection(_ item: PhotosPickerItem) async {
         let gate = featureGateCoordinator.guardUseBranding()
-        if case .blocked(let decision) = gate {
+        if case let .blocked(decision) = gate {
             paywallPresenter.present(decision)
             selectedLogoItem = nil
             return
@@ -224,7 +212,8 @@ struct CompanyBrandingView: View {
         // WEBP: 52 49 46 46 .. .. .. .. 57 45 42 50
         if bytes.count >= 12,
            bytes[0] == 0x52, bytes[1] == 0x49, bytes[2] == 0x46, bytes[3] == 0x46,
-           bytes[8] == 0x57, bytes[9] == 0x45, bytes[10] == 0x42, bytes[11] == 0x50 {
+           bytes[8] == 0x57, bytes[9] == 0x45, bytes[10] == 0x42, bytes[11] == 0x50
+        {
             return "image/webp"
         }
         return nil

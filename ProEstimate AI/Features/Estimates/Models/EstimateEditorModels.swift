@@ -48,31 +48,31 @@ struct LineItemDraft: Identifiable, Sendable {
 extension LineItemDraft {
     /// Initialize a draft from an existing line item for editing.
     init(from item: EstimateLineItem) {
-        self.id = item.id
-        self.estimateId = item.estimateId
-        self.category = item.category
-        self.name = item.name
-        self.description = item.description ?? ""
-        self.quantity = item.quantity
-        self.unit = LineItemUnit(rawValue: item.unit) ?? .each
-        self.unitCost = item.unitCost
-        self.markupPercent = item.markupPercent
-        self.taxRate = item.taxRate
-        self.sortOrder = item.sortOrder
+        id = item.id
+        estimateId = item.estimateId
+        category = item.category
+        name = item.name
+        description = item.description ?? ""
+        quantity = item.quantity
+        unit = LineItemUnit(rawValue: item.unit) ?? .each
+        unitCost = item.unitCost
+        markupPercent = item.markupPercent
+        taxRate = item.taxRate
+        sortOrder = item.sortOrder
     }
 
     /// Initialize a draft from an AI-suggested material.
     /// When `isDIY` is true, markup is set to 0 (homeowner cost only).
     init(from material: MaterialSuggestion, estimateId: String, isDIY: Bool, sortOrder: Int) {
-        self.id = UUID().uuidString
+        id = UUID().uuidString
         self.estimateId = estimateId
-        self.category = .materials
-        self.name = material.name
-        self.quantity = material.quantity
-        self.unit = LineItemUnit(rawValue: material.unit) ?? .each
-        self.unitCost = material.estimatedCost
-        self.markupPercent = isDIY ? 0 : 10
-        self.taxRate = 8.25
+        category = .materials
+        name = material.name
+        quantity = material.quantity
+        unit = LineItemUnit(rawValue: material.unit) ?? .each
+        unitCost = material.estimatedCost
+        markupPercent = isDIY ? 0 : 10
+        taxRate = 8.25
         self.sortOrder = sortOrder
 
         // Embed supplier info in description so it persists through the backend
@@ -83,7 +83,7 @@ extension LineItemDraft {
         if let url = material.supplierURL {
             desc += " · \(url.absoluteString)"
         }
-        self.description = desc
+        description = desc
     }
 
     /// Creates a default labor line item based on project type.
@@ -113,7 +113,7 @@ extension LineItemDraft {
     /// Returns (description, hourly rate, estimated hours) for a project type.
     private static func laborDefaults(
         for projectType: Project.ProjectType,
-        materialsCost: Decimal
+        materialsCost _: Decimal
     ) -> (String, Decimal, Decimal) {
         switch projectType {
         case .kitchen:
@@ -132,6 +132,13 @@ extension LineItemDraft {
             return ("Room Remodel Labor", 65, 24)
         case .exterior:
             return ("Exterior Work Labor", 60, 24)
+        case .landscaping:
+            return ("Landscape Install Labor", 55, 32)
+        case .lawnCare:
+            // Per-visit labor — recurring contracts override this from the
+            // service-level rate sheet, but the fallback assumes a small
+            // commercial property mowed by a 2-person crew.
+            return ("Lawn Care Crew (per visit)", 50, 3)
         case .custom:
             return ("General Contractor Labor", 65, 20)
         }
@@ -170,7 +177,9 @@ enum LineItemUnit: String, CaseIterable, Identifiable, Sendable {
     case day
     case lot
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var displayName: String {
         switch self {
@@ -195,7 +204,9 @@ enum EstimateStatusFilter: String, CaseIterable, Identifiable, Sendable {
     case declined
     case expired
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var title: String {
         switch self {
@@ -230,7 +241,7 @@ struct EstimateSummary: Identifiable, Sendable {
     let projectTitle: String
 
     init(estimate: Estimate, projectTitle: String) {
-        self.id = estimate.id
+        id = estimate.id
         self.estimate = estimate
         self.projectTitle = projectTitle
     }

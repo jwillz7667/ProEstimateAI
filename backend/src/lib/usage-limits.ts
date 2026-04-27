@@ -1,5 +1,5 @@
-import { prisma } from '../config/database';
-import type { UsageMetricCode } from '@prisma/client';
+import { prisma } from "../config/database";
+import type { UsageMetricCode } from "@prisma/client";
 
 /**
  * Rolling-window usage gating. We count UsageEvent rows for a metric over the
@@ -12,7 +12,22 @@ import type { UsageMetricCode } from '@prisma/client';
  * fairer to users than calendar-aligned resets and trivial to compute.
  */
 
-export type UsageMetric = Extract<UsageMetricCode, 'AI_GENERATION' | 'QUOTE_EXPORT'>;
+/**
+ * Metrics that participate in rolling-window cap enforcement.
+ *
+ *   - AI_GENERATION:      one image preview generation. Pro caps at 20/mo.
+ *   - QUOTE_EXPORT:       one PDF export of an estimate / proposal.
+ *   - PROJECT_CREATED:    one new project. Pro caps at 2/mo.
+ *   - ESTIMATE_GENERATED: one AI-generated estimate. Pro caps at 20/mo.
+ *
+ * Premium plans configure generous caps under the same code path so the
+ * gate never goes "unlimited" — protects the backend from a runaway
+ * client looping the same endpoint.
+ */
+export type UsageMetric = Extract<
+  UsageMetricCode,
+  "AI_GENERATION" | "QUOTE_EXPORT" | "PROJECT_CREATED" | "ESTIMATE_GENERATED"
+>;
 
 export interface UsageLimits {
   daily?: number;
@@ -28,7 +43,7 @@ export interface UsageWindow {
 
 export interface LimitCheckBlocked {
   allowed: false;
-  window: 'daily' | 'weekly' | 'monthly';
+  window: "daily" | "weekly" | "monthly";
   cap: number;
   used: number;
   resetAt: Date;
@@ -59,16 +74,18 @@ export function readPlanLimits(
   featuresJson: unknown,
   metric: UsageMetric,
 ): UsageLimits {
-  if (!featuresJson || typeof featuresJson !== 'object') return {};
+  if (!featuresJson || typeof featuresJson !== "object") return {};
   const limits = (featuresJson as Record<string, unknown>).LIMITS;
-  if (!limits || typeof limits !== 'object') return {};
+  if (!limits || typeof limits !== "object") return {};
   const perMetric = (limits as Record<string, unknown>)[metric];
-  if (!perMetric || typeof perMetric !== 'object') return {};
+  if (!perMetric || typeof perMetric !== "object") return {};
   const obj = perMetric as Record<string, unknown>;
   const result: UsageLimits = {};
-  if (typeof obj.daily === 'number' && obj.daily >= 0) result.daily = obj.daily;
-  if (typeof obj.weekly === 'number' && obj.weekly >= 0) result.weekly = obj.weekly;
-  if (typeof obj.monthly === 'number' && obj.monthly >= 0) result.monthly = obj.monthly;
+  if (typeof obj.daily === "number" && obj.daily >= 0) result.daily = obj.daily;
+  if (typeof obj.weekly === "number" && obj.weekly >= 0)
+    result.weekly = obj.weekly;
+  if (typeof obj.monthly === "number" && obj.monthly >= 0)
+    result.monthly = obj.monthly;
   return result;
 }
 
@@ -94,7 +111,7 @@ export async function checkUsageLimit(
       createdAt: { gte: monthStart },
     },
     select: { createdAt: true, quantity: true },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: "asc" },
   });
 
   let monthly = 0;
@@ -122,7 +139,7 @@ export async function checkUsageLimit(
   if (limits.daily !== undefined && daily >= limits.daily) {
     return {
       allowed: false,
-      window: 'daily',
+      window: "daily",
       cap: limits.daily,
       used: daily,
       resetAt: resetForWindow(dayStart, DAY_MS),
@@ -133,7 +150,7 @@ export async function checkUsageLimit(
   if (limits.weekly !== undefined && weekly >= limits.weekly) {
     return {
       allowed: false,
-      window: 'weekly',
+      window: "weekly",
       cap: limits.weekly,
       used: weekly,
       resetAt: resetForWindow(weekStart, WEEK_MS),
@@ -144,7 +161,7 @@ export async function checkUsageLimit(
   if (limits.monthly !== undefined && monthly >= limits.monthly) {
     return {
       allowed: false,
-      window: 'monthly',
+      window: "monthly",
       cap: limits.monthly,
       used: monthly,
       resetAt: resetForWindow(monthStart, MONTH_MS),

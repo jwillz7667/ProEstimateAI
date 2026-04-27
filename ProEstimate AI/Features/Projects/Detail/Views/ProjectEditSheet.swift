@@ -96,7 +96,7 @@ struct ProjectEditSheet: View {
     private var titleSection: some View {
         Section {
             TextField("Project Name", text: $title, axis: .vertical)
-                .lineLimit(1...2)
+                .lineLimit(1 ... 2)
         } header: {
             Text("Name")
         }
@@ -105,7 +105,7 @@ struct ProjectEditSheet: View {
     private var descriptionSection: some View {
         Section {
             TextField("What's the scope of work?", text: $description, axis: .vertical)
-                .lineLimit(3...8)
+                .lineLimit(3 ... 8)
         } header: {
             Text("Description")
         }
@@ -205,7 +205,15 @@ struct ProjectEditSheet: View {
             dimensions: dimensions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil
                 : dimensions.trimmingCharacters(in: .whitespacesAndNewlines),
-            language: project.language
+            language: project.language,
+            // Project edit sheet doesn't expose recurrence today; preserve
+            // whatever the project already has by passing the existing
+            // values through unchanged.
+            isRecurring: project.isRecurring,
+            recurrenceFrequency: project.recurrenceFrequency?.rawValue,
+            visitsPerMonth: project.visitsPerMonth,
+            contractMonths: project.contractMonths,
+            recurrenceStartDate: project.recurrenceStartDate
         )
 
         do {
@@ -220,17 +228,7 @@ struct ProjectEditSheet: View {
     // MARK: - Helpers
 
     private func typeLabel(_ type: Project.ProjectType) -> String {
-        switch type {
-        case .kitchen: "Kitchen"
-        case .bathroom: "Bathroom"
-        case .flooring: "Flooring"
-        case .roofing: "Roofing"
-        case .painting: "Painting"
-        case .siding: "Siding"
-        case .roomRemodel: "Room Remodel"
-        case .exterior: "Exterior"
-        case .custom: "Custom"
-        }
+        type.displayName
     }
 
     private func tierLabel(_ tier: Project.QualityTier) -> String {

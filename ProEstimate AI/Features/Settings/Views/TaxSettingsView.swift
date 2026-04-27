@@ -19,6 +19,7 @@ struct TaxSettingsView: View {
                                 if let value = Decimal(string: newValue), value >= 0, value <= 100 {
                                     viewModel.defaultTaxRate = value
                                 }
+                                viewModel.scheduleSaveTax()
                             }
                         Text("%")
                             .foregroundStyle(.secondary)
@@ -30,9 +31,10 @@ struct TaxSettingsView: View {
                             set: {
                                 viewModel.defaultTaxRate = Decimal($0)
                                 viewModel.taxRateText = String(format: "%.2f", $0)
+                                viewModel.scheduleSaveTax()
                             }
                         ),
-                        in: 0...15,
+                        in: 0 ... 15,
                         step: 0.25
                     )
                     .tint(ColorTokens.primaryOrange)
@@ -54,6 +56,7 @@ struct TaxSettingsView: View {
                     }
                 }
                 .tint(ColorTokens.primaryOrange)
+                .onChange(of: viewModel.taxInclusivePricing) { _, _ in viewModel.scheduleSaveTax() }
             } footer: {
                 Text("When enabled, line item prices shown to clients will include tax. The tax breakdown is still shown separately on invoices.")
             }
@@ -86,29 +89,13 @@ struct TaxSettingsView: View {
             Section("Preview") {
                 taxPreview
             }
-
-            // Save
-            Section {
-                PrimaryCTAButton(
-                    title: "Save Tax Settings",
-                    icon: "checkmark.circle",
-                    isLoading: viewModel.isSaving
-                ) {
-                    Task { await viewModel.saveTaxSettings() }
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-            }
         }
         .navigationTitle("Tax Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Success", isPresented: .init(
-            get: { viewModel.successMessage != nil },
-            set: { if !$0 { viewModel.successMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { viewModel.successMessage = nil }
-        } message: {
-            Text(viewModel.successMessage ?? "")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                SettingsSaveStatusView(status: viewModel.saveStatus)
+            }
         }
     }
 

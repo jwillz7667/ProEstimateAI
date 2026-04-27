@@ -14,6 +14,10 @@ struct AIPreviewSection: View {
 
     @State private var selectedGenerationIndex: Int = 0
     @State private var activePromptEditor: PromptEditorRequest?
+    /// When non-nil, presents the full-screen before/after viewer. Identifiable
+    /// so we can rebuild the sheet content if the contractor opens, dismisses,
+    /// then re-opens for a different generation in the same session.
+    @State private var fullScreenViewer: FullScreenViewerRequest?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
@@ -38,6 +42,24 @@ struct AIPreviewSection: View {
                 activePromptEditor = nil
             }
         }
+        .fullScreenCover(item: $fullScreenViewer) { request in
+            BeforeAfterFullScreenViewer(
+                beforeImageURL: request.beforeURL,
+                afterImageURL: request.afterURL,
+                caption: request.caption
+            )
+        }
+    }
+
+    /// Identifiable trigger for the full-screen before/after viewer. Captures
+    /// the URLs + caption at tap-time so the presentation is stable even if
+    /// the contractor scrolls a new generation into selection while the
+    /// viewer is open.
+    private struct FullScreenViewerRequest: Identifiable, Hashable {
+        let id: String
+        let beforeURL: URL?
+        let afterURL: URL?
+        let caption: String?
     }
 
     /// Identifiable trigger used to drive the prompt editor sheet through
@@ -49,7 +71,7 @@ struct AIPreviewSection: View {
 
         init(initialPrompt: String) {
             self.initialPrompt = initialPrompt
-            self.id = initialPrompt
+            id = initialPrompt
         }
     }
 
@@ -105,10 +127,36 @@ struct AIPreviewSection: View {
             if selectedGenerationIndex < completedGenerations.count {
                 let gen = completedGenerations[selectedGenerationIndex]
 
-                BeforeAfterSlider(
-                    beforeImageURL: assets.first(where: { $0.assetType == .original })?.url,
-                    afterImageURL: gen.previewURL
-                )
+                let beforeURL = assets.first(where: { $0.assetType == .original })?.url
+                let afterURL = gen.previewURL
+                ZStack(alignment: .topTrailing) {
+                    BeforeAfterSlider(
+                        beforeImageURL: beforeURL,
+                        afterImageURL: afterURL
+                    )
+                    // Expand button — corner placement keeps it out of the
+                    // slider's horizontal drag path so taps on the body of
+                    // the slider still move the divider, while a tap on the
+                    // chip opens the full-screen viewer.
+                    Button {
+                        fullScreenViewer = FullScreenViewerRequest(
+                            id: "\(gen.id)-fullscreen",
+                            beforeURL: beforeURL,
+                            afterURL: afterURL,
+                            caption: gen.prompt
+                        )
+                    } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(SpacingTokens.xs)
+                            .background(.black.opacity(0.55), in: Circle())
+                            .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(SpacingTokens.sm)
+                    .accessibilityLabel("Enlarge before/after comparison")
+                }
                 .padding(.horizontal, SpacingTokens.md)
 
                 // Generation info
@@ -179,7 +227,7 @@ struct AIPreviewSection: View {
                                 RoundedRectangle(cornerRadius: RadiusTokens.small)
                                     .strokeBorder(
                                         selectedGenerationIndex == index
-                                        ? ColorTokens.primaryOrange : .clear,
+                                            ? ColorTokens.primaryOrange : .clear,
                                         lineWidth: 2
                                     )
                             )
@@ -188,7 +236,7 @@ struct AIPreviewSection: View {
                                 .font(TypographyTokens.caption2)
                                 .foregroundStyle(
                                     selectedGenerationIndex == index
-                                    ? ColorTokens.primaryOrange : .secondary
+                                        ? ColorTokens.primaryOrange : .secondary
                                 )
                         }
                     }

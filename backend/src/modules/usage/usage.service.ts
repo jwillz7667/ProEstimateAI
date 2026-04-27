@@ -1,20 +1,27 @@
-import { UsageMetricCode } from '@prisma/client';
-import { prisma } from '../../config/database';
-import { NotFoundError, PaywallError } from '../../lib/errors';
-import { isAdminUser } from '../../lib/admin';
-import { UsageBucketDto, toUsageBucketDto } from './usage.dto';
-import { PaywallPlacement } from '../../types/enums';
+import { UsageMetricCode } from "@prisma/client";
+import { prisma } from "../../config/database";
+import { NotFoundError, PaywallError } from "../../lib/errors";
+import { isAdminUser } from "../../lib/admin";
+import { UsageBucketDto, toUsageBucketDto } from "./usage.dto";
+import { PaywallPlacement } from "../../types/enums";
 
-// Map metric codes to their paywall placements when limits are hit
+// Map metric codes to their paywall placements when limits are hit.
+// PROJECT_CREATED and ESTIMATE_GENERATED reuse the generic generation
+// placement — the iOS paywall sheet's copy is metric-aware via the
+// gate's `trigger_reason` field.
 const METRIC_TO_PLACEMENT: Record<UsageMetricCode, PaywallPlacement> = {
-  AI_GENERATION: 'GENERATION_LIMIT_HIT',
-  QUOTE_EXPORT: 'QUOTE_LIMIT_HIT',
+  AI_GENERATION: "GENERATION_LIMIT_HIT",
+  QUOTE_EXPORT: "QUOTE_LIMIT_HIT",
+  PROJECT_CREATED: "GENERATION_LIMIT_HIT",
+  ESTIMATE_GENERATED: "GENERATION_LIMIT_HIT",
 };
 
 // Human-readable labels for paywall error messages
 const METRIC_LABELS: Record<UsageMetricCode, string> = {
-  AI_GENERATION: 'AI generation',
-  QUOTE_EXPORT: 'quote export',
+  AI_GENERATION: "AI generation",
+  QUOTE_EXPORT: "quote export",
+  PROJECT_CREATED: "project",
+  ESTIMATE_GENERATED: "AI estimate",
 };
 
 /**
@@ -26,7 +33,7 @@ export async function getUsageSummary(
 ): Promise<UsageBucketDto[]> {
   const buckets = await prisma.usageBucket.findMany({
     where: { userId, companyId },
-    orderBy: { metricCode: 'asc' },
+    orderBy: { metricCode: "asc" },
   });
 
   return buckets.map(toUsageBucketDto);
@@ -51,7 +58,7 @@ export async function checkAndConsume(
       included_quantity: 999999,
       consumed_quantity: 0,
       remaining_quantity: 999999,
-      source: 'ADMIN',
+      source: "ADMIN",
     };
   }
 
@@ -61,16 +68,16 @@ export async function checkAndConsume(
     // Find all buckets for this metric, prefer STARTER_CREDITS first (consume free credits before Pro)
     const buckets = await tx.usageBucket.findMany({
       where: { userId, metricCode },
-      orderBy: { source: 'asc' }, // STARTER_CREDITS < PRO_SUBSCRIPTION alphabetically
+      orderBy: { source: "asc" }, // STARTER_CREDITS < PRO_SUBSCRIPTION alphabetically
     });
 
     // Find the first bucket with remaining credits
-    const bucket = buckets.find(
-      (b) => b.includedQuantity - b.consumedQuantity > 0,
-    ) ?? buckets[0];
+    const bucket =
+      buckets.find((b) => b.includedQuantity - b.consumedQuantity > 0) ??
+      buckets[0];
 
     if (!bucket) {
-      throw new NotFoundError('UsageBucket', `${userId}/${metricCode}`);
+      throw new NotFoundError("UsageBucket", `${userId}/${metricCode}`);
     }
 
     const remaining = bucket.includedQuantity - bucket.consumedQuantity;

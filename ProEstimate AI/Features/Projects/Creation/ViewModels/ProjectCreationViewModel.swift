@@ -10,7 +10,9 @@ final class ProjectCreationViewModel {
     // MARK: - Step Navigation
 
     var currentStep: Int = 0
-    var totalSteps: Int { ProjectCreationStep.allCases.count }
+    var totalSteps: Int {
+        ProjectCreationStep.allCases.count
+    }
 
     var currentStepEnum: ProjectCreationStep {
         ProjectCreationStep(rawValue: currentStep) ?? .type
@@ -51,7 +53,9 @@ final class ProjectCreationViewModel {
     var prompt: String = ""
     let maxPromptLength: Int = 1000
 
-    var promptCharacterCount: Int { prompt.count }
+    var promptCharacterCount: Int {
+        prompt.count
+    }
 
     var detectedLanguage: String {
         // Simple heuristic: if prompt contains common Spanish words, hint Spanish
@@ -70,6 +74,31 @@ final class ProjectCreationViewModel {
     var qualityTier: Project.QualityTier = .standard
     var squareFootageText: String = ""
     var dimensions: String = ""
+
+    // MARK: - Step 4: Recurring Contract (LAWN_CARE only)
+
+    /// True when the user has chosen to bill this as a recurring service
+    /// contract rather than a one-shot job. Auto-flipped on when the user
+    /// picks `lawnCare` in step 0 (see `selectedProjectType` didSet),
+    /// but the contractor can override either direction in Details.
+    var isRecurring: Bool = false
+    var recurrenceFrequency: Project.RecurrenceFrequency = .weekly
+    var visitsPerMonthText: String = ""
+    var contractMonthsText: String = "8"
+    var recurrenceStartDate: Date = .init()
+
+    /// Resolves the typed visits-per-month value: explicit override if
+    /// the user filled the field, otherwise the cadence default.
+    var resolvedVisitsPerMonth: Decimal? {
+        if let explicit = Decimal(string: visitsPerMonthText), explicit > 0 {
+            return explicit
+        }
+        return recurrenceFrequency.defaultVisitsPerMonth
+    }
+
+    var contractMonths: Int? {
+        Int(contractMonthsText)
+    }
 
     // MARK: - Post-creation behavior
 
@@ -159,6 +188,8 @@ final class ProjectCreationViewModel {
             case .siding: return "Siding Replacement"
             case .roomRemodel: return "Room Remodel"
             case .exterior: return "Exterior Renovation"
+            case .landscaping: return "Landscape Install"
+            case .lawnCare: return "Lawn Care Contract"
             case .custom: return "Custom Project"
             }
         }()
@@ -246,7 +277,12 @@ final class ProjectCreationViewModel {
             qualityTier: qualityTier,
             squareFootage: squareFootage,
             dimensions: dimensions.isEmpty ? nil : dimensions,
-            language: detectedLanguage == "Spanish" ? "es" : "en"
+            language: detectedLanguage == "Spanish" ? "es" : "en",
+            isRecurring: isRecurring ? true : nil,
+            recurrenceFrequency: isRecurring ? recurrenceFrequency.rawValue : nil,
+            visitsPerMonth: isRecurring ? resolvedVisitsPerMonth : nil,
+            contractMonths: isRecurring ? contractMonths : nil,
+            recurrenceStartDate: isRecurring ? recurrenceStartDate : nil
         )
 
         do {
@@ -280,7 +316,8 @@ final class ProjectCreationViewModel {
         var quality: CGFloat = 0.8
         while quality > 0.1 {
             if let compressed = uiImage.jpegData(compressionQuality: quality),
-               compressed.count <= maxBytes {
+               compressed.count <= maxBytes
+            {
                 return compressed
             }
             quality -= 0.1

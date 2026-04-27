@@ -69,6 +69,13 @@ struct MaterialSuggestionCard: View {
                         CurrencyText(amount: material.estimatedCost, font: TypographyTokens.caption)
                             .foregroundStyle(.secondary)
                     }
+
+                    // Verify price — deep link to the contractor's preferred
+                    // retailer's search page so they can confirm the AI's
+                    // estimate against live retail before sending the bid.
+                    if let query = material.supplierSearchQuery, !query.isEmpty {
+                        verifyPriceMenu(query: query)
+                    }
                 }
 
                 Spacer()
@@ -115,6 +122,45 @@ struct MaterialSuggestionCard: View {
                 in: Capsule()
             )
             .foregroundStyle(ColorTokens.primaryOrange)
+    }
+
+    /// Picker that opens the supplier's search page for `query`. The
+    /// AI-suggested supplier (if it matches one we know) is shown first;
+    /// the rest of the catalog falls below for the contractor's preferred
+    /// retailer relationship.
+    @ViewBuilder
+    private func verifyPriceMenu(query: String) -> some View {
+        let suggested = MaterialSupplier.match(supplierName: material.supplierName)
+        let ordered: [MaterialSupplier] = {
+            var all = MaterialSupplier.allCases
+            if let s = suggested {
+                all.removeAll { $0 == s }
+                all.insert(s, at: 0)
+            }
+            return all
+        }()
+
+        Menu {
+            ForEach(ordered) { supplier in
+                if let url = supplier.searchURL(for: query) {
+                    Button {
+                        openURL(url)
+                    } label: {
+                        Label(supplier.displayName, systemImage: "arrow.up.right.square")
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass")
+                    .font(.caption2)
+                Text("Verify price")
+                    .font(TypographyTokens.caption2)
+                    .fontWeight(.medium)
+            }
+            .foregroundStyle(ColorTokens.primaryOrange)
+        }
+        .accessibilityLabel("Verify \(material.name) price at retailer")
     }
 }
 

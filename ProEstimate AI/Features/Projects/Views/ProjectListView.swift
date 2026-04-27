@@ -1,3 +1,4 @@
+import CoreLocation
 import SwiftUI
 
 /// Main project list screen displayed under the Projects tab.
@@ -10,7 +11,7 @@ struct ProjectListView: View {
     @State private var navigateAutoGenerate: Bool = false
     @Environment(AppRouter.self) private var router
 
-    /// Client names are loaded from the API by the view model.
+    // Client names are loaded from the API by the view model.
 
     var body: some View {
         @Bindable var router = router
@@ -23,10 +24,29 @@ struct ProjectListView: View {
                 emptyDetailPlaceholder
                     .navigationDestination(for: AppDestination.self) { destination in
                         switch destination {
-                        case .projectDetail(let id, let autoGenerate):
+                        case let .projectDetail(id, autoGenerate):
                             ProjectDetailView(projectId: id, autoGenerateOnOpen: autoGenerate)
-                        case .clientDetail(let id):
+                        case let .clientDetail(id):
                             ClientDetailView(clientId: id)
+                        case let .lawnMeasurement(projectId, lat, lng):
+                            LawnMeasurementView(
+                                viewModel: LawnMeasurementViewModel(
+                                    projectId: projectId,
+                                    initialCenter: (lat != nil && lng != nil)
+                                        ? CLLocationCoordinate2D(latitude: lat!, longitude: lng!)
+                                        : nil
+                                )
+                            )
+                        case let .roofScouting(projectId, address, lat, lng):
+                            RoofScoutingView(
+                                viewModel: RoofScoutingViewModel(
+                                    projectId: projectId,
+                                    initialAddress: address,
+                                    initialCoordinate: (lat != nil && lng != nil)
+                                        ? CLLocationCoordinate2D(latitude: lat!, longitude: lng!)
+                                        : nil
+                                )
+                            )
                         default:
                             EmptyView()
                         }

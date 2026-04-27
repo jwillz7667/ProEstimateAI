@@ -16,6 +16,15 @@ struct ProjectCreationRequest: Codable, Sendable {
     let squareFootage: Decimal?
     let dimensions: String?
     let language: String?
+    // Recurring contract terms — only sent for projects the wizard
+    // configured as recurring (LAWN_CARE today). All optional so a
+    // standard install bid carries the keys as null and the backend
+    // takes its `is_recurring=false` default.
+    let isRecurring: Bool?
+    let recurrenceFrequency: String?
+    let visitsPerMonth: Decimal?
+    let contractMonths: Int?
+    let recurrenceStartDate: Date?
 
     enum CodingKeys: String, CodingKey {
         case title
@@ -28,6 +37,11 @@ struct ProjectCreationRequest: Codable, Sendable {
         case squareFootage = "square_footage"
         case dimensions
         case language
+        case isRecurring = "is_recurring"
+        case recurrenceFrequency = "recurrence_frequency"
+        case visitsPerMonth = "visits_per_month"
+        case contractMonths = "contract_months"
+        case recurrenceStartDate = "recurrence_start_date"
     }
 }
 
@@ -40,7 +54,9 @@ enum ProjectStatusFilter: String, CaseIterable, Identifiable, Sendable {
     case completed
     case archived
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var title: String {
         switch self {
@@ -98,7 +114,9 @@ enum ProjectCreationStep: Int, CaseIterable, Sendable {
         }
     }
 
-    var stepCount: Int { ProjectCreationStep.allCases.count }
+    var stepCount: Int {
+        ProjectCreationStep.allCases.count
+    }
 }
 
 // NOTE: ActivityLogEntry is defined in Core/Models/ActivityLogEntry.swift

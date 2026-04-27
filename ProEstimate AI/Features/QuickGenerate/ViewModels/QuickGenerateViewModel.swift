@@ -51,8 +51,8 @@ final class QuickGenerateViewModel {
 
     var canGenerate: Bool {
         selectedImageData != nil &&
-        selectedProjectType != nil &&
-        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            selectedProjectType != nil &&
+            !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - Photo Loading
@@ -100,7 +100,14 @@ final class QuickGenerateViewModel {
                 qualityTier: .standard,
                 squareFootage: nil,
                 dimensions: nil,
-                language: "en"
+                language: "en",
+                // QuickGenerate is a one-shot single-photo flow; recurring
+                // contracts are configured in the full project wizard.
+                isRecurring: nil,
+                recurrenceFrequency: nil,
+                visitsPerMonth: nil,
+                contractMonths: nil,
+                recurrenceStartDate: nil
             )
             let project = try await projectService.createProject(request: request)
             createdProjectId = project.id
@@ -125,7 +132,7 @@ final class QuickGenerateViewModel {
 
             // 4. Poll for completion
             var completed = generation
-            for _ in 0..<30 {
+            for _ in 0 ..< 30 {
                 try await Task.sleep(nanoseconds: 2_000_000_000)
                 completed = try await generationService.getGenerationStatus(id: generation.id)
                 if completed.status == .completed || completed.status == .failed {
@@ -170,9 +177,9 @@ final class QuickGenerateViewModel {
     /// `.complete` stage is set by `stopProgressSimulation()` once the
     /// backend signals completion.
     private static let stageDwellSeconds: [Double] = [
-        5,    // .uploading -> .analyzing
-        6,    // .analyzing -> .generating
-        45,   // .generating -> .enhancing
+        5, // .uploading -> .analyzing
+        6, // .analyzing -> .generating
+        45, // .generating -> .enhancing
     ]
 
     private func startProgressSimulation() {
@@ -222,7 +229,8 @@ final class QuickGenerateViewModel {
         var quality: CGFloat = 0.8
         while quality > 0.1 {
             if let compressed = uiImage.jpegData(compressionQuality: quality),
-               compressed.count <= maxBytes {
+               compressed.count <= maxBytes
+            {
                 return compressed
             }
             quality -= 0.1
@@ -241,6 +249,8 @@ final class QuickGenerateViewModel {
         case .siding: "Siding Replacement"
         case .roomRemodel: "Room Remodel"
         case .exterior: "Exterior Renovation"
+        case .landscaping: "Landscape Install"
+        case .lawnCare: "Lawn Care Contract"
         case .custom: "Custom Project"
         }
     }

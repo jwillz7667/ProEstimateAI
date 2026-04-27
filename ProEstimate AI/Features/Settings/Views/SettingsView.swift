@@ -43,6 +43,7 @@ struct SettingsView: View {
             }
             .task {
                 viewModel.appState = appState
+                viewModel.appearanceStore = appearanceStore
                 await viewModel.loadSettings()
             }
             .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
@@ -100,7 +101,7 @@ struct SettingsView: View {
         switch result {
         case .allowed:
             router.settingsPath.append(AppDestination.analytics)
-        case .blocked(let decision):
+        case let .blocked(decision):
             paywallPresenter.present(decision)
         }
     }
@@ -277,8 +278,15 @@ struct SettingsView: View {
                 }
 
                 Label {
-                    @Bindable var store = appearanceStore
-                    Picker("Appearance", selection: $store.mode) {
+                    Picker(
+                        "Appearance",
+                        selection: Binding(
+                            get: { appearanceStore.mode },
+                            set: { newMode in
+                                Task { await appearanceStore.setMode(newMode) }
+                            }
+                        )
+                    ) {
                         ForEach(AppearanceMode.allCases, id: \.self) { mode in
                             Label(mode.label, systemImage: mode.icon)
                                 .tag(mode)

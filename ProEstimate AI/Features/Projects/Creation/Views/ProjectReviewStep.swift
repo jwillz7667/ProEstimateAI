@@ -256,33 +256,11 @@ struct ProjectReviewStep: View {
     // MARK: - Helpers
 
     private var projectTypeIcon: String {
-        guard let type = viewModel.selectedProjectType else { return "questionmark.circle" }
-        switch type {
-        case .kitchen: return "fork.knife"
-        case .bathroom: return "shower"
-        case .flooring: return "square.grid.3x3.fill"
-        case .roofing: return "house"
-        case .painting: return "paintbrush"
-        case .siding: return "building.2"
-        case .roomRemodel: return "bed.double"
-        case .exterior: return "tree"
-        case .custom: return "wrench.and.screwdriver"
-        }
+        viewModel.selectedProjectType?.iconName ?? "questionmark.circle"
     }
 
     private var projectTypeLabel: String {
-        guard let type = viewModel.selectedProjectType else { return "Not selected" }
-        switch type {
-        case .kitchen: return "Kitchen"
-        case .bathroom: return "Bathroom"
-        case .flooring: return "Flooring"
-        case .roofing: return "Roofing"
-        case .painting: return "Painting"
-        case .siding: return "Siding"
-        case .roomRemodel: return "Room Remodel"
-        case .exterior: return "Exterior"
-        case .custom: return "Custom"
-        }
+        viewModel.selectedProjectType?.displayName ?? "Not selected"
     }
 
     private func tierLabel(_ tier: Project.QualityTier) -> String {

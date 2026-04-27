@@ -9,7 +9,7 @@ enum AppDestination: Hashable {
     case estimateEditor(id: String)
     case estimateList(projectId: String)
 
-    // Proposals
+    /// Proposals
     case proposalPreview(id: String)
 
     // Clients
@@ -25,8 +25,17 @@ enum AppDestination: Hashable {
     case subscriptionSettings
     case analytics
 
-    // Commerce
+    /// Commerce
     case paywall(placement: String)
+
+    /// Property Maps
+    /// Lawn polygon measurement on a satellite map. `projectId` is
+    /// optional — when nil the screen acts as a one-off measurement
+    /// tool; when set, the saved area is PATCHed onto the project.
+    case lawnMeasurement(projectId: String?, latitude: Double?, longitude: Double?)
+    /// Roof scouting against the Google Solar API. `projectId` is
+    /// optional for the same reason as above.
+    case roofScouting(projectId: String?, address: String?, latitude: Double?, longitude: Double?)
 }
 
 @Observable

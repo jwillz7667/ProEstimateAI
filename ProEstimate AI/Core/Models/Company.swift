@@ -17,6 +17,7 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
     let secondaryColor: String?
     let defaultTaxRate: Decimal?
     let defaultMarkupPercent: Decimal?
+    let taxInclusivePricing: Bool
     let estimatePrefix: String?
     let invoicePrefix: String?
     let proposalPrefix: String?
@@ -27,6 +28,7 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
     let timezone: String?
     let websiteUrl: String?
     let taxLabel: String?
+    let appearanceMode: String?
     let createdAt: Date
     let updatedAt: Date
 
@@ -44,6 +46,7 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
         case secondaryColor = "secondary_color"
         case defaultTaxRate = "default_tax_rate"
         case defaultMarkupPercent = "default_markup_percent"
+        case taxInclusivePricing = "tax_inclusive_pricing"
         case estimatePrefix = "estimate_prefix"
         case invoicePrefix = "invoice_prefix"
         case proposalPrefix = "proposal_prefix"
@@ -54,8 +57,102 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
         case timezone
         case websiteUrl = "website_url"
         case taxLabel = "tax_label"
+        case appearanceMode = "appearance_mode"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+
+    /// Older API responses (and test fixtures) may omit the newly-added
+    /// `tax_inclusive_pricing` and `appearance_mode` keys. Decode defensively
+    /// so a missing key is treated as `false` / `nil` rather than failing the
+    /// entire response decode.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        phone = try c.decodeIfPresent(String.self, forKey: .phone)
+        email = try c.decodeIfPresent(String.self, forKey: .email)
+        address = try c.decodeIfPresent(String.self, forKey: .address)
+        city = try c.decodeIfPresent(String.self, forKey: .city)
+        state = try c.decodeIfPresent(String.self, forKey: .state)
+        zip = try c.decodeIfPresent(String.self, forKey: .zip)
+        logoURL = try c.decodeIfPresent(URL.self, forKey: .logoURL)
+        primaryColor = try c.decodeIfPresent(String.self, forKey: .primaryColor)
+        secondaryColor = try c.decodeIfPresent(String.self, forKey: .secondaryColor)
+        defaultTaxRate = try c.decodeIfPresent(Decimal.self, forKey: .defaultTaxRate)
+        defaultMarkupPercent = try c.decodeIfPresent(Decimal.self, forKey: .defaultMarkupPercent)
+        taxInclusivePricing = try c.decodeIfPresent(Bool.self, forKey: .taxInclusivePricing) ?? false
+        estimatePrefix = try c.decodeIfPresent(String.self, forKey: .estimatePrefix)
+        invoicePrefix = try c.decodeIfPresent(String.self, forKey: .invoicePrefix)
+        proposalPrefix = try c.decodeIfPresent(String.self, forKey: .proposalPrefix)
+        nextEstimateNumber = try c.decodeIfPresent(Int.self, forKey: .nextEstimateNumber) ?? 1001
+        nextInvoiceNumber = try c.decodeIfPresent(Int.self, forKey: .nextInvoiceNumber) ?? 1001
+        nextProposalNumber = try c.decodeIfPresent(Int.self, forKey: .nextProposalNumber)
+        defaultLanguage = try c.decodeIfPresent(String.self, forKey: .defaultLanguage)
+        timezone = try c.decodeIfPresent(String.self, forKey: .timezone)
+        websiteUrl = try c.decodeIfPresent(String.self, forKey: .websiteUrl)
+        taxLabel = try c.decodeIfPresent(String.self, forKey: .taxLabel)
+        appearanceMode = try c.decodeIfPresent(String.self, forKey: .appearanceMode)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+    }
+
+    init(
+        id: String,
+        name: String,
+        phone: String?,
+        email: String?,
+        address: String?,
+        city: String?,
+        state: String?,
+        zip: String?,
+        logoURL: URL?,
+        primaryColor: String?,
+        secondaryColor: String?,
+        defaultTaxRate: Decimal?,
+        defaultMarkupPercent: Decimal?,
+        taxInclusivePricing: Bool = false,
+        estimatePrefix: String?,
+        invoicePrefix: String?,
+        proposalPrefix: String?,
+        nextEstimateNumber: Int,
+        nextInvoiceNumber: Int,
+        nextProposalNumber: Int?,
+        defaultLanguage: String?,
+        timezone: String?,
+        websiteUrl: String?,
+        taxLabel: String?,
+        appearanceMode: String? = nil,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
+        self.id = id
+        self.name = name
+        self.phone = phone
+        self.email = email
+        self.address = address
+        self.city = city
+        self.state = state
+        self.zip = zip
+        self.logoURL = logoURL
+        self.primaryColor = primaryColor
+        self.secondaryColor = secondaryColor
+        self.defaultTaxRate = defaultTaxRate
+        self.defaultMarkupPercent = defaultMarkupPercent
+        self.taxInclusivePricing = taxInclusivePricing
+        self.estimatePrefix = estimatePrefix
+        self.invoicePrefix = invoicePrefix
+        self.proposalPrefix = proposalPrefix
+        self.nextEstimateNumber = nextEstimateNumber
+        self.nextInvoiceNumber = nextInvoiceNumber
+        self.nextProposalNumber = nextProposalNumber
+        self.defaultLanguage = defaultLanguage
+        self.timezone = timezone
+        self.websiteUrl = websiteUrl
+        self.taxLabel = taxLabel
+        self.appearanceMode = appearanceMode
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 }
 

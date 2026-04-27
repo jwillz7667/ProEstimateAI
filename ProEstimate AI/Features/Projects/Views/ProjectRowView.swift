@@ -77,17 +77,7 @@ struct ProjectRowView: View {
     // MARK: - Helpers
 
     private func iconName(for type: Project.ProjectType) -> String {
-        switch type {
-        case .kitchen: "fork.knife"
-        case .bathroom: "shower"
-        case .flooring: "square.grid.3x3.fill"
-        case .roofing: "house"
-        case .painting: "paintbrush"
-        case .siding: "building.2"
-        case .roomRemodel: "bed.double"
-        case .exterior: "tree"
-        case .custom: "wrench.and.screwdriver"
-        }
+        type.iconName
     }
 
     private func statusText(for status: Project.Status) -> String {

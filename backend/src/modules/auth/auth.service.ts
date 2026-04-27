@@ -1,18 +1,33 @@
-import crypto from 'crypto';
-import { env } from '../../config/env';
-import { prisma } from '../../config/database';
-import { hashPassword, verifyPassword } from '../../lib/hash';
+import crypto from "crypto";
+import { env } from "../../config/env";
+import { prisma } from "../../config/database";
+import { hashPassword, verifyPassword } from "../../lib/hash";
 import {
   signAccessToken,
   signRefreshToken,
   verifyRefreshToken,
   type JwtPayload,
-} from '../../lib/jwt';
-import { generateId } from '../../lib/id';
-import { AuthenticationError, ConflictError, ValidationError } from '../../lib/errors';
-import { verifyAppleIdentityToken } from '../../lib/apple-auth';
-import type { User, Company } from '@prisma/client';
-import type { SignupInput, LoginInput, AppleSignInInput, ForgotPasswordInput, ResetPasswordInput } from './auth.validators';
+} from "../../lib/jwt";
+import { generateId } from "../../lib/id";
+import {
+  AuthenticationError,
+  ConflictError,
+  ValidationError,
+} from "../../lib/errors";
+import { verifyAppleIdentityToken } from "../../lib/apple-auth";
+import {
+  verifyGoogleIdentityToken,
+  GoogleAuthNotConfiguredError,
+} from "../../lib/google-auth";
+import type { User, Company } from "@prisma/client";
+import type {
+  SignupInput,
+  LoginInput,
+  AppleSignInInput,
+  GoogleSignInInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
+} from "./auth.validators";
 
 // ─── Result types ────────────────────────────────────────────────────────────
 
@@ -36,7 +51,7 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
     where: { email: input.email },
   });
   if (existingUser) {
-    throw new ConflictError('A user with this email already exists');
+    throw new ConflictError("A user with this email already exists");
   }
 
   // 2. Hash password
@@ -44,7 +59,7 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
 
   // 3. Look up the FREE_STARTER plan (must exist from seed)
   const freePlan = await prisma.plan.findUniqueOrThrow({
-    where: { code: 'FREE_STARTER' },
+    where: { code: "FREE_STARTER" },
   });
 
   // 4. Create Company + User + Entitlement + UsageBuckets in a single transaction
@@ -66,7 +81,7 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
         email: input.email,
         passwordHash,
         fullName: input.full_name,
-        role: 'OWNER',
+        role: "OWNER",
       },
     });
 
@@ -76,7 +91,7 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
         userId: createdUser.id,
         companyId: createdCompany.id,
         planId: freePlan.id,
-        status: 'FREE',
+        status: "FREE",
       },
     });
 
@@ -87,20 +102,20 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
         {
           userId: createdUser.id,
           companyId: createdCompany.id,
-          metricCode: 'AI_GENERATION',
+          metricCode: "AI_GENERATION",
           includedQuantity: 3,
           consumedQuantity: 0,
-          resetPolicy: 'NEVER',
-          source: 'STARTER_CREDITS',
+          resetPolicy: "NEVER",
+          source: "STARTER_CREDITS",
         },
         {
           userId: createdUser.id,
           companyId: createdCompany.id,
-          metricCode: 'QUOTE_EXPORT',
+          metricCode: "QUOTE_EXPORT",
           includedQuantity: 3,
           consumedQuantity: 0,
-          resetPolicy: 'NEVER',
-          source: 'STARTER_CREDITS',
+          resetPolicy: "NEVER",
+          source: "STARTER_CREDITS",
         },
       ],
     });
@@ -136,23 +151,23 @@ export async function login(input: LoginInput): Promise<AuthResult> {
 
   if (!user) {
     // Generic message to prevent email enumeration
-    throw new AuthenticationError('Invalid email or password');
+    throw new AuthenticationError("Invalid email or password");
   }
 
   // 2. Verify password (Apple-only users have no password)
   if (!user.passwordHash) {
     throw new AuthenticationError(
-      'This account uses Sign in with Apple. Please sign in with Apple instead.',
+      "This account uses Sign in with Apple. Please sign in with Apple instead.",
     );
   }
   const passwordValid = await verifyPassword(input.password, user.passwordHash);
   if (!passwordValid) {
-    throw new AuthenticationError('Invalid email or password');
+    throw new AuthenticationError("Invalid email or password");
   }
 
   // 3. Check account is active
   if (!user.isActive) {
-    throw new AuthenticationError('Account is deactivated');
+    throw new AuthenticationError("Account is deactivated");
   }
 
   // 4. Sign tokens
@@ -174,7 +189,9 @@ export async function login(input: LoginInput): Promise<AuthResult> {
 
 // ─── Apple Sign In ──────────────────────────────────────────────────────────
 
-export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> {
+export async function appleSignIn(
+  input: AppleSignInInput,
+): Promise<AuthResult> {
   // 1. Verify the identity token with Apple's JWKS
   const claims = await verifyAppleIdentityToken(input.identity_token);
   const appleUserId = claims.sub;
@@ -189,10 +206,13 @@ export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> 
   if (user) {
     // Existing Apple user — issue tokens (login flow)
     if (!user.isActive) {
-      throw new AuthenticationError('Account is deactivated');
+      throw new AuthenticationError("Account is deactivated");
     }
 
-    const jwtPayload: JwtPayload = { userId: user.id, companyId: user.companyId };
+    const jwtPayload: JwtPayload = {
+      userId: user.id,
+      companyId: user.companyId,
+    };
     const accessToken = signAccessToken(jwtPayload);
     const refreshToken = signRefreshToken(jwtPayload);
 
@@ -222,7 +242,10 @@ export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> 
         include: { company: true },
       });
 
-      const jwtPayload: JwtPayload = { userId: updated.id, companyId: updated.companyId };
+      const jwtPayload: JwtPayload = {
+        userId: updated.id,
+        companyId: updated.companyId,
+      };
       const accessToken = signAccessToken(jwtPayload);
       const refreshToken = signRefreshToken(jwtPayload);
 
@@ -234,16 +257,23 @@ export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> 
         },
       });
 
-      return { user: updated, company: updated.company, accessToken, refreshToken };
+      return {
+        user: updated,
+        company: updated.company,
+        accessToken,
+        refreshToken,
+      };
     }
   }
 
   // 4. Brand new user — create Company + User + Entitlement + UsageBuckets
-  const fullName = input.full_name || email?.split('@')[0] || 'Apple User';
-  const userEmail = email?.toLowerCase() || `apple_${appleUserId.substring(0, 8)}@proestimate.app`;
+  const fullName = input.full_name || email?.split("@")[0] || "Apple User";
+  const userEmail =
+    email?.toLowerCase() ||
+    `apple_${appleUserId.substring(0, 8)}@proestimate.app`;
 
   const freePlan = await prisma.plan.findUniqueOrThrow({
-    where: { code: 'FREE_STARTER' },
+    where: { code: "FREE_STARTER" },
   });
 
   const userId = generateId();
@@ -264,7 +294,7 @@ export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> 
         email: userEmail,
         fullName,
         appleUserId,
-        role: 'OWNER',
+        role: "OWNER",
       },
     });
 
@@ -273,7 +303,7 @@ export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> 
         userId: createdUser.id,
         companyId: createdCompany.id,
         planId: freePlan.id,
-        status: 'FREE',
+        status: "FREE",
       },
     });
 
@@ -284,20 +314,20 @@ export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> 
         {
           userId: createdUser.id,
           companyId: createdCompany.id,
-          metricCode: 'AI_GENERATION',
+          metricCode: "AI_GENERATION",
           includedQuantity: 3,
           consumedQuantity: 0,
-          resetPolicy: 'NEVER',
-          source: 'STARTER_CREDITS',
+          resetPolicy: "NEVER",
+          source: "STARTER_CREDITS",
         },
         {
           userId: createdUser.id,
           companyId: createdCompany.id,
-          metricCode: 'QUOTE_EXPORT',
+          metricCode: "QUOTE_EXPORT",
           includedQuantity: 3,
           consumedQuantity: 0,
-          resetPolicy: 'NEVER',
-          source: 'STARTER_CREDITS',
+          resetPolicy: "NEVER",
+          source: "STARTER_CREDITS",
         },
       ],
     });
@@ -320,15 +350,174 @@ export async function appleSignIn(input: AppleSignInInput): Promise<AuthResult> 
   return { user: newUser, company, accessToken, refreshToken };
 }
 
+// ─── Google Sign In ─────────────────────────────────────────────────────────
+
+export async function googleSignIn(
+  input: GoogleSignInInput,
+): Promise<AuthResult> {
+  // 1. Verify Google's identity token (signature + iss + aud).
+  // GoogleAuthNotConfiguredError leaks through unchanged so the route
+  // can surface a 503; AuthenticationError covers everything else.
+  const claims = await verifyGoogleIdentityToken(input.identity_token).catch(
+    (err) => {
+      if (err instanceof GoogleAuthNotConfiguredError) throw err;
+      throw err;
+    },
+  );
+
+  if (!claims.emailVerified && !claims.email && !input.email) {
+    throw new AuthenticationError(
+      "Google account email not provided or unverified",
+    );
+  }
+
+  const googleId = claims.sub;
+  const email = (input.email || claims.email)?.toLowerCase();
+
+  // 2. Look for an existing user already linked to this Google account.
+  let user = await prisma.user.findUnique({
+    where: { googleId },
+    include: { company: true },
+  });
+
+  if (user) {
+    if (!user.isActive) {
+      throw new AuthenticationError("Account is deactivated");
+    }
+    return await issueTokens(user);
+  }
+
+  // 3. Match by email — link Google ID onto an existing email/password
+  // account so a user who signed up with a password can later use
+  // "Continue with Google" without losing their data.
+  if (email) {
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      include: { company: true },
+    });
+    if (existingUser) {
+      const updated = await prisma.user.update({
+        where: { id: existingUser.id },
+        data: { googleId },
+        include: { company: true },
+      });
+      return await issueTokens(updated);
+    }
+  }
+
+  // 4. Brand new user — create Company + User + free entitlement +
+  // starter usage buckets. Same shape as the Apple sign-in flow above.
+  const fullName =
+    input.full_name?.trim() ||
+    claims.name ||
+    [claims.givenName, claims.familyName].filter(Boolean).join(" ").trim() ||
+    email?.split("@")[0] ||
+    "Google User";
+  const userEmail =
+    email || `google_${googleId.substring(0, 8)}@proestimate.app`;
+
+  const freePlan = await prisma.plan.findUniqueOrThrow({
+    where: { code: "FREE_STARTER" },
+  });
+
+  const userId = generateId();
+  const companyId = generateId();
+
+  const { user: newUser, company } = await prisma.$transaction(async (tx) => {
+    const createdCompany = await tx.company.create({
+      data: {
+        id: companyId,
+        name: `${fullName}'s Company`,
+      },
+    });
+
+    const createdUser = await tx.user.create({
+      data: {
+        id: userId,
+        companyId: createdCompany.id,
+        email: userEmail,
+        fullName,
+        googleId,
+        avatarUrl: claims.picture ?? null,
+        role: "OWNER",
+      },
+    });
+
+    await tx.userEntitlement.create({
+      data: {
+        userId: createdUser.id,
+        companyId: createdCompany.id,
+        planId: freePlan.id,
+        status: "FREE",
+      },
+    });
+
+    await tx.usageBucket.createMany({
+      data: [
+        {
+          userId: createdUser.id,
+          companyId: createdCompany.id,
+          metricCode: "AI_GENERATION",
+          includedQuantity: 3,
+          consumedQuantity: 0,
+          resetPolicy: "NEVER",
+          source: "STARTER_CREDITS",
+        },
+        {
+          userId: createdUser.id,
+          companyId: createdCompany.id,
+          metricCode: "QUOTE_EXPORT",
+          includedQuantity: 3,
+          consumedQuantity: 0,
+          resetPolicy: "NEVER",
+          source: "STARTER_CREDITS",
+        },
+      ],
+    });
+
+    return { user: createdUser, company: createdCompany };
+  });
+
+  return await issueTokens({ ...newUser, company });
+}
+
+/**
+ * Mint a fresh access + refresh token pair for `user`. Persists the
+ * refresh token so it can be rotated on subsequent /v1/auth/refresh
+ * calls. Used by both the Apple and Google sign-in flows.
+ */
+async function issueTokens(
+  user: User & { company: Company },
+): Promise<AuthResult> {
+  const jwtPayload: JwtPayload = { userId: user.id, companyId: user.companyId };
+  const accessToken = signAccessToken(jwtPayload);
+  const refreshToken = signRefreshToken(jwtPayload);
+  await prisma.refreshToken.create({
+    data: {
+      userId: user.id,
+      token: refreshToken,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+  return {
+    user,
+    company: user.company,
+    accessToken,
+    refreshToken,
+  };
+}
+
 // ─── Refresh ─────────────────────────────────────────────────────────────────
 
-export async function refresh(refreshTokenValue: string): Promise<TokenPairResult> {
+export async function refresh(
+  refreshTokenValue: string,
+): Promise<TokenPairResult> {
   // 1. Verify the JWT signature and expiry
   let payload: JwtPayload;
   try {
     payload = verifyRefreshToken(refreshTokenValue);
   } catch {
-    throw new AuthenticationError('Invalid or expired refresh token');
+    throw new AuthenticationError("Invalid or expired refresh token");
   }
 
   // 2. Look up the token in DB (must exist and not be expired)
@@ -342,13 +531,13 @@ export async function refresh(refreshTokenValue: string): Promise<TokenPairResul
     await prisma.refreshToken.deleteMany({
       where: { userId: payload.userId },
     });
-    throw new AuthenticationError('Refresh token has been revoked');
+    throw new AuthenticationError("Refresh token has been revoked");
   }
 
   if (storedToken.expiresAt < new Date()) {
     // Clean up expired token (deleteMany avoids P2025 on concurrent requests)
     await prisma.refreshToken.deleteMany({ where: { id: storedToken.id } });
-    throw new AuthenticationError('Refresh token has expired');
+    throw new AuthenticationError("Refresh token has expired");
   }
 
   // 3. Rotate: delete old token, issue new pair
@@ -401,7 +590,9 @@ export async function logout(
 const RESET_TOKEN_BYTES = 32;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-export async function forgotPassword(input: ForgotPasswordInput): Promise<void> {
+export async function forgotPassword(
+  input: ForgotPasswordInput,
+): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { email: input.email },
   });
@@ -413,7 +604,7 @@ export async function forgotPassword(input: ForgotPasswordInput): Promise<void> 
   if (!user.passwordHash) return;
 
   // Generate a cryptographically secure reset token
-  const resetToken = crypto.randomBytes(RESET_TOKEN_BYTES).toString('hex');
+  const resetToken = crypto.randomBytes(RESET_TOKEN_BYTES).toString("hex");
   const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
 
   await prisma.user.update({
@@ -425,7 +616,7 @@ export async function forgotPassword(input: ForgotPasswordInput): Promise<void> 
   });
 
   // Send password reset email (graceful no-op if RESEND_API_KEY not configured)
-  const { sendPasswordResetEmail } = await import('../../lib/email');
+  const { sendPasswordResetEmail } = await import("../../lib/email");
   const resetUrl = `${env.API_BASE_URL}/reset-password?token=${resetToken}`;
   await sendPasswordResetEmail(user.email, resetUrl);
 }
@@ -438,10 +629,13 @@ export async function resetPassword(input: ResetPasswordInput): Promise<void> {
   });
 
   if (!user) {
-    throw new ValidationError('Invalid or expired reset token');
+    throw new ValidationError("Invalid or expired reset token");
   }
 
-  if (!user.passwordResetExpiresAt || user.passwordResetExpiresAt < new Date()) {
+  if (
+    !user.passwordResetExpiresAt ||
+    user.passwordResetExpiresAt < new Date()
+  ) {
     // Clear the expired token
     await prisma.user.update({
       where: { id: user.id },
@@ -450,7 +644,7 @@ export async function resetPassword(input: ResetPasswordInput): Promise<void> {
         passwordResetExpiresAt: null,
       },
     });
-    throw new ValidationError('Reset token has expired');
+    throw new ValidationError("Reset token has expired");
   }
 
   const passwordHash = await hashPassword(input.new_password);

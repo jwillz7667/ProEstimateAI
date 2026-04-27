@@ -1,4 +1,4 @@
-import { Company } from '@prisma/client';
+import { Company } from "@prisma/client";
 
 export interface CompanyDto {
   id: string;
@@ -14,6 +14,7 @@ export interface CompanyDto {
   secondary_color: string | null;
   default_tax_rate: number | null;
   default_markup_percent: number | null;
+  tax_inclusive_pricing: boolean;
   estimate_prefix: string | null;
   invoice_prefix: string | null;
   proposal_prefix: string | null;
@@ -24,6 +25,7 @@ export interface CompanyDto {
   timezone: string | null;
   website_url: string | null;
   tax_label: string | null;
+  appearance_mode: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,8 +43,13 @@ export function toCompanyDto(company: Company): CompanyDto {
     logo_url: company.logoUrl,
     primary_color: company.primaryColor,
     secondary_color: company.secondaryColor,
-    default_tax_rate: company.defaultTaxRate ? Number(company.defaultTaxRate) : null,
-    default_markup_percent: company.defaultMarkupPercent ? Number(company.defaultMarkupPercent) : null,
+    default_tax_rate: company.defaultTaxRate
+      ? Number(company.defaultTaxRate)
+      : null,
+    default_markup_percent: company.defaultMarkupPercent
+      ? Number(company.defaultMarkupPercent)
+      : null,
+    tax_inclusive_pricing: company.taxInclusivePricing,
     estimate_prefix: company.estimatePrefix,
     invoice_prefix: company.invoicePrefix,
     proposal_prefix: company.proposalPrefix ?? null,
@@ -53,6 +60,7 @@ export function toCompanyDto(company: Company): CompanyDto {
     timezone: company.timezone ?? null,
     website_url: company.websiteUrl ?? null,
     tax_label: company.taxLabel ?? null,
+    appearance_mode: company.appearanceMode ?? null,
     created_at: company.createdAt.toISOString(),
     updated_at: company.updatedAt.toISOString(),
   };

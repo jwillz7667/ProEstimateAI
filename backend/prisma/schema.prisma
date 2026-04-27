@@ -25,6 +25,8 @@ enum ProjectType {
   SIDING
   ROOM_REMODEL
   EXTERIOR
+  LANDSCAPING
+  LAWN_CARE
   CUSTOM
 }
 
@@ -98,6 +100,8 @@ enum PlanCode {
   FREE_STARTER
   PRO_MONTHLY
   PRO_ANNUAL
+  PREMIUM_MONTHLY
+  PREMIUM_ANNUAL
 }
 
 enum EntitlementStatus {
@@ -115,6 +119,12 @@ enum EntitlementStatus {
 enum UsageMetricCode {
   AI_GENERATION
   QUOTE_EXPORT
+  // Pro tier hard caps (Premium is unlimited): 2 project gens, 20 image
+  // gens, 20 generated estimates per month. The first two map to existing
+  // metrics (PROJECT_CREATED + AI_GENERATION reused for image gens), and
+  // the third gets its own metric so we can rate-limit it independently.
+  PROJECT_CREATED
+  ESTIMATE_GENERATED
 }
 
 enum UsageResetPolicy {
@@ -180,6 +190,11 @@ model User {
   avatarUrl              String?
   phone                  String?
   appleUserId            String?   @unique
+  /// Google "sub" claim from a verified ID token. Set when the user
+  /// signs up or signs in via Google OAuth. Independent of `appleUserId`
+  /// — a user could in theory link both providers to one account, though
+  /// today we treat the first provider seen as the canonical one.
+  googleId               String?   @unique
   passwordResetToken     String?   @unique
   passwordResetExpiresAt DateTime?
   isActive               Boolean   @default(true)
@@ -212,7 +227,7 @@ model Company {
   logoImageMimeType    String?
   primaryColor         String?  @default("#F97316")
   secondaryColor       String?
-  defaultTaxRate       Decimal? @db.Decimal(5, 4)
+  defaultTaxRate       Decimal? @db.Decimal(6, 3)
   defaultMarkupPercent Decimal? @db.Decimal(5, 2)
   estimatePrefix       String?  @default("EST")
   invoicePrefix        String?  @default("INV")
@@ -224,6 +239,8 @@ model Company {
   timezone             String?  @default("America/New_York")
   websiteUrl           String?
   taxLabel             String?  @default("Tax")
+  taxInclusivePricing  Boolean  @default(false)
+  appearanceMode       String?  @default("system")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -286,6 +303,28 @@ model Project {
   squareFootage Decimal?      @db.Decimal(10, 2)
   dimensions    String?
   language      String?       @default("en")
+
+  // Property measurements — populated by maps integration (lawn polygon
+  // measurement, roof segment analysis from Google Solar API). When present
+  // they replace freeform `dimensions` in prompt construction so the AI
+  // estimates against measured area rather than the user's eyeballed guess.
+  lawnAreaSqFt      Decimal? @db.Decimal(10, 2)
+  roofAreaSqFt      Decimal? @db.Decimal(10, 2)
+  propertyLatitude  Decimal? @db.Decimal(10, 7)
+  propertyLongitude Decimal? @db.Decimal(10, 7)
+
+  // Recurring service contract terms (LAWN_CARE primarily). When
+  // `isRecurring=true`, `recurrenceFrequency` describes the cadence and
+  // `contractMonths` is the contract length. `visitsPerMonth` is an
+  // optional override — if null, the frequency drives a default
+  // (weekly→4, biweekly→2, monthly→1, quarterly→0.33, seasonal→1).
+  // `recurrenceStartDate` is when the schedule begins.
+  isRecurring         Boolean   @default(false)
+  recurrenceFrequency String?
+  visitsPerMonth      Decimal?  @db.Decimal(5, 2)
+  contractMonths      Int?
+  recurrenceStartDate DateTime?
+
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -349,6 +388,11 @@ model MaterialSuggestion {
   quantity      Decimal @db.Decimal(10, 2)
   supplierName  String?
   supplierUrl   String?
+  // Free-form query string the iOS client uses to deep-link out to retailer
+  // search pages (Home Depot, Lowe's, SiteOne for landscape, etc.). Populated
+  // by the material gen prompt with retailer-friendly terms so the user can
+  // verify our AI estimate against live retail prices before sending the bid.
+  supplierSearchQuery String?
   isSelected    Boolean @default(false)
   sortOrder     Int     @default(0)
 

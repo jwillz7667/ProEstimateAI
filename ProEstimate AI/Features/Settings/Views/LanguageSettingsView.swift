@@ -12,6 +12,7 @@ struct LanguageSettingsView: View {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             viewModel.selectedLanguage = language
                         }
+                        Task { await viewModel.saveLanguageImmediately() }
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
@@ -46,22 +47,14 @@ struct LanguageSettingsView: View {
             Section("Preview") {
                 documentPreview
             }
-
-            // Save
-            Section {
-                PrimaryCTAButton(
-                    title: viewModel.selectedLanguage == .english ? "Save Language" : "Guardar Idioma",
-                    icon: "checkmark.circle",
-                    isLoading: false
-                ) {
-                    Task { await viewModel.saveLanguage() }
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-            }
         }
         .navigationTitle("Language")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                SettingsSaveStatusView(status: viewModel.saveStatus)
+            }
+        }
     }
 
     // MARK: - Preview

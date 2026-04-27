@@ -1,8 +1,8 @@
-import { prisma } from '../../config/database';
-import { env } from '../../config/env';
-import { NotFoundError, ValidationError } from '../../lib/errors';
-import { UpdateCompanyInput, UploadLogoInput } from './companies.validators';
-import { invalidateCache, CacheKeys } from '../../config/redis';
+import { prisma } from "../../config/database";
+import { env } from "../../config/env";
+import { NotFoundError, ValidationError } from "../../lib/errors";
+import { UpdateCompanyInput, UploadLogoInput } from "./companies.validators";
+import { invalidateCache, CacheKeys } from "../../config/redis";
 
 export async function getMe(companyId: string) {
   const company = await prisma.company.findUnique({
@@ -10,7 +10,7 @@ export async function getMe(companyId: string) {
   });
 
   if (!company) {
-    throw new NotFoundError('Company', companyId);
+    throw new NotFoundError("Company", companyId);
   }
 
   return company;
@@ -23,7 +23,7 @@ export async function updateMe(companyId: string, data: UpdateCompanyInput) {
   });
 
   if (!existing) {
-    throw new NotFoundError('Company', companyId);
+    throw new NotFoundError("Company", companyId);
   }
 
   // Map snake_case input to camelCase Prisma fields
@@ -38,17 +38,48 @@ export async function updateMe(companyId: string, data: UpdateCompanyInput) {
       ...(data.state !== undefined && { state: data.state }),
       ...(data.zip !== undefined && { zip: data.zip }),
       ...(data.logo_url !== undefined && { logoUrl: data.logo_url }),
-      ...(data.primary_color !== undefined && { primaryColor: data.primary_color }),
-      ...(data.secondary_color !== undefined && { secondaryColor: data.secondary_color }),
-      ...(data.default_tax_rate !== undefined && { defaultTaxRate: data.default_tax_rate }),
-      ...(data.default_markup_percent !== undefined && { defaultMarkupPercent: data.default_markup_percent }),
-      ...(data.estimate_prefix !== undefined && { estimatePrefix: data.estimate_prefix }),
-      ...(data.invoice_prefix !== undefined && { invoicePrefix: data.invoice_prefix }),
-      ...(data.proposal_prefix !== undefined && { proposalPrefix: data.proposal_prefix }),
-      ...(data.default_language !== undefined && { defaultLanguage: data.default_language }),
+      ...(data.primary_color !== undefined && {
+        primaryColor: data.primary_color,
+      }),
+      ...(data.secondary_color !== undefined && {
+        secondaryColor: data.secondary_color,
+      }),
+      ...(data.default_tax_rate !== undefined && {
+        defaultTaxRate: data.default_tax_rate,
+      }),
+      ...(data.default_markup_percent !== undefined && {
+        defaultMarkupPercent: data.default_markup_percent,
+      }),
+      ...(data.tax_inclusive_pricing !== undefined && {
+        taxInclusivePricing: data.tax_inclusive_pricing,
+      }),
+      ...(data.estimate_prefix !== undefined && {
+        estimatePrefix: data.estimate_prefix,
+      }),
+      ...(data.invoice_prefix !== undefined && {
+        invoicePrefix: data.invoice_prefix,
+      }),
+      ...(data.proposal_prefix !== undefined && {
+        proposalPrefix: data.proposal_prefix,
+      }),
+      ...(data.next_estimate_number !== undefined && {
+        nextEstimateNumber: data.next_estimate_number,
+      }),
+      ...(data.next_invoice_number !== undefined && {
+        nextInvoiceNumber: data.next_invoice_number,
+      }),
+      ...(data.next_proposal_number !== undefined && {
+        nextProposalNumber: data.next_proposal_number,
+      }),
+      ...(data.default_language !== undefined && {
+        defaultLanguage: data.default_language,
+      }),
       ...(data.timezone !== undefined && { timezone: data.timezone }),
       ...(data.website_url !== undefined && { websiteUrl: data.website_url }),
       ...(data.tax_label !== undefined && { taxLabel: data.tax_label }),
+      ...(data.appearance_mode !== undefined && {
+        appearanceMode: data.appearance_mode,
+      }),
     },
   });
 
@@ -63,9 +94,11 @@ export async function updateMe(companyId: string, data: UpdateCompanyInput) {
  * `assets.service.ts:54-93`.
  */
 export async function uploadLogo(companyId: string, data: UploadLogoInput) {
-  const existing = await prisma.company.findUnique({ where: { id: companyId } });
+  const existing = await prisma.company.findUnique({
+    where: { id: companyId },
+  });
   if (!existing) {
-    throw new NotFoundError('Company', companyId);
+    throw new NotFoundError("Company", companyId);
   }
 
   // Defense in depth: re-check decoded size even though the validator caps
@@ -73,7 +106,7 @@ export async function uploadLogo(companyId: string, data: UploadLogoInput) {
   // storage above ~2MB per company.
   const decodedSizeBytes = Math.floor((data.image_data.length * 3) / 4);
   if (decodedSizeBytes > 2 * 1024 * 1024) {
-    throw new ValidationError('Logo must be 2MB or smaller after decoding');
+    throw new ValidationError("Logo must be 2MB or smaller after decoding");
   }
 
   const serveUrl = `${env.API_BASE_URL}/v1/companies/${companyId}/logo`;
@@ -95,9 +128,11 @@ export async function uploadLogo(companyId: string, data: UploadLogoInput) {
  * derived serve URL) so the UI snaps back to the fallback.
  */
 export async function deleteLogo(companyId: string) {
-  const existing = await prisma.company.findUnique({ where: { id: companyId } });
+  const existing = await prisma.company.findUnique({
+    where: { id: companyId },
+  });
   if (!existing) {
-    throw new NotFoundError('Company', companyId);
+    throw new NotFoundError("Company", companyId);
   }
 
   const company = await prisma.company.update({
@@ -128,7 +163,7 @@ export async function getPublicCompanyLogo(companyId: string) {
   }
 
   return {
-    data: Buffer.from(company.logoImageData, 'base64'),
+    data: Buffer.from(company.logoImageData, "base64"),
     mimeType: company.logoImageMimeType,
   };
 }

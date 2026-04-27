@@ -1,5 +1,5 @@
-import SwiftUI
 import PhotosUI
+import SwiftUI
 
 /// Streamlined AI remodel preview flow accessible from the dashboard.
 /// Pick a photo → describe the remodel → select room type → generate.
@@ -9,6 +9,7 @@ struct QuickGenerateView: View {
 
     @State private var viewModel = QuickGenerateViewModel()
     @State private var isCameraPresented = false
+    @State private var fullScreenViewer: QuickFullScreenViewerRequest?
     @Environment(\.dismiss) private var dismiss
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
@@ -89,7 +90,8 @@ struct QuickGenerateView: View {
                 .padding(.horizontal, SpacingTokens.md)
 
             if let imageData = viewModel.selectedImageData,
-               let uiImage = UIImage(data: imageData) {
+               let uiImage = UIImage(data: imageData)
+            {
                 ZStack(alignment: .topTrailing) {
                     Image(uiImage: uiImage)
                         .resizable()
@@ -167,6 +169,24 @@ struct QuickGenerateView: View {
             }
             .ignoresSafeArea()
         }
+        .fullScreenCover(item: $fullScreenViewer) { request in
+            BeforeAfterFullScreenViewer(
+                beforeImageURL: nil,
+                afterImageURL: request.afterURL,
+                beforeImageData: request.beforeData,
+                caption: request.caption
+            )
+        }
+    }
+
+    /// Identifiable trigger for the QuickGenerate full-screen viewer. The
+    /// "before" is local UIImage data (the photo the contractor just picked
+    /// or shot) so we capture it as `Data` rather than a URL.
+    struct QuickFullScreenViewerRequest: Identifiable, Hashable {
+        let id: String
+        let beforeData: Data
+        let afterURL: URL?
+        let caption: String?
     }
 
     private var roomTypeSection: some View {
@@ -275,12 +295,33 @@ struct QuickGenerateView: View {
                 // Before/After
                 if let beforeData = viewModel.selectedImageData,
                    let _ = UIImage(data: beforeData),
-                   let gen = viewModel.completedGeneration {
-                    BeforeAfterSlider(
-                        beforeImageURL: nil,
-                        afterImageURL: gen.previewURL,
-                        beforeImageData: beforeData
-                    )
+                   let gen = viewModel.completedGeneration
+                {
+                    ZStack(alignment: .topTrailing) {
+                        BeforeAfterSlider(
+                            beforeImageURL: nil,
+                            afterImageURL: gen.previewURL,
+                            beforeImageData: beforeData
+                        )
+                        Button {
+                            fullScreenViewer = QuickFullScreenViewerRequest(
+                                id: "\(gen.id)-quick-fullscreen",
+                                beforeData: beforeData,
+                                afterURL: gen.previewURL,
+                                caption: gen.prompt
+                            )
+                        } label: {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(SpacingTokens.xs)
+                                .background(.black.opacity(0.55), in: Circle())
+                                .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(SpacingTokens.sm)
+                        .accessibilityLabel("Enlarge before/after comparison")
+                    }
                     .padding(.horizontal, SpacingTokens.md)
                 }
 
@@ -364,11 +405,12 @@ struct QuickGenerateView: View {
                 await viewModel.generate()
                 // After successful generation, check for soft upgrade prompt
                 if viewModel.phase == .result,
-                   let softGate = featureGateCoordinator.shouldShowSoftUpgradeAfterGeneration() {
+                   let softGate = featureGateCoordinator.shouldShowSoftUpgradeAfterGeneration()
+                {
                     paywallPresenter.present(softGate)
                 }
             }
-        case .blocked(let decision):
+        case let .blocked(decision):
             paywallPresenter.present(decision)
         }
     }
@@ -376,31 +418,11 @@ struct QuickGenerateView: View {
     // MARK: - Helpers
 
     private func iconForType(_ type: Project.ProjectType) -> String {
-        switch type {
-        case .kitchen: "fork.knife"
-        case .bathroom: "shower"
-        case .flooring: "square.grid.3x3.topleft.filled"
-        case .roofing: "house"
-        case .painting: "paintbrush"
-        case .siding: "building.2"
-        case .roomRemodel: "bed.double"
-        case .exterior: "tree"
-        case .custom: "wrench.and.screwdriver"
-        }
+        type.iconName
     }
 
     private func labelForType(_ type: Project.ProjectType) -> String {
-        switch type {
-        case .kitchen: "Kitchen"
-        case .bathroom: "Bathroom"
-        case .flooring: "Flooring"
-        case .roofing: "Roofing"
-        case .painting: "Painting"
-        case .siding: "Siding"
-        case .roomRemodel: "Room"
-        case .exterior: "Exterior"
-        case .custom: "Custom"
-        }
+        type.displayName
     }
 }
 

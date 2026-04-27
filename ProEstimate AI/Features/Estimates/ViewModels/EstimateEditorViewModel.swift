@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import SwiftUI
 #if canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
 
 @Observable
@@ -10,10 +10,15 @@ final class EstimateEditorViewModel {
     // MARK: - Dependencies
 
     private let service: EstimateServiceProtocol
+    private let projectService: ProjectServiceProtocol
 
     // MARK: - State
 
     var estimate: Estimate?
+    /// The project this estimate belongs to. Loaded alongside the estimate
+    /// so the totals view can render recurring rollups when the project
+    /// is configured as a recurring contract.
+    var project: Project?
     var materialItems: [LineItemDraft] = []
     var laborItems: [LineItemDraft] = []
     var otherItems: [LineItemDraft] = []
@@ -79,6 +84,27 @@ final class EstimateEditorViewModel {
         return materialsTax + otherTax
     }
 
+    /// When the parent project is a recurring contract, this returns the
+    /// rollup terms the totals view renders alongside the per-visit total.
+    /// `perVisit` is `grandTotal` (the per-visit estimate the contractor
+    /// is editing); the view multiplies it by visits/month and contract
+    /// length to show monthly + annual + total-contract values.
+    var recurringContext: EstimateTotalsView.RecurringContext? {
+        guard
+            let project,
+            project.isRecurring,
+            let visits = project.effectiveVisitsPerMonth,
+            let months = project.contractMonths
+        else { return nil }
+        let perVisit = isDIY ? diyGrandTotal : grandTotal
+        return .init(
+            perVisit: perVisit,
+            visitsPerMonth: visits,
+            contractMonths: months,
+            frequency: project.recurrenceFrequency
+        )
+    }
+
     /// Grand total in DIY mode (no labor costs).
     var diyGrandTotal: Decimal {
         let preTaxTotal = materialItems.reduce(Decimal.zero) { $0 + $1.baseCost + $1.markupAmount }
@@ -97,8 +123,12 @@ final class EstimateEditorViewModel {
 
     // MARK: - Init
 
-    init(service: EstimateServiceProtocol = LiveEstimateService()) {
+    init(
+        service: EstimateServiceProtocol = LiveEstimateService(),
+        projectService: ProjectServiceProtocol = LiveProjectService()
+    ) {
         self.service = service
+        self.projectService = projectService
     }
 
     // MARK: - Load
@@ -112,6 +142,11 @@ final class EstimateEditorViewModel {
             estimate = loadedEstimate
             discountAmount = loadedEstimate.discountAmount
             notes = loadedEstimate.notes ?? ""
+
+            // Load the parent project alongside the estimate so the totals
+            // view can render recurring-contract rollups. Non-fatal: if the
+            // project fetch fails we just don't show the rollup.
+            project = try? await projectService.getProject(id: loadedEstimate.projectId)
 
             // Try to load line items (may be empty for new estimates)
             let lineItems = (try? await service.getLineItems(estimateId: id)) ?? []
@@ -347,9 +382,9 @@ final class EstimateEditorViewModel {
             )
         })
 
-        let effectiveLabor: Decimal  = isDIY ? 0 : subtotalLabor
-        let effectiveTax: Decimal    = isDIY ? materialsTaxOnly : taxAmount
-        let effectiveTotal: Decimal  = isDIY ? diyGrandTotal : grandTotal
+        let effectiveLabor: Decimal = isDIY ? 0 : subtotalLabor
+        let effectiveTax: Decimal = isDIY ? materialsTaxOnly : taxAmount
+        let effectiveTotal: Decimal = isDIY ? diyGrandTotal : grandTotal
 
         return PDFGenerator.generateEstimatePDF(
             branding: branding,

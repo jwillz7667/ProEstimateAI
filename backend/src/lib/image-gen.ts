@@ -1,16 +1,29 @@
-import { GoogleGenAI, HarmBlockThreshold, HarmCategory, createPartFromBase64, createPartFromText, createUserContent } from '@google/genai';
-import { env } from '../config/env';
-import { logger } from '../config/logger';
-import { generatePreviewImagePiAPI } from './piapi-image-gen';
+import {
+  GoogleGenAI,
+  HarmBlockThreshold,
+  HarmCategory,
+  createPartFromBase64,
+  createPartFromText,
+  createUserContent,
+} from "@google/genai";
+import { env } from "../config/env";
+import { logger } from "../config/logger";
+import { generatePreviewImagePiAPI } from "./piapi-image-gen";
+import { getImagePrompt } from "./prompts";
+import {
+  PromptContext,
+  QualityTier,
+  RecurrenceFrequency,
+} from "./prompts/types";
 
-const NANO_BANANA_2_MODEL = 'gemini-3.1-flash-image-preview';
+const NANO_BANANA_2_MODEL = "gemini-3.1-flash-image-preview";
 
 let genAI: GoogleGenAI | null = null;
 
 function getClient(): GoogleGenAI {
   if (!genAI) {
     if (!env.GOOGLE_AI_API_KEY) {
-      throw new Error('GOOGLE_AI_API_KEY is not configured');
+      throw new Error("GOOGLE_AI_API_KEY is not configured");
     }
     genAI = new GoogleGenAI({ apiKey: env.GOOGLE_AI_API_KEY });
   }
@@ -30,6 +43,13 @@ export interface MaterialSpec {
   unit?: string;
 }
 
+/**
+ * Everything the orchestrator hands to the image-gen pipeline. The optional
+ * measurement fields (`lawnAreaSqFt`, `roofAreaSqFt`, `zip`) are populated by
+ * the maps integration; the recurrence fields drive LAWN_CARE bids; both are
+ * forwarded into the prompt library so the per-type module can ground its
+ * scene description in real numbers.
+ */
 export interface ImageGenContext {
   projectType: string;
   qualityTier: string;
@@ -38,110 +58,113 @@ export interface ImageGenContext {
   projectTitle: string;
   projectDescription?: string;
   materials?: MaterialSpec[];
+
+  // Property measurements (optional — populated by maps integration).
+  lawnAreaSqFt?: number | null;
+  roofAreaSqFt?: number | null;
+  zip?: string | null;
+
+  // Recurrence (LAWN_CARE only).
+  isRecurring?: boolean;
+  recurrenceFrequency?: RecurrenceFrequency | null;
+  visitsPerMonth?: number | null;
+  contractMonths?: number | null;
 }
 
 /**
- * Determine the best aspect ratio for a given project type.
- * Exteriors and wide rooms benefit from 16:9; bathrooms from 3:4 (portrait);
- * kitchens and general rooms from 4:3.
+ * Map the orchestrator-facing `ImageGenContext` (string-typed for legacy
+ * reasons) into the strictly-typed `PromptContext` the prompt library
+ * consumes. Centralizing the coercion here means new fields only need to
+ * be added once.
+ */
+export function toPromptContext(ctx: ImageGenContext): PromptContext {
+  const tier = (ctx.qualityTier?.toUpperCase() ?? "STANDARD") as QualityTier;
+  const sf = ctx.squareFootage ? Number(ctx.squareFootage) : null;
+  return {
+    projectType: ctx.projectType.toUpperCase(),
+    qualityTier: tier === "LUXURY" || tier === "PREMIUM" ? tier : "STANDARD",
+    squareFootage: Number.isFinite(sf) ? sf : null,
+    dimensions: ctx.dimensions ?? null,
+    projectTitle: ctx.projectTitle,
+    projectDescription: ctx.projectDescription ?? null,
+    materials: ctx.materials,
+    lawnAreaSqFt: ctx.lawnAreaSqFt ?? null,
+    roofAreaSqFt: ctx.roofAreaSqFt ?? null,
+    zip: ctx.zip ?? null,
+    isRecurring: ctx.isRecurring,
+    recurrenceFrequency: ctx.recurrenceFrequency ?? null,
+    visitsPerMonth: ctx.visitsPerMonth ?? null,
+    contractMonths: ctx.contractMonths ?? null,
+  };
+}
+
+/**
+ * Determine the best aspect ratio for a given project type. LANDSCAPING /
+ * LAWN_CARE / EXTERIOR / ROOFING / SIDING are outdoor wide shots and benefit
+ * from 16:9; BATHROOM is portrait; everything else stays 4:3.
  */
 function aspectRatioForProjectType(projectType: string): string {
-  const type = projectType.toUpperCase();
-  switch (type) {
-    case 'EXTERIOR':
-    case 'ROOFING':
-    case 'SIDING':
-      return '16:9';   // wide landscape for exterior shots
-    case 'BATHROOM':
-      return '3:4';    // portrait for compact vertical spaces
-    case 'KITCHEN':
-    case 'ROOM_REMODEL':
-    case 'FLOORING':
-    case 'PAINTING':
+  switch (projectType.toUpperCase()) {
+    case "EXTERIOR":
+    case "ROOFING":
+    case "SIDING":
+    case "LANDSCAPING":
+    case "LAWN_CARE":
+      return "16:9";
+    case "BATHROOM":
+      return "3:4";
+    case "KITCHEN":
+    case "ROOM_REMODEL":
+    case "FLOORING":
+    case "PAINTING":
     default:
-      return '4:3';    // standard landscape for interior rooms
+      return "4:3";
   }
 }
 
 /**
- * Build a comprehensive system-level meta prompt that instructs Nano Banana 2
- * on exactly what it is, how it should behave, and how to produce the output image.
- *
- * This prompt establishes:
- * 1. Identity & role — professional architectural visualization renderer
- * 2. Output quality standards — photorealistic, high-detail, proper lighting
- * 3. Composition rules — camera angle, framing, depth of field
- * 4. Material rendering — accurate textures, reflections, grain
- * 5. Context awareness — residential remodeling, contractor use case
- * 6. Safety & style guardrails — no people, no text overlays, clean output
+ * The full prompt sent to the image model. For the reference-photo path
+ * (PiAPI / Google with attached photo) we want a tight edit instruction
+ * that preserves the room/property; for the text-to-image path we lead
+ * with the per-type prompt and append the contractor's user prompt.
  */
-function buildSystemPrompt(context: ImageGenContext): string {
-  const qualityTierDescriptions: Record<string, string> = {
-    budget: 'Clean and functional with cost-effective builder-grade materials — laminate countertops, basic ceramic tile, painted MDF cabinetry, chrome fixtures. The space still looks professionally finished and well-maintained, just with practical, budget-friendly selections.',
-    standard: 'Mid-range materials with tasteful design — quartz countertops, engineered hardwood or quality luxury vinyl plank flooring, semi-custom shaker cabinetry, brushed nickel or matte black fixtures, subway tile backsplash. A well-designed, modern space that feels curated.',
-    premium: 'High-end finishes throughout — natural marble or quartzite countertops, solid hardwood flooring, custom cabinetry with soft-close hardware, designer lighting fixtures, frameless glass shower enclosures, premium appliances. Every detail feels intentional and luxurious.',
-    luxury: 'Ultra-premium, magazine-editorial quality — exotic stone slabs with dramatic veining, bespoke millwork with intricate detailing, statement chandelier lighting, imported European fixtures, architectural ceiling features like coffered or barrel vaults, wide-plank reclaimed wood, museum-quality finishes.',
-  };
+function buildFullPrompt(
+  userPrompt: string,
+  context: ImageGenContext,
+  hasReferencePhoto: boolean,
+): string {
+  const promptCtx = toPromptContext(context);
+  const systemPrompt = getImagePrompt(promptCtx);
 
-  const tierDesc = qualityTierDescriptions[context.qualityTier.toLowerCase()] ?? qualityTierDescriptions['standard'];
-
-  return `You are a world-class architectural visualization photographer. Generate a single photorealistic photograph of a beautifully completed ${context.projectType.replace(/_/g, ' ').toLowerCase()} remodel. This image will be presented to a homeowner in a professional contractor's proposal, so it must look like a real photograph taken by an interiors photographer for a design magazine.
-
-Shoot the scene as if you are standing in the room with a full-frame camera and a 28mm wide-angle lens at eye level (about 5.5 feet high). Frame the composition using the rule of thirds, with the main focal point slightly off-center. Keep all vertical lines perfectly straight — no barrel distortion or keystoning.
-
-Light the scene with warm, natural daylight streaming through windows, creating soft directional shadows that give the space depth and dimension. For interior scenes, supplement with recessed downlights casting gentle pools of warm light on countertops and floors. The overall mood should be inviting, bright, and aspirational — the kind of golden-hour warmth that makes a homeowner say "I want my home to look exactly like this."
-
-Render every material with obsessive photorealistic detail. Wood surfaces should show natural grain variation and appropriate sheen. Stone and marble should display realistic veining patterns with subtle depth. Tile should have visible grout lines with proper spacing. Metal fixtures should show accurate reflections — distinguish between brushed, polished, and matte finishes. Glass should have proper transparency and edge refraction.
-
-The finish level is ${context.qualityTier.toLowerCase()} grade: ${tierDesc}
-
-Project: "${context.projectTitle}" — a ${context.projectType.replace(/_/g, ' ').toLowerCase()} project.
-${context.projectDescription ? `The homeowner's vision: ${context.projectDescription}` : ''}
-${context.squareFootage ? `The space is approximately ${context.squareFootage} square feet.` : ''}
-${context.dimensions ? `Room dimensions: ${context.dimensions}.` : ''}
-${context.materials && context.materials.length > 0 ? `
-The following specific materials MUST be clearly visible and accurately rendered in the image, as they correspond to the line items on the contractor's estimate:
-${context.materials.map((m, i) => `${i + 1}. ${m.name}${m.category ? ` (${m.category})` : ''}${m.quantity && m.unit ? ` — ${m.quantity} ${m.unit}` : ''}`).join('\n')}
-Every listed material must appear in the scene. Do not substitute, omit, or invent materials not on this list.` : ''}
-
-The scene must show only the finished, move-in-ready result — no construction debris, no tools, no unfinished work. The space should be clean, styled, and magazine-ready. Do not include any people, pets, hands, or living creatures. Do not include any text, labels, watermarks, annotations, brand logos, or UI overlays. Do not produce a cartoon, illustration, sketch, or split-screen layout — only a single cohesive photorealistic image.`;
-}
-
-/**
- * Combine the system meta prompt with the user's specific remodel request
- * into a single optimized prompt for Nano Banana 2.
- */
-function buildFullPrompt(userPrompt: string, context: ImageGenContext, hasReferencePhoto: boolean = false): string {
   if (hasReferencePhoto) {
-    // For image editing: keep the prompt concise and direct.
-    // The model needs a clear instruction to EDIT the provided image, not generate from scratch.
-    const qualityTier = context.qualityTier.toLowerCase();
-    const projectType = context.projectType.replace(/_/g, ' ').toLowerCase();
+    // Edit-mode: keep the camera and structure of the reference photo.
+    // The per-type system prompt establishes design + photographic rules;
+    // the editing directive forces the model to preserve the existing
+    // scene rather than imagining a new one.
+    return `${systemPrompt}
 
-    return `Edit this photo to show a completed ${projectType} remodel. ${userPrompt}
+EDIT INSTRUCTION
+The provided photo is the actual property/room. Edit it in place: keep
+the same camera angle, same vantage point, same structural elements
+(walls, windows, roofline, lot boundaries, plant beds present). Only
+change the finishes, plants, materials, and surfaces to show the
+COMPLETED project as described below.
 
-Keep the exact same room, same layout, same camera angle, same perspective, same windows and doors. Only change the finishes, materials, and fixtures to show a beautiful ${qualityTier}-grade ${projectType} renovation. The result must look like a real photo of this exact same space after a professional remodel. Photorealistic only, no text or labels.`;
+Contractor's request: "${userPrompt}"
+
+Photorealistic only. No text, no labels, no watermarks.`;
   }
 
-  // For pure text-to-image generation (no reference photo)
-  const systemPrompt = buildSystemPrompt(context);
   return `${systemPrompt}
 
-The homeowner has described what they want: "${userPrompt}"
+CONTRACTOR'S REQUEST
+"${userPrompt}"
 
-Photograph this completed remodel from the most flattering angle, capturing the full beauty of the finished space. Make it look so real and aspirational that the homeowner will immediately approve the project.`;
+Photograph this completed project from the most flattering angle that
+satisfies the framing rules above. Make it look so real and aspirational
+that the client will immediately approve.`;
 }
 
-/**
- * Generate a remodel preview image using Nano Banana 2 (Gemini 3.1 Flash Image).
- *
- * Config: 2K resolution, context-aware aspect ratio, person generation disabled.
- * Prompt style: narrative scene description optimized for photorealistic output.
- */
-/**
- * Optional reference photo that the model uses as the basis for the remodel.
- * The model sees the actual room/space and generates the remodel ON that space.
- */
 export interface ReferencePhoto {
   base64Data: string;
   mimeType: string;
@@ -150,74 +173,90 @@ export interface ReferencePhoto {
 /**
  * Generate a preview image using the best available provider.
  *
- * Provider strategy (primary → fallback):
- *   1. Google GenAI direct (if GOOGLE_AI_API_KEY is set) — Gemini 3.1 Flash Image,
- *      lowest latency, billed via Google Cloud
- *   2. PiAPI Nano Banana Pro (if PIAPI_API_KEY is set) — async task-based,
- *      used when Google is unavailable. Internal fallback: PiAPI Nano Banana 2
+ * Provider strategy:
+ *   1. Google GenAI (Gemini 3.1 Flash Image) when GOOGLE_AI_API_KEY is set.
+ *   2. PiAPI nano-banana-pro/2 when PIAPI_API_KEY is set.
  *
- * Both providers produce the same GeneratedImage output (base64 + mimeType + durationMs).
- * The caller is unaware of which provider fulfilled the request.
+ * Both return GeneratedImage with the same shape; the caller is unaware
+ * of which provider fulfilled the request.
  */
 export async function generatePreviewImage(
   userPrompt: string,
   context: ImageGenContext,
   referencePhoto?: ReferencePhoto,
-  referenceAssetUrl?: string
+  referenceAssetUrl?: string,
 ): Promise<GeneratedImage | null> {
-
-  // ── Provider 1: Google GenAI (primary) ──────────────────────────────────
   if (env.GOOGLE_AI_API_KEY) {
     try {
-      logger.info({ provider: 'google' }, 'Attempting Google GenAI image generation (primary)');
-      const googleResult = await generatePreviewImageGoogle(userPrompt, context, referencePhoto);
-
+      logger.info(
+        { provider: "google" },
+        "Attempting Google GenAI image generation (primary)",
+      );
+      const googleResult = await generatePreviewImageGoogle(
+        userPrompt,
+        context,
+        referencePhoto,
+      );
       if (googleResult) {
-        logger.info({ provider: 'google', durationMs: googleResult.durationMs }, 'Google GenAI generation succeeded');
+        logger.info(
+          { provider: "google", durationMs: googleResult.durationMs },
+          "Google GenAI generation succeeded",
+        );
         return googleResult;
       }
-
-      logger.warn({ provider: 'google' }, 'Google GenAI returned null — falling through to PiAPI');
+      logger.warn(
+        { provider: "google" },
+        "Google GenAI returned null — falling through to PiAPI",
+      );
     } catch (googleErr) {
-      logger.error({ err: googleErr, provider: 'google' }, 'Google GenAI generation failed — falling through to PiAPI');
+      logger.error(
+        { err: googleErr, provider: "google" },
+        "Google GenAI generation failed — falling through to PiAPI",
+      );
     }
   }
 
-  // ── Provider 2: PiAPI (fallback) ────────────────────────────────────────
   if (env.PIAPI_API_KEY) {
     try {
-      logger.info({ provider: 'piapi' }, 'Attempting PiAPI image generation (fallback)');
+      logger.info(
+        { provider: "piapi" },
+        "Attempting PiAPI image generation (fallback)",
+      );
       const piResult = await generatePreviewImagePiAPI({
         userPrompt,
         context,
         referencePhoto,
         referenceAssetUrl,
       });
-
       if (piResult) {
-        logger.info({ provider: 'piapi', durationMs: piResult.durationMs }, 'PiAPI generation succeeded');
+        logger.info(
+          { provider: "piapi", durationMs: piResult.durationMs },
+          "PiAPI generation succeeded",
+        );
         return piResult;
       }
-
-      logger.warn({ provider: 'piapi' }, 'PiAPI returned null — no provider produced an image');
+      logger.warn(
+        { provider: "piapi" },
+        "PiAPI returned null — no provider produced an image",
+      );
     } catch (piErr) {
-      logger.error({ err: piErr, provider: 'piapi' }, 'PiAPI generation failed');
+      logger.error(
+        { err: piErr, provider: "piapi" },
+        "PiAPI generation failed",
+      );
     }
   }
 
-  // ── No provider configured ──────────────────────────────────────────────
-  logger.error('No image generation provider produced an image (need GOOGLE_AI_API_KEY or PIAPI_API_KEY)');
+  logger.error(
+    "No image generation provider produced an image (need GOOGLE_AI_API_KEY or PIAPI_API_KEY)",
+  );
   return null;
 }
 
-/**
- * Google GenAI direct implementation (Nano Banana 2 / Gemini 3.1 Flash Image).
- * Primary provider — used first; PiAPI is the fallback on null/error.
- */
 async function generatePreviewImageGoogle(
   userPrompt: string,
   context: ImageGenContext,
-  referencePhoto?: ReferencePhoto
+  referencePhoto?: ReferencePhoto,
 ): Promise<GeneratedImage | null> {
   try {
     const ai = getClient();
@@ -227,13 +266,24 @@ async function generatePreviewImageGoogle(
     const aspectRatio = aspectRatioForProjectType(context.projectType);
 
     logger.info(
-      { model: NANO_BANANA_2_MODEL, provider: 'google', projectType: context.projectType, qualityTier: context.qualityTier, aspectRatio, imageSize: '2K', hasReferencePhoto: !!referencePhoto },
-      'Starting Google GenAI image generation (primary)'
+      {
+        model: NANO_BANANA_2_MODEL,
+        provider: "google",
+        projectType: context.projectType,
+        qualityTier: context.qualityTier,
+        aspectRatio,
+        imageSize: "2K",
+        hasReferencePhoto: !!referencePhoto,
+      },
+      "Starting Google GenAI image generation (primary)",
     );
 
     const contents = referencePhoto
       ? createUserContent([
-          createPartFromBase64(referencePhoto.base64Data, referencePhoto.mimeType),
+          createPartFromBase64(
+            referencePhoto.base64Data,
+            referencePhoto.mimeType,
+          ),
           createPartFromText(fullPrompt),
         ])
       : fullPrompt;
@@ -245,26 +295,41 @@ async function generatePreviewImageGoogle(
         temperature: 1,
         topP: 0.95,
         maxOutputTokens: 32768,
-        responseModalities: referencePhoto ? ['TEXT', 'IMAGE'] : ['IMAGE'],
+        responseModalities: referencePhoto ? ["TEXT", "IMAGE"] : ["IMAGE"],
         safetySettings: [
-          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.OFF },
-          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.OFF },
-          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.OFF },
-          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.OFF },
+          {
+            category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+            threshold: HarmBlockThreshold.OFF,
+          },
+          {
+            category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+            threshold: HarmBlockThreshold.OFF,
+          },
+          {
+            category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+            threshold: HarmBlockThreshold.OFF,
+          },
+          {
+            category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+            threshold: HarmBlockThreshold.OFF,
+          },
         ],
         imageConfig: {
           aspectRatio,
-          imageSize: '2K',
+          imageSize: "2K",
         },
       },
     });
 
     const durationMs = Date.now() - startMs;
-    logger.info({ durationMs, model: NANO_BANANA_2_MODEL, provider: 'google' }, 'Google GenAI generation complete');
+    logger.info(
+      { durationMs, model: NANO_BANANA_2_MODEL, provider: "google" },
+      "Google GenAI generation complete",
+    );
 
     const parts = response.candidates?.[0]?.content?.parts;
     if (!parts) {
-      logger.warn('Google GenAI returned no parts');
+      logger.warn("Google GenAI returned no parts");
       return null;
     }
 
@@ -272,23 +337,27 @@ async function generatePreviewImageGoogle(
       if (part.inlineData) {
         return {
           base64Data: part.inlineData.data as string,
-          mimeType: (part.inlineData.mimeType as string) || 'image/png',
+          mimeType: (part.inlineData.mimeType as string) || "image/png",
           durationMs,
         };
       }
     }
 
-    logger.warn('Google GenAI returned no image data in parts');
+    logger.warn("Google GenAI returned no image data in parts");
     return null;
   } catch (err) {
-    logger.error({ err, provider: 'google' }, 'Google GenAI image generation failed');
+    logger.error(
+      { err, provider: "google" },
+      "Google GenAI image generation failed",
+    );
     return null;
   }
 }
 
 /**
- * Returns the system prompt for a given context (used for storing on the generation record).
+ * Returns the system prompt for a given context — stored on the generation
+ * record so we can audit exactly what we asked the model.
  */
 export function getSystemPrompt(context: ImageGenContext): string {
-  return buildSystemPrompt(context);
+  return getImagePrompt(toPromptContext(context));
 }

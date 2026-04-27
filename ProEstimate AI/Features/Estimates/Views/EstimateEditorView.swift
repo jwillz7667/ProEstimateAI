@@ -1,6 +1,6 @@
 import SwiftUI
 #if canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
 
 struct EstimateEditorView: View {
@@ -12,13 +12,21 @@ struct EstimateEditorView: View {
     @State private var isCreatingProposal = false
     @State private var showDiscardConfirmation = false
     @State private var exportProgressMessage: String?
+    /// Whether the contractor wants the before / after images embedded in
+    /// the exported PDF. Defaults on so the rich proposal is the
+    /// out-of-the-box result; flipping off produces a numbers-only PDF.
+    @AppStorage("estimatePDFIncludeBeforeAfter")
+    private var includeBeforeAfterImages: Bool = true
 
     /// Identifiable wrapper so `.sheet(item:)` can drive the share sheet
     /// without the race that kills `.sheet(isPresented:) + if let url`.
     private struct ExportedPDF: Identifiable, Hashable {
         let url: URL
-        var id: URL { url }
+        var id: URL {
+            url
+        }
     }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresentedBySheet
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
@@ -205,7 +213,7 @@ struct EstimateEditorView: View {
                     exportProgressMessage = nil
                 }
             }
-        case .blocked(let decision):
+        case let .blocked(decision):
             paywallPresenter.present(decision)
         }
     }
@@ -253,9 +261,13 @@ struct EstimateEditorView: View {
         let logoURL = company?.logoURL ?? appState.currentCompany?.logoURL
 
         // Parallel image downloads. Each fetch is independently optional.
+        // The before/after fetches are skipped entirely when the contractor
+        // toggled the "Include before/after on PDF" setting off.
         async let logoFetch: UIImage? = logoURL.flatMap { url in Task { try? await ImageFetcher.fetch(url) } }?.value
-        async let beforeFetch: UIImage? = beforeURL.flatMap { url in Task { try? await ImageFetcher.fetch(url) } }?.value
-        async let afterFetch: UIImage? = afterURL.flatMap { url in Task { try? await ImageFetcher.fetch(url) } }?.value
+        async let beforeFetch: UIImage? = (includeBeforeAfterImages ? beforeURL : nil)
+            .flatMap { url in Task { try? await ImageFetcher.fetch(url) } }?.value
+        async let afterFetch: UIImage? = (includeBeforeAfterImages ? afterURL : nil)
+            .flatMap { url in Task { try? await ImageFetcher.fetch(url) } }?.value
 
         let logoImage = await logoFetch
         let beforeImage = await beforeFetch
@@ -441,6 +453,10 @@ struct EstimateEditorView: View {
                     }
                 )
 
+                // PDF export options — controls what shows up in the
+                // exported / shared PDF without touching the line items.
+                pdfOptionsSection
+
                 // Notes section
                 notesSection
 
@@ -455,14 +471,17 @@ struct EstimateEditorView: View {
             .scrollContentBackground(.hidden)
             .background(ColorTokens.background)
 
-            // Sticky bottom totals bar
+            // Sticky bottom totals bar — gains per-visit / monthly / annual
+            // / contract-total rollup rows when the parent project is a
+            // recurring service contract (LAWN_CARE).
             EstimateTotalsView(
                 subtotalMaterials: viewModel.subtotalMaterials,
                 subtotalLabor: viewModel.isDIY ? 0 : viewModel.subtotalLabor,
                 subtotalOther: viewModel.subtotalOther,
                 taxAmount: viewModel.isDIY ? viewModel.materialsTaxOnly : viewModel.taxAmount,
                 discountAmount: $viewModel.discountAmount,
-                grandTotal: viewModel.isDIY ? viewModel.diyGrandTotal : viewModel.grandTotal
+                grandTotal: viewModel.isDIY ? viewModel.diyGrandTotal : viewModel.grandTotal,
+                recurring: viewModel.recurringContext
             )
         }
     }
@@ -496,6 +515,42 @@ struct EstimateEditorView: View {
                 .labelsHidden()
                 .tint(ColorTokens.accentBlue)
             }
+        }
+    }
+
+    /// Toggle row for PDF export options. Currently surfaces a single
+    /// preference: whether the contractor's original (before) photo and
+    /// the AI-generated (after) preview both appear in the exported
+    /// estimate / proposal PDF. Persists across sessions via @AppStorage
+    /// so a contractor who doesn't want client-facing AI imagery only has
+    /// to flip it once.
+    private var pdfOptionsSection: some View {
+        Section {
+            HStack(spacing: SpacingTokens.sm) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.title3)
+                    .foregroundStyle(ColorTokens.primaryOrange)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Before & After on PDF")
+                        .font(TypographyTokens.headline)
+                    Text(includeBeforeAfterImages
+                        ? "Both images appear on the exported estimate"
+                        : "PDF will export numbers-only (no images)")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $includeBeforeAfterImages)
+                    .labelsHidden()
+                    .tint(ColorTokens.primaryOrange)
+            }
+        } header: {
+            Text("PDF Options")
+        } footer: {
+            Text("Includes the original property photo + AI-generated preview side-by-side on the proposal/estimate PDF you send to clients.")
         }
     }
 

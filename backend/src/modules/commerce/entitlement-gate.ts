@@ -1,13 +1,13 @@
-import type { EntitlementStatus } from '@prisma/client';
-import { prisma } from '../../config/database';
-import { PaywallError } from '../../lib/errors';
-import { isAdminUser } from '../../lib/admin';
+import type { EntitlementStatus } from "@prisma/client";
+import { prisma } from "../../config/database";
+import { PaywallError } from "../../lib/errors";
+import { isAdminUser } from "../../lib/admin";
 import {
   checkUsageLimit,
   readPlanLimits,
   type LimitCheckResult,
   type UsageMetric,
-} from '../../lib/usage-limits';
+} from "../../lib/usage-limits";
 
 /**
  * Centralized AI-action gate. Used by every endpoint that triggers paid AI
@@ -34,63 +34,90 @@ export interface GateOptions {
 }
 
 const PRO_ACCESS_STATES: ReadonlySet<EntitlementStatus> = new Set([
-  'TRIAL_ACTIVE',
-  'PRO_ACTIVE',
-  'GRACE_PERIOD',
-  'BILLING_RETRY',
-  'CANCELED_ACTIVE',
-  'ADMIN_OVERRIDE',
+  "TRIAL_ACTIVE",
+  "PRO_ACTIVE",
+  "GRACE_PERIOD",
+  "BILLING_RETRY",
+  "CANCELED_ACTIVE",
+  "ADMIN_OVERRIDE",
 ]);
 
 function hasProAccess(status: EntitlementStatus): boolean {
   return PRO_ACCESS_STATES.has(status);
 }
 
-function isTrialEligible(args: { status: EntitlementStatus; trialEndsAt: Date | null }): boolean {
+function isTrialEligible(args: {
+  status: EntitlementStatus;
+  trialEndsAt: Date | null;
+}): boolean {
   // Trial is single-use. Eligible only if the user has never had one.
-  return args.status === 'FREE' && args.trialEndsAt === null;
+  return args.status === "FREE" && args.trialEndsAt === null;
+}
+
+function metricNoun(metric: UsageMetric): string {
+  switch (metric) {
+    case "QUOTE_EXPORT":
+      return "AI quote exports";
+    case "PROJECT_CREATED":
+      return "projects";
+    case "ESTIMATE_GENERATED":
+      return "AI-generated estimates";
+    case "AI_GENERATION":
+    default:
+      return "AI generations";
+  }
+}
+
+function metricTriggerReason(
+  metric: UsageMetric,
+  base: "requires Pro" | "cap reached",
+): string {
+  switch (metric) {
+    case "QUOTE_EXPORT":
+      return `AI quote export ${base}`;
+    case "PROJECT_CREATED":
+      return `Creating projects ${base}`;
+    case "ESTIMATE_GENERATED":
+      return `AI estimate generation ${base}`;
+    case "AI_GENERATION":
+    default:
+      return `AI generation ${base}`;
+  }
 }
 
 function buildTrialOfferPaywall(metric: UsageMetric) {
-  const isExport = metric === 'QUOTE_EXPORT';
   return {
-    placement: 'TRIAL_OFFER',
+    placement: "TRIAL_OFFER",
     metric,
-    trigger_reason: isExport
-      ? 'AI quote export requires Pro'
-      : 'AI generation requires Pro',
+    trigger_reason: metricTriggerReason(metric, "requires Pro"),
     blocking: true,
-    headline: 'Start Your 7-Day Free Trial',
-    subheadline: isExport
-      ? 'Unlock unlimited AI estimates and branded exports — free for 7 days.'
-      : 'Unlock unlimited AI previews and estimates — free for 7 days.',
-    primary_cta_title: 'Start 7-Day Free Trial',
-    secondary_cta_title: 'Restore Purchases',
+    headline: "Start Your 7-Day Free Trial",
+    subheadline: `Unlock ${metricNoun(metric)} and every other Pro feature — free for 7 days.`,
+    primary_cta_title: "Start 7-Day Free Trial",
+    // No "Maybe Later" / dismiss path. The contractor has to either
+    // start a trial, restore an existing purchase, or stay blocked on
+    // this action.
+    secondary_cta_title: "Restore Purchases",
     show_continue_free: false,
     show_restore_purchases: true,
-    recommended_product_id: 'proestimate.pro.monthly',
+    recommended_product_id: "proestimate.pro.monthly",
     available_products: null,
   };
 }
 
 function buildSubscribeNoTrialPaywall(metric: UsageMetric) {
-  const isExport = metric === 'QUOTE_EXPORT';
   return {
-    placement: 'SUBSCRIBE_NO_TRIAL',
+    placement: "SUBSCRIBE_NO_TRIAL",
     metric,
-    trigger_reason: isExport
-      ? 'AI quote export requires Pro (trial already used)'
-      : 'AI generation requires Pro (trial already used)',
+    trigger_reason: metricTriggerReason(metric, "requires Pro"),
     blocking: true,
-    headline: 'Upgrade to Pro',
-    subheadline: isExport
-      ? 'Your free trial has ended. Upgrade to keep generating AI estimates and branded exports.'
-      : 'Your free trial has ended. Upgrade to keep using AI previews and estimates.',
-    primary_cta_title: 'Upgrade',
-    secondary_cta_title: 'Restore Purchases',
+    headline: "Upgrade to Continue",
+    subheadline: `Your free trial has ended. Upgrade to keep using ${metricNoun(metric)} and the rest of the app.`,
+    primary_cta_title: "Upgrade",
+    secondary_cta_title: "Restore Purchases",
     show_continue_free: false,
     show_restore_purchases: true,
-    recommended_product_id: 'proestimate.pro.monthly',
+    recommended_product_id: "proestimate.pro.monthly",
     available_products: null,
   };
 }
@@ -101,20 +128,22 @@ function buildUsageLimitPaywall(
 ) {
   const windowLabel = result.window;
   const niceWindow =
-    windowLabel === 'daily' ? 'today'
-    : windowLabel === 'weekly' ? 'this week'
-    : 'this month';
-  const isExport = metric === 'QUOTE_EXPORT';
-  const noun = isExport ? 'AI quote exports' : 'AI generations';
+    windowLabel === "daily"
+      ? "today"
+      : windowLabel === "weekly"
+        ? "this week"
+        : "this month";
+  const isExport = metric === "QUOTE_EXPORT";
+  const noun = isExport ? "AI quote exports" : "AI generations";
 
   return {
     placement: `USAGE_LIMIT_${windowLabel.toUpperCase()}`,
     metric,
     trigger_reason: `${windowLabel} ${metric.toLowerCase()} cap reached`,
     blocking: true,
-    headline: `You've Hit Your ${windowLabel === 'daily' ? 'Daily' : windowLabel === 'weekly' ? 'Weekly' : 'Monthly'} Limit`,
+    headline: `You've Hit Your ${windowLabel === "daily" ? "Daily" : windowLabel === "weekly" ? "Weekly" : "Monthly"} Limit`,
     subheadline: `You've used all ${result.cap} ${noun} ${niceWindow}. Capacity reopens at ${result.resetAt.toISOString()}.`,
-    primary_cta_title: 'OK',
+    primary_cta_title: "OK",
     secondary_cta_title: null,
     show_continue_free: false,
     show_restore_purchases: false,
@@ -147,7 +176,7 @@ export async function gateAIAction(opts: GateOptions): Promise<void> {
     // No entitlement means we never bootstrapped commerce for this user — treat
     // as a brand-new account: offer the trial.
     throw new PaywallError(
-      'AI features require an active subscription.',
+      "AI features require an active subscription.",
       buildTrialOfferPaywall(opts.metric),
     );
   }
@@ -169,15 +198,20 @@ export async function gateAIAction(opts: GateOptions): Promise<void> {
   }
 
   // 4. Free / Expired / Revoked → trial offer if eligible, else subscribe.
-  if (isTrialEligible({ status: entitlement.status, trialEndsAt: entitlement.trialEndsAt })) {
+  if (
+    isTrialEligible({
+      status: entitlement.status,
+      trialEndsAt: entitlement.trialEndsAt,
+    })
+  ) {
     throw new PaywallError(
-      'AI features require an active subscription.',
+      "AI features require an active subscription.",
       buildTrialOfferPaywall(opts.metric),
     );
   }
 
   throw new PaywallError(
-    'AI features require an active subscription.',
+    "AI features require an active subscription.",
     buildSubscribeNoTrialPaywall(opts.metric),
   );
 }

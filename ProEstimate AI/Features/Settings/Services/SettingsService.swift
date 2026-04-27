@@ -12,7 +12,13 @@ protocol SettingsServiceProtocol: Sendable {
     func loadPricingProfiles() async throws -> [PricingProfile]
     func savePricingProfile(_ profile: PricingProfile) async throws -> PricingProfile
     func deletePricingProfile(id: String) async throws
-    func saveLanguagePreference(_ language: AppLanguage) async throws
+    /// Persist the user's preferred document language. Returns the updated
+    /// Company so callers can apply server-side normalization. Implementations
+    /// may also mirror to local storage (UserDefaults) for early-boot UX.
+    func saveLanguagePreference(_ language: AppLanguage) async throws -> Company
+    /// Persist the user's preferred appearance mode (system/light/dark).
+    /// Returns the updated Company so callers can sync local UI state.
+    func saveAppearanceMode(_ mode: AppearanceMode) async throws -> Company
 }
 
 // MARK: - Update DTOs
@@ -48,7 +54,9 @@ enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     case english = "en"
     case spanish = "es"
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var displayName: String {
         switch self {
@@ -106,7 +114,7 @@ final class MockSettingsService: SettingsServiceProtocol {
         )
     }
 
-    func uploadLogo(imageData: Data, mimeType: String) async throws -> Company {
+    func uploadLogo(imageData _: Data, mimeType _: String) async throws -> Company {
         try await Task.sleep(nanoseconds: simulatedDelay)
         return Company.sample
     }
@@ -132,6 +140,7 @@ final class MockSettingsService: SettingsServiceProtocol {
             secondaryColor: "#1E293B",
             defaultTaxRate: settings.defaultTaxRate,
             defaultMarkupPercent: 20,
+            taxInclusivePricing: settings.taxInclusivePricing,
             estimatePrefix: "EST",
             invoicePrefix: "INV",
             proposalPrefix: "PROP",
@@ -188,12 +197,18 @@ final class MockSettingsService: SettingsServiceProtocol {
         return profile
     }
 
-    func deletePricingProfile(id: String) async throws {
+    func deletePricingProfile(id _: String) async throws {
         try await Task.sleep(nanoseconds: simulatedDelay)
     }
 
-    func saveLanguagePreference(_ language: AppLanguage) async throws {
+    func saveLanguagePreference(_: AppLanguage) async throws -> Company {
         try await Task.sleep(nanoseconds: simulatedDelay)
+        return Company.sample
+    }
+
+    func saveAppearanceMode(_: AppearanceMode) async throws -> Company {
+        try await Task.sleep(nanoseconds: simulatedDelay)
+        return Company.sample
     }
 }
 
