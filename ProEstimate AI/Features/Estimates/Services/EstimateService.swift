@@ -5,6 +5,7 @@ import Foundation
 protocol EstimateServiceProtocol: Sendable {
     func listEstimates() async throws -> [EstimateSummary]
     func listByProject(projectId: String) async throws -> [Estimate]
+    func listByClient(clientId: String) async throws -> [Estimate]
     func getEstimate(id: String) async throws -> Estimate
     func getLineItems(estimateId: String) async throws -> [EstimateLineItem]
     func createEstimate(_ estimate: Estimate) async throws -> Estimate
@@ -26,6 +27,13 @@ final class MockEstimateService: EstimateServiceProtocol {
     func listByProject(projectId: String) async throws -> [Estimate] {
         try await Task.sleep(nanoseconds: simulatedDelay)
         return Self.sampleEstimates.filter { $0.projectId == projectId }
+    }
+
+    func listByClient(clientId _: String) async throws -> [Estimate] {
+        try await Task.sleep(nanoseconds: simulatedDelay)
+        // Mock has no client-project mapping; return a representative slice
+        // so previews always show data.
+        return Array(Self.sampleEstimates.prefix(2))
     }
 
     func getEstimate(id: String) async throws -> Estimate {
@@ -51,11 +59,11 @@ final class MockEstimateService: EstimateServiceProtocol {
         return estimate
     }
 
-    func deleteEstimate(id: String) async throws {
+    func deleteEstimate(id _: String) async throws {
         try await Task.sleep(nanoseconds: simulatedDelay)
     }
 
-    func saveLineItems(_ items: [EstimateLineItem], estimateId: String) async throws -> [EstimateLineItem] {
+    func saveLineItems(_ items: [EstimateLineItem], estimateId _: String) async throws -> [EstimateLineItem] {
         try await Task.sleep(nanoseconds: simulatedDelay)
         return items
     }

@@ -1,23 +1,43 @@
-import { prisma } from '../../config/database';
-import { NotFoundError } from '../../lib/errors';
-import { PaginationParams, paginateResults, buildCursorWhere } from '../../lib/pagination';
-import { CreateEstimateInput, UpdateEstimateInput } from './estimates.validators';
-import { EstimateStatus, LineItemCategory } from '@prisma/client';
-import { generateEstimate, type EstimateGenContext } from '../../lib/estimate-gen';
-import { gateAIAction } from '../commerce/entitlement-gate';
-import { recordUsage } from '../../lib/usage-limits';
+import { prisma } from "../../config/database";
+import { NotFoundError } from "../../lib/errors";
+import {
+  PaginationParams,
+  paginateResults,
+  buildCursorWhere,
+} from "../../lib/pagination";
+import {
+  CreateEstimateInput,
+  UpdateEstimateInput,
+} from "./estimates.validators";
+import { EstimateStatus, LineItemCategory } from "@prisma/client";
+import {
+  generateEstimate,
+  type EstimateGenContext,
+} from "../../lib/estimate-gen";
+import { gateAIAction } from "../commerce/entitlement-gate";
+import { recordUsage } from "../../lib/usage-limits";
 
-export async function list(companyId: string, pagination: PaginationParams, projectId?: string) {
+export async function list(
+  companyId: string,
+  pagination: PaginationParams,
+  projectId?: string,
+  clientId?: string,
+) {
   const { cursor, pageSize = 25 } = pagination;
 
   const where: any = { companyId };
   if (projectId) {
     where.projectId = projectId;
   }
+  // Filter by client by joining through Project.clientId. The Estimate row
+  // doesn't carry clientId directly — projects own that link.
+  if (clientId) {
+    where.project = { clientId };
+  }
 
   const estimates = await prisma.estimate.findMany({
     where,
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: pageSize + 1,
     ...buildCursorWhere(cursor),
   });
@@ -31,20 +51,24 @@ export async function getById(id: string, companyId: string) {
   });
 
   if (!estimate) {
-    throw new NotFoundError('Estimate', id);
+    throw new NotFoundError("Estimate", id);
   }
 
   return estimate;
 }
 
-export async function create(companyId: string, userId: string, data: CreateEstimateInput) {
+export async function create(
+  companyId: string,
+  userId: string,
+  data: CreateEstimateInput,
+) {
   // Verify the project belongs to this company
   const project = await prisma.project.findFirst({
     where: { id: data.project_id, companyId },
   });
 
   if (!project) {
-    throw new NotFoundError('Project', data.project_id);
+    throw new NotFoundError("Project", data.project_id);
   }
 
   // Auto-increment estimate number inside a transaction
@@ -56,10 +80,10 @@ export async function create(companyId: string, userId: string, data: CreateEsti
     });
 
     if (!company) {
-      throw new NotFoundError('Company', companyId);
+      throw new NotFoundError("Company", companyId);
     }
 
-    const estimateNumber = `${company.estimatePrefix || 'EST'}-${company.nextEstimateNumber}`;
+    const estimateNumber = `${company.estimatePrefix || "EST"}-${company.nextEstimateNumber}`;
 
     // Increment the company's next estimate number
     await tx.company.update({
@@ -89,7 +113,7 @@ export async function create(companyId: string, userId: string, data: CreateEsti
       data: {
         projectId: data.project_id,
         userId,
-        action: 'ESTIMATE_CREATED',
+        action: "ESTIMATE_CREATED",
         description: `Estimate ${estimateNumber} created`,
       },
     });
@@ -100,13 +124,18 @@ export async function create(companyId: string, userId: string, data: CreateEsti
   return estimate;
 }
 
-export async function update(id: string, companyId: string, userId: string, data: UpdateEstimateInput) {
+export async function update(
+  id: string,
+  companyId: string,
+  userId: string,
+  data: UpdateEstimateInput,
+) {
   const existing = await prisma.estimate.findFirst({
     where: { id, companyId },
   });
 
   if (!existing) {
-    throw new NotFoundError('Estimate', id);
+    throw new NotFoundError("Estimate", id);
   }
 
   const updateData: any = {};
@@ -133,7 +162,9 @@ export async function update(id: string, companyId: string, userId: string, data
     updateData.contingencyAmount = data.contingency_amount;
   }
   if (data.valid_until !== undefined) {
-    updateData.validUntil = data.valid_until ? new Date(data.valid_until) : null;
+    updateData.validUntil = data.valid_until
+      ? new Date(data.valid_until)
+      : null;
   }
   if (data.subtotal_materials !== undefined) {
     updateData.subtotalMaterials = data.subtotal_materials;
@@ -164,7 +195,7 @@ export async function update(id: string, companyId: string, userId: string, data
     data: {
       projectId: existing.projectId,
       userId,
-      action: 'ESTIMATE_UPDATED',
+      action: "ESTIMATE_UPDATED",
       description: `Estimate ${existing.estimateNumber} updated`,
     },
   });
@@ -178,7 +209,7 @@ export async function remove(id: string, companyId: string) {
   });
 
   if (!existing) {
-    throw new NotFoundError('Estimate', id);
+    throw new NotFoundError("Estimate", id);
   }
 
   await prisma.estimate.delete({ where: { id } });
@@ -191,28 +222,32 @@ export async function remove(id: string, companyId: string) {
  * hands everything to the estimate-gen lib. The returned structured output is
  * persisted as an Estimate plus its line items in a single transaction.
  */
-export async function generateAI(companyId: string, userId: string, projectId: string) {
+export async function generateAI(
+  companyId: string,
+  userId: string,
+  projectId: string,
+) {
   // Gate AI work behind subscription + rolling-window usage caps.
   // Counts toward the same AI_GENERATION metric as image previews so a single
   // pool of AI calls applies regardless of which AI feature the user invokes.
-  await gateAIAction({ userId, companyId, metric: 'AI_GENERATION' });
+  await gateAIAction({ userId, companyId, metric: "AI_GENERATION" });
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, companyId },
   });
   if (!project) {
-    throw new NotFoundError('Project', projectId);
+    throw new NotFoundError("Project", projectId);
   }
 
   const company = await prisma.company.findUnique({ where: { id: companyId } });
   if (!company) {
-    throw new NotFoundError('Company', companyId);
+    throw new NotFoundError("Company", companyId);
   }
 
   const [selectedMaterials, defaultPricingProfile] = await Promise.all([
     prisma.materialSuggestion.findMany({
       where: { projectId, isSelected: true },
-      orderBy: { sortOrder: 'asc' },
+      orderBy: { sortOrder: "asc" },
     }),
     prisma.pricingProfile.findFirst({
       where: { companyId, isDefault: true },
@@ -230,14 +265,17 @@ export async function generateAI(companyId: string, userId: string, projectId: s
     companyName: company.name,
     companyPhone: company.phone ?? undefined,
     companyEmail: company.email ?? undefined,
-    companyAddress: [company.address, company.city, company.state, company.zip]
-      .filter(Boolean)
-      .join(', ') || undefined,
+    companyAddress:
+      [company.address, company.city, company.state, company.zip]
+        .filter(Boolean)
+        .join(", ") || undefined,
     companyWebsite: company.websiteUrl ?? undefined,
     defaultMarkupPercent: company.defaultMarkupPercent
       ? Number(company.defaultMarkupPercent)
       : undefined,
-    defaultTaxRate: company.defaultTaxRate ? Number(company.defaultTaxRate) : undefined,
+    defaultTaxRate: company.defaultTaxRate
+      ? Number(company.defaultTaxRate)
+      : undefined,
     selectedMaterials: selectedMaterials.map((m) => ({
       name: m.name,
       category: m.category,
@@ -247,7 +285,9 @@ export async function generateAI(companyId: string, userId: string, projectId: s
     })),
     pricingProfile: defaultPricingProfile
       ? {
-          defaultMarkupPercent: Number(defaultPricingProfile.defaultMarkupPercent),
+          defaultMarkupPercent: Number(
+            defaultPricingProfile.defaultMarkupPercent,
+          ),
           contingencyPercent: Number(defaultPricingProfile.contingencyPercent),
           wasteFactor: Number(defaultPricingProfile.wasteFactor),
           laborRates: defaultPricingProfile.laborRates.map((r) => ({
@@ -275,27 +315,28 @@ export async function generateAI(companyId: string, userId: string, projectId: s
     const lineTax = preTax * item.taxRate;
 
     switch (item.category) {
-      case 'materials':
+      case "materials":
         subtotalMaterials += preTax;
         break;
-      case 'labor':
+      case "labor":
         subtotalLabor += preTax;
         break;
-      case 'other':
+      case "other":
         subtotalOther += preTax;
         break;
     }
     taxAmount += lineTax;
   }
 
-  const totalAmount = subtotalMaterials + subtotalLabor + subtotalOther + taxAmount;
+  const totalAmount =
+    subtotalMaterials + subtotalLabor + subtotalOther + taxAmount;
 
   const validUntil = new Date();
   validUntil.setDate(validUntil.getDate() + generated.validDays);
 
   const notesWithTerms = [generated.overview, generated.terms]
     .filter((s) => s && s.trim().length > 0)
-    .join('\n\n');
+    .join("\n\n");
 
   // Compose Assumptions and Exclusions into the dedicated Estimate columns.
   const estimate = await prisma.$transaction(async (tx) => {
@@ -304,10 +345,10 @@ export async function generateAI(companyId: string, userId: string, projectId: s
       select: { estimatePrefix: true, nextEstimateNumber: true },
     });
     if (!co) {
-      throw new NotFoundError('Company', companyId);
+      throw new NotFoundError("Company", companyId);
     }
 
-    const estimateNumber = `${co.estimatePrefix || 'EST'}-${co.nextEstimateNumber}`;
+    const estimateNumber = `${co.estimatePrefix || "EST"}-${co.nextEstimateNumber}`;
 
     await tx.company.update({
       where: { id: companyId },
@@ -344,9 +385,9 @@ export async function generateAI(companyId: string, userId: string, projectId: s
       const lineTotal = preTax + preTax * item.taxRate;
 
       const categoryEnum =
-        item.category === 'materials'
+        item.category === "materials"
           ? LineItemCategory.MATERIALS
-          : item.category === 'labor'
+          : item.category === "labor"
             ? LineItemCategory.LABOR
             : LineItemCategory.OTHER;
 
@@ -354,7 +395,7 @@ export async function generateAI(companyId: string, userId: string, projectId: s
         data: {
           estimateId: created.id,
           category: categoryEnum,
-          itemType: 'per_unit',
+          itemType: "per_unit",
           name: item.name,
           description: item.description || null,
           quantity: item.quantity,
@@ -375,7 +416,7 @@ export async function generateAI(companyId: string, userId: string, projectId: s
       data: {
         projectId,
         userId,
-        action: 'ESTIMATE_CREATED',
+        action: "ESTIMATE_CREATED",
         description: `AI-generated estimate ${estimateNumber} created`,
       },
     });
@@ -384,10 +425,10 @@ export async function generateAI(companyId: string, userId: string, projectId: s
   });
 
   // Record usage AFTER the estimate is committed so a failed write doesn't burn cap.
-  await recordUsage(userId, companyId, 'AI_GENERATION', {
+  await recordUsage(userId, companyId, "AI_GENERATION", {
     projectId,
     estimateId: estimate.id,
-    kind: 'ai_estimate',
+    kind: "ai_estimate",
   });
 
   return estimate;

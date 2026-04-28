@@ -9,8 +9,12 @@ struct ClientDetailView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var showingEditSheet = false
+    @State private var estimates: [Estimate] = []
+    @State private var isLoadingEstimates = false
+    @State private var estimatesError: String?
 
     private let clientService: ClientServiceProtocol = LiveClientService()
+    private let estimateService: EstimateServiceProtocol = LiveEstimateService()
 
     var body: some View {
         Group {
@@ -36,6 +40,7 @@ struct ClientDetailView: View {
         }
         .task {
             await loadClient()
+            await loadEstimates()
         }
         .sheet(isPresented: $showingEditSheet) {
             if let client {
@@ -53,26 +58,32 @@ struct ClientDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
                 // MARK: - Header
+
                 clientHeader(client)
                     .padding(.horizontal, SpacingTokens.md)
 
                 // MARK: - Contact Info
+
                 contactInfoSection(client)
 
                 // MARK: - Address
+
                 if client.formattedAddress != nil {
                     addressSection(client)
                 }
 
                 // MARK: - Notes
+
                 if let notes = client.notes, !notes.isEmpty {
                     notesSection(notes)
                 }
 
                 // MARK: - Projects
+
                 projectsSection
 
                 // MARK: - Estimates & Invoices
+
                 estimatesSection
             }
             .padding(.top, SpacingTokens.sm)
@@ -223,24 +234,115 @@ struct ClientDetailView: View {
         }
     }
 
-    // MARK: - Estimates Section (Placeholder)
+    // MARK: - Estimates Section
 
     private var estimatesSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            SectionHeaderView(title: "Estimates & Invoices")
+            SectionHeaderView(title: "Past Estimates")
 
-            GlassCard {
-                HStack {
-                    Image(systemName: "doc.text")
-                        .foregroundStyle(.secondary)
-                    Text("Estimates and invoices will appear here")
-                        .font(TypographyTokens.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+            Group {
+                if isLoadingEstimates && estimates.isEmpty {
+                    GlassCard {
+                        HStack {
+                            ProgressView().controlSize(.small)
+                            Text("Loading estimates…")
+                                .font(TypographyTokens.subheadline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                    }
+                } else if let estimatesError, estimates.isEmpty {
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+                            HStack {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .foregroundStyle(ColorTokens.error)
+                                Text(estimatesError)
+                                    .font(TypographyTokens.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            Button("Retry") {
+                                Task { await loadEstimates() }
+                            }
+                            .buttonStyle(.borderless)
+                            .tint(ColorTokens.primaryOrange)
+                        }
+                    }
+                } else if estimates.isEmpty {
+                    GlassCard {
+                        HStack {
+                            Image(systemName: "doc.text")
+                                .foregroundStyle(.secondary)
+                            Text("No estimates created for this client yet.")
+                                .font(TypographyTokens.subheadline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                    }
+                } else {
+                    VStack(spacing: SpacingTokens.xs) {
+                        ForEach(estimates) { estimate in
+                            estimateRow(estimate)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, SpacingTokens.md)
         }
+    }
+
+    private func estimateRow(_ estimate: Estimate) -> some View {
+        Button {
+            router.navigate(to: .estimateEditor(id: estimate.id))
+        } label: {
+            GlassCard {
+                HStack(spacing: SpacingTokens.sm) {
+                    Image(systemName: "doc.text.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(ColorTokens.primaryOrange)
+                        .frame(width: 28)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: SpacingTokens.xs) {
+                            Text(estimate.estimateNumber)
+                                .font(TypographyTokens.headline)
+                            StatusBadge(
+                                text: estimate.status.rawValue.capitalized,
+                                style: badgeStyle(for: estimate.status)
+                            )
+                        }
+
+                        if let title = estimate.title, !title.isEmpty {
+                            Text(title)
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+
+                        Text("Created \(estimate.createdAt.formatted(as: .medium))")
+                            .font(TypographyTokens.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        CurrencyText(amount: estimate.totalAmount, font: TypographyTokens.moneyMedium)
+                        if let validUntil = estimate.validUntil {
+                            Text("Valid \(validUntil.formatted(as: .short))")
+                                .font(TypographyTokens.caption2)
+                                .foregroundStyle(estimate.isExpired ? ColorTokens.error : .secondary)
+                        }
+                    }
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Data Loading
@@ -256,5 +358,28 @@ struct ClientDetailView: View {
         }
 
         isLoading = false
+    }
+
+    private func loadEstimates() async {
+        isLoadingEstimates = true
+        estimatesError = nil
+
+        do {
+            estimates = try await estimateService.listByClient(clientId: clientId)
+        } catch {
+            estimatesError = error.localizedDescription
+        }
+
+        isLoadingEstimates = false
+    }
+
+    private func badgeStyle(for status: Estimate.Status) -> StatusBadge.Style {
+        switch status {
+        case .draft: return .neutral
+        case .sent: return .info
+        case .approved: return .success
+        case .declined: return .error
+        case .expired: return .warning
+        }
     }
 }

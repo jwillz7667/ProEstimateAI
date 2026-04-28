@@ -60,7 +60,7 @@ enum APIEndpoint: Sendable {
 
     // MARK: - Estimates
 
-    case listEstimates(projectId: String?)
+    case listEstimates(projectId: String?, clientId: String? = nil)
     case getEstimate(id: String)
     case createEstimate(body: Encodable & Sendable)
     /// AI-generate a complete estimate from the project's materials + the
@@ -282,8 +282,11 @@ extension APIEndpoint {
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
         case let .listProjects(cursor):
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
-        case let .listEstimates(projectId):
-            return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
+        case let .listEstimates(projectId, clientId):
+            var items: [URLQueryItem] = []
+            if let projectId { items.append(URLQueryItem(name: "project_id", value: projectId)) }
+            if let clientId { items.append(URLQueryItem(name: "client_id", value: clientId)) }
+            return items.isEmpty ? nil : items
         case let .listProposals(projectId):
             return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
         case let .listActivityLog(_, cursor):

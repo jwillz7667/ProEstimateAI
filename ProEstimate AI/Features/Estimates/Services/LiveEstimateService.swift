@@ -30,6 +30,10 @@ final class LiveEstimateService: EstimateServiceProtocol, Sendable {
         try await apiClient.request(.listEstimates(projectId: projectId))
     }
 
+    func listByClient(clientId: String) async throws -> [Estimate] {
+        try await apiClient.request(.listEstimates(projectId: nil, clientId: clientId))
+    }
+
     func getEstimate(id: String) async throws -> Estimate {
         try await apiClient.request(.getEstimate(id: id))
     }
