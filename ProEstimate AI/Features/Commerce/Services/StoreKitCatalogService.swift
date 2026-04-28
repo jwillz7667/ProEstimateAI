@@ -1,6 +1,6 @@
 import Foundation
-import StoreKit
 import os.log
+import StoreKit
 
 /// Production implementation of `StoreKitCatalogProviding`.
 /// Loads subscription products from the App Store using StoreKit 2 APIs
@@ -13,10 +13,7 @@ final class StoreKitCatalogService: StoreKitCatalogProviding {
     private var cachedProducts: [Product]?
 
     init(productIDs: Set<String>? = nil) {
-        self.productIDs = productIDs ?? [
-            AppConstants.monthlyProductID,
-            AppConstants.annualProductID
-        ]
+        self.productIDs = productIDs ?? Set(AppConstants.allSubscriptionProductIDs)
     }
 
     // MARK: - StoreKitCatalogProviding
@@ -26,13 +23,14 @@ final class StoreKitCatalogService: StoreKitCatalogProviding {
             return cached
         }
 
-        logger.info("Loading StoreKit products: \(self.productIDs)")
+        let ids = productIDs
+        logger.info("Loading StoreKit products: \(ids)")
 
         do {
-            let products = try await Product.products(for: productIDs)
+            let products = try await Product.products(for: ids)
 
             if products.isEmpty {
-                logger.warning("No products returned from StoreKit for IDs: \(self.productIDs)")
+                logger.warning("No products returned from StoreKit for IDs: \(ids)")
             } else {
                 logger.info("Loaded \(products.count) products from StoreKit")
             }
@@ -81,9 +79,19 @@ final class StoreKitCatalogService: StoreKitCatalogProviding {
         isFeatured: Bool = false,
         savingsText: String? = nil
     ) -> StoreProductModel {
-        let planCode: PlanCode = product.id == AppConstants.annualProductID
-            ? .proAnnual
-            : .proMonthly
+        let planCode: PlanCode = {
+            switch product.id {
+            case AppConstants.proMonthlyProductID: return .proMonthly
+            case AppConstants.proAnnualProductID: return .proAnnual
+            case AppConstants.premiumMonthlyProductID: return .premiumMonthly
+            case AppConstants.premiumAnnualProductID: return .premiumAnnual
+            default:
+                // Unknown product ID — fall back based on subscription period
+                // so tier toggles still work for unexpected catalog entries.
+                let isAnnual = product.subscription?.subscriptionPeriod.unit == .year
+                return isAnnual ? .proAnnual : .proMonthly
+            }
+        }()
 
         let billingPeriodLabel: String = {
             guard let subscription = product.subscription else { return "one-time" }
