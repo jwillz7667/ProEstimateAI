@@ -1,90 +1,80 @@
-# Fastlane
+fastlane documentation
+----
 
-Automation for building, uploading to TestFlight, and pushing App Store Connect metadata for **ProEstimate AI**.
+# Installation
 
-Everything authenticates with an App Store Connect API key — never an Apple ID password — so CI runs don't hit two-factor prompts.
+Make sure you have the latest version of the Xcode command line tools installed:
 
----
-
-## Lanes
-
-| Lane | What it does |
-| :--- | :--- |
-| `bundle exec fastlane beta` | Bumps the build number to `latest_testflight + 1`, archives the app for release, uploads the build to TestFlight (no external distribution). |
-| `bundle exec fastlane metadata` | Pushes `fastlane/metadata/**` (localized copy + URLs + review info) to App Store Connect. No binary. Does not submit. |
-| `bundle exec fastlane submit` | Uploads metadata and submits the most recent build for App Store review (manual release). Does not auto-release. |
-
----
-
-## One-time setup
-
-### 1. Generate an App Store Connect API key
-
-1. Open https://appstoreconnect.apple.com → **Users and Access** → **Integrations** → **App Store Connect API**.
-2. Click **Generate API Key** (or **+**). Give it access level **App Manager** (or higher — **Admin** is fine for solo teams).
-3. Download the `.p8` file when prompted. Apple **only lets you download it once** — save it somewhere safe.
-4. Note the **Key ID** (10-char string under the name) and the **Issuer ID** (UUID shown above the keys list).
-
-### 2. Local environment
-
-Drop the key into the conventional location and export the three env vars. Add to `~/.zshrc`:
-
-```bash
-# fastlane / App Store Connect
-export APP_STORE_CONNECT_API_KEY_ID="YOUR_KEY_ID"
-export APP_STORE_CONNECT_API_KEY_ISSUER_ID="YOUR_ISSUER_UUID"
-# Base64-encode the .p8 so the content can live in one line:
-export APP_STORE_CONNECT_API_KEY_CONTENT="$(base64 -i ~/Downloads/AuthKey_YOUR_KEY_ID.p8)"
+```sh
+xcode-select --install
 ```
 
-Move the downloaded `.p8` to `~/.appstoreconnect/private_keys/AuthKey_YOUR_KEY_ID.p8` for tools that read it directly.
+For _fastlane_ installation instructions, see [Installing _fastlane_](https://docs.fastlane.tools/#installing-fastlane)
 
-### 3. Install Fastlane
+# Available Actions
 
-```bash
-bundle install
+## iOS
+
+### ios beta
+
+```sh
+[bundle exec] fastlane ios beta
 ```
 
-### 4. Smoke test
+Build the project from a clean checkout and push it to TestFlight
 
-```bash
-bundle exec fastlane metadata
+### ios metadata
+
+```sh
+[bundle exec] fastlane ios metadata
 ```
 
-If the command prints something like "Ready to upload" before any network call, your key is wired correctly.
+Push localized metadata and screenshots to App Store Connect (no binary)
 
----
+### ios metadata_copy
 
-## GitHub Actions — `TestFlight` workflow
-
-`.github/workflows/testflight.yml` runs the `beta` lane on:
-- any push of a tag matching `v*.*.*` (e.g. `git tag v1.0.1 && git push origin v1.0.1`), or
-- manual dispatch from the Actions tab.
-
-Required repository secrets (Repo → Settings → Secrets and variables → Actions → New repository secret):
-
-| Secret name | Value |
-| :--- | :--- |
-| `APP_STORE_CONNECT_API_KEY_ID` | The 10-char Key ID. |
-| `APP_STORE_CONNECT_API_KEY_ISSUER_ID` | The Issuer UUID. |
-| `APP_STORE_CONNECT_API_KEY_CONTENT` | Base64 of the `.p8` file: `base64 -i AuthKey_XXXX.p8 \| pbcopy`. |
-
-Cut a TestFlight build:
-
-```bash
-git tag v1.0.1
-git push origin v1.0.1
+```sh
+[bundle exec] fastlane ios metadata_copy
 ```
 
-The workflow will archive, upload, and attach the `.ipa` as a workflow artifact (kept for 7 days).
+Push text metadata only (name/subtitle/keywords/description/promo/notes). Skips screenshots for fast ASO iteration.
 
----
+### ios metadata_screenshots
 
-## Metadata you may want to edit before a real run
+```sh
+[bundle exec] fastlane ios metadata_screenshots
+```
 
-`fastlane/metadata/review_information/` contains placeholders you must replace before submitting for review:
+Push screenshots only (no metadata).
 
-- `demo_password.txt` — `REPLACE_WITH_REAL_DEMO_PASSWORD`. The password for the demo account Apple reviewers will use.
-- `phone_number.txt` — `REPLACE_WITH_CONTACT_PHONE`. The reviewer contact number.
+### ios submit
 
-Localized copy (`en-US/`, `es-MX/`) is already filled in with production-ready text. Edit `description.txt`, `keywords.txt`, and the URLs as the product evolves; `bundle exec fastlane metadata` pushes changes without re-uploading a binary.
+```sh
+[bundle exec] fastlane ios submit
+```
+
+Submit the most recent build for App Store review
+
+### ios register_bundle_id
+
+```sh
+[bundle exec] fastlane ios register_bundle_id
+```
+
+Register the bundle id in the Developer Portal (one-time). Enables Sign In with Apple and In-App Purchase capabilities.
+
+### ios create_subscriptions
+
+```sh
+[bundle exec] fastlane ios create_subscriptions
+```
+
+Create the Pro subscription group + monthly / annual products via App Store Connect API
+
+----
+
+This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
+
+More information about _fastlane_ can be found on [fastlane.tools](https://fastlane.tools).
+
+The documentation of _fastlane_ can be found on [docs.fastlane.tools](https://docs.fastlane.tools).
