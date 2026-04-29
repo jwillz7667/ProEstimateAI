@@ -11,9 +11,7 @@ struct SignUpView: View {
                 // MARK: - Header
 
                 VStack(spacing: SpacingTokens.sm) {
-                    Image(systemName: "person.badge.plus")
-                        .font(.system(size: 48))
-                        .foregroundStyle(ColorTokens.primaryOrange)
+                    logoBadge
 
                     Text("Create Account")
                         .font(TypographyTokens.title)
@@ -153,6 +151,31 @@ struct SignUpView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+    }
+
+    // MARK: - Logo
+
+    /// Brand badge: the orange `person.badge.plus` glyph centered inside a
+    /// 96pt white disc. The white fill is unconditional in both color
+    /// schemes — in dark mode it pops the orange off the system-dark
+    /// canvas, and in light mode the soft shadow gives the disc enough
+    /// edge to read as a deliberate badge rather than a flat fill.
+    ///
+    /// The SF Symbol's bounding box centers in the disc, but the
+    /// `person.badge.plus` glyph itself sits a hair left of optical center
+    /// because of the trailing "+" badge. A 2pt trailing padding nudges
+    /// the bounding box left so the *figure* lands on the disc's vertical
+    /// axis — the kind of optical correction designers expect.
+    private var logoBadge: some View {
+        Image(systemName: "person.badge.plus")
+            .font(.system(size: 44, weight: .medium))
+            .foregroundStyle(ColorTokens.primaryOrange)
+            .symbolRenderingMode(.monochrome)
+            .padding(.trailing, 2)
+            .frame(width: 96, height: 96)
+            .background(Circle().fill(.white))
+            .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 2)
+            .accessibilityHidden(true)
     }
 
     // MARK: - Provider buttons

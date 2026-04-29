@@ -94,32 +94,35 @@ enum ProjectStatusFilter: String, CaseIterable, Identifiable, Sendable {
 
 // MARK: - Creation Step
 
-/// The four sequential steps of the simplified project creation flow.
-/// `type` and `photos` are the input stages; `details` collects the
-/// project name + optional advanced fields (sqft, lot size, budget);
-/// `generating` is a non-interactive loading state while the project,
-/// photo upload, and AI preview pipeline run to completion before the
-/// user lands on the project detail screen.
+/// Steps in the project creation flow.
+///
+/// Standard projects walk: `type → photos → details → generating`.
+/// Lawn-care projects insert a `lawnMap` step between photos and
+/// details so the contractor can pin the lawn polygon on a satellite
+/// map and capture an area measurement for estimation. The wizard
+/// skips `.lawnMap` for any non-lawn-care project type — see
+/// `ProjectCreationViewModel.nextStep` / `previousStep` for the
+/// step-skipping logic and `navigableStepCount` for the progress-bar
+/// length.
+///
+/// `generating` is a non-interactive loading state — it sits at the
+/// end of the enum and is excluded from the navigable count for both
+/// flows.
 enum ProjectCreationStep: Int, CaseIterable, Sendable {
     case type = 0
     case photos = 1
-    case details = 2
-    case generating = 3
+    case lawnMap = 2
+    case details = 3
+    case generating = 4
 
     var title: String {
         switch self {
         case .type: "Category"
         case .photos: "Photos & Vision"
+        case .lawnMap: "Measure Lawn"
         case .details: "Details"
         case .generating: "Generating"
         }
-    }
-
-    /// Number of *navigable* steps shown in the progress indicator. The
-    /// final `.generating` step is a loading state, not a tappable input
-    /// step, so it doesn't count toward the indicator length.
-    var navigableStepCount: Int {
-        ProjectCreationStep.allCases.count - 1
     }
 }
 

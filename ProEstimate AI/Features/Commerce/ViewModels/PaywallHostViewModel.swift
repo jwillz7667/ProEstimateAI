@@ -36,15 +36,21 @@ final class PaywallHostViewModel {
     }
 
     /// Resolve the (tier, period) intersection from the current product
-    /// catalog and assign it to `selectedProduct`. Falls back to the
-    /// nearest tier match when the exact intersection isn't available
-    /// (e.g. before Premium ships in App Store Connect).
+    /// catalog and assign it to `selectedProduct`. When the catalog
+    /// hasn't shipped the exact match yet (e.g. Premium not yet in App
+    /// Store Connect, or StoreKit still resolving), substitute the
+    /// canonical fallback so the rendered price + description always
+    /// match the user's stated tier/period. The purchase flow validates
+    /// against the real StoreKit catalog separately, so a fallback never
+    /// silently completes a checkout against a price that isn't live.
     private func resyncSelectedProduct() {
         let exact = products.first {
             $0.tier == selectedTier && $0.isAnnual == isAnnualSelected
         }
-        let fallback = products.first { $0.tier == selectedTier }
-        selectedProduct = exact ?? fallback ?? selectedProduct
+        selectedProduct = exact ?? .canonicalFallback(
+            tier: selectedTier,
+            isAnnual: isAnnualSelected
+        )
     }
 
     /// Whether products are loading.
@@ -353,6 +359,9 @@ final class PaywallHostViewModel {
 
 extension PaywallHostViewModel {
     /// Create a view model for SwiftUI previews with mock data.
+    /// Loads the full sample catalog (Pro + Premium × Monthly + Annual)
+    /// and lets the tier/period bindings drive `selectedProduct` so the
+    /// preview surfaces the same selection logic used in production.
     static func preview(
         decision: PaywallDecision = .sampleSoftGate
     ) -> PaywallHostViewModel {
@@ -361,8 +370,9 @@ extension PaywallHostViewModel {
             commerceAPI: MockCommerceAPIClient(),
             entitlementStore: .preview()
         )
-        vm.products = [.sampleMonthly, .sampleAnnual]
-        vm.selectedProduct = .sampleAnnual
+        vm.products = StoreProductModel.sampleAll
+        vm.selectedTier = .premium
+        vm.isAnnualSelected = false
         return vm
     }
 }

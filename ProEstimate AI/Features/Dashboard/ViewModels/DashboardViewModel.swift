@@ -18,9 +18,9 @@ final class DashboardViewModel {
         let hour = Calendar.current.component(.hour, from: Date())
         let timeGreeting: String
         switch hour {
-        case 0..<12:
+        case 0 ..< 12:
             timeGreeting = "Good morning"
-        case 12..<17:
+        case 12 ..< 17:
             timeGreeting = "Good afternoon"
         default:
             timeGreeting = "Good evening"
@@ -72,27 +72,54 @@ final class DashboardViewModel {
 
     // MARK: - Thumbnail Loading
 
+    /// Hydrate `projectThumbnails` for every project in the carousel.
+    ///
+    /// Strategy:
+    ///   1. Prefer the server-provided `Project.thumbnailURL` — the backend
+    ///      already resolves the most recent COMPLETED generation preview
+    ///      (or first ORIGINAL asset) and returns it on the project DTO.
+    ///      No extra round-trip required.
+    ///   2. For projects whose payload arrives without a thumbnail (legacy
+    ///      records, or projects whose generation finished after the list
+    ///      query), fall back to `listGenerations` so the carousel still
+    ///      shows the freshest preview rather than a blank placeholder.
     private func loadThumbnails(for projects: [Project]) async {
-        await withTaskGroup(of: (String, URL?).self) { group in
-            for project in projects.prefix(5) {
-                group.addTask { [apiClient] in
-                    do {
-                        let generations: [AIGeneration] = try await apiClient.request(
-                            .listGenerations(projectId: project.id)
-                        )
-                        let completed = generations.first { $0.status == .completed }
-                        return (project.id, completed?.previewURL)
-                    } catch {
-                        return (project.id, nil)
+        let visible = Array(projects.prefix(10))
+        var resolved: [String: URL] = [:]
+        var needsLookup: [Project] = []
+
+        for project in visible {
+            if let url = project.thumbnailURL {
+                resolved[project.id] = url
+            } else {
+                needsLookup.append(project)
+            }
+        }
+
+        if !needsLookup.isEmpty {
+            await withTaskGroup(of: (String, URL?).self) { group in
+                for project in needsLookup {
+                    group.addTask { [apiClient] in
+                        do {
+                            let generations: [AIGeneration] = try await apiClient.request(
+                                .listGenerations(projectId: project.id)
+                            )
+                            let completed = generations.first { $0.status == .completed }
+                            return (project.id, completed?.previewURL)
+                        } catch {
+                            return (project.id, nil)
+                        }
+                    }
+                }
+
+                for await (projectId, url) in group {
+                    if let url {
+                        resolved[projectId] = url
                     }
                 }
             }
-
-            for await (projectId, url) in group {
-                if let url {
-                    projectThumbnails[projectId] = url
-                }
-            }
         }
+
+        projectThumbnails = resolved
     }
 }

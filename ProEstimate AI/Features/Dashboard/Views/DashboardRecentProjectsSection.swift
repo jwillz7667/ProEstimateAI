@@ -89,29 +89,8 @@ struct DashboardRecentProjectsSection: View {
                 endPoint: .bottom
             )
 
-            // Top-right status pill
-            VStack {
-                HStack {
-                    Spacer()
-                    statusBadge(for: project.status)
-                }
-                Spacer()
-            }
-            .padding(SpacingTokens.sm)
-
-            // Title + meta block
-            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                Text(project.title)
-                    .font(TypographyTokens.headline)
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-
-                Text(project.updatedAt.formatted(as: .relative))
-                    .font(TypographyTokens.caption)
-                    .foregroundStyle(.white.opacity(0.85))
-            }
-            .padding(SpacingTokens.md)
+            statusOverlay(for: project)
+            metaOverlay(for: project)
         }
         .frame(height: cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
@@ -123,33 +102,104 @@ struct DashboardRecentProjectsSection: View {
         .shadow(color: .black.opacity(0.16), radius: 10, x: 0, y: 4)
     }
 
+    /// Top-right status pill, anchored via a VStack so the badge floats
+    /// to the card's top edge regardless of the surrounding ZStack
+    /// alignment (which is bottomLeading for the title block).
+    private func statusOverlay(for project: Project) -> some View {
+        VStack {
+            HStack {
+                Spacer()
+                statusBadge(for: project.status)
+            }
+            Spacer()
+        }
+        .padding(SpacingTokens.sm)
+    }
+
+    /// Bottom-anchored title + description + age stack. Extracted out of
+    /// `projectCard` so the parent view body stays light enough for the
+    /// SwiftUI type checker to resolve in reasonable time.
+    private func metaOverlay(for project: Project) -> some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+            Text(project.title)
+                .font(TypographyTokens.headline)
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+
+            Text(descriptionLine(for: project))
+                .font(TypographyTokens.caption)
+                .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Text(project.createdAt.formatted(as: .relative))
+                .font(TypographyTokens.caption2)
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .padding(SpacingTokens.md)
+    }
+
     // MARK: - Thumbnail
 
-    @ViewBuilder
     private func thumbnailLayer(for project: Project) -> some View {
-        if let url = thumbnails[project.id] {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case let .success(image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                case .failure:
+        // The thumbnail is rendered inside a `Color.clear` overlay host
+        // that owns the card's exact bounds. Two reasons this matters:
+        //   1. AsyncImage with `.aspectRatio(.fill)` resolves its layout
+        //      from the loaded image's intrinsic size; without an
+        //      anchored host, that size can briefly affect the parent
+        //      ZStack's geometry on first decode and bleed past the
+        //      card's rounded corners (which are visible because the
+        //      surrounding ScrollView uses `.scrollClipDisabled()`).
+        //   2. Applying `.clipShape(RoundedRectangle…)` directly to this
+        //      host hard-clips the image content to the card silhouette
+        //      — the outer ZStack's clip is still in place, but this
+        //      defensive inner clip prevents any rendering artifact
+        //      from spilling into a neighboring card.
+        Color.clear
+            .overlay {
+                if let url = resolvedThumbnailURL(for: project) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case let .success(image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        case .failure:
+                            fallbackArt(for: project)
+                        default:
+                            placeholder(for: project)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
                     fallbackArt(for: project)
-                default:
-                    placeholder(for: project)
                 }
             }
-            // Pin AsyncImage to the card's full frame and clip — without
-            // these, .fill lets the image spill past the card edges into
-            // adjacent slots in the carousel (the parent .clipShape
-            // alone isn't enough; the image's geometry still affects
-            // sibling layout before the outer clip is applied).
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-        } else {
-            fallbackArt(for: project)
+            .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
+    }
+
+    /// Resolve the thumbnail URL for a project, preferring the locally
+    /// hydrated `thumbnails` dictionary (which the dashboard VM keeps in
+    /// sync with the freshest available preview) but falling back to the
+    /// server-provided URL on the project DTO when the dictionary entry
+    /// hasn't landed yet (e.g. mid-refresh).
+    private func resolvedThumbnailURL(for project: Project) -> URL? {
+        thumbnails[project.id] ?? project.thumbnailURL
+    }
+
+    /// One-line caption that summarizes the project. Prefers the
+    /// contractor's own description when present so the carousel reads
+    /// like a curated portfolio; otherwise surfaces the project type so
+    /// every card carries some context instead of feeling empty.
+    private func descriptionLine(for project: Project) -> String {
+        if let description = project.description?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !description.isEmpty
+        {
+            return description
         }
+        return project.projectType.displayName
     }
 
     private func placeholder(for project: Project) -> some View {
@@ -243,8 +293,8 @@ struct DashboardRecentProjectsSection: View {
 
     private func accessibilityLabel(for project: Project) -> String {
         let status = statusText(for: project.status)
-        let when = project.updatedAt.formatted(as: .relative)
-        return "Project \(project.title), \(status), updated \(when)"
+        let when = project.createdAt.formatted(as: .relative)
+        return "Project \(project.title), \(descriptionLine(for: project)), \(status), created \(when)"
     }
 
     private func statusText(for status: Project.Status) -> String {

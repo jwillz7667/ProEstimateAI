@@ -43,9 +43,9 @@ struct PhotosAndPromptStep: View {
     private var photosSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.sm) {
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                Text("Upload a before photo")
+                Text(photosHeaderTitle)
                     .font(TypographyTokens.title3)
-                Text("More photos produce better AI previews. At least one is required.")
+                Text(photosHeaderSubtitle)
                     .font(TypographyTokens.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -68,9 +68,11 @@ struct PhotosAndPromptStep: View {
 
             if viewModel.selectedImageData.isEmpty {
                 photoStatusRow(
-                    icon: "exclamationmark.circle",
-                    text: "At least 1 photo required",
-                    tint: ColorTokens.warning
+                    icon: photosOptional ? "info.circle" : "exclamationmark.circle",
+                    text: photosOptional
+                        ? "Photos are optional — we'll measure the lawn on the next step."
+                        : "At least 1 photo required",
+                    tint: photosOptional ? ColorTokens.secondaryText : ColorTokens.warning
                 )
                 .padding(.horizontal, SpacingTokens.md)
             } else {
@@ -105,6 +107,25 @@ struct PhotosAndPromptStep: View {
     private var photoCountLabel: String {
         let count = viewModel.selectedImageData.count
         return "\(count) photo\(count == 1 ? "" : "s") selected"
+    }
+
+    /// Lawn-care projects don't gate on photo upload — the next step
+    /// captures the lawn polygon, which is the load-bearing input for
+    /// the per-sq-ft estimate. Other types still require at least one
+    /// before-photo for the AI remodel preview.
+    private var photosOptional: Bool {
+        viewModel.isLawnCareFlow
+    }
+
+    private var photosHeaderTitle: String {
+        photosOptional ? "Add a photo (optional)" : "Upload a before photo"
+    }
+
+    private var photosHeaderSubtitle: String {
+        if photosOptional {
+            return "Drop a photo of the property if you have one — otherwise just pick a service style below and we'll measure the lawn next."
+        }
+        return "More photos produce better AI previews. At least one is required."
     }
 
     private func photoSourceButton(

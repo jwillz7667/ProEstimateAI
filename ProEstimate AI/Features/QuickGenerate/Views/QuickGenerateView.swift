@@ -226,7 +226,11 @@ struct QuickGenerateView: View {
                     : ColorTokens.surface,
                 in: Capsule()
             )
-            .foregroundStyle(isSelected ? .white : ColorTokens.primaryText)
+            // Both states render white-on-dark: the unselected capsule
+            // sits on the slate `Surface` token (which stays dark in
+            // both color schemes), and the selected capsule fills with
+            // primary orange — `.white` reads cleanly against either.
+            .foregroundStyle(.white)
             .overlay(
                 Capsule()
                     .strokeBorder(

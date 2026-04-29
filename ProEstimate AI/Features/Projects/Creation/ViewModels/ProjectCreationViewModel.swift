@@ -21,14 +21,27 @@ final class ProjectCreationViewModel {
         ProjectCreationStep.allCases.count
     }
 
-    /// Number of navigable input steps (excludes the trailing loading
-    /// step) — drives the progress-indicator length.
+    /// Number of navigable input steps in the active flow (excludes the
+    /// trailing `.generating` loading step, and excludes `.lawnMap`
+    /// unless the user picked a lawn-care project type). Drives the
+    /// progress-indicator pill count so the bar is accurate per flow.
     var navigableStepCount: Int {
-        ProjectCreationStep.allCases.first?.navigableStepCount ?? 1
+        // Standard: type + photos + details = 3. Lawn care adds the
+        // lawnMap step between photos and details for a total of 4.
+        isLawnCareFlow ? 4 : 3
     }
 
     var currentStepEnum: ProjectCreationStep {
         ProjectCreationStep(rawValue: currentStep) ?? .type
+    }
+
+    /// Whether the active flow needs the lawn measurement step. Lawn-
+    /// care contracts price by measured area (per-sq-ft fertilizer,
+    /// per-acre treatments) so the polygon is the load-bearing input —
+    /// the AI estimate downstream reads the same `lawn_area_sq_ft`
+    /// the map captures here.
+    var isLawnCareFlow: Bool {
+        selectedProjectType == .lawnCare
     }
 
     // MARK: - Step 0: Project Type
@@ -56,6 +69,36 @@ final class ProjectCreationViewModel {
 
     var customInstructionsCharacterCount: Int {
         customInstructions.count
+    }
+
+    // MARK: - Lawn Measurement (lawn-care flow only)
+
+    /// The map-driven lawn polygon capture VM. Lazily instantiated on
+    /// first access so non-lawn-care flows never spin up MapKit
+    /// machinery. The wizard owns this lifecycle so the polygon survives
+    /// step navigation (Back from `.lawnMap` keeps the existing
+    /// vertices) and so the pipeline can persist the area to the
+    /// project after creation.
+    @ObservationIgnored
+    private var _lawnMeasurementVM: LawnMeasurementViewModel?
+
+    var lawnMeasurementVM: LawnMeasurementViewModel {
+        if let vm = _lawnMeasurementVM { return vm }
+        let vm = LawnMeasurementViewModel(
+            projectId: nil,
+            initialCenter: nil,
+            service: mapsService
+        )
+        _lawnMeasurementVM = vm
+        return vm
+    }
+
+    /// Whether the user has dropped enough vertices for a valid polygon
+    /// (3+). Mirrors the lawn VM's gate so the wizard's `canProceed`
+    /// can drive the Next button without leaking MapKit types into the
+    /// rest of the wizard.
+    var hasValidLawnPolygon: Bool {
+        _lawnMeasurementVM?.hasValidPolygon ?? false
     }
 
     // MARK: - Step 2: Details
@@ -125,6 +168,7 @@ final class ProjectCreationViewModel {
 
     private let projectService: ProjectServiceProtocol
     private let generationService: GenerationServiceProtocol
+    private let mapsService: MapsServiceProtocol
     private let apiClient: APIClientProtocol
 
     /// Polling cadence for generation status. 3s strikes a balance
@@ -141,10 +185,12 @@ final class ProjectCreationViewModel {
     init(
         projectService: ProjectServiceProtocol = LiveProjectService(),
         generationService: GenerationServiceProtocol = LiveGenerationService(),
+        mapsService: MapsServiceProtocol = LiveMapsService(),
         apiClient: APIClientProtocol = APIClient.shared
     ) {
         self.projectService = projectService
         self.generationService = generationService
+        self.mapsService = mapsService
         self.apiClient = apiClient
     }
 
@@ -156,10 +202,21 @@ final class ProjectCreationViewModel {
         case .type:
             return selectedProjectType != nil
         case .photos:
-            // At least one photo is required so the AI has something to
-            // remodel. A prompt is required too — either via card or
-            // custom instructions.
+            // Lawn-care projects don't need an uploaded photo — the
+            // generation works from the lawn-care prompt + the
+            // measured polygon captured in the next step. Other types
+            // still need at least one before-photo so the AI has a
+            // surface to remodel against. A resolved prompt (either a
+            // suggestion card or custom instructions) is always
+            // required.
+            if isLawnCareFlow {
+                return hasResolvedPrompt
+            }
             return !selectedImageData.isEmpty && hasResolvedPrompt
+        case .lawnMap:
+            // Polygon must be closed (3+ vertices) before we can
+            // estimate per-area pricing.
+            return hasValidLawnPolygon
         case .details:
             // Name + advanced fields are all optional.
             return true
@@ -252,13 +309,28 @@ final class ProjectCreationViewModel {
 
     func nextStep() {
         guard canProceed, currentStep < totalSteps - 1 else { return }
-        currentStep += 1
+        var next = currentStep + 1
+        // Skip the lawn measurement step when the user isn't building a
+        // lawn-care project. The map step is only meaningful when we're
+        // about to estimate per-area pricing.
+        if ProjectCreationStep(rawValue: next) == .lawnMap, !isLawnCareFlow {
+            next += 1
+        }
+        guard next < totalSteps else { return }
+        currentStep = next
     }
 
     func previousStep() {
         // Guard against going back into the loading step or pre-step 0.
         guard !isPipelineRunning, currentStep > 0 else { return }
-        currentStep -= 1
+        var prev = currentStep - 1
+        // Mirror the forward skip — non-lawn-care flows never see
+        // `.lawnMap`, so Back from `.details` jumps straight to
+        // `.photos` instead of an empty map step.
+        if ProjectCreationStep(rawValue: prev) == .lawnMap, !isLawnCareFlow {
+            prev -= 1
+        }
+        currentStep = prev
     }
 
     /// Jump straight to the loading step. Called when the user taps
@@ -340,6 +412,12 @@ final class ProjectCreationViewModel {
         // Stage 1: create project
         pipelineStage = .creating
 
+        // Lawn-care projects are recurring contracts — flag them at
+        // creation so the backend persists the recurrence defaults
+        // and the project detail UI immediately surfaces per-visit /
+        // monthly / annual rollups instead of a single total.
+        let isLawnCare = projectType == .lawnCare
+
         let request = ProjectCreationRequest(
             title: generatedTitle,
             projectType: projectType,
@@ -351,8 +429,8 @@ final class ProjectCreationViewModel {
             squareFootage: squareFootage,
             dimensions: composedDimensions,
             language: detectedLanguage == "Spanish" ? "es" : "en",
-            isRecurring: nil,
-            recurrenceFrequency: nil,
+            isRecurring: isLawnCare ? true : nil,
+            recurrenceFrequency: isLawnCare ? "weekly" : nil,
             visitsPerMonth: nil,
             contractMonths: nil,
             recurrenceStartDate: nil
@@ -366,6 +444,22 @@ final class ProjectCreationViewModel {
             pipelineStage = .failed(error.localizedDescription)
             pipelineError = error.localizedDescription
             return
+        }
+
+        // Stage 1.5: persist the captured lawn polygon for lawn-care
+        // projects so the backend stores `lawn_area_sq_ft` +
+        // `property_latitude/longitude` on the project. Failure here
+        // is non-fatal: the area can be re-measured from the project
+        // detail's Property Scouting card without losing the project.
+        if isLawnCare, hasValidLawnPolygon {
+            do {
+                _ = try await mapsService.measureLawn(
+                    polygon: lawnMeasurementVM.vertices,
+                    projectId: project.id
+                )
+            } catch {
+                // Surface to logs only — the project itself is created.
+            }
         }
 
         // Stage 2: upload photos. Photo upload failures are *not* fatal

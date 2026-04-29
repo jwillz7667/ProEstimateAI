@@ -62,6 +62,8 @@ struct ProjectCreationFlowView: View {
             ProjectTypeSelectionStep(viewModel: viewModel)
         case .photos:
             PhotosAndPromptStep(viewModel: viewModel)
+        case .lawnMap:
+            LawnAreaCaptureStep(viewModel: viewModel)
         case .details:
             ProjectDetailsStep(viewModel: viewModel)
         case .generating:
