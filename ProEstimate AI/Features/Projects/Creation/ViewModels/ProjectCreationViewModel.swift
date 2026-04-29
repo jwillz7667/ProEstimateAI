@@ -2,44 +2,40 @@ import Foundation
 import PhotosUI
 import SwiftUI
 
-/// Manages the full multi-step project creation flow.
-/// Tracks the current step, validates per-step input, collects all form
-/// data, and submits the creation request to the backend.
+/// Drives the four-step project creation flow.
+///
+/// Inputs flow forward only — no review step. After the user taps
+/// "Create Project" on the details step, the view model transitions to
+/// the `.generating` step and runs a four-stage pipeline (create →
+/// upload photos → start generation → poll until complete) so the user
+/// sees a single continuous loading screen and lands on a fully-rendered
+/// project detail screen instead of a half-loaded shell.
 @Observable
+@MainActor
 final class ProjectCreationViewModel {
     // MARK: - Step Navigation
 
     var currentStep: Int = 0
+
     var totalSteps: Int {
         ProjectCreationStep.allCases.count
+    }
+
+    /// Number of navigable input steps (excludes the trailing loading
+    /// step) — drives the progress-indicator length.
+    var navigableStepCount: Int {
+        ProjectCreationStep.allCases.first?.navigableStepCount ?? 1
     }
 
     var currentStepEnum: ProjectCreationStep {
         ProjectCreationStep(rawValue: currentStep) ?? .type
     }
 
-    // MARK: - Step 0: Project Type + Title
+    // MARK: - Step 0: Project Type
 
     var selectedProjectType: Project.ProjectType?
 
-    /// Optional user-supplied project title. When empty, `generatedTitle`
-    /// falls back to a sensible default built from the selected type and
-    /// client name. When non-empty, this wins.
-    var customTitle: String = ""
-
-    // MARK: - Step 1: Client Selection
-
-    var selectedClient: Client?
-    var clientSearchText: String = ""
-    var availableClients: [Client] = []
-
-    var filteredClients: [Client] {
-        guard !clientSearchText.isEmpty else { return availableClients }
-        let query = clientSearchText.lowercased()
-        return availableClients.filter { $0.name.lowercased().contains(query) }
-    }
-
-    // MARK: - Step 2: Image Upload
+    // MARK: - Step 1: Photos + Prompt
 
     var selectedPhotosItems: [PhotosPickerItem] = []
     var selectedImageData: [Data] = []
@@ -48,64 +44,39 @@ final class ProjectCreationViewModel {
     /// from the Photos library. Cleared on a successful retry.
     var imageLoadError: String?
 
-    // MARK: - Step 3: Prompt / Description
+    /// User-tapped suggestion card — drives the AI prompt's stylistic
+    /// baseline. `nil` means the user is going prompt-only.
+    var selectedPromptCard: PromptCard?
 
-    var prompt: String = ""
-    let maxPromptLength: Int = 1000
+    /// Free-form additions the user types beneath the suggestion cards.
+    /// Combined with the selected card's prompt at submission time.
+    var customInstructions: String = ""
 
-    var promptCharacterCount: Int {
-        prompt.count
+    let maxCustomInstructionsLength: Int = 1000
+
+    var customInstructionsCharacterCount: Int {
+        customInstructions.count
     }
 
-    var detectedLanguage: String {
-        // Simple heuristic: if prompt contains common Spanish words, hint Spanish
-        let spanishIndicators = ["cocina", "bano", "piso", "techo", "pintura", "habitacion", "remodelacion"]
-        let lowered = prompt.lowercased()
-        for word in spanishIndicators {
-            if lowered.contains(word) { return "Spanish" }
-        }
-        return "English"
-    }
+    // MARK: - Step 2: Details
 
-    // MARK: - Step 4: Details
+    /// Optional user-supplied project title. When empty, `generatedTitle`
+    /// falls back to a sensible default built from the selected type.
+    var customTitle: String = ""
 
+    var squareFootageText: String = ""
+    var lotSizeText: String = ""
     var budgetMinText: String = ""
     var budgetMaxText: String = ""
     var qualityTier: Project.QualityTier = .standard
-    var squareFootageText: String = ""
-    var dimensions: String = ""
 
-    // MARK: - Step 4: Recurring Contract (LAWN_CARE only)
-
-    /// True when the user has chosen to bill this as a recurring service
-    /// contract rather than a one-shot job. Auto-flipped on when the user
-    /// picks `lawnCare` in step 0 (see `selectedProjectType` didSet),
-    /// but the contractor can override either direction in Details.
-    var isRecurring: Bool = false
-    var recurrenceFrequency: Project.RecurrenceFrequency = .weekly
-    var visitsPerMonthText: String = ""
-    var contractMonthsText: String = "8"
-    var recurrenceStartDate: Date = .init()
-
-    /// Resolves the typed visits-per-month value: explicit override if
-    /// the user filled the field, otherwise the cadence default.
-    var resolvedVisitsPerMonth: Decimal? {
-        if let explicit = Decimal(string: visitsPerMonthText), explicit > 0 {
-            return explicit
-        }
-        return recurrenceFrequency.defaultVisitsPerMonth
+    var squareFootage: Decimal? {
+        Decimal(string: squareFootageText)
     }
 
-    var contractMonths: Int? {
-        Int(contractMonthsText)
+    var lotSize: Decimal? {
+        Decimal(string: lotSizeText)
     }
-
-    // MARK: - Post-creation behavior
-
-    /// When true, the project detail screen will automatically start an AI
-    /// preview generation as soon as the new project is opened, using the
-    /// description the user entered on the prompt step.
-    var autoGenerateEnabled: Bool = true
 
     var budgetMin: Decimal? {
         Decimal(string: budgetMinText)
@@ -115,37 +86,66 @@ final class ProjectCreationViewModel {
         Decimal(string: budgetMaxText)
     }
 
-    var squareFootage: Decimal? {
-        Decimal(string: squareFootageText)
+    // MARK: - Step 3: Generation Pipeline
+
+    /// Stage of the post-create pipeline. `.idle` until the user taps
+    /// "Create Project" on the details step.
+    var pipelineStage: CreationPipelineStage = .idle
+
+    /// The newly created project, set once the create-project API call
+    /// succeeds. Used by the wizard host to fire `onProjectCreated`.
+    var createdProject: Project?
+
+    /// The first generation kicked off by the pipeline, polled to
+    /// completion before the wizard dismisses.
+    var pendingGeneration: AIGeneration?
+
+    /// Long-form pipeline error (after retries / on hard failure).
+    /// Drives the inline retry banner on the loading screen.
+    var pipelineError: String?
+
+    /// Whether any pipeline stage is currently running. Disables back
+    /// navigation and the dismiss gesture during in-flight work.
+    var isPipelineRunning: Bool {
+        switch pipelineStage {
+        case .creating, .uploadingPhotos, .startingGeneration, .generating:
+            return true
+        case .idle, .completed, .failed:
+            return false
+        }
     }
 
-    // MARK: - Submission State
+    // MARK: - Submission Convenience
 
-    var isSubmitting: Bool = false
-    var submissionError: String?
-    var createdProject: Project?
+    var isSubmitting: Bool {
+        isPipelineRunning
+    }
 
     // MARK: - Dependencies
 
     private let projectService: ProjectServiceProtocol
-    private let clientService: ClientServiceProtocol
+    private let generationService: GenerationServiceProtocol
+    private let apiClient: APIClientProtocol
+
+    /// Polling cadence for generation status. 3s strikes a balance
+    /// between perceived responsiveness and backend load.
+    private let pollInterval: UInt64 = 3_000_000_000
+
+    /// Hard ceiling on poll attempts. 60 attempts × 3s ≈ 3 minutes —
+    /// well past the typical 60–90s generation time but bounded so a
+    /// stalled job can't keep the wizard open forever.
+    private let maxPollAttempts: Int = 60
 
     // MARK: - Init
 
     init(
         projectService: ProjectServiceProtocol = LiveProjectService(),
-        clientService: ClientServiceProtocol = LiveClientService()
+        generationService: GenerationServiceProtocol = LiveGenerationService(),
+        apiClient: APIClientProtocol = APIClient.shared
     ) {
         self.projectService = projectService
-        self.clientService = clientService
-    }
-
-    func loadClients() async {
-        do {
-            availableClients = try await clientService.listClients()
-        } catch {
-            availableClients = []
-        }
+        self.generationService = generationService
+        self.apiClient = apiClient
     }
 
     // MARK: - Computed Validation
@@ -155,53 +155,100 @@ final class ProjectCreationViewModel {
         switch currentStepEnum {
         case .type:
             return selectedProjectType != nil
-        case .client:
-            // Client is optional — always allow proceeding
-            return true
         case .photos:
-            return !selectedImageData.isEmpty
-        case .prompt:
-            return !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            // At least one photo is required so the AI has something to
+            // remodel. A prompt is required too — either via card or
+            // custom instructions.
+            return !selectedImageData.isEmpty && hasResolvedPrompt
         case .details:
-            // Details are optional
+            // Name + advanced fields are all optional.
             return true
-        case .review:
-            return true
+        case .generating:
+            return false
         }
+    }
+
+    /// True when the user has supplied either a tapped suggestion card
+    /// or non-empty custom instructions (or both).
+    var hasResolvedPrompt: Bool {
+        if selectedPromptCard != nil { return true }
+        return !customInstructions
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
+    }
+
+    /// Final prompt sent to the generation pipeline. Combines the
+    /// selected card's baseline with the user's custom layer.
+    var resolvedPrompt: String {
+        var parts: [String] = []
+        if let card = selectedPromptCard {
+            parts.append(card.prompt)
+        }
+        let custom = customInstructions
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !custom.isEmpty {
+            parts.append(custom)
+        }
+        return parts.joined(separator: " ")
+    }
+
+    var detectedLanguage: String {
+        // Simple heuristic: if prompt contains common Spanish words, hint Spanish.
+        let spanishIndicators = [
+            "cocina", "bano", "piso", "techo", "pintura", "habitacion", "remodelacion",
+        ]
+        let lowered = resolvedPrompt.lowercased()
+        for word in spanishIndicators where lowered.contains(word) {
+            return "Spanish"
+        }
+        return "English"
     }
 
     /// Project title that gets sent to the backend. Uses `customTitle`
     /// when the user has filled it in; otherwise falls back to an
-    /// auto-generated string built from the selected type and client.
+    /// auto-generated string built from the selected type.
     var generatedTitle: String {
         let trimmed = customTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
 
-        let typeName: String = {
-            guard let type = selectedProjectType else { return "Project" }
-            switch type {
-            case .kitchen: return "Kitchen Remodel"
-            case .bathroom: return "Bathroom Renovation"
-            case .flooring: return "Flooring Install"
-            case .roofing: return "Roof Replacement"
-            case .painting: return "Painting Project"
-            case .siding: return "Siding Replacement"
-            case .roomRemodel: return "Room Remodel"
-            case .exterior: return "Exterior Renovation"
-            case .landscaping: return "Landscape Install"
-            case .lawnCare: return "Lawn Care Contract"
-            case .custom: return "Custom Project"
-            }
-        }()
-
-        if let client = selectedClient {
-            let lastName = client.name.split(separator: " ").last.map(String.init) ?? client.name
-            return "\(typeName) – \(lastName) Residence"
+        guard let type = selectedProjectType else { return "Project" }
+        switch type {
+        case .kitchen: return "Kitchen Remodel"
+        case .bathroom: return "Bathroom Renovation"
+        case .flooring: return "Flooring Install"
+        case .roofing: return "Roof Replacement"
+        case .painting: return "Painting Project"
+        case .siding: return "Siding Replacement"
+        case .roomRemodel: return "Room Remodel"
+        case .exterior: return "Exterior Renovation"
+        case .landscaping: return "Landscape Install"
+        case .lawnCare: return "Lawn Care Contract"
+        case .custom: return "Custom Project"
         }
-        return typeName
     }
 
-    // MARK: - Actions
+    /// Free-text dimensions field appended to the project record. Lot
+    /// size doesn't have a dedicated backend column, so we compose a
+    /// human-readable summary the AI material/labor pass can reference.
+    var composedDimensions: String? {
+        var parts: [String] = []
+        if let sqft = squareFootage {
+            parts.append("Project: \(formatDecimal(sqft)) sqft")
+        }
+        if let lot = lotSize {
+            parts.append("Lot: \(formatDecimal(lot)) sqft")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private func formatDecimal(_ value: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: value as NSDecimalNumber) ?? "\(value)"
+    }
+
+    // MARK: - Step Actions
 
     func nextStep() {
         guard canProceed, currentStep < totalSteps - 1 else { return }
@@ -209,9 +256,26 @@ final class ProjectCreationViewModel {
     }
 
     func previousStep() {
-        guard currentStep > 0 else { return }
+        // Guard against going back into the loading step or pre-step 0.
+        guard !isPipelineRunning, currentStep > 0 else { return }
         currentStep -= 1
     }
+
+    /// Jump straight to the loading step. Called when the user taps
+    /// "Create Project" on the details step.
+    func enterGeneratingStep() {
+        currentStep = ProjectCreationStep.generating.rawValue
+    }
+
+    func selectPromptCard(_ card: PromptCard) {
+        selectedPromptCard = card
+    }
+
+    func clearPromptCard() {
+        selectedPromptCard = nil
+    }
+
+    // MARK: - Photos
 
     func loadImages() async {
         isLoadingImages = true
@@ -237,11 +301,11 @@ final class ProjectCreationViewModel {
 
         if failedCount > 0 {
             let plural = failedCount == 1 ? "photo" : "photos"
-            imageLoadError = "\(failedCount) \(plural) couldn't be loaded. You can retry, or continue with the \(loadedData.count) that loaded."
+            imageLoadError = "\(failedCount) \(plural) couldn't be loaded. Retry, or continue with the \(loadedData.count) that loaded."
         }
     }
 
-    /// Clear the image-load error banner (e.g., when the user dismisses it).
+    /// Clear the image-load error banner.
     func clearImageLoadError() {
         imageLoadError = nil
     }
@@ -255,61 +319,173 @@ final class ProjectCreationViewModel {
     }
 
     /// Adds an image captured from the camera to the selected images array.
-    /// Converts the UIImage to JPEG data before appending.
     func addCameraImage(_ image: UIImage) {
         guard let data = image.jpegData(compressionQuality: 0.8) else { return }
         selectedImageData.append(data)
     }
 
-    func createProject() async {
-        guard let projectType = selectedProjectType else { return }
+    // MARK: - Pipeline
 
-        isSubmitting = true
-        submissionError = nil
+    /// Runs the full create → upload → generate → poll pipeline. The
+    /// caller (the wizard's `Generating` step view) drives this and
+    /// observes `pipelineStage` to render the progress checklist.
+    func runCreationPipeline() async {
+        guard let projectType = selectedProjectType else {
+            pipelineStage = .failed("Select a project category to continue.")
+            return
+        }
+
+        pipelineError = nil
+
+        // Stage 1: create project
+        pipelineStage = .creating
 
         let request = ProjectCreationRequest(
             title: generatedTitle,
             projectType: projectType,
-            clientId: selectedClient?.id,
-            description: prompt.isEmpty ? nil : prompt,
+            clientId: nil,
+            description: resolvedPrompt.isEmpty ? nil : resolvedPrompt,
             budgetMin: budgetMin,
             budgetMax: budgetMax,
             qualityTier: qualityTier,
             squareFootage: squareFootage,
-            dimensions: dimensions.isEmpty ? nil : dimensions,
+            dimensions: composedDimensions,
             language: detectedLanguage == "Spanish" ? "es" : "en",
-            isRecurring: isRecurring ? true : nil,
-            recurrenceFrequency: isRecurring ? recurrenceFrequency.rawValue : nil,
-            visitsPerMonth: isRecurring ? resolvedVisitsPerMonth : nil,
-            contractMonths: isRecurring ? contractMonths : nil,
-            recurrenceStartDate: isRecurring ? recurrenceStartDate : nil
+            isRecurring: nil,
+            recurrenceFrequency: nil,
+            visitsPerMonth: nil,
+            contractMonths: nil,
+            recurrenceStartDate: nil
         )
 
+        let project: Project
         do {
-            let project = try await projectService.createProject(request: request)
+            project = try await projectService.createProject(request: request)
             createdProject = project
-
-            // Upload photos as assets
-            await uploadPhotos(projectId: project.id)
         } catch {
-            submissionError = error.localizedDescription
+            pipelineStage = .failed(error.localizedDescription)
+            pipelineError = error.localizedDescription
+            return
         }
 
-        isSubmitting = false
+        // Stage 2: upload photos. Photo upload failures are *not* fatal
+        // — the project exists and the user can re-upload from detail.
+        pipelineStage = .uploadingPhotos
+        await uploadPhotos(projectId: project.id)
+
+        // Stage 3: kick off generation
+        pipelineStage = .startingGeneration
+        let generation: AIGeneration
+        do {
+            generation = try await generationService.startGeneration(
+                projectId: project.id,
+                prompt: resolvedPrompt,
+                materials: nil
+            )
+            pendingGeneration = generation
+        } catch {
+            // Generation failed to start. Surface the error but treat
+            // the project as created — the user can retry from detail.
+            pipelineStage = .failed(error.localizedDescription)
+            pipelineError = error.localizedDescription
+            return
+        }
+
+        // Stage 4: poll until complete or until we hit the ceiling
+        pipelineStage = .generating
+        await pollGeneration(initial: generation)
     }
 
     private func uploadPhotos(projectId: String) async {
         for imageData in selectedImageData {
             let compressed = Self.compressImage(imageData, maxBytes: 1_000_000)
             let base64 = compressed.base64EncodedString()
-            let body = AssetUploadBody(url: "data:image/jpeg;base64,\(base64)", assetType: "original")
+            let body = AssetUploadBody(
+                url: "data:image/jpeg;base64,\(base64)",
+                assetType: "original"
+            )
             do {
-                let _: Asset = try await APIClient.shared.request(.uploadAsset(projectId: projectId, body: body))
+                let _: Asset = try await apiClient.request(
+                    .uploadAsset(projectId: projectId, body: body)
+                )
             } catch {
-                // Non-critical: project was created, photo upload failed silently
+                // Non-critical: project was created, photo upload failed silently.
             }
         }
     }
+
+    private func pollGeneration(initial: AIGeneration) async {
+        var generation = initial
+        var attempts = 0
+
+        while attempts < maxPollAttempts {
+            switch generation.status {
+            case .completed:
+                pendingGeneration = generation
+                pipelineStage = .completed
+                return
+            case .failed:
+                let message = generation.errorMessage ?? "Generation failed. You can retry from your project."
+                pipelineError = message
+                pipelineStage = .failed(message)
+                return
+            case .queued, .processing:
+                break
+            }
+
+            try? await Task.sleep(nanoseconds: pollInterval)
+            attempts += 1
+
+            // Cancellation check — caller may have dismissed the wizard.
+            if Task.isCancelled { return }
+
+            do {
+                generation = try await generationService.getGenerationStatus(id: generation.id)
+                pendingGeneration = generation
+            } catch {
+                // Don't surface transient poll errors immediately —
+                // network blips happen during long polls. Hold the
+                // existing snapshot and try again next tick.
+                continue
+            }
+        }
+
+        // Timeout: surface a friendly message but treat the project as
+        // created. The user can open it and the generation may still
+        // complete in the background.
+        pipelineError = "This is taking longer than expected. You can open your project and we'll keep working in the background."
+        pipelineStage = .failed(pipelineError ?? "Generation timeout")
+    }
+
+    /// Retry just the generation portion of the pipeline. Used by the
+    /// inline retry button on the loading screen — the project itself
+    /// was already created, so we restart from `.startingGeneration`.
+    func retryGeneration() async {
+        guard let project = createdProject else {
+            // Nothing to retry against — restart the full pipeline.
+            await runCreationPipeline()
+            return
+        }
+
+        pipelineError = nil
+        pipelineStage = .startingGeneration
+
+        do {
+            let generation = try await generationService.startGeneration(
+                projectId: project.id,
+                prompt: resolvedPrompt,
+                materials: nil
+            )
+            pendingGeneration = generation
+            pipelineStage = .generating
+            await pollGeneration(initial: generation)
+        } catch {
+            pipelineError = error.localizedDescription
+            pipelineStage = .failed(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Image Compression
 
     private static func compressImage(_ data: Data, maxBytes: Int) -> Data {
         guard let uiImage = UIImage(data: data) else { return data }
@@ -323,6 +499,31 @@ final class ProjectCreationViewModel {
             quality -= 0.1
         }
         return uiImage.jpegData(compressionQuality: 0.1) ?? data
+    }
+}
+
+// MARK: - Pipeline Stage
+
+/// Stages of the post-create pipeline. Drives the loading-screen UI.
+enum CreationPipelineStage: Sendable, Equatable {
+    case idle
+    case creating
+    case uploadingPhotos
+    case startingGeneration
+    case generating
+    case completed
+    case failed(String)
+
+    var rank: Int {
+        switch self {
+        case .idle: return 0
+        case .creating: return 1
+        case .uploadingPhotos: return 2
+        case .startingGeneration: return 3
+        case .generating: return 4
+        case .completed: return 5
+        case .failed: return -1
+        }
     }
 }
 

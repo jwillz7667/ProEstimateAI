@@ -94,28 +94,32 @@ enum ProjectStatusFilter: String, CaseIterable, Identifiable, Sendable {
 
 // MARK: - Creation Step
 
-/// The six sequential steps of the project creation flow.
+/// The four sequential steps of the simplified project creation flow.
+/// `type` and `photos` are the input stages; `details` collects the
+/// project name + optional advanced fields (sqft, lot size, budget);
+/// `generating` is a non-interactive loading state while the project,
+/// photo upload, and AI preview pipeline run to completion before the
+/// user lands on the project detail screen.
 enum ProjectCreationStep: Int, CaseIterable, Sendable {
     case type = 0
-    case client = 1
-    case photos = 2
-    case prompt = 3
-    case details = 4
-    case review = 5
+    case photos = 1
+    case details = 2
+    case generating = 3
 
     var title: String {
         switch self {
-        case .type: "Type"
-        case .client: "Client"
-        case .photos: "Photos"
-        case .prompt: "Description"
+        case .type: "Category"
+        case .photos: "Photos & Vision"
         case .details: "Details"
-        case .review: "Review"
+        case .generating: "Generating"
         }
     }
 
-    var stepCount: Int {
-        ProjectCreationStep.allCases.count
+    /// Number of *navigable* steps shown in the progress indicator. The
+    /// final `.generating` step is a loading state, not a tappable input
+    /// step, so it doesn't count toward the indicator length.
+    var navigableStepCount: Int {
+        ProjectCreationStep.allCases.count - 1
     }
 }
 

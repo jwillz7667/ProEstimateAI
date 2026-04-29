@@ -1,192 +1,166 @@
 import SwiftUI
 
-/// Step 4: Optional project details — budget range, quality tier,
-/// square footage, and dimensions.
+/// Step 2 of the simplified creation flow. Project name is the lead;
+/// advanced fields (square footage, lot size, budget, quality tier) sit
+/// below as optional context the AI uses for material/labor estimates.
 struct ProjectDetailsStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
+
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case name, squareFootage, lotSize, budgetMin, budgetMax
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
-                Text("Project Details")
-                    .font(TypographyTokens.title3)
+                nameSection
 
-                Text("These fields are optional but help the AI generate more accurate previews and cost estimates.")
-                    .font(TypographyTokens.subheadline)
-                    .foregroundStyle(.secondary)
+                advancedHeader
 
-                // Recurring contract terms — surfaced when the project type
-                // is configured as recurring by default (LAWN_CARE today)
-                // OR when the contractor manually flipped on recurring.
-                if showsRecurrenceConfig {
-                    recurrenceSection
-                }
-
-                // Budget Range
-                budgetSection
-
-                // Quality Tier
-                qualityTierSection
-
-                // Square Footage
                 squareFootageSection
-
-                // Dimensions
-                dimensionsSection
+                lotSizeSection
+                budgetSection
+                qualityTierSection
             }
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.sm)
         }
-        .onAppear {
-            // First time we land on Details after picking lawnCare:
-            // pre-flip recurrence on so the field is visible and ready
-            // without making the contractor hunt for a toggle.
-            if viewModel.selectedProjectType?.isRecurringByDefault == true,
-               !viewModel.isRecurring
-            {
-                viewModel.isRecurring = true
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focusedField = nil }
+                    .fontWeight(.semibold)
+                    .tint(ColorTokens.primaryOrange)
             }
         }
     }
 
-    private var showsRecurrenceConfig: Bool {
-        // Always show for project types that are recurring-by-default; for
-        // others, only show after the contractor explicitly toggles on.
-        viewModel.selectedProjectType?.isRecurringByDefault == true
-            || viewModel.isRecurring
-    }
+    // MARK: - Name
 
-    // MARK: - Sections
+    private var nameSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            HStack(spacing: SpacingTokens.xxs) {
+                Image(systemName: "pencil.line")
+                    .font(.caption)
+                    .foregroundStyle(ColorTokens.primaryOrange)
+                Text("Project name")
+                    .font(TypographyTokens.headline)
+                Text("Optional")
+                    .font(TypographyTokens.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, SpacingTokens.xs)
+                    .padding(.vertical, 1)
+                    .background(ColorTokens.inputBackground, in: Capsule())
+            }
 
-    private var recurrenceSection: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.sm) {
-            Label("Recurring Contract", systemImage: "calendar.badge.clock")
-                .font(TypographyTokens.headline)
+            TextField(
+                viewModel.generatedTitle,
+                text: $viewModel.customTitle,
+                axis: .vertical
+            )
+            .focused($focusedField, equals: .name)
+            .submitLabel(.next)
+            .lineLimit(1 ... 2)
+            .padding(SpacingTokens.sm)
+            .background(
+                ColorTokens.inputBackground,
+                in: RoundedRectangle(cornerRadius: RadiusTokens.small)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.small)
+                    .strokeBorder(ColorTokens.subtleBorder, lineWidth: 1)
+            )
 
-            Text("Sell this as a recurring service contract. Materials and labor below are quoted PER VISIT; the proposal will roll up monthly and annual totals.")
+            Text("Leave blank and we'll auto-name this from the category.")
                 .font(TypographyTokens.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
 
-            Toggle("Bill as Recurring", isOn: $viewModel.isRecurring)
-                .tint(ColorTokens.primaryOrange)
+    // MARK: - Advanced Header
 
-            if viewModel.isRecurring {
-                Divider().padding(.vertical, SpacingTokens.xxs)
+    private var advancedHeader: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+            Divider()
+                .padding(.vertical, SpacingTokens.xxs)
 
-                // Frequency
-                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("Frequency")
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(.secondary)
-                    Picker("Frequency", selection: $viewModel.recurrenceFrequency) {
-                        ForEach(Project.RecurrenceFrequency.allCases, id: \.self) { freq in
-                            Text(freq.displayName).tag(freq)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: viewModel.recurrenceFrequency) { _, newValue in
-                        // Clear an explicit override when the cadence
-                        // changes so the new cadence's default takes effect
-                        // unless the user re-enters an override.
-                        viewModel.visitsPerMonthText = ""
-                        _ = newValue
-                    }
-                }
+            Text("Advanced (optional)")
+                .font(TypographyTokens.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
 
-                // Visits per month (override)
-                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("Visits / Month")
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: SpacingTokens.xs) {
-                        TextField(
-                            "Default \(defaultVisitsHint)",
-                            text: $viewModel.visitsPerMonthText
-                        )
-                        .keyboardType(.decimalPad)
-                        .textFieldStyle(.roundedBorder)
-                        Text("visits")
-                            .font(TypographyTokens.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("Leave blank to use the cadence default.")
-                        .font(TypographyTokens.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-
-                // Contract length
-                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("Contract Length")
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: SpacingTokens.xs) {
-                        TextField("8", text: $viewModel.contractMonthsText)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
-                        Text("months")
-                            .font(TypographyTokens.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("Typical: 8 months for cool-season turf, 12 for year-round HOA contracts.")
-                        .font(TypographyTokens.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-
-                // Start date
-                DatePicker(
-                    "Start Date",
-                    selection: $viewModel.recurrenceStartDate,
-                    displayedComponents: .date
-                )
+            Text("These help the AI tailor material quantities and cost estimates. Skip them and we'll use sensible defaults.")
                 .font(TypographyTokens.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
 
-                // Live rollup preview
-                if let visits = viewModel.resolvedVisitsPerMonth,
-                   let months = viewModel.contractMonths
-                {
-                    let totalVisits = visits * Decimal(months)
-                    HStack {
-                        Text("Total visits over contract")
-                            .font(TypographyTokens.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(NSDecimalNumber(decimal: totalVisits).intValue)")
-                            .font(TypographyTokens.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(ColorTokens.primaryOrange)
-                    }
-                    .padding(.top, SpacingTokens.xs)
-                }
+    // MARK: - Square Footage
+
+    private var squareFootageSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            Label("Project area", systemImage: "ruler")
+                .font(TypographyTokens.headline)
+
+            HStack(spacing: SpacingTokens.xs) {
+                TextField("e.g. 250", text: $viewModel.squareFootageText)
+                    .keyboardType(.decimalPad)
+                    .focused($focusedField, equals: .squareFootage)
+                    .textFieldStyle(.roundedBorder)
+                Text("sqft")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(.secondary)
             }
+
+            Text("Approximate working area for this remodel.")
+                .font(TypographyTokens.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(SpacingTokens.md)
         .glassCard(cornerRadius: RadiusTokens.card)
     }
 
-    /// Numeric hint shown in the visits-per-month placeholder. Tracks the
-    /// selected cadence's default so the contractor sees what the bid
-    /// will use when the override is left blank.
-    private var defaultVisitsHint: String {
-        let v = viewModel.recurrenceFrequency.defaultVisitsPerMonth
-        let n = NSDecimalNumber(decimal: v).doubleValue
-        // Quarterly is fractional; everything else is whole.
-        return n.rounded() == n
-            ? String(Int(n))
-            : String(format: "%.2f", n)
+    // MARK: - Lot Size
+
+    private var lotSizeSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            Label("Lot size", systemImage: "square.dashed")
+                .font(TypographyTokens.headline)
+
+            HStack(spacing: SpacingTokens.xs) {
+                TextField("e.g. 5000", text: $viewModel.lotSizeText)
+                    .keyboardType(.decimalPad)
+                    .focused($focusedField, equals: .lotSize)
+                    .textFieldStyle(.roundedBorder)
+                Text("sqft")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Total property lot size — useful for exterior, landscaping, and lawn jobs.")
+                .font(TypographyTokens.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(SpacingTokens.md)
+        .glassCard(cornerRadius: RadiusTokens.card)
     }
+
+    // MARK: - Budget
 
     private var budgetSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            Label("Budget Range", systemImage: "dollarsign.circle")
+            Label("Budget range", systemImage: "dollarsign.circle")
                 .font(TypographyTokens.headline)
 
             HStack(spacing: SpacingTokens.sm) {
                 VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("Minimum")
+                    Text("Min")
                         .font(TypographyTokens.caption)
                         .foregroundStyle(.secondary)
-                    currencyField(text: $viewModel.budgetMinText, placeholder: "$0")
+                    currencyField(text: $viewModel.budgetMinText, placeholder: "0", focus: .budgetMin)
                 }
 
                 Text("–")
@@ -194,10 +168,10 @@ struct ProjectDetailsStep: View {
                     .padding(.top, SpacingTokens.md)
 
                 VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("Maximum")
+                    Text("Max")
                         .font(TypographyTokens.caption)
                         .foregroundStyle(.secondary)
-                    currencyField(text: $viewModel.budgetMaxText, placeholder: "$0")
+                    currencyField(text: $viewModel.budgetMaxText, placeholder: "0", focus: .budgetMax)
                 }
             }
         }
@@ -205,12 +179,14 @@ struct ProjectDetailsStep: View {
         .glassCard(cornerRadius: RadiusTokens.card)
     }
 
+    // MARK: - Quality Tier
+
     private var qualityTierSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            Label("Quality Tier", systemImage: "star.circle")
+            Label("Quality tier", systemImage: "star.circle")
                 .font(TypographyTokens.headline)
 
-            Text("Affects material suggestions and cost estimates.")
+            Text("Influences material suggestions and cost estimates.")
                 .font(TypographyTokens.caption)
                 .foregroundStyle(.secondary)
 
@@ -225,44 +201,16 @@ struct ProjectDetailsStep: View {
         .glassCard(cornerRadius: RadiusTokens.card)
     }
 
-    private var squareFootageSection: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            Label("Square Footage", systemImage: "ruler")
-                .font(TypographyTokens.headline)
-
-            TextField("e.g. 250", text: $viewModel.squareFootageText)
-                .keyboardType(.decimalPad)
-                .textFieldStyle(.roundedBorder)
-        }
-        .padding(SpacingTokens.md)
-        .glassCard(cornerRadius: RadiusTokens.card)
-    }
-
-    private var dimensionsSection: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            Label("Dimensions", systemImage: "arrow.left.and.right")
-                .font(TypographyTokens.headline)
-
-            TextField("e.g. 20x12.5", text: $viewModel.dimensions)
-                .textFieldStyle(.roundedBorder)
-
-            Text("Length x Width format, in feet")
-                .font(TypographyTokens.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(SpacingTokens.md)
-        .glassCard(cornerRadius: RadiusTokens.card)
-    }
-
     // MARK: - Helpers
 
-    private func currencyField(text: Binding<String>, placeholder: String) -> some View {
+    private func currencyField(text: Binding<String>, placeholder: String, focus: Field) -> some View {
         HStack(spacing: SpacingTokens.xxs) {
             Text("$")
                 .font(TypographyTokens.body)
                 .foregroundStyle(.secondary)
             TextField(placeholder, text: text)
                 .keyboardType(.decimalPad)
+                .focused($focusedField, equals: focus)
                 .textFieldStyle(.plain)
         }
         .padding(.horizontal, SpacingTokens.sm)

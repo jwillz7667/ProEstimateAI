@@ -126,6 +126,13 @@ struct DashboardRecentProjectsSection: View {
                     placeholder(for: project)
                 }
             }
+            // Pin AsyncImage to the card's full frame and clip — without
+            // these, .fill lets the image spill past the card edges into
+            // adjacent slots in the carousel (the parent .clipShape
+            // alone isn't enough; the image's geometry still affects
+            // sibling layout before the outer clip is applied).
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
         } else {
             fallbackArt(for: project)
         }

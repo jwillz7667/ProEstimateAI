@@ -1,52 +1,43 @@
 import SwiftUI
 
 /// Multi-step project creation flow presented as a full-screen cover.
-/// Shows a progress indicator, step content, and Back/Next navigation
-/// buttons. Dismisses on successful creation or explicit cancel.
+///
+/// Four pages: category → photos+prompts → name+advanced → generating.
+/// The trailing "generating" page runs the create+upload+AI pipeline
+/// inline so the user sees one continuous loading screen and lands on a
+/// fully-rendered project detail screen rather than a half-loaded shell.
 struct ProjectCreationFlowView: View {
-    /// Fires when the project is successfully created. The second parameter
-    /// mirrors the "auto-generate preview" toggle from the review step so
-    /// the caller can kick off generation right after navigating.
+    /// Fires when the project + AI generation pipeline completes (or
+    /// the user opts to open the project anyway after a soft failure).
+    /// The second parameter is kept for backward compatibility with the
+    /// old auto-generate handoff; in this flow it's always `false`
+    /// because generation has already started in the wizard.
     var onProjectCreated: ((_ projectId: String, _ autoGenerate: Bool) -> Void)?
+
     @State private var viewModel = ProjectCreationViewModel()
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Progress indicator
-                progressBar
-                    .padding(.horizontal, SpacingTokens.md)
-                    .padding(.top, SpacingTokens.sm)
-                    .padding(.bottom, SpacingTokens.md)
-
-                // Step content
-                TabView(selection: $viewModel.currentStep) {
-                    ProjectTypeSelectionStep(viewModel: viewModel)
-                        .tag(0)
-
-                    ClientSelectionStep(viewModel: viewModel)
-                        .tag(1)
-
-                    ImageUploadStep(viewModel: viewModel)
-                        .tag(2)
-
-                    ProjectPromptStep(viewModel: viewModel)
-                        .tag(3)
-
-                    ProjectDetailsStep(viewModel: viewModel)
-                        .tag(4)
-
-                    ProjectReviewStep(viewModel: viewModel)
-                        .tag(5)
+                // Hide the progress bar entirely on the loading step —
+                // it's not navigable and the loading screen already
+                // signals progress in a richer way.
+                if viewModel.currentStepEnum != .generating {
+                    progressBar
+                        .padding(.horizontal, SpacingTokens.md)
+                        .padding(.top, SpacingTokens.sm)
+                        .padding(.bottom, SpacingTokens.md)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.easeInOut(duration: 0.3), value: viewModel.currentStep)
 
-                // Navigation buttons
-                navigationButtons
-                    .padding(.horizontal, SpacingTokens.md)
-                    .padding(.vertical, SpacingTokens.md)
+                stepContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if viewModel.currentStepEnum != .generating {
+                    navigationButtons
+                        .padding(.horizontal, SpacingTokens.md)
+                        .padding(.vertical, SpacingTokens.md)
+                }
             }
             .navigationTitle(viewModel.currentStepEnum.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -55,13 +46,30 @@ struct ProjectCreationFlowView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .disabled(viewModel.isPipelineRunning)
                 }
             }
-            .onChange(of: viewModel.createdProject) { _, newValue in
-                if let project = newValue {
-                    onProjectCreated?(project.id, viewModel.autoGenerateEnabled)
-                    dismiss()
-                }
+            .interactiveDismissDisabled(viewModel.isPipelineRunning)
+        }
+    }
+
+    // MARK: - Step Content
+
+    @ViewBuilder
+    private var stepContent: some View {
+        switch viewModel.currentStepEnum {
+        case .type:
+            ProjectTypeSelectionStep(viewModel: viewModel)
+        case .photos:
+            PhotosAndPromptStep(viewModel: viewModel)
+        case .details:
+            ProjectDetailsStep(viewModel: viewModel)
+        case .generating:
+            ProjectGeneratingStep(viewModel: viewModel) { projectId in
+                // Pipeline complete (or "open anyway" tapped). Hand off
+                // to the caller and dismiss the wizard.
+                onProjectCreated?(projectId, false)
+                dismiss()
             }
         }
     }
@@ -70,7 +78,7 @@ struct ProjectCreationFlowView: View {
 
     private var progressBar: some View {
         HStack(spacing: SpacingTokens.xxs) {
-            ForEach(0..<viewModel.totalSteps, id: \.self) { step in
+            ForEach(0 ..< viewModel.navigableStepCount, id: \.self) { step in
                 Capsule()
                     .fill(step <= viewModel.currentStep ? ColorTokens.primaryOrange : ColorTokens.progressTrack)
                     .frame(height: 4)
@@ -89,22 +97,26 @@ struct ProjectCreationFlowView: View {
                 }
             }
 
-            if viewModel.currentStep < viewModel.totalSteps - 1 {
+            // Last input step is `.details`; tapping the primary button
+            // there should kick off the pipeline by transitioning to
+            // the generating step (which auto-runs the pipeline in its
+            // .task). All earlier steps just step forward.
+            if viewModel.currentStepEnum == .details {
+                PrimaryCTAButton(
+                    title: "Create Project",
+                    icon: "plus.circle.fill",
+                    isLoading: viewModel.isPipelineRunning,
+                    isDisabled: !viewModel.canProceed || viewModel.isPipelineRunning
+                ) {
+                    viewModel.enterGeneratingStep()
+                }
+            } else {
                 PrimaryCTAButton(
                     title: "Next",
                     icon: "chevron.right",
                     isDisabled: !viewModel.canProceed
                 ) {
                     viewModel.nextStep()
-                }
-            } else {
-                PrimaryCTAButton(
-                    title: "Create Project",
-                    icon: "plus.circle.fill",
-                    isLoading: viewModel.isSubmitting,
-                    isDisabled: !viewModel.canProceed
-                ) {
-                    Task { await viewModel.createProject() }
                 }
             }
         }
