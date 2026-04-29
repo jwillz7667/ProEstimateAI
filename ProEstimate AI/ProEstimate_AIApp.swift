@@ -32,9 +32,31 @@ struct ProEstimate_AIApp: App {
             fatalError("Failed to create ModelContainer: \(error)")
         }
 
-        // Global navigation bar appearance — orange large title text
-        let orange = UIColor(red: 255 / 255, green: 146 / 255, blue: 48 / 255, alpha: 1)
-        UINavigationBar.appearance().largeTitleTextAttributes = [.foregroundColor: orange]
+        // Global navigation bar appearance.
+        //
+        // Title text uses a dynamic UIColor: dark slate (#2A323A) in light
+        // mode for AAA contrast against the white page background, and the
+        // system label color in dark mode (white-ish) which already passes
+        // AAA on the dark page background. White-on-#2A323A and
+        // #2A323A-on-white both score ~12.7:1 — comfortably above the 7:1
+        // threshold for normal text.
+        //
+        // Tint color stays brand-orange so navigation chevrons, action
+        // items, and back buttons read as primary actions.
+        let slate = UIColor(red: 0x2A / 255, green: 0x32 / 255, blue: 0x3A / 255, alpha: 1)
+        let orange = UIColor(red: 0xFF / 255, green: 0x92 / 255, blue: 0x30 / 255, alpha: 1)
+        let titleColor = UIColor { traits in
+            traits.userInterfaceStyle == .dark ? .label : slate
+        }
+
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithDefaultBackground()
+        appearance.titleTextAttributes = [.foregroundColor: titleColor]
+        appearance.largeTitleTextAttributes = [.foregroundColor: titleColor]
+
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().compactAppearance = appearance
         UINavigationBar.appearance().tintColor = orange
     }
 

@@ -76,12 +76,6 @@ struct EstimateListView: View {
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.md) {
-                metricsRow
-                    .padding(.horizontal, SpacingTokens.md)
-
-                filterPicker
-                    .padding(.bottom, SpacingTokens.xxs)
-
                 estimateList
                     .padding(.horizontal, SpacingTokens.md)
 
@@ -89,25 +83,6 @@ struct EstimateListView: View {
             }
             .padding(.top, SpacingTokens.sm)
         }
-    }
-
-    // MARK: - Metrics row
-
-    private var metricsRow: some View {
-        HStack(spacing: SpacingTokens.sm) {
-            MetricCard(label: "Total", value: formattedTotalValue)
-            MetricCard(label: "Drafts", value: "\(viewModel.draftCount)")
-            MetricCard(label: "Approved", value: "\(viewModel.approvedCount)")
-        }
-    }
-
-    private var formattedTotalValue: String {
-        let total = viewModel.estimates.reduce(Decimal.zero) { $0 + $1.estimate.totalAmount }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: total as NSDecimalNumber) ?? "$0"
     }
 
     // MARK: - Estimate list
@@ -139,10 +114,10 @@ struct EstimateListView: View {
 
     private var filteredEmptyView: some View {
         VStack(spacing: SpacingTokens.sm) {
-            Image(systemName: "line.3.horizontal.decrease.circle")
+            Image(systemName: "magnifyingglass")
                 .font(.system(size: 36))
                 .foregroundStyle(ColorTokens.secondaryText)
-            Text(viewModel.searchText.isEmpty ? "No estimates in \(viewModel.selectedFilter.title.lowercased())" : "No matches")
+            Text("No matches")
                 .font(TypographyTokens.subheadline)
                 .foregroundStyle(ColorTokens.secondaryText)
         }
@@ -161,76 +136,6 @@ struct EstimateListView: View {
             ctaAction: { appState.selectedTab = .projects }
         )
         .padding(.horizontal, SpacingTokens.md)
-    }
-
-    // MARK: - Filter pills
-
-    private var filterPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: SpacingTokens.xs) {
-                ForEach(EstimateStatusFilter.allCases) { filter in
-                    FilterPill(
-                        title: filter.title,
-                        count: count(for: filter),
-                        isActive: viewModel.selectedFilter == filter
-                    ) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            viewModel.selectedFilter = filter
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, SpacingTokens.md)
-        }
-    }
-
-    private func count(for filter: EstimateStatusFilter) -> Int {
-        if filter == .all { return viewModel.estimates.count }
-        return viewModel.estimates.filter { filter.matchingStatuses.contains($0.estimate.status) }.count
-    }
-}
-
-// MARK: - Filter Pill
-
-private struct FilterPill: View {
-    let title: String
-    let count: Int
-    let isActive: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: SpacingTokens.xxs) {
-                Text(title)
-                    .font(TypographyTokens.subheadline)
-                    .fontWeight(isActive ? .semibold : .regular)
-
-                Text("\(count)")
-                    .font(TypographyTokens.caption2)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, SpacingTokens.xxs)
-                    .padding(.vertical, 2)
-                    .background(
-                        isActive ? Color.white.opacity(0.25) : ColorTokens.primaryOrange.opacity(0.12),
-                        in: Capsule()
-                    )
-            }
-            .padding(.horizontal, SpacingTokens.sm)
-            .padding(.vertical, SpacingTokens.xs)
-            .background(
-                Capsule()
-                    .fill(isActive ? ColorTokens.primaryOrange : ColorTokens.surface)
-            )
-            .overlay(
-                Capsule()
-                    .strokeBorder(
-                        isActive ? .clear : ColorTokens.primaryOrange.opacity(0.2),
-                        lineWidth: 1
-                    )
-            )
-            .foregroundStyle(isActive ? .white : ColorTokens.primaryText)
-        }
-        .buttonStyle(.plain)
     }
 }
 
