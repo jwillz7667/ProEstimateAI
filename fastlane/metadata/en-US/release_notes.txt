@@ -1,12 +1,10 @@
-Welcome to ProEstimate AI.
+Polish + new lawn-care workflow.
 
-Snap a photo of any room and see a photoreal remodel preview — plus a full materials and labor estimate — in under a minute.
+What's new
+• Lawn care projects now skip the photo upload and route you straight to a hybrid satellite map — pin each corner of the lawn to capture the area for per-sq-ft estimating.
+• Recent Projects carousel: every project's generated image now appears reliably, sized consistently with placeholder cards. Cards now show a one-line description and how long ago the project was created.
+• Sign-up screen logo gets a clean white badge so it pops against the dark background.
+• Paywall: tapping Premium now updates the price and details immediately instead of staying on Pro pricing.
+• AI Remodel Preview: room-type pill text is white in both selected and unselected states for better contrast on the dark surface.
 
-Launch features:
-• AI remodel previews for kitchen, bathroom, flooring, roofing, siding, painting, and custom projects
-• Auto-priced materials at Standard, Premium, and Luxury tiers
-• DIY mode to strip labor costs
-• Branded PDF estimates, proposals, and invoices
-• English and Mexican Spanish throughout
-
-Thanks for being here on day one. Tell us what you build: support@proestimateai.com
+Thanks for the feedback — keep it coming at support@proestimateai.com.

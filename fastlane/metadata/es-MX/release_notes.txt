@@ -1,12 +1,10 @@
-Bienvenido a ProEstimate AI.
+Mejoras + nuevo flujo de cuidado de césped.
 
-Toma una foto de cualquier espacio y mira una previsualización fotorrealista de tu remodelación — con materiales y mano de obra con precios — en menos de un minuto.
+Novedades
+• Los proyectos de cuidado de césped ahora omiten la subida de fotos y te llevan directo a un mapa satelital — toca cada esquina del césped para capturar el área y estimar por pie cuadrado.
+• Carrusel de Proyectos Recientes: la imagen generada de cada proyecto aparece de forma confiable, con el mismo tamaño que las tarjetas marcador. Las tarjetas ahora muestran una descripción de una línea y cuánto tiempo hace que se creó el proyecto.
+• Pantalla de registro: el logo ahora tiene una insignia blanca limpia para destacar sobre el fondo oscuro.
+• Paywall: al tocar Premium, el precio y los detalles se actualizan al instante en lugar de quedarse en el precio de Pro.
+• Vista previa de remodelación con IA: el texto de las pastillas de tipo de habitación es blanco en ambos estados (seleccionado y no seleccionado) para mejor contraste sobre la superficie oscura.
 
-Funciones de lanzamiento:
-• Previsualizaciones IA para cocina, baño, pisos, techos, siding, pintura y proyectos personalizados
-• Materiales con precios automáticos en niveles Estándar, Premium y Lujo
-• Modo DIY para eliminar mano de obra
-• PDFs con tu marca: cotizaciones, propuestas y facturas
-• Inglés y español mexicano en toda la app
-
-Gracias por estar aquí el día uno. Cuéntanos qué construyes: support@proestimateai.com
+Gracias por tus comentarios — síguenos contando en support@proestimateai.com.
