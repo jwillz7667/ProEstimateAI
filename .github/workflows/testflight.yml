@@ -5,7 +5,7 @@ on:
   # triggered manually from the Actions tab for one-off uploads.
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
   workflow_dispatch:
 
 concurrency:
@@ -40,18 +40,27 @@ jobs:
       - name: Select Xcode
         run: |
           ls /Applications | grep -i Xcode
-          if [ -d "/Applications/Xcode_26.4.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_26.4.app
-          elif [ -d "/Applications/Xcode_26.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_26.app
+          # Pick the highest available Xcode 26.x. The macos-15 image
+          # carries 26.0 → 26.3 today; pinning to a specific minor
+          # (26.4) caused us to silently fall through to Xcode 16.4 and
+          # archive against the iOS 18 SDK, which fails on iOS 26 APIs
+          # like MapContentBuilder. `sort -V` puts 26.3.0 above 26.3
+          # above 26.2.0… and `tail -1` picks the newest.
+          xc=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$xc" ]; then
+            echo "::error::No Xcode 26.x found on runner — only have:"
+            ls /Applications | grep -i Xcode
+            exit 1
           fi
+          echo "Selecting $xc"
+          sudo xcode-select -s "$xc"
           xcode-select -p
           xcodebuild -version
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.3'
+          ruby-version: "3.3"
           bundler-cache: true
 
       - name: Sanity-check required secrets
