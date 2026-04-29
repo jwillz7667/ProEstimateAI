@@ -30,3 +30,5 @@ fastlane/test_output/
 *.p8
 *.p12
 .secrets-staging/
+
+/app-store-listing/

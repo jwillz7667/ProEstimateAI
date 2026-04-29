@@ -32,7 +32,10 @@ struct PlanSelectorView: View {
             tierButton(.premium)
         }
         .padding(2)
-        .background(ColorTokens.onDarkFillSubtle, in: Capsule())
+        // System tertiary fill is automatically light-on-light vs
+        // dark-on-dark, so the pill stays visible against either
+        // paywall backdrop without us hardcoding a translucent white.
+        .background(Color(.tertiarySystemFill), in: Capsule())
     }
 
     private func tierButton(_ tier: PlanTier) -> some View {
@@ -55,7 +58,7 @@ struct PlanSelectorView: View {
                 Text(tier.displayName.uppercased())
                     .font(TypographyTokens.caption.weight(.bold))
                     .tracking(0.5)
-                    .foregroundStyle(isSelected ? .white : ColorTokens.onDarkSecondary)
+                    .foregroundStyle(isSelected ? .white : ColorTokens.secondaryText)
                 if tier == .premium && isSelected {
                     Text("MOST POPULAR")
                         .font(.system(size: 9, weight: .bold))
@@ -90,7 +93,7 @@ struct PlanSelectorView: View {
                 isAnnualSelected = true
             }
         }
-        .background(ColorTokens.onDarkFillSubtle, in: Capsule())
+        .background(Color(.tertiarySystemFill), in: Capsule())
     }
 
     /// Annual savings badge string, e.g. "Save 17%". Pulled from the
@@ -111,7 +114,7 @@ struct PlanSelectorView: View {
                 Text(title)
                     .font(TypographyTokens.subheadline)
                     .fontWeight(isSelected ? .semibold : .regular)
-                    .foregroundStyle(isSelected ? .white : ColorTokens.onDarkTertiary)
+                    .foregroundStyle(isSelected ? .white : ColorTokens.secondaryText)
                 if let badge {
                     Text(badge)
                         .font(.system(size: 9, weight: .bold))
@@ -172,9 +175,13 @@ struct PlanSelectorView: View {
             }
             .padding(SpacingTokens.md)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Surface stays dark slate in both modes (`Surface` =
+            // #2A323A in light, system dark in dark), so the white-tinted
+            // copy already defined inside reads correctly without per-
+            // mode overrides.
             .background(
                 RoundedRectangle(cornerRadius: RadiusTokens.card)
-                    .fill(ColorTokens.onDarkSeparator)
+                    .fill(ColorTokens.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: RadiusTokens.card)
@@ -183,7 +190,7 @@ struct PlanSelectorView: View {
         } else {
             // Empty placeholder while products load.
             RoundedRectangle(cornerRadius: RadiusTokens.card)
-                .fill(ColorTokens.onDarkFillSubtle)
+                .fill(ColorTokens.surface)
                 .frame(height: 130)
                 .overlay {
                     ProgressView().tint(.white)

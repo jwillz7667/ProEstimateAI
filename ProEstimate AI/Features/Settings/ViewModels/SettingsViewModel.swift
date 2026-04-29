@@ -378,6 +378,9 @@ final class SettingsViewModel {
         }
         if let lang = updated.defaultLanguage, let parsed = AppLanguage(rawValue: lang) {
             selectedLanguage = parsed
+            // Mirror to the AppearanceStore so the SwiftUI \.locale is in
+            // sync with the saved preference on returning sessions.
+            appearanceStore?.applyRemote(language: parsed)
         }
     }
 
@@ -419,6 +422,7 @@ final class SettingsViewModel {
 
         if let lang = company.defaultLanguage, let parsed = AppLanguage(rawValue: lang) {
             selectedLanguage = parsed
+            appearanceStore?.applyRemote(language: parsed)
         }
         if let mode = company.appearanceMode, let parsed = AppearanceMode(stringValue: mode) {
             appearanceStore?.applyRemote(mode: parsed)

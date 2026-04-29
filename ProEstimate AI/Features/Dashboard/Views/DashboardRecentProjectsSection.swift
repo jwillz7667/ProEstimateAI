@@ -9,9 +9,11 @@ struct DashboardRecentProjectsSection: View {
     var onSeeAll: (() -> Void)?
     var onCreateProject: (() -> Void)?
 
-    /// Width fraction of each card relative to the container. Leaves a small
-    /// peek of the next card so users discover the horizontal scroll.
-    private let cardWidthFraction: Double = 0.82
+    /// Width fraction of each card relative to the scroll container.
+    /// Tuned so that after the leading content margin (16pt) and the
+    /// trailing inter-card gutter, ~20pt of the next card peeks into
+    /// the viewport on standard iPhone widths.
+    private let cardWidthFraction: CGFloat = 0.78
     private let cardHeight: CGFloat = 220
     /// Wider than 2 × (shadow blur + |y offset|) so adjacent cards'
     /// shadows fully clear each other in the gutter. Current card
@@ -19,6 +21,7 @@ struct DashboardRecentProjectsSection: View {
     /// 28pt is the floor; 34pt buys a small safety margin and matches
     /// what reads as "clearly separate" on-device.
     private let cardSpacing: CGFloat = 34
+    private let edgeMargin: CGFloat = 16
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.sm) {
@@ -41,6 +44,14 @@ struct DashboardRecentProjectsSection: View {
     // MARK: - Carousel
 
     private var carousel: some View {
+        // `.contentMargins(.horizontal, _, for: .scrollContent)` is the
+        // canonical iOS 17+ pattern for snap-paged carousels: the
+        // leading/trailing inset is honored by `.viewAligned`, so the
+        // first card snaps with a clear left margin and the last card
+        // settles flush to the right margin. An equivalent
+        // `.padding(.horizontal, …)` on the inner LazyHStack does NOT
+        // get respected by the snap behavior — items snap to the scroll
+        // container's edge, leaving the first card flush to x=0.
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: cardSpacing) {
                 ForEach(projects.prefix(10)) { project in
@@ -58,9 +69,9 @@ struct DashboardRecentProjectsSection: View {
                 }
             }
             .scrollTargetLayout()
-            .padding(.horizontal, SpacingTokens.md)
         }
         .scrollTargetBehavior(.viewAligned)
+        .contentMargins(.horizontal, edgeMargin, for: .scrollContent)
         .scrollClipDisabled()
     }
 

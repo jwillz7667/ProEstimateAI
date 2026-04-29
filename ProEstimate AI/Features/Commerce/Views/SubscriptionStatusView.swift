@@ -54,12 +54,12 @@ struct SubscriptionStatusView: View {
             VStack(spacing: SpacingTokens.xxs) {
                 Text(tierTitle(for: tier))
                     .font(TypographyTokens.title2)
-                    .foregroundStyle(ColorTokens.onDarkPrimary)
+                    .foregroundStyle(ColorTokens.primaryText)
                     .multilineTextAlignment(.center)
 
                 Text(tierSubtitle(for: tier))
                     .font(TypographyTokens.subheadline)
-                    .foregroundStyle(ColorTokens.onDarkSecondary)
+                    .foregroundStyle(ColorTokens.secondaryText)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -133,7 +133,7 @@ struct SubscriptionStatusView: View {
         } label: {
             Text("Stick with Pro · Back to Dashboard")
                 .font(TypographyTokens.callout)
-                .foregroundStyle(ColorTokens.onDarkSecondary)
+                .foregroundStyle(ColorTokens.secondaryText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SpacingTokens.sm)
                 .contentShape(Rectangle())
@@ -148,13 +148,13 @@ struct SubscriptionStatusView: View {
         } label: {
             Text("Done")
                 .font(TypographyTokens.headline)
-                .foregroundStyle(ColorTokens.onDarkPrimary)
+                .foregroundStyle(ColorTokens.primaryText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SpacingTokens.md)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
                 .overlay(
                     RoundedRectangle(cornerRadius: RadiusTokens.button)
-                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
+                        .strokeBorder(ColorTokens.subtleBorder, lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
@@ -234,17 +234,23 @@ struct SubscriptionStatusView: View {
 
     // MARK: - Background
 
+    /// Adaptive backdrop matching the rest of the paywall surface — white
+    /// in light mode, system-dark in dark mode — so the status sheet
+    /// reads as part of the host theme rather than an always-dark hero.
     private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [
-                ColorTokens.overlayBackground,
-                ColorTokens.overlayAccent,
-                ColorTokens.overlayBackground,
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        ZStack {
+            ColorTokens.background
+                .ignoresSafeArea()
+            LinearGradient(
+                colors: [
+                    ColorTokens.primaryOrange.opacity(0.06),
+                    Color.clear,
+                ],
+                startPoint: .top,
+                endPoint: .center
+            )
+            .ignoresSafeArea()
+        }
     }
 
     // MARK: - Dismiss Button
@@ -258,7 +264,7 @@ struct SubscriptionStatusView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(ColorTokens.onDarkSecondary)
+                        .foregroundStyle(ColorTokens.secondaryText)
                         .frame(width: 30, height: 30)
                         .background(.ultraThinMaterial, in: Circle())
                 }

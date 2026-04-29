@@ -16,17 +16,19 @@ struct PaywallHeroSection: View {
             // App icon / illustration area.
             iconArea
 
-            // Headline.
+            // Headline — adaptive so it reads as the system label color
+            // (near-black in light mode, white in dark) on the paywall's
+            // adaptive backdrop.
             Text(decision.headline)
                 .font(TypographyTokens.title)
-                .foregroundStyle(.white)
+                .foregroundStyle(ColorTokens.primaryText)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             // Subheadline.
             Text(decision.subheadline)
                 .font(TypographyTokens.body)
-                .foregroundStyle(ColorTokens.onDarkSecondary)
+                .foregroundStyle(ColorTokens.secondaryText)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -52,7 +54,7 @@ struct PaywallHeroSection: View {
                     RadialGradient(
                         colors: [
                             ColorTokens.primaryOrange.opacity(0.3),
-                            ColorTokens.primaryOrange.opacity(0.0)
+                            ColorTokens.primaryOrange.opacity(0.0),
                         ],
                         center: .center,
                         startRadius: 20,
@@ -78,11 +80,13 @@ struct PaywallHeroSection: View {
     // MARK: - Gradient Background
 
     private var heroGradient: some View {
+        // Subtle warm wash that reads over both the white (light) and
+        // dark (dark) paywall backdrops without competing with the
+        // headline copy.
         LinearGradient(
             colors: [
-                ColorTokens.overlayAccent,
-                ColorTokens.primaryOrange.opacity(0.15),
-                Color.clear
+                ColorTokens.primaryOrange.opacity(0.10),
+                Color.clear,
             ],
             startPoint: .top,
             endPoint: .bottom

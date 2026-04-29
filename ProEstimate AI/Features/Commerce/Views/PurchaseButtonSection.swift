@@ -72,7 +72,7 @@ struct PurchaseButtonSection: View {
             Text(secondaryCtaTitle ?? "Continue with Free Plan")
                 .font(TypographyTokens.subheadline)
                 .fontWeight(.medium)
-                .foregroundStyle(ColorTokens.onDarkSecondary)
+                .foregroundStyle(ColorTokens.secondaryText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SpacingTokens.sm)
         }
@@ -85,12 +85,12 @@ struct PurchaseButtonSection: View {
             HStack(spacing: SpacingTokens.xxs) {
                 if isRestoring {
                     ProgressView()
-                        .tint(ColorTokens.onDarkQuaternary)
+                        .tint(ColorTokens.tertiaryText)
                         .scaleEffect(0.8)
                 }
                 Text("Restore Purchases")
                     .font(TypographyTokens.footnote)
-                    .foregroundStyle(ColorTokens.onDarkQuaternary)
+                    .foregroundStyle(ColorTokens.tertiaryText)
                     .underline()
             }
         }

@@ -73,6 +73,11 @@ struct ProEstimate_AIApp: App {
                 .environment(onboardingStore)
                 .environment(networkMonitor)
                 .preferredColorScheme(appearanceStore.colorScheme)
+                // Push the user's chosen interface language into the
+                // environment so all `String(localized:)`-resolved copy
+                // (English / Espa\u{00F1}ol / future) updates live without
+                // a relaunch or a trip to iOS Settings.
+                .environment(\.locale, appearanceStore.locale)
                 .tint(ColorTokens.primaryOrange)
                 .task {
                     await bootstrap()

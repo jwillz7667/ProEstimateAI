@@ -106,17 +106,25 @@ struct PaywallHostView: View {
 
     // MARK: - Background
 
+    /// Adaptive paywall backdrop. Uses the same page background token as
+    /// the rest of the app — white in light mode, system-dark in dark
+    /// mode — so the paywall reads as part of the host theme rather than
+    /// a permanently-dark "premium hero". A subtle warm orange wash at
+    /// the top keeps the paywall feeling distinct from a regular screen.
     private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [
-                ColorTokens.overlayBackground,
-                ColorTokens.overlayAccent,
-                ColorTokens.overlayBackground,
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        ZStack {
+            ColorTokens.background
+                .ignoresSafeArea()
+            LinearGradient(
+                colors: [
+                    ColorTokens.primaryOrange.opacity(0.06),
+                    Color.clear,
+                ],
+                startPoint: .top,
+                endPoint: .center
+            )
+            .ignoresSafeArea()
+        }
     }
 
     // MARK: - Dismiss Button
@@ -130,7 +138,7 @@ struct PaywallHostView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(ColorTokens.onDarkSecondary)
+                        .foregroundStyle(ColorTokens.secondaryText)
                         .frame(width: 30, height: 30)
                         .background(.ultraThinMaterial, in: Circle())
                 }
@@ -152,7 +160,7 @@ struct PaywallHostView: View {
 
             Text(message)
                 .font(TypographyTokens.footnote)
-                .foregroundStyle(ColorTokens.onDarkPrimary)
+                .foregroundStyle(ColorTokens.primaryText)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button("Try Again", action: onRetry)

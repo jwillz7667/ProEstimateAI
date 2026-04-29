@@ -108,7 +108,7 @@ final class ProjectCreationViewModel {
     /// navigation and the dismiss gesture during in-flight work.
     var isPipelineRunning: Bool {
         switch pipelineStage {
-        case .creating, .uploadingPhotos, .startingGeneration, .generating:
+        case .creating, .uploadingPhotos, .startingGeneration, .generating, .generatingMaterials:
             return true
         case .idle, .completed, .failed:
             return false
@@ -422,7 +422,12 @@ final class ProjectCreationViewModel {
             switch generation.status {
             case .completed:
                 pendingGeneration = generation
-                pipelineStage = .completed
+                // Image is ready, but the backend then kicks off the
+                // material/labor estimate generation as a non-critical
+                // follow-up. Wait for that too so the user lands on a
+                // project detail screen with both the preview AND the
+                // materials list populated.
+                await pollMaterials(generationId: generation.id)
                 return
             case .failed:
                 let message = generation.errorMessage ?? "Generation failed. You can retry from your project."
@@ -455,6 +460,49 @@ final class ProjectCreationViewModel {
         // complete in the background.
         pipelineError = "This is taking longer than expected. You can open your project and we'll keep working in the background."
         pipelineStage = .failed(pipelineError ?? "Generation timeout")
+    }
+
+    /// Wait for the AI material/labor suggestions to appear after image
+    /// generation completes. The backend creates the image first and
+    /// then fires the materials pass as a non-critical background task,
+    /// so this poll typically resolves within 10–30s after the image is
+    /// done. We cap the wait so a stalled materials pass can't trap the
+    /// user — when the cap is hit we still call the pipeline complete
+    /// and let the user open the project; materials will continue to
+    /// land in the background and appear when they arrive.
+    private func pollMaterials(generationId: String) async {
+        pipelineStage = .generatingMaterials
+
+        // 60s ceiling — enough time for the typical materials pass to
+        // resolve, while bounded so a timeout still gives the user
+        // their project promptly. Materials are non-critical to the
+        // project being usable.
+        let maxAttempts = 20
+        var attempts = 0
+
+        while attempts < maxAttempts {
+            if Task.isCancelled { return }
+
+            do {
+                let materials: [MaterialSuggestion] = try await apiClient.request(
+                    .listMaterialSuggestions(generationId: generationId)
+                )
+                if !materials.isEmpty {
+                    pipelineStage = .completed
+                    return
+                }
+            } catch {
+                // Transient error — hold and retry next tick.
+            }
+
+            try? await Task.sleep(nanoseconds: pollInterval)
+            attempts += 1
+        }
+
+        // Timeout: don't penalize the user. The image is done and the
+        // project is created — open it. Materials will populate in the
+        // background and the project detail view re-fetches on appear.
+        pipelineStage = .completed
     }
 
     /// Retry just the generation portion of the pipeline. Used by the
@@ -511,6 +559,7 @@ enum CreationPipelineStage: Sendable, Equatable {
     case uploadingPhotos
     case startingGeneration
     case generating
+    case generatingMaterials
     case completed
     case failed(String)
 
@@ -521,7 +570,8 @@ enum CreationPipelineStage: Sendable, Equatable {
         case .uploadingPhotos: return 2
         case .startingGeneration: return 3
         case .generating: return 4
-        case .completed: return 5
+        case .generatingMaterials: return 5
+        case .completed: return 6
         case .failed: return -1
         }
     }
