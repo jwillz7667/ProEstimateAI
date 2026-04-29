@@ -132,9 +132,13 @@ struct DashboardView: View {
                         .padding(.horizontal, SpacingTokens.md)
                 }
 
-                // Primary CTA — the dashboard's load-bearing action.
-                newProjectBanner
-                    .padding(.horizontal, SpacingTokens.md)
+                // Subscription / upgrade banner sits at the very top so
+                // tier status is the first thing the user sees on every
+                // dashboard load.
+                DashboardSubscriptionCard(onUpgrade: {
+                    paywallPresenter.present(.settingsUpgrade)
+                })
+                .padding(.horizontal, SpacingTokens.md)
 
                 greetingSection
                     .padding(.horizontal, SpacingTokens.md)
@@ -154,11 +158,12 @@ struct DashboardView: View {
                     }
                 )
 
-                DashboardSubscriptionCard(onUpgrade: {
-                    paywallPresenter.present(.settingsUpgrade)
-                })
-                .padding(.horizontal, SpacingTokens.md)
-                .padding(.bottom, SpacingTokens.xxl)
+                // Primary CTA — sits below the carousel so the user
+                // first scans recent work, then has an obvious path
+                // to start something new.
+                newProjectBanner
+                    .padding(.horizontal, SpacingTokens.md)
+                    .padding(.bottom, SpacingTokens.xxl)
             }
             .padding(.top, SpacingTokens.sm)
         }

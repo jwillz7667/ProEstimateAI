@@ -13,9 +13,12 @@ struct DashboardRecentProjectsSection: View {
     /// peek of the next card so users discover the horizontal scroll.
     private let cardWidthFraction: Double = 0.82
     private let cardHeight: CGFloat = 220
-    /// Larger than the card shadow's blur radius so adjacent cards' shadows
-    /// don't bleed into each other and read as visual overlap.
-    private let cardSpacing: CGFloat = 24
+    /// Wider than 2 × (shadow blur + |y offset|) so adjacent cards'
+    /// shadows fully clear each other in the gutter. Current card
+    /// shadow is radius 10 / y 4 → ~14pt visible spread per side, so
+    /// 28pt is the floor; 34pt buys a small safety margin and matches
+    /// what reads as "clearly separate" on-device.
+    private let cardSpacing: CGFloat = 34
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.sm) {
