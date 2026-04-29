@@ -1,6 +1,6 @@
 import Foundation
-import StoreKit
 import os.log
+import StoreKit
 
 /// Production implementation of `PurchaseCoordinating`.
 /// Orchestrates the full purchase lifecycle:
@@ -34,7 +34,7 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
         let result: Product.PurchaseResult
         do {
             var options: Set<Product.PurchaseOption> = [
-                .appAccountToken(appAccountToken)
+                .appAccountToken(appAccountToken),
             ]
 
             // Ensure the purchase is associated with the correct subscription group window.
@@ -48,13 +48,16 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
 
         // Handle the purchase result.
         switch result {
-        case .success(let verification):
+        case let .success(verification):
             let transaction = try verifyTransaction(verification)
             logger.info("Purchase verified. Transaction ID: \(transaction.id)")
 
             // Sync the transaction to the backend for server-side validation.
+            // The Apple-signed JWS rides along so the backend can re-verify
+            // the chain against Apple Root CA G3 before flipping entitlement.
             await syncTransactionToBackend(
                 transaction: transaction,
+                signedJWS: verification.jwsRepresentation,
                 appAccountToken: appAccountToken
             )
 
@@ -95,7 +98,12 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
         for await result in Transaction.currentEntitlements {
             do {
                 let transaction = try verifyTransaction(result)
-                items.append(makeRestoreItem(from: transaction))
+                items.append(
+                    makeRestoreItem(
+                        from: transaction,
+                        signedJWS: result.jwsRepresentation
+                    )
+                )
                 await transaction.finish()
             } catch {
                 logger.warning("Skipping unverified transaction in restore: \(error.localizedDescription)")
@@ -121,8 +129,15 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
         }
     }
 
-    /// Build a `RestoreTransactionItem` from a verified StoreKit `Transaction`.
-    private func makeRestoreItem(from transaction: Transaction) -> RestoreTransactionItem {
+    /// Build a `RestoreTransactionItem` from a verified StoreKit
+    /// `Transaction` and the JWS string produced by Apple's verification
+    /// pipeline. The backend re-verifies that JWS against Apple Root CA
+    /// G3 before granting access — the bare scalars here are convenience
+    /// for bookkeeping, not the trust anchor.
+    private func makeRestoreItem(
+        from transaction: Transaction,
+        signedJWS: String
+    ) -> RestoreTransactionItem {
         let environment: String = {
             switch transaction.environment {
             case .sandbox: return "sandbox"
@@ -137,7 +152,8 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
             transactionId: String(transaction.id),
             originalTransactionId: String(transaction.originalID),
             appAccountToken: transaction.appAccountToken?.uuidString,
-            environment: environment
+            environment: environment,
+            signedTransaction: signedJWS
         )
     }
 
@@ -149,19 +165,30 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
                 let transaction = try verifyTransaction(result)
                 logger.info("Transaction update received: \(transaction.id), product: \(transaction.productID)")
 
-                // Sync the updated transaction to the backend.
-                await syncTransactionToBackend(
-                    transaction: transaction,
-                    appAccountToken: transaction.appAccountToken ?? UUID()
-                )
+                // Only sync to backend when the transaction carries the
+                // appAccountToken that was minted by our PurchaseAttempt
+                // flow. Renewals and out-of-band transactions (Family
+                // Sharing, restored on a different device) often arrive
+                // with a nil token; sending a random UUID would just make
+                // the backend's `PurchaseAttempt` lookup miss and the
+                // sync silently fail. App Store Server Notifications
+                // remain the authoritative reconciliation path for those
+                // — we just refresh locally so the UI catches up.
+                if let appAccountToken = transaction.appAccountToken {
+                    await syncTransactionToBackend(
+                        transaction: transaction,
+                        signedJWS: result.jwsRepresentation,
+                        appAccountToken: appAccountToken
+                    )
+                }
 
-                // Finish the transaction.
                 await transaction.finish()
-
-                // Refresh local entitlement state.
                 await entitlementStore.refresh()
             } catch {
                 logger.error("Transaction update verification failed: \(error.localizedDescription)")
+                // Even on verification failure, pull a fresh entitlement
+                // so the UI reflects whatever the backend now believes.
+                await entitlementStore.refresh()
             }
         }
     }
@@ -172,9 +199,9 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
     /// Throws `PurchaseError.unverified` if the transaction fails verification.
     private func verifyTransaction(_ result: VerificationResult<Transaction>) throws -> Transaction {
         switch result {
-        case .verified(let transaction):
+        case let .verified(transaction):
             return transaction
-        case .unverified(_, let error):
+        case let .unverified(_, error):
             logger.error("Transaction verification failed: \(error.localizedDescription)")
             throw PurchaseError.unverified
         }
@@ -182,11 +209,15 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
 
     // MARK: - Backend Sync
 
-    /// Sync a verified transaction to the backend for server-side reconciliation.
-    /// Non-throwing — failures are logged but do not block the purchase flow.
-    /// The backend will eventually reconcile via App Store Server Notifications.
+    /// Sync a verified transaction to the backend for server-side
+    /// reconciliation. Never throws — but on failure we still pull a
+    /// fresh entitlement snapshot directly so the local store is at
+    /// least as fresh as the backend's view of the world. Without this
+    /// fallback a transient sync failure would leave the user staring
+    /// at the FREE tier despite a verified Apple transaction.
     private func syncTransactionToBackend(
         transaction: Transaction,
+        signedJWS: String,
         appAccountToken: UUID
     ) async {
         let environment: String = {
@@ -204,7 +235,8 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
             transactionId: String(transaction.id),
             originalTransactionId: String(transaction.originalID),
             appAccountToken: appAccountToken.uuidString,
-            environment: environment
+            environment: environment,
+            signedTransaction: signedJWS
         )
 
         do {
@@ -212,8 +244,14 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
             await entitlementStore.updateFromSnapshot(updatedSnapshot)
             logger.info("Transaction synced to backend. New state: \(updatedSnapshot.subscriptionState.rawValue)")
         } catch {
-            // Non-fatal: the backend will reconcile via App Store Server Notifications.
-            logger.warning("Failed to sync transaction to backend: \(error.localizedDescription). Will reconcile via ASSN.")
+            logger.warning("Failed to sync transaction to backend: \(error.localizedDescription). Falling back to direct entitlement refresh.")
+            // Fallback: regardless of why the sync round-trip failed
+            // (network blip, idempotency mismatch, server hiccup), the
+            // canonical entitlement endpoint is the safety net. App
+            // Store Server Notifications will eventually reconcile any
+            // remaining drift, but the user shouldn't have to wait for
+            // ASSN before features unlock.
+            await entitlementStore.refresh()
         }
     }
 }

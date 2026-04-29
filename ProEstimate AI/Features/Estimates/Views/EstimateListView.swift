@@ -20,12 +20,17 @@ struct EstimateListView: View {
                 }
             }
             .navigationTitle("Estimates")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    SubscriptionBadge()
+                }
+            }
             .searchable(text: $viewModel.searchText, prompt: "Search estimates...")
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {
-                case .estimateEditor(let id):
+                case let .estimateEditor(id):
                     EstimateEditorView(estimateId: id)
-                case .proposalPreview(let id):
+                case let .proposalPreview(id):
                     ProposalPreviewView(proposalId: id)
                 default:
                     EmptyView()

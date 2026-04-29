@@ -73,6 +73,9 @@ struct ProjectListView: View {
         .navigationTitle("Projects")
         .searchable(text: $viewModel.searchText, prompt: "Search projects")
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                SubscriptionBadge()
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     handleCreateProject()

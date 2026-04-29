@@ -48,6 +48,11 @@ struct PurchaseAttemptResponse: Codable, Sendable {
 
 /// Request body for `POST /v1/commerce/transactions/sync`.
 /// Sent after a successful StoreKit purchase to reconcile the transaction on the backend.
+///
+/// `signedTransaction` is the `jwsRepresentation` from `VerificationResult<Transaction>` —
+/// a JWS chained to Apple Root CA G3 that the backend re-verifies before
+/// flipping the entitlement. The other fields are convenience scalars
+/// for the backend's own bookkeeping; the JWS is the trust anchor.
 struct SyncTransactionRequest: Codable, Sendable {
     let purchaseAttemptId: String
     let storeProductId: String
@@ -55,6 +60,7 @@ struct SyncTransactionRequest: Codable, Sendable {
     let originalTransactionId: String
     let appAccountToken: String
     let environment: String
+    let signedTransaction: String
 
     enum CodingKeys: String, CodingKey {
         case purchaseAttemptId = "purchase_attempt_id"
@@ -63,6 +69,7 @@ struct SyncTransactionRequest: Codable, Sendable {
         case originalTransactionId = "original_transaction_id"
         case appAccountToken = "app_account_token"
         case environment
+        case signedTransaction = "signed_transaction"
     }
 }
 
@@ -92,13 +99,17 @@ struct RestoreTransactionsRequest: Encodable, Sendable {
     let transactions: [RestoreTransactionItem]
 }
 
-/// One transaction item inside a restore request.
+/// One transaction item inside a restore request. `signedTransaction`
+/// carries the Apple-signed JWS payload (from `VerificationResult.jwsRepresentation`)
+/// so the backend can authenticate every restored entitlement against
+/// Apple Root CA G3 before granting Pro access.
 struct RestoreTransactionItem: Codable, Sendable {
     let storeProductId: String
     let transactionId: String
     let originalTransactionId: String
     let appAccountToken: String?
     let environment: String
+    let signedTransaction: String
 
     enum CodingKeys: String, CodingKey {
         case storeProductId = "store_product_id"
@@ -106,5 +117,6 @@ struct RestoreTransactionItem: Codable, Sendable {
         case originalTransactionId = "original_transaction_id"
         case appAccountToken = "app_account_token"
         case environment
+        case signedTransaction = "signed_transaction"
     }
 }

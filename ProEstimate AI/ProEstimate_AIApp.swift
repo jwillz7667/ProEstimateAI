@@ -1,13 +1,19 @@
- import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct ProEstimate_AIApp: App {
     @State private var appState = AppState()
     @State private var appRouter = AppRouter()
-    @State private var entitlementStore = EntitlementStore()
-    @State private var usageMeterStore = UsageMeterStore()
-    @State private var featureGateCoordinator = FeatureGateCoordinator()
+    // Anchor the App's @State to the canonical singletons so that any
+    // collaborator that defaults to `.shared` (e.g. PaywallHostViewModel,
+    // StoreKitPurchaseCoordinator, DashboardSubscriptionCardViewModel) ends
+    // up mutating the very same instance that the SwiftUI environment
+    // observes. Allocating fresh instances here would create a split-brain
+    // where purchases update one store and the UI reads from another.
+    @State private var entitlementStore = EntitlementStore.shared
+    @State private var usageMeterStore = UsageMeterStore.shared
+    @State private var featureGateCoordinator = FeatureGateCoordinator.shared
     @State private var paywallPresenter = PaywallPresenter()
     @State private var appearanceStore = AppearanceStore()
     @State private var onboardingStore = OnboardingStore.shared
@@ -27,7 +33,7 @@ struct ProEstimate_AIApp: App {
         }
 
         // Global navigation bar appearance — orange large title text
-        let orange = UIColor(red: 255/255, green: 146/255, blue: 48/255, alpha: 1)
+        let orange = UIColor(red: 255 / 255, green: 146 / 255, blue: 48 / 255, alpha: 1)
         UINavigationBar.appearance().largeTitleTextAttributes = [.foregroundColor: orange]
         UINavigationBar.appearance().tintColor = orange
     }
@@ -57,6 +63,28 @@ struct ProEstimate_AIApp: App {
                         }
                     }
                 }
+                // Refresh commerce state immediately on auth transitions.
+                // `bootstrap()` only runs once when the WindowGroup's task
+                // first fires, which happens before sign-in for cold-start
+                // unauthenticated users. Without this hook, a fresh signup
+                // or login would leave the entitlement snapshot stuck on
+                // whatever (or nothing) the pre-auth refresh produced —
+                // until the next foreground transition. We mirror the same
+                // refreshes here so subscription state, usage credits, and
+                // the store catalog are all up-to-date the moment the
+                // user lands on the dashboard.
+                //
+                // Sign-out is already handled inside `AppState.signOut`,
+                // which calls `reset()` on both stores, so we only act on
+                // the false → true transition.
+                .onChange(of: appState.isAuthenticated) { wasAuthed, isAuthed in
+                    guard !wasAuthed, isAuthed else { return }
+                    Task {
+                        await entitlementStore.refresh()
+                        await usageMeterStore.refresh()
+                        await featureGateCoordinator.loadProducts()
+                    }
+                }
                 .sheet(item: $paywallPresenter.activeDecision) { decision in
                     PaywallHostView(decision: decision) {
                         paywallPresenter.dismiss()
@@ -75,6 +103,10 @@ struct ProEstimate_AIApp: App {
         entitlementStore.configure(commerceAPI: commerceAPI)
         usageMeterStore.configure(commerceAPI: commerceAPI, entitlementStore: entitlementStore)
         featureGateCoordinator.configure(entitlementStore: entitlementStore, usageMeterStore: usageMeterStore)
+        // Defensive net: PaywallPresenter silently drops `present(_:)` calls
+        // for users who already have Pro access, so legacy / future call
+        // sites cannot surface a paywall to a paying subscriber.
+        paywallPresenter.configure(entitlementStore: entitlementStore)
 
         // Wire the unauthorized callback so a failed token refresh signs the user out
         // instead of leaving them stuck in a half-authenticated state.

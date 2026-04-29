@@ -4,7 +4,6 @@ struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     @Environment(EntitlementStore.self) private var entitlementStore
-    @Environment(UsageMeterStore.self) private var usageMeterStore
     @Environment(PaywallPresenter.self) private var paywallPresenter
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @State private var eventBus = AppEventBus.shared
@@ -32,6 +31,9 @@ struct DashboardView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    SubscriptionBadge()
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showSettings = true
@@ -147,18 +149,9 @@ struct DashboardView: View {
 
                 // MARK: - Subscription Card
 
-                DashboardSubscriptionCard(
-                    generationsRemaining: entitlementStore.hasProAccess
-                        ? Int.max
-                        : usageMeterStore.generationsRemaining,
-                    quotesRemaining: entitlementStore.hasProAccess
-                        ? Int.max
-                        : usageMeterStore.quotesRemaining,
-                    isPro: entitlementStore.hasProAccess,
-                    onUpgrade: {
-                        paywallPresenter.present(.settingsUpgrade)
-                    }
-                )
+                DashboardSubscriptionCard(onUpgrade: {
+                    paywallPresenter.present(.settingsUpgrade)
+                })
                 .padding(.horizontal, SpacingTokens.md)
                 .padding(.bottom, SpacingTokens.xxl)
             }

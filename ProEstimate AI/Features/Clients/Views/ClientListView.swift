@@ -52,6 +52,9 @@ struct ClientListView: View {
         }
         .navigationTitle("Clients")
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                SubscriptionBadge()
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showingNewClient = true
@@ -172,5 +175,4 @@ struct ClientListView: View {
         }
         .padding(.vertical, SpacingTokens.xxs)
     }
-
 }
