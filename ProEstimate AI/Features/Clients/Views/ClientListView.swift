@@ -20,6 +20,9 @@ struct ClientListView: View {
                             clientId: clientId,
                             onClientUpdated: { updatedClient in
                                 viewModel.addOrUpdateClient(updatedClient)
+                            },
+                            onClientDeleted: { deletedId in
+                                viewModel.removeClient(id: deletedId)
                             }
                         )
                     }

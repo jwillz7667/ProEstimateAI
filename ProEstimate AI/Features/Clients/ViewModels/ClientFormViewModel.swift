@@ -20,6 +20,17 @@ final class ClientFormViewModel {
     var isSaving: Bool = false
     var errorMessage: String?
 
+    /// Whether the user has visited (and left) the name field at least once.
+    /// Drives the inline "name required" error so it doesn't flash on first
+    /// presentation before the user has typed anything.
+    var nameWasVisited: Bool = false
+
+    /// Whether the user has visited (and left) the email field at least once.
+    var emailWasVisited: Bool = false
+
+    /// Bumps every successful save so views can drive sensoryFeedback/haptics.
+    var saveSuccessCount: Int = 0
+
     // MARK: - Mode
 
     let isEditMode: Bool
@@ -37,8 +48,8 @@ final class ClientFormViewModel {
     ///   - clientService: The service used to persist changes.
     init(client: Client? = nil, clientService: ClientServiceProtocol = LiveClientService()) {
         self.clientService = clientService
-        self.isEditMode = client != nil
-        self.existingClientId = client?.id
+        isEditMode = client != nil
+        existingClientId = client?.id
 
         if let client {
             name = client.name
@@ -78,17 +89,16 @@ final class ClientFormViewModel {
         return trimmed.range(of: pattern, options: .regularExpression) == nil
     }
 
-    /// Show the name error only after the user has interacted with the field
-    /// in a way that could leave it empty — i.e. never on initial presentation.
+    /// Show the name error only after the user has interacted with the name
+    /// field — never on initial presentation.
     var showsNameError: Bool {
-        // Show whenever the user has tapped into the field and the name is empty.
-        // Using non-empty on the *other* fields as a pragmatic "has interacted" signal.
-        isNameInvalid && (!email.isEmpty || !phone.isEmpty)
+        nameWasVisited && isNameInvalid
     }
 
-    /// Show the email error only when the user has typed something invalid.
+    /// Show the email error only when the user has typed something invalid
+    /// and has left the field.
     var showsEmailError: Bool {
-        !email.isEmpty && isEmailInvalid
+        emailWasVisited && !email.isEmpty && isEmailInvalid
     }
 
     /// Whether the whole form is valid enough to submit.
@@ -98,10 +108,13 @@ final class ClientFormViewModel {
 
     func validate() -> Bool {
         if isNameInvalid {
+            // Surface the inline marker as well so the field is highlighted.
+            nameWasVisited = true
             errorMessage = "Client name is required."
             return false
         }
         if isEmailInvalid {
+            emailWasVisited = true
             errorMessage = "Please enter a valid email address."
             return false
         }
@@ -157,6 +170,7 @@ final class ClientFormViewModel {
             }
 
             isSaving = false
+            saveSuccessCount &+= 1
             return client
         } catch {
             errorMessage = error.localizedDescription

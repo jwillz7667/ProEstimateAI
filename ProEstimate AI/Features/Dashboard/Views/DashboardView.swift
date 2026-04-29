@@ -35,14 +35,7 @@ struct DashboardView: View {
                     SubscriptionBadge()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .foregroundStyle(ColorTokens.primaryOrange)
-                    }
-                    .accessibilityLabel("Settings")
-                    .accessibilityHint("Opens app settings")
+                    profileToolbarButton
                 }
             }
             .sheet(isPresented: $showSettings) {
@@ -63,8 +56,6 @@ struct DashboardView: View {
                     await viewModel.loadDashboard()
                 }
             }
-            // Reload revenue metrics when an invoice payment event fires
-            // from another screen.
             .onChange(of: eventBus.paymentEventToken) { _, _ in
                 Task { await viewModel.loadDashboard() }
             }
@@ -108,46 +99,60 @@ struct DashboardView: View {
         }
     }
 
+    // MARK: - Profile / Settings Trigger
+
+    private var profileToolbarButton: some View {
+        Button {
+            showSettings = true
+        } label: {
+            AvatarView(
+                name: appState.currentUser?.fullName ?? "",
+                imageURL: appState.currentUser?.avatarURL,
+                size: 32
+            )
+            .overlay(
+                Circle().strokeBorder(ColorTokens.primaryOrange.opacity(0.35), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open settings")
+        .accessibilityHint("Includes profile, branding, billing and app preferences")
+        .accessibilityAddTraits(.isButton)
+    }
+
     // MARK: - Dashboard Content
 
     private var dashboardContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
-                // MARK: - Billing issue banner (grace period / retry)
-
+                // Billing-issue banner takes precedence — it's a blocking
+                // signal the user needs to act on before anything else.
                 if entitlementStore.hasBillingIssue {
                     BillingIssueBanner()
                         .padding(.horizontal, SpacingTokens.md)
                 }
 
-                // MARK: - Greeting
+                // Primary CTA — the dashboard's load-bearing action.
+                newProjectBanner
+                    .padding(.horizontal, SpacingTokens.md)
 
                 greetingSection
                     .padding(.horizontal, SpacingTokens.md)
 
-                // MARK: - Quick AI Generate (Hero CTA)
-
+                // Secondary, exploratory action: "just show me a remodel".
                 quickGenerateCard
                     .padding(.horizontal, SpacingTokens.md)
-
-                // MARK: - New Project CTA
-
-                SecondaryButton(title: "New Project", icon: "plus.circle.fill") {
-                    handleCreateProject()
-                }
-                .padding(.horizontal, SpacingTokens.md)
-
-                // MARK: - Recent Projects
 
                 DashboardRecentProjectsSection(
                     projects: viewModel.recentProjects,
                     thumbnails: viewModel.projectThumbnails,
                     onSeeAll: {
                         appState.selectedTab = .projects
+                    },
+                    onCreateProject: {
+                        handleCreateProject()
                     }
                 )
-
-                // MARK: - Subscription Card
 
                 DashboardSubscriptionCard(onUpgrade: {
                     paywallPresenter.present(.settingsUpgrade)
@@ -162,37 +167,79 @@ struct DashboardView: View {
         }
     }
 
+    // MARK: - New Project Banner
+
+    private var newProjectBanner: some View {
+        Button {
+            handleCreateProject()
+        } label: {
+            HStack(spacing: SpacingTokens.md) {
+                ZStack {
+                    Circle()
+                        .fill(.white.opacity(0.18))
+                        .frame(width: 52, height: 52)
+
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("New Project")
+                        .font(TypographyTokens.title3)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+
+                    Text("Start a new renovation, estimate or invoice")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: SpacingTokens.xs)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            .padding(.vertical, SpacingTokens.md)
+            .padding(.horizontal, SpacingTokens.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                LinearGradient(
+                    colors: [
+                        ColorTokens.primaryOrange,
+                        ColorTokens.primaryOrange.opacity(0.78),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: RadiusTokens.card)
+            )
+            .shadow(color: ColorTokens.primaryOrange.opacity(0.32), radius: 16, x: 0, y: 8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("New Project")
+        .accessibilityHint("Starts a new renovation, estimate or invoice")
+        .accessibilityAddTraits(.isButton)
+    }
+
     // MARK: - Greeting
 
     private var greetingSection: some View {
-        VStack(spacing: SpacingTokens.sm) {
-            ZStack {
-                // Always-white circle so the brand icon stays legible in both
-                // light and dark mode. (ColorTokens.surface goes near-black in
-                // dark mode and made the icon disappear.)
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: 80, height: 80)
-                    .shadow(color: ColorTokens.primaryOrange.opacity(0.25), radius: 12, x: 0, y: 4)
+        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+            Text(viewModel.greeting(for: appState.currentUser?.fullName ?? ""))
+                .font(TypographyTokens.title2)
 
-                Image("housd-icon-light")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 48, height: 48)
-            }
-
-            VStack(spacing: SpacingTokens.xxs) {
-                Text(viewModel.greeting(for: appState.currentUser?.fullName ?? ""))
-                    .font(TypographyTokens.title2)
-
-                if let companyName = appState.currentCompany?.name {
-                    Text(companyName)
-                        .font(TypographyTokens.subheadline)
-                        .foregroundStyle(ColorTokens.secondaryText)
-                }
+            if let companyName = appState.currentCompany?.name {
+                Text(companyName)
+                    .font(TypographyTokens.subheadline)
+                    .foregroundStyle(ColorTokens.secondaryText)
             }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Quick Generate Card
@@ -211,10 +258,10 @@ struct DashboardView: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 56, height: 56)
+                        .frame(width: 48, height: 48)
 
                     Image(systemName: entitlementStore.hasProAccess ? "wand.and.stars" : "lock.fill")
-                        .font(.system(size: 24))
+                        .font(.system(size: 22))
                         .foregroundStyle(.white)
                 }
 
@@ -253,6 +300,9 @@ struct DashboardView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityHint(entitlementStore.hasProAccess
+            ? "Starts a quick AI remodel preview"
+            : "Locked — requires a Pro subscription")
     }
 
     // MARK: - Feature-Gated Actions
@@ -283,9 +333,9 @@ struct DashboardView: View {
         navigateToProjectId = nil
         navigateAutoGenerate = false
         // Brief delay lets the fullScreenCover dismiss animation finish
-        // before pushing onto the NavigationStack — avoids SwiftUI race.
+        // before pushing onto the NavigationStack — avoids a SwiftUI race
+        // where the push gets eaten mid-dismiss.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            // Clear any stale navigation entries first so we don't land on an old project
             router.dashboardPath = NavigationPath()
             router.dashboardPath.append(
                 AppDestination.projectDetail(id: projectId, autoGenerate: autoGenerate)

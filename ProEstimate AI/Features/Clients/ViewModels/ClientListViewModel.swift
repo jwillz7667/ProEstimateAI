@@ -78,4 +78,10 @@ final class ClientListViewModel {
         // Re-sort alphabetically
         clients.sort { $0.name < $1.name }
     }
+
+    /// Drop a client from the in-memory list when the network deletion has
+    /// already been performed upstream (e.g. from `ClientDetailView`).
+    func removeClient(id: String) {
+        clients.removeAll { $0.id == id }
+    }
 }

@@ -3,12 +3,16 @@ import SwiftUI
 struct ClientDetailView: View {
     let clientId: String
     var onClientUpdated: ((Client) -> Void)?
+    var onClientDeleted: ((String) -> Void)?
 
     @Environment(AppRouter.self) private var router
+    @Environment(\.dismiss) private var dismiss
     @State private var client: Client?
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var showingEditSheet = false
+    @State private var showingDeleteConfirmation = false
+    @State private var isDeleting = false
     @State private var estimates: [Estimate] = []
     @State private var isLoadingEstimates = false
     @State private var estimatesError: String?
@@ -32,10 +36,27 @@ struct ClientDetailView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Edit") {
-                    showingEditSheet = true
+                Menu {
+                    Button {
+                        showingEditSheet = true
+                    } label: {
+                        Label("Edit Client", systemImage: "pencil")
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
+                    } label: {
+                        Label("Delete Client", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
                 .tint(ColorTokens.primaryOrange)
+                .accessibilityLabel("More options")
+                .accessibilityHint("Edit or delete this client")
+                .disabled(client == nil || isDeleting)
             }
         }
         .task {
@@ -50,6 +71,40 @@ struct ClientDetailView: View {
                 }
             }
         }
+        .confirmationDialog(
+            "Delete Client",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Permanently", role: .destructive) {
+                Task { await performDeletion() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Projects and invoices linked to this client will still exist, but their client information will be removed. This can't be undone.")
+        }
+        .overlay {
+            if isDeleting {
+                Color.black.opacity(0.1)
+                    .ignoresSafeArea()
+                    .overlay {
+                        ProgressView("Deleting...")
+                            .padding(SpacingTokens.xl)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
+                    }
+            }
+        }
+        .alert(
+            "Couldn't Delete Client",
+            isPresented: Binding(
+                get: { client != nil && errorMessage != nil && !isLoading },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
     // MARK: - Content
@@ -57,32 +112,20 @@ struct ClientDetailView: View {
     private func clientContent(_ client: Client) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
-                // MARK: - Header
-
                 clientHeader(client)
                     .padding(.horizontal, SpacingTokens.md)
 
-                // MARK: - Contact Info
-
                 contactInfoSection(client)
-
-                // MARK: - Address
 
                 if client.formattedAddress != nil {
                     addressSection(client)
                 }
 
-                // MARK: - Notes
-
                 if let notes = client.notes, !notes.isEmpty {
                     notesSection(notes)
                 }
 
-                // MARK: - Projects
-
                 projectsSection
-
-                // MARK: - Estimates & Invoices
 
                 estimatesSection
             }
@@ -371,6 +414,24 @@ struct ClientDetailView: View {
         }
 
         isLoadingEstimates = false
+    }
+
+    // MARK: - Delete
+
+    private func performDeletion() async {
+        guard !isDeleting else { return }
+        isDeleting = true
+        errorMessage = nil
+
+        do {
+            try await clientService.deleteClient(id: clientId)
+            onClientDeleted?(clientId)
+            isDeleting = false
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            isDeleting = false
+        }
     }
 
     private func badgeStyle(for status: Estimate.Status) -> StatusBadge.Style {
