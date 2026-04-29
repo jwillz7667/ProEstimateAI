@@ -48,14 +48,23 @@ struct LawnAreaCaptureStep: View {
 
 // MARK: - Map sub-view
 
-/// Owns `@Bindable` for the lawn measurement VM so SwiftUI can derive a
-/// `Binding<MapCameraPosition>` for the Map. Splitting this out of
-/// `LawnAreaCaptureStep` is required because `@Bindable` only works as a
-/// property wrapper on a View struct's stored property — the inline
-/// `Bindable(...)` initializer doesn't satisfy MapContentBuilder's
-/// availability check on stricter Swift compilers.
+/// Owns the lawn measurement VM via `@State` so SwiftUI derives a real
+/// `Binding<MapCameraPosition>` from `$lawnVM.cameraPosition` for the
+/// `Map`. The wizard's parent VM also retains a reference to the same
+/// instance (class semantics) so the polygon vertices the user draws
+/// here are still visible to the pipeline after creation.
+///
+/// We deliberately match `LawnMeasurementView`'s `@State` pattern
+/// rather than using `@Bindable` on a parameter: CI's strict Swift
+/// compiler fails to satisfy `MapContentBuilder` availability when the
+/// camera position binding is derived through `@Bindable` here, even
+/// though local Xcode lets it through.
 private struct LawnAreaCaptureMap: View {
-    @Bindable var lawnVM: LawnMeasurementViewModel
+    @State private var lawnVM: LawnMeasurementViewModel
+
+    init(lawnVM: LawnMeasurementViewModel) {
+        _lawnVM = State(wrappedValue: lawnVM)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
