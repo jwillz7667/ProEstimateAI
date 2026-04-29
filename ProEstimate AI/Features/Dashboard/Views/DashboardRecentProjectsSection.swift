@@ -13,6 +13,9 @@ struct DashboardRecentProjectsSection: View {
     /// peek of the next card so users discover the horizontal scroll.
     private let cardWidthFraction: Double = 0.82
     private let cardHeight: CGFloat = 220
+    /// Larger than the card shadow's blur radius so adjacent cards' shadows
+    /// don't bleed into each other and read as visual overlap.
+    private let cardSpacing: CGFloat = 24
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.sm) {
@@ -36,7 +39,7 @@ struct DashboardRecentProjectsSection: View {
 
     private var carousel: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: SpacingTokens.md) {
+            LazyHStack(spacing: cardSpacing) {
                 ForEach(projects.prefix(10)) { project in
                     NavigationLink(value: AppDestination.projectDetail(id: project.id)) {
                         projectCard(project)
@@ -102,7 +105,8 @@ struct DashboardRecentProjectsSection: View {
             RoundedRectangle(cornerRadius: RadiusTokens.card)
                 .strokeBorder(.white.opacity(0.06), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.18), radius: 14, x: 0, y: 6)
+        // Tighter shadow so adjacent cards' bleed doesn't visually merge.
+        .shadow(color: .black.opacity(0.16), radius: 10, x: 0, y: 4)
     }
 
     // MARK: - Thumbnail

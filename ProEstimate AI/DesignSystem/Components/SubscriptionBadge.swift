@@ -5,9 +5,11 @@ import SwiftUI
 /// Renders nothing for free users (so the badge silently disappears the
 /// instant a user subscribes and the entitlement snapshot updates). For
 /// active subscribers it renders a tier-aware capsule: a flat orange
-/// "PRO" / trial badge, or a gradient orange→fuchsia "PREMIUM" badge for
-/// the Premium tier. Tapping the badge switches to the Settings tab so
-/// the user can manage their subscription.
+/// "PRO" / trial badge, or a gold "PREMIUM" badge with a crown for the
+/// Premium tier. Tapping the badge opens a non-blocking subscription
+/// status sheet that shows the active tier, included features, and (for
+/// Pro) an unobtrusive Premium upsell. Billing-issue states still route
+/// straight to Settings so the user can fix payment quickly.
 ///
 /// The badge reads directly from `EntitlementStore` via `@Environment`,
 /// so it re-renders automatically as soon as a purchase, restore, or
@@ -15,17 +17,21 @@ import SwiftUI
 struct SubscriptionBadge: View {
     @Environment(EntitlementStore.self) private var entitlementStore
     @Environment(AppState.self) private var appState
+    @State private var showStatus = false
 
     var body: some View {
         if entitlementStore.hasProAccess, let style = badgeStyle {
-            Button(action: openSubscriptionSettings) {
+            Button(action: handleTap) {
                 badgeContent(style: style)
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(style.accessibilityLabel)
-            .accessibilityHint("Opens subscription settings")
+            .accessibilityHint(style.accessibilityHint)
             .transition(.scale.combined(with: .opacity))
+            .sheet(isPresented: $showStatus) {
+                SubscriptionStatusView()
+            }
         }
     }
 
@@ -53,8 +59,14 @@ struct SubscriptionBadge: View {
 
     // MARK: - Actions
 
-    private func openSubscriptionSettings() {
-        appState.selectedTab = .settings
+    private func handleTap() {
+        // Billing problems are time-sensitive — short-circuit straight to
+        // Settings so the user can fix payment without an extra modal hop.
+        if entitlementStore.hasBillingIssue {
+            appState.selectedTab = .settings
+        } else {
+            showStatus = true
+        }
     }
 
     // MARK: - Style Resolution
@@ -122,14 +134,16 @@ private enum BadgeStyle {
                 )
             )
         case .premium:
+            // Gold gradient (amber-300 → amber-600) signals "top tier"
+            // without competing with the orange brand accent.
             return AnyShapeStyle(
                 LinearGradient(
                     colors: [
-                        Color(hex: 0xFB923C),
-                        Color(hex: 0xC026D3),
+                        Color(hex: 0xFCD34D),
+                        Color(hex: 0xD97706),
                     ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
             )
         case .trial:
@@ -160,9 +174,17 @@ private enum BadgeStyle {
     var shadowColor: Color {
         switch self {
         case .pro: return ColorTokens.primaryOrange
-        case .premium: return Color(hex: 0xC026D3)
+        case .premium: return Color(hex: 0xD97706)
         case .trial: return ColorTokens.primaryOrange
         case .billingIssue: return Color(hex: 0xEF4444)
+        }
+    }
+
+    var accessibilityHint: String {
+        switch self {
+        case .pro, .trial: return "Opens your subscription status with an option to upgrade to Premium"
+        case .premium: return "Opens your Premium subscription status"
+        case .billingIssue: return "Opens settings so you can fix your billing"
         }
     }
 
