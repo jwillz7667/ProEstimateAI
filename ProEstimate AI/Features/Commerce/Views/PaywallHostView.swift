@@ -47,8 +47,7 @@ struct PaywallHostView: View {
                                 products: viewModel.products,
                                 selectedProduct: viewModel.selectedProduct,
                                 selectedTier: $viewModel.selectedTier,
-                                isAnnualSelected: $viewModel.isAnnualSelected,
-                                onSelect: { viewModel.selectProduct($0) }
+                                isAnnualSelected: $viewModel.isAnnualSelected
                             )
                         }
 

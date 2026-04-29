@@ -15,7 +15,6 @@ struct PlanSelectorView: View {
     let selectedProduct: StoreProductModel?
     @Binding var selectedTier: PlanTier
     @Binding var isAnnualSelected: Bool
-    let onSelect: (StoreProductModel) -> Void
 
     var body: some View {
         VStack(spacing: SpacingTokens.md) {
@@ -39,8 +38,13 @@ struct PlanSelectorView: View {
     private func tierButton(_ tier: PlanTier) -> some View {
         let isSelected = selectedTier == tier
         return Button {
+            // Update only the binding. The host view model's didSet
+            // observer on `selectedTier` re-resolves `selectedProduct`
+            // against the catalog and keeps the user's tier choice
+            // intact even when no matching SKU is loaded yet (which
+            // used to silently revert via the now-removed
+            // `applySelection()` -> `selectProduct(_:)` round-trip).
             selectedTier = tier
-            applySelection()
         } label: {
             HStack(spacing: SpacingTokens.xxs) {
                 if tier == .premium && !isSelected {
@@ -76,13 +80,14 @@ struct PlanSelectorView: View {
 
     private var periodToggle: some View {
         HStack(spacing: 0) {
+            // Same pattern as the tier toggle — let the binding's didSet
+            // observer in the host VM re-resolve `selectedProduct` so we
+            // can't override the user's period choice on fallback.
             periodButton(title: "Monthly", isSelected: !isAnnualSelected) {
                 isAnnualSelected = false
-                applySelection()
             }
             periodButton(title: "Annual", isSelected: isAnnualSelected, badge: annualSavingsBadge) {
                 isAnnualSelected = true
-                applySelection()
             }
         }
         .background(ColorTokens.onDarkFillSubtle, in: Capsule())
@@ -188,17 +193,12 @@ struct PlanSelectorView: View {
 
     /// Resolve the product matching the current (tier, period) selection.
     /// Falls back to the existing `selectedProduct` when no match found
-    /// (e.g. backend hasn't shipped Premium yet).
+    /// (e.g. backend hasn't shipped Premium yet) so the rendered card
+    /// shows *something* while the host VM continues holding the user's
+    /// stated tier/period preference.
     private var currentProduct: StoreProductModel? {
         let match = products.first { $0.tier == selectedTier && $0.isAnnual == isAnnualSelected }
         return match ?? selectedProduct
-    }
-
-    /// Push the (tier, period) → product resolution back up via
-    /// `onSelect` so the host view model knows which product to charge.
-    private func applySelection() {
-        guard let resolved = currentProduct else { return }
-        onSelect(resolved)
     }
 
     // MARK: - Badges
@@ -231,8 +231,7 @@ struct PlanSelectorView: View {
             products: StoreProductModel.sampleAll,
             selectedProduct: .samplePremiumAnnual,
             selectedTier: .constant(.premium),
-            isAnnualSelected: .constant(true),
-            onSelect: { _ in }
+            isAnnualSelected: .constant(true)
         )
         .padding()
     }
