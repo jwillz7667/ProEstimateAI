@@ -15,30 +15,20 @@ struct LawnAreaCaptureStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
 
     var body: some View {
-        let lawnVM = viewModel.lawnMeasurementVM
-
         VStack(spacing: 0) {
             instructions
                 .padding(.horizontal, SpacingTokens.md)
                 .padding(.top, SpacingTokens.xs)
                 .padding(.bottom, SpacingTokens.sm)
 
-            ZStack(alignment: .top) {
-                mapLayer(lawnVM: lawnVM)
-
-                AddressSearchField(placeholder: "Search address or location") { result in
-                    lawnVM.recenter(on: result.coordinate, zoomedIn: true)
-                }
-                .padding(.horizontal, SpacingTokens.md)
-                .padding(.top, SpacingTokens.xs)
-
-                VStack {
-                    Spacer()
-                    controlsCard(lawnVM: lawnVM)
-                        .padding(.horizontal, SpacingTokens.md)
-                        .padding(.bottom, SpacingTokens.md)
-                }
-            }
+            // The lawn VM is wrapped in its own @Bindable inside
+            // `LawnAreaCaptureMap` so the Map's `position:` parameter
+            // gets a real `Binding<MapCameraPosition>` from `$lawnVM`.
+            // Inline `Bindable(lawnVM).cameraPosition` doesn't satisfy
+            // MapContentBuilder's availability requirements on stricter
+            // Swift compilers (CI Xcode 26.4 rejects it; 26.4.1 lets it
+            // through as a warning).
+            LawnAreaCaptureMap(lawnVM: viewModel.lawnMeasurementVM)
         }
     }
 
@@ -54,12 +44,43 @@ struct LawnAreaCaptureStep: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
+
+// MARK: - Map sub-view
+
+/// Owns `@Bindable` for the lawn measurement VM so SwiftUI can derive a
+/// `Binding<MapCameraPosition>` for the Map. Splitting this out of
+/// `LawnAreaCaptureStep` is required because `@Bindable` only works as a
+/// property wrapper on a View struct's stored property — the inline
+/// `Bindable(...)` initializer doesn't satisfy MapContentBuilder's
+/// availability check on stricter Swift compilers.
+private struct LawnAreaCaptureMap: View {
+    @Bindable var lawnVM: LawnMeasurementViewModel
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            mapLayer
+
+            AddressSearchField(placeholder: "Search address or location") { result in
+                lawnVM.recenter(on: result.coordinate, zoomedIn: true)
+            }
+            .padding(.horizontal, SpacingTokens.md)
+            .padding(.top, SpacingTokens.xs)
+
+            VStack {
+                Spacer()
+                controlsCard
+                    .padding(.horizontal, SpacingTokens.md)
+                    .padding(.bottom, SpacingTokens.md)
+            }
+        }
+    }
 
     // MARK: - Map
 
-    private func mapLayer(lawnVM: LawnMeasurementViewModel) -> some View {
+    private var mapLayer: some View {
         MapReader { proxy in
-            Map(position: Bindable(lawnVM).cameraPosition) {
+            Map(position: $lawnVM.cameraPosition) {
                 UserAnnotation()
 
                 if lawnVM.vertices.count >= 2 {
@@ -102,7 +123,7 @@ struct LawnAreaCaptureStep: View {
 
     // MARK: - Controls
 
-    private func controlsCard(lawnVM: LawnMeasurementViewModel) -> some View {
+    private var controlsCard: some View {
         VStack(spacing: SpacingTokens.sm) {
             HStack {
                 Image(systemName: "ruler")

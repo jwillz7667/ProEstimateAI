@@ -16,6 +16,7 @@ enum SettingsSaveStatus: Equatable {
 }
 
 @Observable
+@MainActor
 final class SettingsViewModel {
     // MARK: - Dependencies
 
