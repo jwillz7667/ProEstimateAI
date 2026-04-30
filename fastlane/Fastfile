@@ -293,13 +293,10 @@ platform :ios do
     # project pins the target version up-front so the polling loop
     # waits for the *right* build to appear.
     # ------------------------------------------------------------------
-    target_marketing_version = `xcrun agvtool what-marketing-version -terse1`.strip
-    if target_marketing_version.empty?
-      pbx = File.read(File.expand_path("../#{XCODE_PROJECT}/project.pbxproj", __dir__))
-      m = pbx.match(/MARKETING_VERSION = ([0-9.]+);/)
-      target_marketing_version = m ? m[1] : nil
-    end
-    UI.user_error!("Could not determine target MARKETING_VERSION from project") if target_marketing_version.nil? || target_marketing_version.empty?
+    pbx_path = File.expand_path("../#{XCODE_PROJECT}/project.pbxproj", __dir__)
+    pbx_match = File.read(pbx_path).match(/MARKETING_VERSION = ([0-9.]+);/)
+    target_marketing_version = pbx_match ? pbx_match[1] : nil
+    UI.user_error!("Could not determine MARKETING_VERSION from #{pbx_path}") if target_marketing_version.nil? || target_marketing_version.empty?
     UI.success("Target marketing version: #{target_marketing_version}")
 
     # `latest` is hoisted out of the loop so the post-loop App Store

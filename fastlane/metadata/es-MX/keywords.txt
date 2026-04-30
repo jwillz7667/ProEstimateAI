@@ -1,1 +1,1 @@
-cocina,baño,piso,techo,pintura,albañil,bricolaje,construir,casa,presupuesto,cotizar,obra,factura
+cocina,baño,piso,techo,pintura,siding,albañil,handyman,reno,obra,materiales,jardín,plano,renovar
