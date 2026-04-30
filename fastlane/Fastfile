@@ -281,6 +281,10 @@ platform :ios do
       parsed
     end
 
+    # `latest` is hoisted out of the loop so the post-loop App Store
+    # version creation step can read its id + attributes (Ruby block
+    # locals would otherwise go out of scope on `break`).
+    latest = nil
     deadline = Time.now + 2700 # 45 minutes total
     loop do
       builds_resp = asc_get.call("builds?filter[app]=#{submit_app.id}&sort=-uploadedDate&limit=1")
@@ -289,15 +293,14 @@ platform :ios do
         UI.important("No TestFlight build visible yet — waiting 30s...")
       else
         state   = latest.dig("attributes", "processingState")
-        version = latest.dig("attributes", "version")
-        bnum    = latest.dig("attributes", "version") # version is the Marketing version; build number is elsewhere
-        UI.message("Latest build (v#{version}) — processingState: #{state.inspect}")
+        bnum    = latest.dig("attributes", "version") # build number, not marketing version
+        UI.message("Latest build (build #{bnum}) — processingState: #{state.inspect}")
         case state
         when "VALID"
-          UI.success("Build v#{version} is processed — continuing to submit")
+          UI.success("Build #{bnum} is processed — continuing to submit")
           break
         when "FAILED", "INVALID"
-          UI.user_error!("Latest build (v#{version}) is in terminal state #{state} — cannot submit")
+          UI.user_error!("Latest build (build #{bnum}) is in terminal state #{state} — cannot submit")
         end
       end
 
@@ -306,6 +309,8 @@ platform :ios do
       end
       sleep 30
     end
+
+    UI.user_error!("No build available after polling — cannot submit") if latest.nil?
 
     # ------------------------------------------------------------------
     # Clear any stale review submissions before calling deliver.
