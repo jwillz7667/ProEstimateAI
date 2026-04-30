@@ -83,6 +83,19 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Version
+
+    /// "1.0.1 (4)" — read live from the app bundle so the About row
+    /// always reflects the actual marketing version + build number
+    /// instead of drifting from a hard-coded literal. Falls back to a
+    /// readable placeholder if either Info.plist key is missing.
+    private var appVersionString: String {
+        let info = Bundle.main.infoDictionary
+        let marketing = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? "—"
+        return "\(marketing) (\(build))"
+    }
+
     // MARK: - Pro Badge
 
     private var proBadge: some View {
@@ -334,8 +347,9 @@ struct SettingsView: View {
                 HStack {
                     Text("Version")
                     Spacer()
-                    Text("1.0.0 (1)")
+                    Text(appVersionString)
                         .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
 
                 Link(destination: AppConstants.termsOfServiceURL) {
