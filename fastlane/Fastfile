@@ -318,8 +318,12 @@ platform :ios do
         UI.important("No TestFlight train for #{target_marketing_version} visible yet — waiting 30s...")
       else
         prv_id = prv_record["id"]
+        # The related `preReleaseVersions/{id}/builds` endpoint rejects
+        # `sort=…` (PARAMETER_ERROR.ILLEGAL); the top-level /builds
+        # endpoint supports both filter[preReleaseVersion] and
+        # sort=-uploadedDate, so use that for the "newest build" pick.
         builds_resp = asc_get.call(
-          "preReleaseVersions/#{prv_id}/builds?sort=-uploadedDate&limit=1"
+          "builds?filter[preReleaseVersion]=#{prv_id}&sort=-uploadedDate&limit=1"
         )
         latest = (builds_resp["data"] || []).first
         if latest.nil?
