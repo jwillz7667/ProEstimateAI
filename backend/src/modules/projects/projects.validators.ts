@@ -11,6 +11,8 @@ const projectTypeEnum = z.enum([
   "exterior",
   "landscaping",
   "lawn_care",
+  "outdoor_living",
+  "garage",
   "custom",
 ]);
 

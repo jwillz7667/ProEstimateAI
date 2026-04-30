@@ -27,6 +27,8 @@ enum ProjectType {
   EXTERIOR
   LANDSCAPING
   LAWN_CARE
+  OUTDOOR_LIVING
+  GARAGE
   CUSTOM
 }
 
