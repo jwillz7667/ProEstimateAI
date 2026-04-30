@@ -251,6 +251,8 @@ final class QuickGenerateViewModel {
         case .exterior: "Exterior Renovation"
         case .landscaping: "Landscape Install"
         case .lawnCare: "Lawn Care Contract"
+        case .outdoorLiving: "Outdoor Living Build"
+        case .garage: "Garage Build-Out"
         case .custom: "Custom Project"
         }
     }

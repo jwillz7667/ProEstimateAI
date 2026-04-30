@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "02_luxury_bathroom.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

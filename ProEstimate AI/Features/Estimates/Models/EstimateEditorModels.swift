@@ -139,6 +139,15 @@ extension LineItemDraft {
             // service-level rate sheet, but the fallback assumes a small
             // commercial property mowed by a 2-person crew.
             return ("Lawn Care Crew (per visit)", 50, 3)
+        case .outdoorLiving:
+            // Hardscape/decking/pergola work — typically a 2-person crew
+            // for a multi-day mid-size patio install.
+            return ("Outdoor Living Install Labor", 65, 40)
+        case .garage:
+            // Garage build-outs span workshop fit-outs, EV bay upgrades,
+            // and livable conversions. Default assumes a finished
+            // workshop/storage tier (electrical + flooring + cabinetry).
+            return ("Garage Build-Out Labor", 60, 28)
         case .custom:
             return ("General Contractor Labor", 65, 20)
         }

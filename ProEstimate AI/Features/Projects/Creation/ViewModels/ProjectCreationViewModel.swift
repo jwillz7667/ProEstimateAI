@@ -280,6 +280,8 @@ final class ProjectCreationViewModel {
         case .exterior: return "Exterior Renovation"
         case .landscaping: return "Landscape Install"
         case .lawnCare: return "Lawn Care Contract"
+        case .outdoorLiving: return "Outdoor Living Build"
+        case .garage: return "Garage Build-Out"
         case .custom: return "Custom Project"
         }
     }

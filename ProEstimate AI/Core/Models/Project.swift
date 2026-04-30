@@ -53,6 +53,11 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     // MARK: - Nested Enums
 
     /// The category of remodel or construction work.
+    ///
+    /// Renamed `exterior` displayName from "Exterior / Outdoor Living"
+    /// to just "Exterior" once `outdoorLiving` was added — outdoor decks,
+    /// patios, pergolas, pools, and firepits live there now, leaving
+    /// `exterior` to mean curb appeal / facade work specifically.
     enum ProjectType: String, Codable, CaseIterable, Sendable {
         case kitchen
         case bathroom
@@ -64,6 +69,8 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         case exterior
         case landscaping
         case lawnCare = "lawn_care"
+        case outdoorLiving = "outdoor_living"
+        case garage
         case custom
 
         /// Display name for project type pickers and detail headers.
@@ -76,14 +83,18 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
             case .painting: return "Painting"
             case .siding: return "Siding"
             case .roomRemodel: return "Room Remodel"
-            case .exterior: return "Exterior / Outdoor Living"
+            case .exterior: return "Exterior"
             case .landscaping: return "Landscaping"
-            case .lawnCare: return "Lawn Care (Recurring)"
+            case .lawnCare: return "Lawn Care"
+            case .outdoorLiving: return "Outdoor Living"
+            case .garage: return "Garage"
             case .custom: return "Custom"
             }
         }
 
-        /// SF Symbol used in the project picker grid and list rows.
+        /// SF Symbol used in legacy small-icon contexts (project list rows,
+        /// dashboard tiles, detail header). The new image-driven category
+        /// picker uses `thumbnailAssetName` instead.
         var iconName: String {
             switch self {
             case .kitchen: return "fork.knife"
@@ -96,7 +107,30 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
             case .exterior: return "house.lodge"
             case .landscaping: return "leaf.fill"
             case .lawnCare: return "scissors"
+            case .outdoorLiving: return "sofa.fill"
+            case .garage: return "car.fill"
             case .custom: return "wrench.and.screwdriver"
+            }
+        }
+
+        /// Asset-catalog name of the curated hero photograph rendered in
+        /// the project creation category picker. Source: `category-thumbs`
+        /// imported under `Assets.xcassets/CategoryThumbs/`.
+        var thumbnailAssetName: String {
+            switch self {
+            case .kitchen: return "CategoryThumbs/01_modern_kitchen"
+            case .bathroom: return "CategoryThumbs/02_luxury_bathroom"
+            case .flooring: return "CategoryThumbs/11_dining_room"
+            case .roofing: return "CategoryThumbs/33_exterior_facade"
+            case .painting: return "CategoryThumbs/04_guest_bedroom"
+            case .siding: return "CategoryThumbs/34_front_porch"
+            case .roomRemodel: return "CategoryThumbs/10_family_room"
+            case .exterior: return "CategoryThumbs/45_front_yard"
+            case .landscaping: return "CategoryThumbs/46_backyard_garden"
+            case .lawnCare: return "CategoryThumbs/54_putting_green"
+            case .outdoorLiving: return "CategoryThumbs/36_outdoor_patio"
+            case .garage: return "CategoryThumbs/29_garage_workshop"
+            case .custom: return "CategoryThumbs/25_game_room"
             }
         }
 
