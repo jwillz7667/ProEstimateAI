@@ -55,7 +55,12 @@ struct FeatureComparisonListView: View {
             Text("Pro")
                 .font(TypographyTokens.caption)
                 .fontWeight(.bold)
-                .foregroundStyle(ColorTokens.accentBlue)
+                // White on dark slate (the surface stays slate in both
+                // color schemes) — accentBlue text was nearly the same
+                // value as the slate surface and washed out in light
+                // mode. Premium keeps its orange identity for tier
+                // distinction; Pro reads as the neutral white anchor.
+                .foregroundStyle(.white)
                 .frame(width: tierColumnWidth)
 
             VStack(spacing: 1) {
@@ -132,7 +137,11 @@ struct FeatureComparisonListView: View {
     private func checkColor(for tier: PlanTier) -> Color {
         switch tier {
         case .free: ColorTokens.success.opacity(0.6)
-        case .pro: ColorTokens.accentBlue
+        // White for Pro check / infinity glyphs — same reason as the
+        // header text: blue on slate surface fades into the
+        // background, especially in light mode. Premium stays orange
+        // so the headline tier is visually unmistakable.
+        case .pro: .white
         case .premium: ColorTokens.primaryOrange
         }
     }

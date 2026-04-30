@@ -37,24 +37,58 @@ struct SubscriptionBadge: View {
 
     // MARK: - Badge Content
 
+    /// Per-tier content. Pro is a flat "PRO" text capsule (no icon —
+    /// the word IS the brand); Premium collapses to a single crown
+    /// glyph (the symbol carries the meaning, no need to also write
+    /// "PREMIUM"); trial and billing-issue keep the icon + label combo
+    /// because their text carries time-sensitive context (days
+    /// remaining, "Action needed") that an icon alone can't convey.
+    @ViewBuilder
     private func badgeContent(style: BadgeStyle) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: style.icon)
-                .font(.system(size: 10, weight: .bold))
-
-            Text(style.label)
+        switch style {
+        case .pro:
+            Text("PRO")
                 .font(.system(size: 11, weight: .heavy, design: .rounded))
                 .tracking(0.6)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(style.background, in: Capsule())
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+                )
+                .shadow(color: style.shadowColor.opacity(0.45), radius: 6, x: 0, y: 2)
+        case .premium:
+            Image(systemName: "crown.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 26, height: 22)
+                .background(style.background, in: Capsule())
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+                )
+                .shadow(color: style.shadowColor.opacity(0.45), radius: 6, x: 0, y: 2)
+        case .trial, .billingIssue:
+            HStack(spacing: 4) {
+                Image(systemName: style.icon)
+                    .font(.system(size: 10, weight: .bold))
+
+                Text(style.label)
+                    .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    .tracking(0.6)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(style.background, in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+            )
+            .shadow(color: style.shadowColor.opacity(0.45), radius: 6, x: 0, y: 2)
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .background(style.background, in: Capsule())
-        .overlay(
-            Capsule()
-                .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
-        )
-        .shadow(color: style.shadowColor.opacity(0.45), radius: 6, x: 0, y: 2)
     }
 
     // MARK: - Actions
