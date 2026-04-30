@@ -8,6 +8,12 @@
 /Screenshot*.png
 /Simulator Screenshot*.png
 
+# Source thumbnails for the project-type tiles. These are the unprocessed
+# 62-image PNG dump that gets resized to JPG and imported under
+# Assets.xcassets/CategoryThumbs/ — the shipping JPGs are tracked, the
+# raw originals stay local (~100MB).
+/category-thumbs/
+
 # macOS
 .DS_Store
 
