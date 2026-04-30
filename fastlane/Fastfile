@@ -281,26 +281,63 @@ platform :ios do
       parsed
     end
 
+    # ------------------------------------------------------------------
+    # Determine which marketing version we're submitting from the
+    # checked-out project file rather than from "the latest build in
+    # ASC". The latest-build heuristic was wrong on iteration #2 of
+    # this lane: when v1.0.2 was uploaded but Apple hadn't yet surfaced
+    # the new build in their `/v1/builds` query (typical 2-15 min
+    # indexing lag), the lane picked up the prior v1.0.1 build, then
+    # tried to attach metadata to v1.0.1's already-RELEASED App Store
+    # version and aborted. Reading CFBundleShortVersionString from the
+    # project pins the target version up-front so the polling loop
+    # waits for the *right* build to appear.
+    # ------------------------------------------------------------------
+    target_marketing_version = `xcrun agvtool what-marketing-version -terse1`.strip
+    if target_marketing_version.empty?
+      pbx = File.read(File.expand_path("../#{XCODE_PROJECT}/project.pbxproj", __dir__))
+      m = pbx.match(/MARKETING_VERSION = ([0-9.]+);/)
+      target_marketing_version = m ? m[1] : nil
+    end
+    UI.user_error!("Could not determine target MARKETING_VERSION from project") if target_marketing_version.nil? || target_marketing_version.empty?
+    UI.success("Target marketing version: #{target_marketing_version}")
+
     # `latest` is hoisted out of the loop so the post-loop App Store
     # version creation step can read its id + attributes (Ruby block
     # locals would otherwise go out of scope on `break`).
     latest = nil
     deadline = Time.now + 2700 # 45 minutes total
     loop do
-      builds_resp = asc_get.call("builds?filter[app]=#{submit_app.id}&sort=-uploadedDate&limit=1")
-      latest = (builds_resp["data"] || []).first
-      if latest.nil?
-        UI.important("No TestFlight build visible yet — waiting 30s...")
+      # Find the preReleaseVersion record for our target marketing
+      # version, then walk its builds. This filters out builds for
+      # other marketing versions (older, already-shipped) so the lane
+      # never confuses a previously-released train for the current one.
+      prv_resp = asc_get.call(
+        "preReleaseVersions?filter[app]=#{submit_app.id}&filter[platform]=IOS&filter[version]=#{target_marketing_version}&include=builds&limit=1"
+      )
+      prv_record = (prv_resp["data"] || []).first
+
+      if prv_record.nil?
+        UI.important("No TestFlight train for #{target_marketing_version} visible yet — waiting 30s...")
       else
-        state   = latest.dig("attributes", "processingState")
-        bnum    = latest.dig("attributes", "version") # build number, not marketing version
-        UI.message("Latest build (build #{bnum}) — processingState: #{state.inspect}")
-        case state
-        when "VALID"
-          UI.success("Build #{bnum} is processed — continuing to submit")
-          break
-        when "FAILED", "INVALID"
-          UI.user_error!("Latest build (build #{bnum}) is in terminal state #{state} — cannot submit")
+        prv_id = prv_record["id"]
+        builds_resp = asc_get.call(
+          "preReleaseVersions/#{prv_id}/builds?sort=-uploadedDate&limit=1"
+        )
+        latest = (builds_resp["data"] || []).first
+        if latest.nil?
+          UI.important("No build attached to #{target_marketing_version} yet — waiting 30s...")
+        else
+          state = latest.dig("attributes", "processingState")
+          bnum  = latest.dig("attributes", "version") # build number
+          UI.message("v#{target_marketing_version} build #{bnum} — processingState: #{state.inspect}")
+          case state
+          when "VALID"
+            UI.success("v#{target_marketing_version} build #{bnum} is processed — continuing")
+            break
+          when "FAILED", "INVALID"
+            UI.user_error!("v#{target_marketing_version} build #{bnum} is in terminal state #{state} — cannot submit")
+          end
         end
       end
 
@@ -393,16 +430,12 @@ platform :ios do
     # for 'IOS'". Create one via the createAppStoreVersion API if
     # missing — idempotent, since we GET first.
     #
-    # `build.attributes.version` is the BUILD NUMBER (e.g. "3"); the
-    # marketing version (e.g. "1.0.1") lives on the build's related
-    # preReleaseVersion. Fetch that explicitly.
+    # We already pinned `target_marketing_version` from the project
+    # file at the top of the lane and waited for a build matching it
+    # to finish processing — reuse it here so we never accidentally
+    # attach metadata to a different version's record.
     # ------------------------------------------------------------------
-    prv_resp = asc_get.call("builds/#{latest['id']}/preReleaseVersion")
-    target_version = prv_resp.dig("data", "attributes", "version")
-    if target_version.nil? || target_version.empty?
-      UI.user_error!("Could not read marketing version from build #{latest['id']}'s preReleaseVersion")
-    end
-    UI.message("Resolved marketing version #{target_version} from latest build's preReleaseVersion")
+    target_version = target_marketing_version
 
     versions_resp = asc_get.call(
       "apps/#{submit_app.id}/appStoreVersions?filter[platform]=IOS&filter[versionString]=#{target_version}&limit=10"
