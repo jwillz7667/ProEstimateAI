@@ -118,16 +118,21 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         /// imported under `Assets.xcassets/CategoryThumbs/`.
         var thumbnailAssetName: String {
             switch self {
+            // Each tile uses a thumbnail whose subject is the work itself,
+            // not a decorative match. Where the catalog has no perfect
+            // shot for a category (flooring, roofing, painting, custom),
+            // we pick a scene where that category's work product
+            // dominates the frame.
             case .kitchen: return "CategoryThumbs/01_modern_kitchen"
             case .bathroom: return "CategoryThumbs/02_luxury_bathroom"
-            case .flooring: return "CategoryThumbs/11_dining_room"
-            case .roofing: return "CategoryThumbs/33_exterior_facade"
+            case .flooring: return "CategoryThumbs/09_living_room"
+            case .roofing: return "CategoryThumbs/28_attic_conversion"
             case .painting: return "CategoryThumbs/04_guest_bedroom"
-            case .siding: return "CategoryThumbs/34_front_porch"
+            case .siding: return "CategoryThumbs/33_exterior_facade"
             case .roomRemodel: return "CategoryThumbs/10_family_room"
-            case .exterior: return "CategoryThumbs/45_front_yard"
+            case .exterior: return "CategoryThumbs/34_front_porch"
             case .landscaping: return "CategoryThumbs/46_backyard_garden"
-            case .lawnCare: return "CategoryThumbs/54_putting_green"
+            case .lawnCare: return "CategoryThumbs/45_front_yard"
             case .outdoorLiving: return "CategoryThumbs/36_outdoor_patio"
             case .garage: return "CategoryThumbs/29_garage_workshop"
             case .custom: return "CategoryThumbs/25_game_room"

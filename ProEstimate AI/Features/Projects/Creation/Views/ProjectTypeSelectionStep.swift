@@ -13,9 +13,9 @@ struct ProjectTypeSelectionStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
 
     private let columns = [
-        GridItem(.flexible(), spacing: SpacingTokens.sm),
-        GridItem(.flexible(), spacing: SpacingTokens.sm),
-        GridItem(.flexible(), spacing: SpacingTokens.sm),
+        GridItem(.flexible(), spacing: SpacingTokens.md),
+        GridItem(.flexible(), spacing: SpacingTokens.md),
+        GridItem(.flexible(), spacing: SpacingTokens.md),
     ]
 
     var body: some View {
@@ -23,7 +23,7 @@ struct ProjectTypeSelectionStep: View {
             VStack(alignment: .leading, spacing: SpacingTokens.md) {
                 header
 
-                LazyVGrid(columns: columns, spacing: SpacingTokens.sm) {
+                LazyVGrid(columns: columns, spacing: SpacingTokens.md) {
                     ForEach(Project.ProjectType.allCases, id: \.self) { type in
                         ProjectTypeCard(
                             projectType: type,

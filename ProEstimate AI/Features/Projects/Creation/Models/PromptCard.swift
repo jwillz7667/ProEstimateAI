@@ -23,13 +23,18 @@ extension PromptCard {
     static func suggestions(for type: Project.ProjectType) -> [PromptCard] {
         switch type {
         case .kitchen:
+            // All four cards use kitchen-zone thumbnails (the lone kitchen
+            // shot plus the breakfast nook and pantry shots that show
+            // cabinetry/countertops in a kitchen context). Style is
+            // conveyed through the title, subtitle, and prompt — not the
+            // photo, which only signals "this is a kitchen."
             return [
                 PromptCard(
                     id: "kitchen.farmhouse",
                     title: "Modern Farmhouse",
                     subtitle: "White shaker · butcher block · matte black",
                     icon: "sun.max.fill",
-                    imageAssetName: "CategoryThumbs/12_breakfast_nook",
+                    imageAssetName: "CategoryThumbs/13_butlers_pantry",
                     prompt: "Modern farmhouse kitchen with white shaker cabinets, butcher block countertops, apron-front sink, matte black hardware, and warm pendant lighting."
                 ),
                 PromptCard(
@@ -45,7 +50,7 @@ extension PromptCard {
                     title: "Traditional",
                     subtitle: "Raised panel · granite · crown molding",
                     icon: "leaf.fill",
-                    imageAssetName: "CategoryThumbs/13_butlers_pantry",
+                    imageAssetName: "CategoryThumbs/12_breakfast_nook",
                     prompt: "Traditional kitchen with raised-panel cherry cabinets, granite countertops, decorative crown molding, ceramic tile backsplash, and a farmhouse-style chandelier."
                 ),
                 PromptCard(
@@ -58,6 +63,11 @@ extension PromptCard {
                 ),
             ]
         case .bathroom:
+            // Two true bathroom shots in the catalog (luxury bath + powder
+            // room) plus the sauna which is a wet-space wellness scene
+            // honest for "spa retreat." The other two cards reuse the
+            // legitimate bathroom thumbnails rather than substituting an
+            // unrelated room.
             return [
                 PromptCard(
                     id: "bath.spa",
@@ -72,7 +82,7 @@ extension PromptCard {
                     title: "Modern Minimalist",
                     subtitle: "Floating vanity · vessel sink · porcelain",
                     icon: "circle.dotted",
-                    imageAssetName: "CategoryThumbs/19_laundry_room",
+                    imageAssetName: "CategoryThumbs/02_luxury_bathroom",
                     prompt: "Modern minimalist bathroom with a floating wood vanity, vessel sink, large-format porcelain tile, brushed nickel fixtures, and backlit mirror."
                 ),
                 PromptCard(
@@ -93,6 +103,11 @@ extension PromptCard {
                 ),
             ]
         case .flooring:
+            // Flooring is whole-room work — every interior shot has a
+            // floor in frame. We pick rooms where the floor genuinely
+            // dominates the composition (dining room with wide-plank,
+            // entry with tile, living room with LVP, game room with
+            // polished concrete).
             return [
                 PromptCard(
                     id: "floor.hardwood",
@@ -107,7 +122,7 @@ extension PromptCard {
                     title: "Polished Concrete",
                     subtitle: "Modern · light gray · subtle aggregate",
                     icon: "square.fill",
-                    imageAssetName: "CategoryThumbs/32_staircase",
+                    imageAssetName: "CategoryThumbs/25_game_room",
                     prompt: "Polished concrete flooring with a clean modern finish, light gray with subtle aggregate, sealed to a satin sheen."
                 ),
                 PromptCard(
@@ -128,6 +143,10 @@ extension PromptCard {
                 ),
             ]
         case .roofing:
+            // The catalog has no roof close-up. We use exterior shots
+            // where the roofline is a major compositional element
+            // (facade, porch with visible eaves) and the attic-conversion
+            // shot which shows roof structure from inside.
             return [
                 PromptCard(
                     id: "roof.architectural",
@@ -142,7 +161,7 @@ extension PromptCard {
                     title: "Standing Seam Metal",
                     subtitle: "Galvalume · clean lines · modern",
                     icon: "rectangle.split.3x1.fill",
-                    imageAssetName: "CategoryThumbs/28_attic_conversion",
+                    imageAssetName: "CategoryThumbs/34_front_porch",
                     prompt: "Standing-seam metal roof in galvalume finish with crisp ridge lines, integrated snow guards, and matching trim."
                 ),
                 PromptCard(
@@ -150,7 +169,7 @@ extension PromptCard {
                     title: "Clay Tile",
                     subtitle: "Spanish · terra cotta · classic",
                     icon: "circle.grid.3x3.fill",
-                    imageAssetName: "CategoryThumbs/34_front_porch",
+                    imageAssetName: "CategoryThumbs/33_exterior_facade",
                     prompt: "Spanish-style clay tile roof in natural terra cotta, with rounded barrel tiles and decorative ridge caps."
                 ),
                 PromptCard(
@@ -158,11 +177,15 @@ extension PromptCard {
                     title: "Synthetic Slate",
                     subtitle: "Composite · gray · long-lasting",
                     icon: "square.stack.fill",
-                    imageAssetName: "CategoryThumbs/38_pergola",
+                    imageAssetName: "CategoryThumbs/28_attic_conversion",
                     prompt: "Synthetic slate roof in graduated gray tones, with copper flashing details and a clean, refined appearance."
                 ),
             ]
         case .painting:
+            // Paint is on every wall — we pick rooms whose walls dominate
+            // the frame (bedrooms, living rooms) for the interior cards.
+            // The exterior-refresh card uses the facade shot since
+            // exterior paint is the visible work product.
             return [
                 PromptCard(
                     id: "paint.warm-neutral",
@@ -177,7 +200,7 @@ extension PromptCard {
                     title: "Modern Cool",
                     subtitle: "Soft white · charcoal trim · airy",
                     icon: "circle.lefthalf.filled",
-                    imageAssetName: "CategoryThumbs/05_kids_bedroom",
+                    imageAssetName: "CategoryThumbs/09_living_room",
                     prompt: "Walls in soft modern white with charcoal accent trim, providing a clean and airy contemporary look."
                 ),
                 PromptCard(
@@ -193,18 +216,21 @@ extension PromptCard {
                     title: "Exterior Refresh",
                     subtitle: "Body · trim · accent color combo",
                     icon: "house.lodge.fill",
-                    imageAssetName: "CategoryThumbs/45_front_yard",
+                    imageAssetName: "CategoryThumbs/33_exterior_facade",
                     prompt: "Fresh exterior paint with a thoughtful three-color combination — body, trim, and front door accent — that elevates curb appeal."
                 ),
             ]
         case .siding:
+            // Siding is exterior facade work. We rotate between the
+            // facade and front-porch shots since both feature siding
+            // prominently. No fence/in-law-suite reaches.
             return [
                 PromptCard(
                     id: "siding.fiber",
                     title: "Fiber Cement",
                     subtitle: "Lap · soft white · architectural trim",
                     icon: "rectangle.split.3x1.fill",
-                    imageAssetName: "CategoryThumbs/34_front_porch",
+                    imageAssetName: "CategoryThumbs/33_exterior_facade",
                     prompt: "Fiber cement lap siding in soft white with architectural trim and corner boards, replacing aging existing siding."
                 ),
                 PromptCard(
@@ -212,7 +238,7 @@ extension PromptCard {
                     title: "Vinyl Premium",
                     subtitle: "Insulated · low-maintenance",
                     icon: "shield.lefthalf.filled",
-                    imageAssetName: "CategoryThumbs/31_in_law_suite",
+                    imageAssetName: "CategoryThumbs/34_front_porch",
                     prompt: "Premium insulated vinyl siding in a warm tan, with matching soffit, fascia, and seamless gutters."
                 ),
                 PromptCard(
@@ -220,7 +246,7 @@ extension PromptCard {
                     title: "Cedar Shake",
                     subtitle: "Stained · natural · craftsman",
                     icon: "leaf.fill",
-                    imageAssetName: "CategoryThumbs/60_privacy_fence",
+                    imageAssetName: "CategoryThumbs/33_exterior_facade",
                     prompt: "Cedar shake siding with a transparent stain showing natural grain, accented with stone veneer at the foundation."
                 ),
                 PromptCard(
@@ -233,6 +259,11 @@ extension PromptCard {
                 ),
             ]
         case .roomRemodel:
+            // Room remodel is style-agnostic — any finished room reads
+            // honestly. Pair each style card with a room whose mood
+            // genuinely matches: home office for "modern," library for
+            // "transitional" classic millwork, sunroom for the airy
+            // Scandinavian feel, game room for industrial.
             return [
                 PromptCard(
                     id: "room.modern",
@@ -255,7 +286,7 @@ extension PromptCard {
                     title: "Scandinavian",
                     subtitle: "Light wood · white · cozy textiles",
                     icon: "snowflake",
-                    imageAssetName: "CategoryThumbs/06_nursery",
+                    imageAssetName: "CategoryThumbs/27_sunroom",
                     prompt: "Scandinavian room with light oak floors, white walls, simple furniture, and cozy textiles for warmth."
                 ),
                 PromptCard(
@@ -268,6 +299,9 @@ extension PromptCard {
                 ),
             ]
         case .exterior:
+            // Exterior cards stick to genuine exterior shots — facade,
+            // front porch, screened porch, and driveway. No bedroom or
+            // garden substitutes.
             return [
                 PromptCard(
                     id: "exterior.modern",
@@ -289,8 +323,8 @@ extension PromptCard {
                     id: "exterior.modern-farmhouse",
                     title: "Modern Farmhouse",
                     subtitle: "Board & batten · black accents",
-                    icon: "barn.fill",
-                    imageAssetName: "CategoryThumbs/31_in_law_suite",
+                    icon: "house.lodge.fill",
+                    imageAssetName: "CategoryThumbs/33_exterior_facade",
                     prompt: "Modern farmhouse exterior with white board-and-batten siding, black window frames, metal roof accents, and a covered front porch."
                 ),
                 PromptCard(
@@ -338,13 +372,18 @@ extension PromptCard {
                 ),
             ]
         case .lawnCare:
+            // Lawn care = grass-only work. We pick shots where the lawn
+            // is the visible subject: front yard, backyard with turf, the
+            // putting green for high-maintenance fertilization, and the
+            // backyard garden where seasonal cleanup happens at bed
+            // edges.
             return [
                 PromptCard(
                     id: "lawn.weekly",
                     title: "Weekly Maintenance",
                     subtitle: "Mow · edge · blow · trim",
                     icon: "leaf.fill",
-                    imageAssetName: "CategoryThumbs/54_putting_green",
+                    imageAssetName: "CategoryThumbs/45_front_yard",
                     prompt: "Recurring weekly lawn maintenance: precision mowing, hard-edge work, debris blowing, and periodic shrub trimming."
                 ),
                 PromptCard(
@@ -352,7 +391,7 @@ extension PromptCard {
                     title: "Fertilization Program",
                     subtitle: "Multi-step · seasonal · weed control",
                     icon: "drop.fill",
-                    imageAssetName: "CategoryThumbs/45_front_yard",
+                    imageAssetName: "CategoryThumbs/54_putting_green",
                     prompt: "Multi-step seasonal fertilization program with pre-emergent weed control, targeted nutrients, and broadleaf treatments."
                 ),
                 PromptCard(
@@ -360,7 +399,7 @@ extension PromptCard {
                     title: "Aeration & Overseed",
                     subtitle: "Core aerate · top-quality seed",
                     icon: "circle.grid.cross.fill",
-                    imageAssetName: "CategoryThumbs/35_driveway",
+                    imageAssetName: "CategoryThumbs/45_front_yard",
                     prompt: "Annual core aeration with overseed using top-quality cool-season turf blend, topdressed for healthy establishment."
                 ),
                 PromptCard(
@@ -368,7 +407,7 @@ extension PromptCard {
                     title: "Spring/Fall Cleanup",
                     subtitle: "Bed clearing · leaves · trim back",
                     icon: "wind",
-                    imageAssetName: "CategoryThumbs/53_sport_court",
+                    imageAssetName: "CategoryThumbs/46_backyard_garden",
                     prompt: "Comprehensive spring or fall cleanup: bed clearing, leaf removal, hard prune of shrubs, and fresh edging."
                 ),
             ]
@@ -438,7 +477,7 @@ extension PromptCard {
                     title: "Storage & Organization",
                     subtitle: "Overhead racks · cabinets · ceiling lift",
                     icon: "shippingbox.fill",
-                    imageAssetName: "CategoryThumbs/17_home_office",
+                    imageAssetName: "CategoryThumbs/29_garage_workshop",
                     prompt: "Garage storage and organization with overhead ceiling racks, full-height steel cabinetry, slatwall hooks, bicycle and kayak hoists, and a clean labeled-bin system."
                 ),
             ]
