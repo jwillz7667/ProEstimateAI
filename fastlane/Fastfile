@@ -378,8 +378,64 @@ platform :ios do
     # Give ASC a beat to flip state before deliver's pre-check runs.
     sleep 15 unless open_submissions.empty?
 
+    # ------------------------------------------------------------------
+    # Ensure an editable App Store version exists for the build's
+    # marketing version. Bumping CFBundleShortVersionString uploads a
+    # build under a new pre-release train but does NOT create the
+    # corresponding App Store version automatically. Without an
+    # EDITABLE / PREPARE_FOR_SUBMISSION version, deliver fails with
+    # "Cannot update languages - could not find an editable version
+    # for 'IOS'". Create one via the createAppStoreVersion API if
+    # missing — idempotent, since we GET first.
+    #
+    # `build.attributes.version` is the BUILD NUMBER (e.g. "3"); the
+    # marketing version (e.g. "1.0.1") lives on the build's related
+    # preReleaseVersion. Fetch that explicitly.
+    # ------------------------------------------------------------------
+    prv_resp = asc_get.call("builds/#{latest['id']}/preReleaseVersion")
+    target_version = prv_resp.dig("data", "attributes", "version")
+    if target_version.nil? || target_version.empty?
+      UI.user_error!("Could not read marketing version from build #{latest['id']}'s preReleaseVersion")
+    end
+    UI.message("Resolved marketing version #{target_version} from latest build's preReleaseVersion")
+
+    versions_resp = asc_get.call(
+      "apps/#{submit_app.id}/appStoreVersions?filter[platform]=IOS&filter[versionString]=#{target_version}&limit=10"
+    )
+    matching_versions = versions_resp["data"] || []
+    editable_states = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED REJECTED METADATA_REJECTED INVALID_BINARY]
+    editable_match = matching_versions.find { |v| editable_states.include?(v.dig("attributes", "appStoreState")) }
+
+    if editable_match
+      UI.success("Editable App Store version #{target_version} already exists (#{editable_match['id']}, state: #{editable_match.dig('attributes', 'appStoreState')})")
+    elsif !matching_versions.empty?
+      states_seen = matching_versions.map { |v| v.dig("attributes", "appStoreState") }.uniq
+      UI.user_error!("App Store version #{target_version} exists but is in non-editable state(s): #{states_seen.join(', ')}. Bump CFBundleShortVersionString to a new value and re-run.")
+    else
+      UI.message("Creating App Store version #{target_version} for IOS platform...")
+      create_code, create_body = asc_raw.call(:post, "appStoreVersions", {
+        data: {
+          type: "appStoreVersions",
+          attributes: {
+            platform:      "IOS",
+            versionString: target_version,
+            releaseType:   "MANUAL"
+          },
+          relationships: {
+            app: { data: { type: "apps", id: submit_app.id } }
+          }
+        }
+      })
+      if create_code >= 400
+        UI.user_error!("Failed to create App Store version #{target_version} (#{create_code}): #{(create_body.dig('errors') || []).map { |e| e['detail'] }.join('; ')}")
+      end
+      UI.success("Created App Store version #{target_version} (#{create_body.dig('data', 'id')})")
+      sleep 5
+    end
+
     deliver(
       api_key:                           api_key,
+      app_version:                       target_version,
       skip_binary_upload:                true,
       skip_screenshots:                  false,
       skip_metadata:                     false,
