@@ -30,7 +30,9 @@ struct OnboardingOfferPage: View {
             Spacer()
 
             ctaStack
-                .padding(.bottom, SpacingTokens.xxl)
+                // Match the lifted CTA position on every other
+                // onboarding page so the bottom anchor is consistent.
+                .padding(.bottom, SpacingTokens.huge)
         }
         .padding(.horizontal, SpacingTokens.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

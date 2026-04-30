@@ -1,10 +1,9 @@
-Mejoras + nuevo flujo de cuidado de césped.
+Onboarding más limpio + paywall más claro.
 
 Novedades
-• Los proyectos de cuidado de césped ahora omiten la subida de fotos y te llevan directo a un mapa satelital — toca cada esquina del césped para capturar el área y estimar por pie cuadrado.
-• Carrusel de Proyectos Recientes: la imagen generada de cada proyecto aparece de forma confiable, con el mismo tamaño que las tarjetas marcador. Las tarjetas ahora muestran una descripción de una línea y cuánto tiempo hace que se creó el proyecto.
-• Pantalla de registro: el logo ahora tiene una insignia blanca limpia para destacar sobre el fondo oscuro.
-• Paywall: al tocar Premium, el precio y los detalles se actualizan al instante en lugar de quedarse en el precio de Pro.
-• Vista previa de remodelación con IA: el texto de las pastillas de tipo de habitación es blanco en ambos estados (seleccionado y no seleccionado) para mejor contraste sobre la superficie oscura.
+• Onboarding: quitamos el resplandor naranja que competía con los iconos principales, subimos los botones y el botón Saltar a una posición más cómoda, y la pastilla de Saltar arriba a la derecha queda al ras del safe area.
+• Insignia de suscripción: Pro ahora muestra una pastilla limpia "PRO" y Premium es solo una corona — se siente más intencional que la combinación de icono + texto.
+• Paywall: el encabezado de la columna "Pro" y los íconos de check en la comparación de funciones ahora son blancos en lugar de azules para que se lean bien sobre la superficie pizarra en modo claro.
+• Ajustes: la fila de Versión ahora se lee en vivo del paquete, así siempre refleja el build real.
 
 Gracias por tus comentarios — síguenos contando en support@proestimateai.com.

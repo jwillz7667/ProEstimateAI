@@ -61,7 +61,9 @@ struct OnboardingValuePropPage: View {
                 }
                 .accessibilityLabel("Skip onboarding")
             }
-            .padding(.bottom, SpacingTokens.xxl)
+            // Match the lifted CTA position used on the other onboarding
+            // pages so the bottom anchor is consistent across the flow.
+            .padding(.bottom, SpacingTokens.huge)
         }
         .padding(.horizontal, SpacingTokens.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

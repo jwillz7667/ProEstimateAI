@@ -1,10 +1,9 @@
-Polish + new lawn-care workflow.
+Tighter onboarding + clearer paywall.
 
 What's new
-• Lawn care projects now skip the photo upload and route you straight to a hybrid satellite map — pin each corner of the lawn to capture the area for per-sq-ft estimating.
-• Recent Projects carousel: every project's generated image now appears reliably, sized consistently with placeholder cards. Cards now show a one-line description and how long ago the project was created.
-• Sign-up screen logo gets a clean white badge so it pops against the dark background.
-• Paywall: tapping Premium now updates the price and details immediately instead of staying on Pro pricing.
-• AI Remodel Preview: room-type pill text is white in both selected and unselected states for better contrast on the dark surface.
+• Onboarding: dropped the orange backdrop glow that was competing with the hero badges, lifted the buttons and Skip into a more comfortable position, and the top-right Skip pill now sits flush with the safe area.
+• Subscription badge: Pro now shows a clean "PRO" capsule and Premium is a single crown — both feel more deliberate than the icon + label combo.
+• Paywall: the "Pro" column header and check icons in the feature comparison are now white instead of blue so they read cleanly on the slate card surface in light mode.
+• Settings: the Version row now reads live from the bundle so it always reflects the actual build.
 
 Thanks for the feedback — keep it coming at support@proestimateai.com.

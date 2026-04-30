@@ -66,7 +66,10 @@ struct OnboardingWelcomePage: View {
                 }
                 .accessibilityLabel("Skip onboarding")
             }
-            .padding(.bottom, SpacingTokens.xxl)
+            // Lifted 16pt off the bottom edge so the CTA stack reads as
+            // grounded above the page-indicator dots instead of crowding
+            // them on standard iPhone heights.
+            .padding(.bottom, SpacingTokens.huge)
         }
         .padding(.horizontal, SpacingTokens.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -68,7 +68,9 @@ struct OnboardingPermissionsPage: View {
                     }
                 }
             )
-            .padding(.bottom, SpacingTokens.xxl)
+            // Same bottom-lift as the other onboarding pages — keeps
+            // the CTA at a consistent height across the flow.
+            .padding(.bottom, SpacingTokens.huge)
         }
         .padding(.horizontal, SpacingTokens.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

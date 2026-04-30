@@ -84,21 +84,15 @@ struct OnboardingFlowView: View {
     // MARK: - Background
 
     private var backgroundGradient: some View {
+        // Flat charcoal canvas with a subtle warm-to-dark vertical wash —
+        // the previous top-anchored orange RadialGradient was reading as
+        // a "glow" behind the hero badges and competing with the orange
+        // brand glyphs inside each page. Pulling it removes the visual
+        // double-up while keeping the page distinct from the system
+        // background via the bottom-darkening linear gradient.
         ZStack {
             ColorTokens.overlayBackground
                 .ignoresSafeArea()
-
-            RadialGradient(
-                colors: [
-                    ColorTokens.primaryOrange.opacity(0.35),
-                    ColorTokens.primaryOrange.opacity(0.08),
-                    ColorTokens.overlayBackground.opacity(0),
-                ],
-                center: .top,
-                startRadius: 40,
-                endRadius: 520
-            )
-            .ignoresSafeArea()
 
             LinearGradient(
                 colors: [
@@ -136,7 +130,11 @@ struct OnboardingFlowView: View {
                 }
             }
             .padding(.horizontal, SpacingTokens.lg)
-            .padding(.top, SpacingTokens.xs)
+            // Sit the Skip pill flush with the top safe-area edge — the
+            // 8pt cushion previously pushed it noticeably below the
+            // status bar on iPad, leaving a dead band of empty header
+            // space.
+            .padding(.top, 0)
 
             Spacer()
         }

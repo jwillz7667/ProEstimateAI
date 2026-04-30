@@ -1,6 +1,6 @@
 import Foundation
-import Security
 import os.log
+import Security
 
 /// Keychain-backed storage for access and refresh tokens.
 /// Uses the iOS Security framework directly — no third-party dependencies.
@@ -23,12 +23,12 @@ final class TokenStore: Sendable {
 
     /// The current access token, or nil if not stored.
     var accessToken: String? {
-        get { read(key: AppConstants.keychainAccessTokenKey) }
+        read(key: AppConstants.keychainAccessTokenKey)
     }
 
     /// The current refresh token, or nil if not stored.
     var refreshToken: String? {
-        get { read(key: AppConstants.keychainRefreshTokenKey) }
+        read(key: AppConstants.keychainRefreshTokenKey)
     }
 
     /// Store both tokens after a successful login or token refresh.
