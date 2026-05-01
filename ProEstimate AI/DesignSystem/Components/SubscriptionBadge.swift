@@ -49,7 +49,9 @@ struct SubscriptionBadge: View {
         case .pro:
             Text("PRO")
                 .font(.system(size: 11, weight: .heavy, design: .rounded))
-                .tracking(0.6)
+                .tracking(0.4)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
@@ -77,8 +79,10 @@ struct SubscriptionBadge: View {
 
                 Text(style.label)
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
-                    .tracking(0.6)
+                    .tracking(0.4)
+                    .lineLimit(1)
             }
+            .fixedSize(horizontal: true, vertical: false)
             .foregroundStyle(.white)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)

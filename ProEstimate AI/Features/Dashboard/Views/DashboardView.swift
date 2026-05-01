@@ -9,7 +9,6 @@ struct DashboardView: View {
     @State private var eventBus = AppEventBus.shared
     @State private var viewModel = DashboardViewModel()
     @State private var showProjectCreation = false
-    @State private var showQuickGenerate = false
     @State private var showClientForm = false
     @State private var showSettings = false
     @State private var navigateToProjectId: String?
@@ -65,19 +64,7 @@ struct DashboardView: View {
                     navigateAutoGenerate = autoGenerate
                 }
             }
-            .fullScreenCover(isPresented: $showQuickGenerate) {
-                QuickGenerateView { projectId in
-                    navigateToProjectId = projectId
-                    navigateAutoGenerate = false
-                }
-            }
             .onChange(of: showProjectCreation) { wasPresented, isPresented in
-                if wasPresented && !isPresented {
-                    Task { await viewModel.loadDashboard() }
-                    navigateToCreatedProject()
-                }
-            }
-            .onChange(of: showQuickGenerate) { wasPresented, isPresented in
                 if wasPresented && !isPresented {
                     Task { await viewModel.loadDashboard() }
                     navigateToCreatedProject()
@@ -132,19 +119,16 @@ struct DashboardView: View {
                         .padding(.horizontal, SpacingTokens.md)
                 }
 
-                // Subscription / upgrade banner sits at the very top so
-                // tier status is the first thing the user sees on every
-                // dashboard load.
-                DashboardSubscriptionCard(onUpgrade: {
-                    paywallPresenter.present(.settingsUpgrade)
-                })
-                .padding(.horizontal, SpacingTokens.md)
+                DashboardHeroVideoCard()
+                    .padding(.horizontal, SpacingTokens.md)
 
                 greetingSection
                     .padding(.horizontal, SpacingTokens.md)
 
-                // Secondary, exploratory action: "just show me a remodel".
-                quickGenerateCard
+                // Primary CTA — directly under the greeting so the
+                // first scannable action on every dashboard load is
+                // "start something new".
+                newProjectBanner
                     .padding(.horizontal, SpacingTokens.md)
 
                 DashboardRecentProjectsSection(
@@ -157,13 +141,7 @@ struct DashboardView: View {
                         handleCreateProject()
                     }
                 )
-
-                // Primary CTA — sits below the carousel so the user
-                // first scans recent work, then has an obvious path
-                // to start something new.
-                newProjectBanner
-                    .padding(.horizontal, SpacingTokens.md)
-                    .padding(.bottom, SpacingTokens.xxl)
+                .padding(.bottom, SpacingTokens.xxl)
             }
             .padding(.top, SpacingTokens.sm)
         }
@@ -247,79 +225,7 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Quick Generate Card
-
-    private var quickGenerateCard: some View {
-        Button {
-            handleQuickGenerate()
-        } label: {
-            HStack(spacing: SpacingTokens.md) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [ColorTokens.primaryOrange, ColorTokens.primaryOrange.opacity(0.8)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 48, height: 48)
-
-                    Image(systemName: entitlementStore.hasProAccess ? "wand.and.stars" : "lock.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(.white)
-                }
-
-                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("AI Remodel Preview")
-                        .font(TypographyTokens.headline)
-                        .foregroundStyle(ColorTokens.primaryText)
-
-                    Text("Upload a photo and see your remodel in seconds")
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(ColorTokens.secondaryText)
-                        .lineLimit(2)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(ColorTokens.tertiaryText)
-            }
-            .padding(SpacingTokens.md)
-            .background(
-                LinearGradient(
-                    colors: [
-                        ColorTokens.primaryOrange.opacity(0.08),
-                        ColorTokens.primaryOrange.opacity(0.03),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
-                in: RoundedRectangle(cornerRadius: RadiusTokens.card)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: RadiusTokens.card)
-                    .strokeBorder(ColorTokens.primaryOrange.opacity(0.2), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint(entitlementStore.hasProAccess
-            ? "Starts a quick AI remodel preview"
-            : "Locked — requires a Pro subscription")
-    }
-
     // MARK: - Feature-Gated Actions
-
-    private func handleQuickGenerate() {
-        switch featureGateCoordinator.guardGeneratePreview() {
-        case .allowed:
-            showQuickGenerate = true
-        case let .blocked(decision):
-            paywallPresenter.present(decision)
-        }
-    }
 
     private func handleCreateProject() {
         switch featureGateCoordinator.guardCreateProject() {

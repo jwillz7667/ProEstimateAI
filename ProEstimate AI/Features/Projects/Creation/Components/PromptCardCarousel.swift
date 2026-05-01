@@ -8,18 +8,20 @@ import SwiftUI
 /// card's prompt is combined with the user's custom-instruction text
 /// at submission.
 ///
-/// Layout: cards take ~74% of viewport width so the next card peeks past
-/// the trailing edge — a hard-coded scroll affordance that signals
-/// "swipe me" without paging dots. Cards are tall (3:2 hero + label)
-/// so the photo reads at-a-glance.
+/// Layout: cards take ~64% of viewport width so the next card peeks
+/// past the trailing edge — a hard-coded scroll affordance that signals
+/// "swipe me" without paging dots. The card is intentionally compact so
+/// the carousel doesn't dominate the step's vertical real estate; the
+/// photo carries the visual weight, the text is a quiet caption beneath
+/// the bottom gradient.
 struct PromptCardCarousel: View {
     let cards: [PromptCard]
     let selectedCardId: String?
     let onSelect: (PromptCard) -> Void
 
-    private let cardWidthFraction: CGFloat = 0.74
-    private let cardHeight: CGFloat = 220
-    private let cardSpacing: CGFloat = 14
+    private let cardWidthFraction: CGFloat = 0.64
+    private let cardHeight: CGFloat = 180
+    private let cardSpacing: CGFloat = SpacingTokens.md
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -112,47 +114,24 @@ struct PromptCardCarousel: View {
     }
 
     private func textOverlay(_ card: PromptCard) -> some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-            iconChip(card)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(card.title)
+                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .shadow(color: .black.opacity(0.45), radius: 2, x: 0, y: 1)
 
-            Spacer(minLength: 0)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(card.title)
-                    .font(.system(.headline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
-
-                Text(card.subtitle)
-                    .font(TypographyTokens.caption)
-                    .foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
-            }
+            Text(card.subtitle)
+                .font(TypographyTokens.caption2)
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .shadow(color: .black.opacity(0.45), radius: 2, x: 0, y: 1)
         }
-        .padding(SpacingTokens.md)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    /// Floating capsule chip carrying the card's SF Symbol — sits at the
-    /// top-leading corner of the photo so it reads regardless of how
-    /// dark/light the underlying image is.
-    private func iconChip(_ card: PromptCard) -> some View {
-        Image(systemName: card.icon)
-            .font(.system(size: 14, weight: .bold))
-            .foregroundStyle(ColorTokens.primaryOrange)
-            .frame(width: 30, height: 30)
-            .background(
-                .ultraThinMaterial,
-                in: RoundedRectangle(cornerRadius: RadiusTokens.small, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: RadiusTokens.small, style: .continuous)
-                    .strokeBorder(.white.opacity(0.18), lineWidth: 0.5)
-            )
+        .padding(.horizontal, SpacingTokens.sm)
+        .padding(.vertical, SpacingTokens.sm)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     }
 
     /// Top-trailing checkmark badge that confirms selection without
@@ -166,10 +145,10 @@ struct PromptCardCarousel: View {
                 ZStack {
                     Circle()
                         .fill(ColorTokens.primaryOrange)
-                        .frame(width: 30, height: 30)
-                        .shadow(color: .black.opacity(0.25), radius: 5, x: 0, y: 2)
+                        .frame(width: 26, height: 26)
+                        .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
                     Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .heavy))
+                        .font(.system(size: 12, weight: .heavy))
                         .foregroundStyle(.white)
                 }
                 .padding(SpacingTokens.xs)

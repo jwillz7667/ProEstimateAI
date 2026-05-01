@@ -1,9 +1,9 @@
-Tighter onboarding + clearer paywall.
+Dashboard refresh + tighter project creation.
 
 What's new
-• Onboarding: dropped the orange backdrop glow that was competing with the hero badges, lifted the buttons and Skip into a more comfortable position, and the top-right Skip pill now sits flush with the safe area.
-• Subscription badge: Pro now shows a clean "PRO" capsule and Premium is a single crown — both feel more deliberate than the icon + label combo.
-• Paywall: the "Pro" column header and check icons in the feature comparison are now white instead of blue so they read cleanly on the slate card surface in light mode.
-• Settings: the Version row now reads live from the bundle so it always reflects the actual build.
+• Dashboard: a new looping hero video sits at the top of the home screen, with "New Project" promoted to the primary call-to-action right beneath it.
+• Project creation: category tiles and style direction cards are right-sized — gaps between them, no more oversized images, and the generic style icon is gone so the photography carries the visual weight.
+• Subscription badge: the top-left PRO badge no longer truncates to "P" on smaller layouts.
+• Refreshed dark-mode app icon.
 
 Thanks for the feedback — keep it coming at support@proestimateai.com.

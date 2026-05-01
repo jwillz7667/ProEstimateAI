@@ -1,9 +1,9 @@
-Onboarding más limpio + paywall más claro.
+Dashboard renovado + creación de proyectos más ágil.
 
 Novedades
-• Onboarding: quitamos el resplandor naranja que competía con los iconos principales, subimos los botones y el botón Saltar a una posición más cómoda, y la pastilla de Saltar arriba a la derecha queda al ras del safe area.
-• Insignia de suscripción: Pro ahora muestra una pastilla limpia "PRO" y Premium es solo una corona — se siente más intencional que la combinación de icono + texto.
-• Paywall: el encabezado de la columna "Pro" y los íconos de check en la comparación de funciones ahora son blancos en lugar de azules para que se lean bien sobre la superficie pizarra en modo claro.
-• Ajustes: la fila de Versión ahora se lee en vivo del paquete, así siempre refleja el build real.
+• Dashboard: un nuevo video destacado en bucle ocupa la parte superior de la pantalla principal, con "Nuevo proyecto" como acción principal justo debajo.
+• Creación de proyectos: las miniaturas de categoría y las tarjetas de estilo ahora tienen el tamaño justo — con espacio entre ellas, sin imágenes desproporcionadas, y quitamos el icono genérico para que la fotografía sea la protagonista.
+• Insignia de suscripción: la insignia PRO arriba a la izquierda ya no se recorta a "P" en pantallas más estrechas.
+• Icono de la app renovado en modo oscuro.
 
 Gracias por tus comentarios — síguenos contando en support@proestimateai.com.

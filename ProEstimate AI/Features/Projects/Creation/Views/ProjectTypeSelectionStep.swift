@@ -12,10 +12,12 @@ import SwiftUI
 struct ProjectTypeSelectionStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
 
+    private let gridSpacing: CGFloat = SpacingTokens.sm
+
     private let columns = [
-        GridItem(.flexible(), spacing: SpacingTokens.md),
-        GridItem(.flexible(), spacing: SpacingTokens.md),
-        GridItem(.flexible(), spacing: SpacingTokens.md),
+        GridItem(.flexible(), spacing: SpacingTokens.sm),
+        GridItem(.flexible(), spacing: SpacingTokens.sm),
+        GridItem(.flexible(), spacing: SpacingTokens.sm),
     ]
 
     var body: some View {
@@ -23,7 +25,7 @@ struct ProjectTypeSelectionStep: View {
             VStack(alignment: .leading, spacing: SpacingTokens.md) {
                 header
 
-                LazyVGrid(columns: columns, spacing: SpacingTokens.md) {
+                LazyVGrid(columns: columns, spacing: gridSpacing) {
                     ForEach(Project.ProjectType.allCases, id: \.self) { type in
                         ProjectTypeCard(
                             projectType: type,
