@@ -14,6 +14,13 @@
 # raw originals stay local (~100MB).
 /category-thumbs/
 
+# Source HEICs for the dedicated category tiles and per-category style
+# cards. The shipping copies live inside Assets.xcassets/CategoryTiles/
+# and Assets.xcassets/StyleCards/ (tracked); the staging folders stay
+# local so we don't double-store them.
+/category_tiles_heic/
+/style_cards_heic/
+
 # macOS
 .DS_Store
 

@@ -3,7 +3,7 @@ import SwiftUI
 /// A selectable category tile rendered with a curated photographic hero.
 ///
 /// The card is composed in two horizontal bands:
-/// 1. A 4:3 photo hero pulled from `Assets.xcassets/CategoryThumbs/`, with
+/// 1. A 4:3 photo hero pulled from `Assets.xcassets/CategoryTiles/`, with
 ///    a bottom-aligned dark gradient that anchors the floating label and
 ///    keeps text legible across light and dark thumbnails.
 /// 2. A bottom strip carrying the category name in a high-weight rounded

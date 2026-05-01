@@ -113,29 +113,27 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
             }
         }
 
-        /// Asset-catalog name of the curated hero photograph rendered in
-        /// the project creation category picker. Source: `category-thumbs`
-        /// imported under `Assets.xcassets/CategoryThumbs/`.
+        /// Asset-catalog name of the dedicated category hero rendered in
+        /// the project creation category picker. One bespoke HEIC per
+        /// category lives under `Assets.xcassets/CategoryTiles/` — unlike
+        /// the legacy `CategoryThumbs/` library (which is a shared pool of
+        /// generic room photos), each tile here is purpose-shot for its
+        /// category and never reused across categories.
         var thumbnailAssetName: String {
             switch self {
-            // Each tile uses a thumbnail whose subject is the work itself,
-            // not a decorative match. Where the catalog has no perfect
-            // shot for a category (flooring, roofing, painting, custom),
-            // we pick a scene where that category's work product
-            // dominates the frame.
-            case .kitchen: return "CategoryThumbs/01_modern_kitchen"
-            case .bathroom: return "CategoryThumbs/02_luxury_bathroom"
-            case .flooring: return "CategoryThumbs/09_living_room"
-            case .roofing: return "CategoryThumbs/28_attic_conversion"
-            case .painting: return "CategoryThumbs/04_guest_bedroom"
-            case .siding: return "CategoryThumbs/33_exterior_facade"
-            case .roomRemodel: return "CategoryThumbs/10_family_room"
-            case .exterior: return "CategoryThumbs/34_front_porch"
-            case .landscaping: return "CategoryThumbs/46_backyard_garden"
-            case .lawnCare: return "CategoryThumbs/45_front_yard"
-            case .outdoorLiving: return "CategoryThumbs/36_outdoor_patio"
-            case .garage: return "CategoryThumbs/29_garage_workshop"
-            case .custom: return "CategoryThumbs/25_game_room"
+            case .kitchen: return "CategoryTiles/01_kitchen"
+            case .bathroom: return "CategoryTiles/02_bathroom"
+            case .flooring: return "CategoryTiles/03_flooring"
+            case .roofing: return "CategoryTiles/04_roofing"
+            case .painting: return "CategoryTiles/05_painting"
+            case .siding: return "CategoryTiles/06_siding"
+            case .roomRemodel: return "CategoryTiles/07_room_remodel"
+            case .exterior: return "CategoryTiles/08_exterior"
+            case .landscaping: return "CategoryTiles/09_landscaping"
+            case .lawnCare: return "CategoryTiles/10_lawn_care"
+            case .outdoorLiving: return "CategoryTiles/11_outdoor_living"
+            case .garage: return "CategoryTiles/12_garage"
+            case .custom: return "CategoryTiles/13_custom"
             }
         }
 

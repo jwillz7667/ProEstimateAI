@@ -3,9 +3,10 @@ import SwiftUI
 /// Snap-paged horizontal carousel of premade prompt suggestions.
 ///
 /// Each card is a photographic tile pulled from
-/// `Assets.xcassets/CategoryThumbs/` with a frosted text overlay anchored
-/// to the bottom. Tapping toggles selection; the selected card's prompt
-/// is combined with the user's custom-instruction text at submission.
+/// `Assets.xcassets/StyleCards/<Category>/` with a frosted text overlay
+/// anchored to the bottom. Tapping toggles selection; the selected
+/// card's prompt is combined with the user's custom-instruction text
+/// at submission.
 ///
 /// Layout: cards take ~74% of viewport width so the next card peeks past
 /// the trailing edge — a hard-coded scroll affordance that signals
