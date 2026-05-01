@@ -41,6 +41,14 @@ struct PaywallHostView: View {
                     PaywallHeroSection(decision: viewModel.decision)
 
                     VStack(spacing: SpacingTokens.xl) {
+                        // Free-tier counter — only rendered when the
+                        // paywall fired because starter credits ran out.
+                        // Hidden everywhere else so the rest of the app
+                        // reads as "fully open" until exhaustion.
+                        StarterCreditsExhaustedCard(
+                            isVisible: viewModel.decision.placement == .generationLimitHit
+                        )
+
                         // Tier + period picker.
                         if !viewModel.products.isEmpty {
                             PlanSelectorView(

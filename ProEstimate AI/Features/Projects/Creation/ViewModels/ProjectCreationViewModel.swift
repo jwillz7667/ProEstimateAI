@@ -478,6 +478,8 @@ final class ProjectCreationViewModel {
                 prompt: resolvedPrompt,
                 materials: nil
             )
+            // One starter credit was consumed inside the backend gate.
+            UsageMeterStore.shared.recordGenerationConsumed()
             pendingGeneration = generation
         } catch {
             // Generation failed to start. Surface the error but treat
@@ -620,6 +622,7 @@ final class ProjectCreationViewModel {
                 prompt: resolvedPrompt,
                 materials: nil
             )
+            UsageMeterStore.shared.recordGenerationConsumed()
             pendingGeneration = generation
             pipelineStage = .generating
             await pollGeneration(initial: generation)

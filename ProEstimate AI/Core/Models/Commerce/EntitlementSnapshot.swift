@@ -193,17 +193,10 @@ extension EntitlementSnapshot {
         usage: [
             UsageBucket(
                 metricCode: .aiGeneration,
-                includedQuantity: 3,
-                consumedQuantity: 1,
-                remainingQuantity: 2,
-                source: "free_starter"
-            ),
-            UsageBucket(
-                metricCode: .quoteExport,
-                includedQuantity: 3,
-                consumedQuantity: 0,
+                includedQuantity: 5,
+                consumedQuantity: 2,
                 remainingQuantity: 3,
-                source: "free_starter"
+                source: "STARTER_CREDITS"
             ),
         ],
         renewalDate: nil,

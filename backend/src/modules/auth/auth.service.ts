@@ -14,6 +14,10 @@ import {
   ConflictError,
   ValidationError,
 } from "../../lib/errors";
+import {
+  FREE_TIER_AI_GENERATION_CREDITS,
+  STARTER_CREDITS_SOURCE,
+} from "../../lib/limits";
 import { verifyAppleIdentityToken } from "../../lib/apple-auth";
 import {
   verifyGoogleIdentityToken,
@@ -95,9 +99,18 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
       },
     });
 
-    // No starter credits — free users hit the paywall on every paid
-    // action and must start a 7-day trial or subscribe to use the app.
-    // The "3 free previews" pattern is gone.
+    // Seed AI generation starter credits. Lets the user try the core
+    // product loop a fixed number of times before the paywall fires.
+    await tx.usageBucket.create({
+      data: {
+        userId: createdUser.id,
+        companyId: createdCompany.id,
+        metricCode: "AI_GENERATION",
+        includedQuantity: FREE_TIER_AI_GENERATION_CREDITS,
+        consumedQuantity: 0,
+        source: STARTER_CREDITS_SOURCE,
+      },
+    });
 
     return { user: createdUser, company: createdCompany };
   });
@@ -286,9 +299,18 @@ export async function appleSignIn(
       },
     });
 
-    // No starter credits — free users hit the paywall on every paid
-    // action and must start a 7-day trial or subscribe to use the app.
-    // The "3 free previews" pattern is gone.
+    // Seed AI generation starter credits — same allowance as the
+    // email-signup path so first-tap parity holds across providers.
+    await tx.usageBucket.create({
+      data: {
+        userId: createdUser.id,
+        companyId: createdCompany.id,
+        metricCode: "AI_GENERATION",
+        includedQuantity: FREE_TIER_AI_GENERATION_CREDITS,
+        consumedQuantity: 0,
+        source: STARTER_CREDITS_SOURCE,
+      },
+    });
 
     return { user: createdUser, company: createdCompany };
   });
@@ -410,9 +432,18 @@ export async function googleSignIn(
       },
     });
 
-    // No starter credits — free users hit the paywall on every paid
-    // action and must start a 7-day trial or subscribe to use the app.
-    // The "3 free previews" pattern is gone.
+    // Seed AI generation starter credits — same allowance as the
+    // email + Apple paths so first-tap parity holds across providers.
+    await tx.usageBucket.create({
+      data: {
+        userId: createdUser.id,
+        companyId: createdCompany.id,
+        metricCode: "AI_GENERATION",
+        includedQuantity: FREE_TIER_AI_GENERATION_CREDITS,
+        consumedQuantity: 0,
+        source: STARTER_CREDITS_SOURCE,
+      },
+    });
 
     return { user: createdUser, company: createdCompany };
   });

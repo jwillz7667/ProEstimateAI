@@ -8,6 +8,10 @@ import {
   type LimitCheckResult,
   type UsageMetric,
 } from "../../lib/usage-limits";
+import {
+  FREE_TIER_AI_GENERATION_CREDITS,
+  STARTER_CREDITS_SOURCE,
+} from "../../lib/limits";
 
 /**
  * Centralized AI-action gate. Used by every endpoint that triggers paid AI
@@ -105,6 +109,32 @@ function buildTrialOfferPaywall(metric: UsageMetric) {
   };
 }
 
+function buildGenerationLimitHitPaywall(args: {
+  included: number;
+  consumed: number;
+}) {
+  return {
+    placement: "GENERATION_LIMIT_HIT",
+    metric: "AI_GENERATION" as UsageMetric,
+    trigger_reason: "Free generation credits exhausted",
+    blocking: true,
+    headline: "You've Used All 5 Free Generations",
+    subheadline:
+      "Start a 7-day free trial to keep generating AI previews — unlimited while you trial, then keep going on any paid plan.",
+    primary_cta_title: "Start 7-Day Free Trial",
+    secondary_cta_title: "Restore Purchases",
+    show_continue_free: false,
+    show_restore_purchases: true,
+    recommended_product_id: "proestimate.pro.monthly",
+    available_products: null,
+    // Machine-readable counter so the iOS paywall can render
+    // "5 of 5 free generations used" without a separate API round-trip.
+    included_quantity: args.included,
+    consumed_quantity: args.consumed,
+    remaining_quantity: 0,
+  };
+}
+
 function buildSubscribeNoTrialPaywall(metric: UsageMetric) {
   return {
     placement: "SUBSCRIBE_NO_TRIAL",
@@ -197,7 +227,21 @@ export async function gateAIAction(opts: GateOptions): Promise<void> {
     return;
   }
 
-  // 4. Free / Expired / Revoked → trial offer if eligible, else subscribe.
+  // 4a. Free user → AI_GENERATION has 5 starter credits before the paywall.
+  // Consume one credit atomically; only block when the bucket is exhausted.
+  // PROJECT_CREATED rides through unconditionally for FREE users — without a
+  // project there's nothing to generate against, so we let creation succeed
+  // and let the AI_GENERATION gate be the sole bottleneck.
+  if (entitlement.status === "FREE") {
+    if (opts.metric === "PROJECT_CREATED") return;
+    if (opts.metric === "AI_GENERATION") {
+      await consumeStarterCreditOrThrow(opts.userId, opts.companyId);
+      return;
+    }
+    // QUOTE_EXPORT and ESTIMATE_GENERATED stay paywalled for FREE users.
+  }
+
+  // 4b. Free / Expired / Revoked → trial offer if eligible, else subscribe.
   if (
     isTrialEligible({
       status: entitlement.status,
@@ -214,4 +258,76 @@ export async function gateAIAction(opts: GateOptions): Promise<void> {
     "AI features require an active subscription.",
     buildSubscribeNoTrialPaywall(opts.metric),
   );
+}
+
+/**
+ * Atomically consume one AI_GENERATION starter credit from the user's
+ * STARTER_CREDITS bucket. If no bucket exists yet (legacy account that
+ * pre-dates the bucket-on-signup change), seed one with the canonical
+ * 5-credit allowance and consume the first credit in the same
+ * transaction. Throws PaywallError(GENERATION_LIMIT_HIT) when the
+ * bucket is exhausted.
+ *
+ * Uses a serializable transaction so two concurrent generation requests
+ * cannot both consume the last credit.
+ */
+async function consumeStarterCreditOrThrow(
+  userId: string,
+  companyId: string,
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    let bucket = await tx.usageBucket.findUnique({
+      where: {
+        userId_companyId_metricCode_source: {
+          userId,
+          companyId,
+          metricCode: "AI_GENERATION",
+          source: STARTER_CREDITS_SOURCE,
+        },
+      },
+    });
+
+    if (!bucket) {
+      bucket = await tx.usageBucket.create({
+        data: {
+          userId,
+          companyId,
+          metricCode: "AI_GENERATION",
+          includedQuantity: FREE_TIER_AI_GENERATION_CREDITS,
+          consumedQuantity: 0,
+          source: STARTER_CREDITS_SOURCE,
+        },
+      });
+    }
+
+    const remaining = bucket.includedQuantity - bucket.consumedQuantity;
+    if (remaining <= 0) {
+      throw new PaywallError(
+        "You've used all your free AI generation credits.",
+        buildGenerationLimitHitPaywall({
+          included: bucket.includedQuantity,
+          consumed: bucket.consumedQuantity,
+        }),
+      );
+    }
+
+    await tx.usageBucket.update({
+      where: { id: bucket.id },
+      data: { consumedQuantity: { increment: 1 } },
+    });
+
+    await tx.usageEvent.create({
+      data: {
+        userId,
+        companyId,
+        metricCode: "AI_GENERATION",
+        quantity: 1,
+        metadata: {
+          source: STARTER_CREDITS_SOURCE,
+          bucket_id: bucket.id,
+          consumed_after: bucket.consumedQuantity + 1,
+        },
+      },
+    });
+  });
 }

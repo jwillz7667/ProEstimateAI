@@ -7,11 +7,16 @@ import os.log
 ///   - `.allowed` — the user can proceed.
 ///   - `.blocked(PaywallDecision)` — present the paywall.
 ///
-/// As of the Premium tier launch, free users receive **zero** pre-paid
-/// actions: every paid feature flips to the paywall on first tap (Trial
-/// Offer if the user has never trialed, Subscribe Now if they have).
-/// Pro users have monthly caps (2 projects / 20 image gens / 20 estimates)
-/// enforced on the backend; the local gate just routes to the paywall.
+/// Free users get a small pool of starter AI generation credits
+/// (`AppConstants.freeGenerationCredits`) before the paywall fires.
+/// Project creation and photo upload ride through unconditionally —
+/// without a project there's nothing to generate against, so the
+/// generation gate is the only bottleneck. Every other Pro feature
+/// (quote export, branding, invoices, share links, AI estimates,
+/// analytics, custom pricing profiles, watermark removal, maps) hits
+/// the paywall on first tap. Pro users have backend-enforced monthly
+/// caps; the local gate just routes them to the paywall when the
+/// backend signals exhaustion.
 @Observable
 final class FeatureGateCoordinator {
     static let shared = FeatureGateCoordinator()
@@ -19,6 +24,7 @@ final class FeatureGateCoordinator {
     // MARK: - Dependencies
 
     private var entitlementStore: EntitlementStore?
+    private var usageMeterStore: UsageMeterStore?
     private let logger = Logger(subsystem: AppConstants.bundleID, category: "FeatureGate")
 
     // MARK: - Cached Products
@@ -48,15 +54,16 @@ final class FeatureGateCoordinator {
 
     init() {}
 
-    /// Configure the coordinator with its dependencies.
-    /// `usageMeterStore` is no longer required for gating decisions but
-    /// stays in the API for source compatibility with
-    /// `ProEstimate_AIApp.bootstrap()`.
+    /// Configure the coordinator with its dependencies. Both stores are
+    /// load-bearing: `entitlementStore` decides whether the user has
+    /// subscription-tier access, and `usageMeterStore` decides whether a
+    /// FREE user still has starter generation credits remaining.
     func configure(
         entitlementStore: EntitlementStore,
-        usageMeterStore _: UsageMeterStore
+        usageMeterStore: UsageMeterStore
     ) {
         self.entitlementStore = entitlementStore
+        self.usageMeterStore = usageMeterStore
     }
 
     // MARK: - Helpers
@@ -100,15 +107,25 @@ final class FeatureGateCoordinator {
     // MARK: - Feature Guards
 
     /// Check whether the user can generate an AI preview image.
+    ///
+    /// Pro / trialing users always pass through. Free users pass through
+    /// while they still have starter generation credits remaining and hit
+    /// the paywall the moment that pool is exhausted. The credit counter
+    /// is intentionally NOT surfaced in normal UI — it only appears on
+    /// the paywall sheet that fires on exhaustion (see
+    /// `PaywallHostView`'s `.generationLimitHit` branch).
     func guardGeneratePreview() -> FeatureGateResult {
         guard let entitlementStore else { return .allowed }
         if entitlementStore.hasProAccess { return .allowed }
-        logger.info("Generation blocked — subscription required.")
+        if let meter = usageMeterStore, meter.canGenerate {
+            return .allowed
+        }
+        logger.info("Generation blocked — starter credits exhausted.")
         return blockWithTrialOffer(
             placement: .generationLimitHit,
-            triggerReason: "AI preview requires a subscription",
-            headline: "Unlock AI Remodel Previews",
-            subheadline: "See realistic AI-generated previews of your finished project, instantly. Start a 7-day free trial — cancel anytime."
+            triggerReason: "Free generation credits exhausted",
+            headline: "You've Used All 5 Free Generations",
+            subheadline: "Start a 7-day free trial to keep generating AI previews — unlimited while you trial, then continue on any paid plan."
         )
     }
 
@@ -146,18 +163,13 @@ final class FeatureGateCoordinator {
         )
     }
 
-    /// Check whether the user can create a new project. Free users hit
-    /// the paywall here; Pro users hit it server-side at the 2/month cap.
+    /// Project creation is always allowed locally. Free users need to
+    /// own a project to spend their starter generation credits against,
+    /// so gating creation defeats the starter pack. The bottleneck for
+    /// free users is `guardGeneratePreview()`; Pro users hit the
+    /// 2-projects-per-month cap server-side.
     func guardCreateProject() -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.hasProAccess { return .allowed }
-        logger.info("Project creation blocked — subscription required.")
-        return blockWithTrialOffer(
-            placement: .generationLimitHit,
-            triggerReason: "Creating projects requires a subscription",
-            headline: "Start Your First Project",
-            subheadline: "Every project includes AI previews, instant estimates, and branded proposals. Start a 7-day free trial — cancel anytime."
-        )
+        .allowed
     }
 
     /// Check whether the user can use the lawn polygon / roof scouting
@@ -255,7 +267,7 @@ extension FeatureGateCoordinator {
     ) -> FeatureGateCoordinator {
         let coordinator = FeatureGateCoordinator()
         coordinator.entitlementStore = entitlementStore
-        _ = usageMeterStore
+        coordinator.usageMeterStore = usageMeterStore
         return coordinator
     }
 }

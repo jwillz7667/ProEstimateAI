@@ -184,6 +184,11 @@ final class ProjectDetailViewModel {
                     prompt: effectivePrompt,
                     materials: effectiveMaterials
                 )
+                // Backend has consumed one starter credit inside the
+                // gate's transaction; mirror that locally so the next
+                // tap reflects the new remaining count without waiting
+                // on the entitlement refresh.
+                UsageMeterStore.shared.recordGenerationConsumed()
                 await self.pollUntilFinished(generation: generation, project: project)
             } catch is CancellationError {
                 // Silent — caller cancelled deliberately.
