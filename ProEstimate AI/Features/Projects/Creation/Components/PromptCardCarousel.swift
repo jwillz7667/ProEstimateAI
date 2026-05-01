@@ -21,9 +21,23 @@ struct PromptCardCarousel: View {
 
     private let cardWidthFraction: CGFloat = 0.64
     private let cardHeight: CGFloat = 180
-    private let cardSpacing: CGFloat = SpacingTokens.md
+    /// Selected cards drop a 12pt-radius / 6pt-y shadow — ~18pt visible
+    /// reach per side. Spacing has to clear 2× that or adjacent cards'
+    /// halos visibly merge in the gutter; 32pt buys a small safety
+    /// margin past the 36pt floor without making the carousel feel
+    /// sparse.
+    private let cardSpacing: CGFloat = 32
+    private let edgeMargin: CGFloat = SpacingTokens.md
 
     var body: some View {
+        // `.contentMargins(.horizontal, _, for: .scrollContent)` is the
+        // canonical iOS 17+ pattern for snap-paged carousels: the
+        // leading/trailing inset is honored by `.viewAligned` so the
+        // first card snaps with a clear left margin and the last
+        // settles flush to the right margin. Putting the equivalent
+        // `.padding(.horizontal, _)` on the inner LazyHStack does NOT
+        // get respected by snap behavior — items snap to the scroll
+        // container's edge and the first card sits flush at x=0.
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: cardSpacing) {
                 ForEach(cards) { card in
@@ -43,9 +57,9 @@ struct PromptCardCarousel: View {
                 }
             }
             .scrollTargetLayout()
-            .padding(.horizontal, SpacingTokens.md)
         }
         .scrollTargetBehavior(.viewAligned)
+        .contentMargins(.horizontal, edgeMargin, for: .scrollContent)
         .scrollClipDisabled()
         .frame(height: cardHeight)
     }

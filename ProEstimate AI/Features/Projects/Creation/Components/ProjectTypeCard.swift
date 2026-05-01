@@ -89,7 +89,7 @@ struct ProjectTypeCard: View {
     private var labelStrip: some View {
         Text(projectType.displayName)
             .font(.system(.caption2, design: .rounded, weight: .semibold))
-            .foregroundStyle(isSelected ? ColorTokens.primaryOrange : ColorTokens.primaryText)
+            .foregroundStyle(isSelected ? ColorTokens.primaryOrange : .white)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
             .padding(.horizontal, SpacingTokens.xxs)
@@ -97,8 +97,8 @@ struct ProjectTypeCard: View {
             .frame(minHeight: labelHeight)
             .background(
                 isSelected
-                    ? ColorTokens.primaryOrange.opacity(0.10)
-                    : Color.clear
+                    ? ColorTokens.primaryOrange.opacity(0.22)
+                    : Color.black.opacity(0.78)
             )
     }
 
