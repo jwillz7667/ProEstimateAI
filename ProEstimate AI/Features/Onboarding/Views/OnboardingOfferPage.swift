@@ -32,6 +32,9 @@ struct OnboardingOfferPage: View {
             ctaStack
                 // Match the lifted CTA position on every other
                 // onboarding page so the bottom anchor is consistent.
+                // The page-indicator pill is suppressed on this page
+                // (see OnboardingFlowView), so the secondary CTA no
+                // longer needs extra clearance.
                 .padding(.bottom, SpacingTokens.huge)
         }
         .padding(.horizontal, SpacingTokens.xl)

@@ -46,7 +46,15 @@ struct OnboardingFlowView: View {
                 )
                 .tag(OnboardingViewModel.Page.offer)
             }
-            .tabViewStyle(.page(indexDisplayMode: .always))
+            // Page-indicator dots stay visible on the navigable pages
+            // (welcome → valueProp → permissions) but are suppressed on
+            // the terminal offer page. The pill renders inside a fixed
+            // bottom band that intercepts taps, and on the offer page
+            // it was sitting directly under "Continue with Free Plan",
+            // making the secondary CTA un-tappable. The user has
+            // nowhere to swipe forward at that point either, so the
+            // dots aren't informational anymore.
+            .tabViewStyle(.page(indexDisplayMode: viewModel.currentPage.isLast ? .never : .always))
             .indexViewStyle(.page(backgroundDisplayMode: .always))
             .animation(.easeInOut(duration: 0.3), value: viewModel.currentPage)
 
