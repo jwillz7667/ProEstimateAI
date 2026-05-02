@@ -190,14 +190,25 @@ struct ProjectListView: View {
     }
 
     private var projectList: some View {
+        // Rows tap-through via an explicit Button that appends onto
+        // `router.projectsPath` (the detail-side NavigationStack's
+        // bound path). NavigationLink(value:) read from the sidebar
+        // side of NavigationSplitView did not consistently resolve
+        // against the destination registered inside the detail stack
+        // — the same `projectsPath.append(...)` is what the post-
+        // creation flow already uses to push into the detail.
         ScrollView {
             LazyVStack(spacing: SpacingTokens.sm) {
                 ForEach(viewModel.filteredProjects) { project in
-                    NavigationLink(value: AppDestination.projectDetail(id: project.id)) {
+                    Button {
+                        router.projectsPath.append(
+                            AppDestination.projectDetail(id: project.id)
+                        )
+                    } label: {
                         ProjectRowView(
                             project: project,
                             clientName: project.clientId.flatMap { viewModel.clientLookup[$0] },
-                            thumbnailURL: project.thumbnailURL
+                            thumbnailURL: viewModel.projectThumbnails[project.id] ?? project.thumbnailURL
                         )
                     }
                     .buttonStyle(.plain)
