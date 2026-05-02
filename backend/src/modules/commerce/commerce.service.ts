@@ -24,6 +24,12 @@ import {
   verifyAppleJWS,
 } from "../../lib/apple-storekit";
 import {
+  AppStoreServerApiError,
+  AppStoreTransactionNotFoundError,
+  assertTransactionInHistory,
+  isAppStoreServerApiConfigured,
+} from "../../lib/apple-server-api";
+import {
   StoreProductDto,
   toStoreProductDto,
   EntitlementSnapshotDto,
@@ -296,6 +302,51 @@ async function verifySignedTransactionPayload(args: {
     throw new ValidationError(
       "Signed transaction appAccountToken does not match purchase attempt",
     );
+  }
+
+  // Defense-in-depth: when the App Store Server API credentials are
+  // provisioned, cross-check the transaction against Apple's
+  // authoritative server-side history. JWS verification proves the
+  // payload was signed by Apple at some point; the history check proves
+  // Apple still considers the transaction live and present right now.
+  // Transactions Apple has refunded or revoked between issuance and
+  // this call show up missing here, so we reject them as forgeries
+  // alongside actual replay attacks.
+  //
+  // Fail-closed on missing transactions, fail-open on transient API
+  // failures: a single Apple outage shouldn't take down purchases.
+  if (isAppStoreServerApiConfigured()) {
+    try {
+      await assertTransactionInHistory({
+        originalTransactionId: payload.originalTransactionId,
+        transactionId: payload.transactionId,
+      });
+    } catch (err) {
+      if (err instanceof AppStoreTransactionNotFoundError) {
+        logger.warn(
+          {
+            transactionId: payload.transactionId,
+            originalTransactionId: payload.originalTransactionId,
+          },
+          "Rejecting transaction — not present in Apple's server-side history",
+        );
+        throw new ValidationError(
+          "Transaction could not be confirmed against Apple's server-side history",
+        );
+      }
+      if (err instanceof AppStoreServerApiError) {
+        logger.warn(
+          {
+            statusCode: err.statusCode,
+            transactionId: payload.transactionId,
+            originalTransactionId: payload.originalTransactionId,
+          },
+          "App Store Server API check failed — proceeding with JWS-only verification",
+        );
+      } else {
+        throw err;
+      }
+    }
   }
 
   return payload;
@@ -767,6 +818,22 @@ async function tryBootstrapEntitlementFromWebhook(args: {
   const { transactionInfo, payload } = decoded;
   const { notificationType, subtype, notificationUUID } = payload;
 
+  // Dedupe on Apple's canonical idempotency key first. If we've already
+  // recorded an event with this notificationUUID — whether through this
+  // bootstrap path, the normal webhook path, or a prior retry — Apple
+  // is replaying and we have nothing to do.
+  const alreadyProcessed = await prisma.subscriptionEvent.findUnique({
+    where: { notificationUUID },
+    select: { id: true },
+  });
+  if (alreadyProcessed) {
+    logger.info(
+      { notificationUUID, notificationType },
+      "Webhook bootstrap skipped — notificationUUID already processed",
+    );
+    return true;
+  }
+
   const attempt = await prisma.purchaseAttempt.findUnique({
     where: { appAccountToken },
   });
@@ -908,41 +975,36 @@ async function tryBootstrapEntitlementFromWebhook(args: {
           ? "INITIAL_PURCHASE"
           : "PURCHASED";
 
-    const existingEvent = await tx.subscriptionEvent.findFirst({
-      where: {
+    // notificationUUID is the unique key now — we already short-circuited
+    // duplicate notifications above, but the create can still race with a
+    // concurrent webhook delivery. Letting Prisma surface the unique-index
+    // collision is fine; retries on the same UUID become idempotent.
+    await tx.subscriptionEvent.create({
+      data: {
         entitlementId: entitlement.id,
-        transactionId: transactionInfo.transactionId,
+        userId: attempt.userId,
+        companyId: attempt.companyId,
         eventType,
-      },
-      select: { id: true },
-    });
-    if (!existingEvent) {
-      await tx.subscriptionEvent.create({
-        data: {
-          entitlementId: entitlement.id,
-          userId: attempt.userId,
-          companyId: attempt.companyId,
-          eventType,
-          storeProductId: transactionInfo.productId,
-          transactionId: transactionInfo.transactionId,
-          environment: transactionInfo.environment,
-          platform: "ios",
-          appAccountToken,
-          effectiveAt: now,
-          payloadJson: {
-            notificationType,
-            subtype: subtype ?? null,
-            notificationUUID,
-            bootstrapped_from_webhook: true,
-          },
-          metadata: {
-            original_transaction_id: transactionInfo.originalTransactionId,
-            plan_code: product.plan.code,
-            purchase_attempt_id: attempt.id,
-          },
+        storeProductId: transactionInfo.productId,
+        transactionId: transactionInfo.transactionId,
+        environment: transactionInfo.environment,
+        platform: "ios",
+        appAccountToken,
+        notificationUUID,
+        effectiveAt: now,
+        payloadJson: {
+          notificationType,
+          subtype: subtype ?? null,
+          notificationUUID,
+          bootstrapped_from_webhook: true,
         },
-      });
-    }
+        metadata: {
+          original_transaction_id: transactionInfo.originalTransactionId,
+          plan_code: product.plan.code,
+          purchase_attempt_id: attempt.id,
+        },
+      },
+    });
 
     await tx.usageBucket.upsert({
       where: {
@@ -1012,7 +1074,7 @@ export async function handleAppStoreWebhook(
   decoded: DecodedAppleNotification,
 ): Promise<void> {
   const { payload, transactionInfo, renewalInfo } = decoded;
-  const { notificationType, subtype } = payload;
+  const { notificationType, subtype, notificationUUID } = payload;
   const {
     originalTransactionId,
     transactionId,
@@ -1020,6 +1082,25 @@ export async function handleAppStoreWebhook(
     appAccountToken,
     environment,
   } = transactionInfo;
+
+  // Apple's notificationUUID is the canonical idempotency key for App
+  // Store Server Notifications V2. Apple retries failed deliveries with
+  // the same UUID, and a single semantic event (e.g. "subscription
+  // renewed") always carries one. Checking it first lets us short-circuit
+  // duplicates at O(1) without loading the entitlement, before any of
+  // the per-event branching below — including the bootstrap path, where
+  // a duplicate INITIAL_BUY shouldn't re-run the upsert.
+  const alreadyProcessed = await prisma.subscriptionEvent.findUnique({
+    where: { notificationUUID },
+    select: { id: true },
+  });
+  if (alreadyProcessed) {
+    logger.info(
+      { notificationUUID, notificationType, transactionId },
+      "Duplicate App Store notification — notificationUUID already processed",
+    );
+    return;
+  }
 
   const entitlement = await prisma.userEntitlement.findFirst({
     where: { originalTransactionId },
@@ -1053,18 +1134,6 @@ export async function handleAppStoreWebhook(
   }
 
   const eventType = mapNotificationToEventType(notificationType, subtype);
-
-  // Idempotency: skip if we already processed this transactionId + eventType
-  const existingEvent = await prisma.subscriptionEvent.findFirst({
-    where: { entitlementId: entitlement.id, transactionId, eventType },
-  });
-  if (existingEvent) {
-    logger.info(
-      { transactionId, notificationType },
-      "Duplicate App Store notification — already processed",
-    );
-    return;
-  }
 
   const statusUpdate = mapNotificationToStatus(
     notificationType,
@@ -1132,11 +1201,12 @@ export async function handleAppStoreWebhook(
         environment,
         platform: "ios",
         appAccountToken: appAccountToken ?? null,
+        notificationUUID,
         effectiveAt: new Date(),
         payloadJson: {
           notificationType,
           subtype: subtype ?? null,
-          notificationUUID: payload.notificationUUID,
+          notificationUUID,
         },
         metadata: {
           originalTransactionId,

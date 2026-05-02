@@ -679,6 +679,7 @@ model SubscriptionEvent {
   environment      String?
   platform         String?
   appAccountToken  String?
+  notificationUUID String?               @unique
   effectiveAt      DateTime?
   payloadJson      Json?
   metadata         Json?
