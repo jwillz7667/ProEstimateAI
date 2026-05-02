@@ -94,7 +94,6 @@ final class AppState {
 enum AppTab: Int, CaseIterable, Identifiable {
     case dashboard
     case projects
-    case estimates
     case clients
     case settings
 
@@ -104,7 +103,6 @@ enum AppTab: Int, CaseIterable, Identifiable {
         switch self {
         case .dashboard: "Dashboard"
         case .projects: "Projects"
-        case .estimates: "Estimates"
         case .clients: "Clients"
         case .settings: "Settings"
         }
@@ -114,7 +112,6 @@ enum AppTab: Int, CaseIterable, Identifiable {
         switch self {
         case .dashboard: "square.grid.2x2"
         case .projects: "folder"
-        case .estimates: "doc.text"
         case .clients: "person.2"
         case .settings: "gearshape"
         }

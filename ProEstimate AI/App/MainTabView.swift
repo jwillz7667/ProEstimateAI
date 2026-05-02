@@ -14,10 +14,6 @@ struct MainTabView: View {
                     ProjectListView()
                 }
 
-                Tab("Estimates", systemImage: AppTab.estimates.systemImage, value: AppTab.estimates) {
-                    EstimateListView()
-                }
-
                 Tab("Clients", systemImage: AppTab.clients.systemImage, value: AppTab.clients) {
                     ClientListView()
                 }
