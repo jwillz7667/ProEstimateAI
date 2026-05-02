@@ -12,12 +12,20 @@ import SwiftUI
 struct ProjectTypeSelectionStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
 
-    private let gridSpacing: CGFloat = SpacingTokens.sm
+    /// Wider than 2 × (shadow blur + |y offset|) so adjacent tiles'
+    /// shadows fully clear each other in the gutter. ProjectTypeCard's
+    /// selected-state shadow is radius 7 / y 4 → ~11pt visible spread
+    /// on the selected side, plus the 1.02× scale pushes its edge
+    /// another ~1pt outward; the unselected neighbor adds ~6pt of its
+    /// own shadow reach. 24pt clears that combined ~18pt with a small
+    /// margin, mirroring the same fix DashboardRecentProjectsSection
+    /// applied to its carousel.
+    private let gridSpacing: CGFloat = 24
 
     private let columns = [
-        GridItem(.flexible(), spacing: SpacingTokens.sm),
-        GridItem(.flexible(), spacing: SpacingTokens.sm),
-        GridItem(.flexible(), spacing: SpacingTokens.sm),
+        GridItem(.flexible(), spacing: 24),
+        GridItem(.flexible(), spacing: 24),
+        GridItem(.flexible(), spacing: 24),
     ]
 
     var body: some View {

@@ -19,48 +19,50 @@ struct PromptCardCarousel: View {
     let selectedCardId: String?
     let onSelect: (PromptCard) -> Void
 
-    private let cardWidthFraction: CGFloat = 0.64
+    private let cardWidthFraction: CGFloat = 0.62
     private let cardHeight: CGFloat = 180
-    /// Selected cards drop a 12pt-radius / 6pt-y shadow — ~18pt visible
-    /// reach per side. Spacing has to clear 2× that or adjacent cards'
-    /// halos visibly merge in the gutter; 32pt buys a small safety
-    /// margin past the 36pt floor without making the carousel feel
-    /// sparse.
-    private let cardSpacing: CGFloat = 32
+    /// Selected card shadow is radius 12 / y 6 → ~12pt horizontal
+    /// visible reach per side; unselected adds another ~6pt from its
+    /// own shadow. 36pt clears the combined ~18pt with margin so the
+    /// gutter reads as deliberate negative space rather than two
+    /// touching cards.
+    private let cardSpacing: CGFloat = 36
     private let edgeMargin: CGFloat = SpacingTokens.md
 
     var body: some View {
-        // `.contentMargins(.horizontal, _, for: .scrollContent)` is the
-        // canonical iOS 17+ pattern for snap-paged carousels: the
-        // leading/trailing inset is honored by `.viewAligned` so the
-        // first card snaps with a clear left margin and the last
-        // settles flush to the right margin. Putting the equivalent
-        // `.padding(.horizontal, _)` on the inner LazyHStack does NOT
-        // get respected by snap behavior — items snap to the scroll
-        // container's edge and the first card sits flush at x=0.
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: cardSpacing) {
-                ForEach(cards) { card in
-                    Button {
-                        onSelect(card)
-                    } label: {
-                        cardContent(card)
+        // GeometryReader-driven layout. The previous version relied on
+        // `.containerRelativeFrame(.horizontal) { length, _ in length * 0.64 }`
+        // composed with `.contentMargins(...)` and `.scrollClipDisabled()`,
+        // which produced visually-touching cards on iPhone-class devices —
+        // the resolved `length` and the snap-aligned offset interacted in a
+        // way that swallowed the LazyHStack spacing. Switching to explicit
+        // `.frame(width:)` driven by the parent width is deterministic:
+        // card width and gutter are exactly what we set, full stop.
+        GeometryReader { proxy in
+            let cardWidth = proxy.size.width * cardWidthFraction
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: cardSpacing) {
+                    ForEach(cards) { card in
+                        Button {
+                            onSelect(card)
+                        } label: {
+                            cardContent(card)
+                        }
+                        .buttonStyle(PromptCardButtonStyle())
+                        .frame(width: cardWidth)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("\(card.title). \(card.subtitle)")
+                        .accessibilityValue(selectedCardId == card.id ? "Selected" : "Not selected")
+                        .accessibilityAddTraits(.isButton)
                     }
-                    .buttonStyle(PromptCardButtonStyle())
-                    .containerRelativeFrame(.horizontal) { length, _ in
-                        length * cardWidthFraction
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(card.title). \(card.subtitle)")
-                    .accessibilityValue(selectedCardId == card.id ? "Selected" : "Not selected")
-                    .accessibilityAddTraits(.isButton)
                 }
+                .padding(.horizontal, edgeMargin)
+                .scrollTargetLayout()
             }
-            .scrollTargetLayout()
+            .scrollTargetBehavior(.viewAligned)
+            .scrollClipDisabled()
         }
-        .scrollTargetBehavior(.viewAligned)
-        .contentMargins(.horizontal, edgeMargin, for: .scrollContent)
-        .scrollClipDisabled()
         .frame(height: cardHeight)
     }
 
