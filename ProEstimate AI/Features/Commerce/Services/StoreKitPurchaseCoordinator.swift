@@ -30,20 +30,38 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
     func purchase(product: Product, appAccountToken: UUID) async throws -> Transaction {
         logger.info("Initiating purchase for product: \(product.id) with token: \(appAccountToken.uuidString)")
 
+        // Pre-flight: confirm the device + Apple ID can transact at all.
+        // `AppStore.canMakePayments` is false when the device has parental
+        // controls / Screen Time blocking purchases, an MDM-managed device
+        // disables the App Store, or the account region/type doesn't support
+        // IAP. Without this guard, `Product.purchase()` either silently
+        // returns nothing or throws an opaque error and the user sees a
+        // frozen paywall — exactly the symptom the bug report describes.
+        guard AppStore.canMakePayments else {
+            logger.error("AppStore.canMakePayments == false; aborting purchase before StoreKit prompt.")
+            throw PurchaseError.paymentsNotAllowed
+        }
+
+        // Diagnostic-only: capture the active Storefront so support can
+        // disambiguate "wrong Apple ID" from "supported region but the
+        // account is blocked". Storefront reflects the App Store account,
+        // not the iCloud account — they can differ on a single device.
+        if let storefront = await Storefront.current {
+            logger.info("Active Storefront: country=\(storefront.countryCode) id=\(storefront.id)")
+        } else {
+            logger.warning("No active Storefront — App Store account may not be signed in.")
+        }
+
         // Attempt the StoreKit purchase with the app account token.
         let result: Product.PurchaseResult
         do {
-            var options: Set<Product.PurchaseOption> = [
+            let options: Set<Product.PurchaseOption> = [
                 .appAccountToken(appAccountToken),
             ]
-
-            // Ensure the purchase is associated with the correct subscription group window.
-            _ = options // Silence unused warning — options set is passed below.
-
             result = try await product.purchase(options: options)
         } catch {
             logger.error("StoreKit purchase failed: \(error.localizedDescription)")
-            throw PurchaseError.storeKitError(error.localizedDescription)
+            throw mapStoreKitError(error)
         }
 
         // Handle the purchase result.
@@ -52,10 +70,32 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
             let transaction = try verifyTransaction(verification)
             logger.info("Purchase verified. Transaction ID: \(transaction.id)")
 
+            // Round-trip assertion: the verified transaction MUST carry the
+            // exact appAccountToken we passed in `options`. A mismatch means
+            // the OS-level Apple ID didn't accept our token (typically
+            // because the user is signed into a different Apple ID at the
+            // App Store level than the ProEstimate account they authenticated
+            // as) — the backend would reject the sync anyway, but failing
+            // fast lets us surface a clear, actionable message and avoid
+            // finishing a transaction the backend will refuse to honour.
+            guard let returnedToken = transaction.appAccountToken,
+                  returnedToken == appAccountToken
+            else {
+                logger.error("appAccountToken round-trip failed. expected=\(appAccountToken.uuidString) got=\(transaction.appAccountToken?.uuidString ?? "nil")")
+                // Finish so Apple stops redelivering this exact transaction.
+                // The user resolves the account mismatch and can retry; the
+                // next purchase mints a fresh appAccountToken via the
+                // backend so there's no risk of replaying this one.
+                await transaction.finish()
+                throw PurchaseError.accountMismatch
+            }
+
             // Sync the transaction to the backend for server-side validation.
             // The Apple-signed JWS rides along so the backend can re-verify
             // the chain against Apple Root CA G3 before flipping entitlement.
-            await syncTransactionToBackend(
+            // `syncTransactionToBackend` re-throws unrecoverable errors
+            // (account mismatch) so the caller can render a specific UI.
+            try await syncTransactionToBackend(
                 transaction: transaction,
                 signedJWS: verification.jwsRepresentation,
                 appAccountToken: appAccountToken
@@ -79,6 +119,34 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
             logger.error("Unknown purchase result for product: \(product.id)")
             throw PurchaseError.storeKitError("Unknown purchase result")
         }
+    }
+
+    /// Map a raw StoreKit purchase error to a `PurchaseError`. StoreKit 2
+    /// surfaces `StoreKitError` for many failure modes; pulling out the
+    /// well-known cases lets the UI render specific copy instead of a
+    /// generic "something went wrong".
+    private func mapStoreKitError(_ error: Error) -> PurchaseError {
+        if let storeKitError = error as? StoreKitError {
+            switch storeKitError {
+            case .userCancelled:
+                return .cancelled
+            case .networkError:
+                return .network(storeKitError.localizedDescription)
+            case .notAvailableInStorefront, .notEntitled:
+                return .paymentsNotAllowed
+            default:
+                return .storeKitError(storeKitError.localizedDescription)
+            }
+        }
+        if let purchaseError = error as? Product.PurchaseError {
+            switch purchaseError {
+            case .ineligibleForOffer, .invalidQuantity, .productUnavailable:
+                return .productNotFound
+            default:
+                return .storeKitError(purchaseError.localizedDescription)
+            }
+        }
+        return .storeKitError(error.localizedDescription)
     }
 
     func restorePurchases() async throws {
@@ -175,11 +243,19 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
                 // remain the authoritative reconciliation path for those
                 // — we just refresh locally so the UI catches up.
                 if let appAccountToken = transaction.appAccountToken {
-                    await syncTransactionToBackend(
-                        transaction: transaction,
-                        signedJWS: result.jwsRepresentation,
-                        appAccountToken: appAccountToken
-                    )
+                    do {
+                        try await syncTransactionToBackend(
+                            transaction: transaction,
+                            signedJWS: result.jwsRepresentation,
+                            appAccountToken: appAccountToken
+                        )
+                    } catch {
+                        // The listener path can't surface UI; just log so
+                        // ops can investigate. Finishing below stops Apple
+                        // from infinitely redelivering. Eventual webhook
+                        // reconciliation handles legitimate renewals.
+                        logger.error("Listener sync failed: \(error.localizedDescription)")
+                    }
                 }
 
                 await transaction.finish()
@@ -210,16 +286,20 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
     // MARK: - Backend Sync
 
     /// Sync a verified transaction to the backend for server-side
-    /// reconciliation. Never throws — but on failure we still pull a
-    /// fresh entitlement snapshot directly so the local store is at
-    /// least as fresh as the backend's view of the world. Without this
-    /// fallback a transient sync failure would leave the user staring
-    /// at the FREE tier despite a verified Apple transaction.
+    /// reconciliation.
+    ///
+    /// Re-throws ONLY the unrecoverable errors that need explicit user
+    /// action — most prominently `accountMismatch`, where the backend
+    /// has refused to bind this transaction to the authenticated user.
+    /// Transient failures (network blips, idempotency races, server
+    /// hiccups) are absorbed and a fresh entitlement snapshot is pulled
+    /// from the canonical endpoint instead; App Store Server
+    /// Notifications remain the eventual-consistency safety net.
     private func syncTransactionToBackend(
         transaction: Transaction,
         signedJWS: String,
         appAccountToken: UUID
-    ) async {
+    ) async throws {
         let environment: String = {
             switch transaction.environment {
             case .sandbox: return "sandbox"
@@ -243,15 +323,23 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
             let updatedSnapshot = try await commerceAPI.syncTransaction(request: request)
             await entitlementStore.updateFromSnapshot(updatedSnapshot)
             logger.info("Transaction synced to backend. New state: \(updatedSnapshot.subscriptionState.rawValue)")
+        } catch let APIError.server(code, message) where code == "ACCOUNT_MISMATCH" {
+            logger.error("Backend rejected transaction with ACCOUNT_MISMATCH: \(message)")
+            // Refresh so the UI reflects whatever entitlement the backend
+            // currently believes — then propagate so the caller can route
+            // the user into the recovery flow (sign out / restore).
+            await entitlementStore.refresh()
+            throw PurchaseError.accountMismatch
+        } catch let APIError.network(message) {
+            logger.warning("Network error syncing transaction: \(message). Falling back to direct entitlement refresh.")
+            await entitlementStore.refresh()
+            throw PurchaseError.network(message)
         } catch {
             logger.warning("Failed to sync transaction to backend: \(error.localizedDescription). Falling back to direct entitlement refresh.")
-            // Fallback: regardless of why the sync round-trip failed
-            // (network blip, idempotency mismatch, server hiccup), the
-            // canonical entitlement endpoint is the safety net. App
-            // Store Server Notifications will eventually reconcile any
-            // remaining drift, but the user shouldn't have to wait for
-            // ASSN before features unlock.
             await entitlementStore.refresh()
+            // Transient — don't re-throw. ASSN + the next launch refresh
+            // will reconcile any drift; failing the purchase here would
+            // confuse a user whose payment Apple already authorized.
         }
     }
 }

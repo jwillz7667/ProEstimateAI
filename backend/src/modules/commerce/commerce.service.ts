@@ -1,5 +1,9 @@
 import { prisma } from "../../config/database";
-import { NotFoundError, ValidationError } from "../../lib/errors";
+import {
+  AccountMismatchError,
+  NotFoundError,
+  ValidationError,
+} from "../../lib/errors";
 import { v4 as uuidv4 } from "uuid";
 import { isAdminUser } from "../../lib/admin";
 import { logger } from "../../config/logger";
@@ -214,7 +218,18 @@ export async function syncTransaction(
   }
 
   if (attempt.userId !== userId) {
-    throw new ValidationError("Purchase attempt does not belong to this user");
+    // The iOS client signed and submitted a transaction whose
+    // `appAccountToken` was minted for a different ProEstimate account.
+    // Don't leak which account owns the token; the message stays generic.
+    logger.warn(
+      {
+        attemptUserId: attempt.userId,
+        requestUserId: userId,
+        appAccountToken: input.app_account_token,
+      },
+      "Purchase attempt user mismatch — rejecting with ACCOUNT_MISMATCH",
+    );
+    throw new AccountMismatchError();
   }
 
   // Idempotency: if already completed, return current snapshot

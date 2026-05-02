@@ -53,3 +53,19 @@ export class ConflictError extends AppError {
     this.name = 'ConflictError';
   }
 }
+
+/**
+ * Thrown when a StoreKit transaction's bound `appAccountToken` doesn't
+ * resolve to the authenticated user. This happens when the device's
+ * App Store Apple ID differs from the ProEstimate account that initiated
+ * the purchase — e.g. a contractor signed into the app with one account
+ * but tries to upgrade while signed into a different iCloud / App Store
+ * Apple ID. The 403 + dedicated `ACCOUNT_MISMATCH` code lets iOS render
+ * a specific recovery prompt instead of a generic "validation failed".
+ */
+export class AccountMismatchError extends AppError {
+  constructor(message: string = 'This purchase is associated with a different Apple ID than your ProEstimate account.') {
+    super(403, 'ACCOUNT_MISMATCH', message);
+    this.name = 'AccountMismatchError';
+  }
+}

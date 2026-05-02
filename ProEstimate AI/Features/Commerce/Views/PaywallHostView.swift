@@ -62,10 +62,14 @@ struct PaywallHostView: View {
                         // Feature comparison — Free vs Pro vs Premium.
                         FeatureComparisonListView()
 
-                        // Error message with inline retry.
+                        // Inline catalog-load failure with retry. Purchase
+                        // and restore outcomes go through `.alert(...)`
+                        // bound at the bottom of this view, so this banner
+                        // only fires when the StoreKit + backend catalog
+                        // both failed to load.
                         if let errorMessage = viewModel.errorMessage {
                             errorBanner(errorMessage) {
-                                Task { await viewModel.purchase() }
+                                Task { await viewModel.loadProducts() }
                             }
                         }
 
@@ -109,7 +113,53 @@ struct PaywallHostView: View {
                 dismiss()
             }
         }
+        .alert(
+            viewModel.activeAlert?.title ?? "",
+            isPresented: Binding(
+                get: { viewModel.activeAlert != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        viewModel.activeAlert = nil
+                    }
+                }
+            ),
+            presenting: viewModel.activeAlert,
+            actions: { alert in
+                ForEach(alert.actions, id: \.self) { action in
+                    Button(action.title, role: action.buttonRole) {
+                        handle(action, in: alert.context)
+                    }
+                }
+            },
+            message: { alert in
+                Text(alert.message)
+            }
+        )
         .interactiveDismissDisabled(false)
+    }
+
+    // MARK: - Alert Action Dispatch
+
+    /// Route a tapped alert action back into the view model. SwiftUI auto-
+    /// dismisses the alert as soon as any button fires, so we only have to
+    /// trigger the side-effect — the binding's `set` closure clears
+    /// `activeAlert` for us.
+    private func handle(_ action: PurchaseAlert.Action, in context: PurchaseAlert.Context) {
+        switch action {
+        case .dismiss:
+            // No-op — the alert binding clears `activeAlert` automatically
+            // when SwiftUI dismisses on tap.
+            break
+        case .tryAgain:
+            switch context {
+            case .purchase:
+                Task { await viewModel.purchase() }
+            case .restore:
+                Task { await viewModel.restorePurchases() }
+            }
+        case .restorePurchases:
+            Task { await viewModel.restorePurchases() }
+        }
     }
 
     // MARK: - Background
