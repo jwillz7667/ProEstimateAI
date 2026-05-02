@@ -38,6 +38,11 @@ struct PurchaseAlert: Identifiable, Sendable {
         case pendingApproval
         /// Local Apple ID does not match the ProEstimate account.
         case accountMismatch
+        /// The Apple subscription is already bound to a different
+        /// ProEstimate user. Distinct from `accountMismatch`: the
+        /// device-level Apple ID is fine, but the ProEstimate account
+        /// trying to claim it is wrong.
+        case subscriptionBoundToOtherUser
         /// `AppStore.canMakePayments` is false — IAP disabled by Screen
         /// Time, MDM, or unsupported region.
         case paymentsNotAllowed
@@ -64,6 +69,7 @@ struct PurchaseAlert: Identifiable, Sendable {
     static let selectionRequired = PurchaseAlert(kind: .selectionRequired)
     static let pendingApproval = PurchaseAlert(kind: .pendingApproval)
     static let accountMismatch = PurchaseAlert(kind: .accountMismatch)
+    static let subscriptionBoundToOtherUser = PurchaseAlert(kind: .subscriptionBoundToOtherUser)
     static let paymentsNotAllowed = PurchaseAlert(kind: .paymentsNotAllowed)
     static let verificationFailed = PurchaseAlert(kind: .verificationFailed)
     static let productUnavailable = PurchaseAlert(kind: .productUnavailable)
@@ -93,6 +99,11 @@ struct PurchaseAlert: Identifiable, Sendable {
             return String(
                 localized: "purchase.alert.account_mismatch.title",
                 defaultValue: "Apple ID Mismatch"
+            )
+        case .subscriptionBoundToOtherUser:
+            return String(
+                localized: "purchase.alert.subscription_bound_to_other_user.title",
+                defaultValue: "Subscription Linked to Another Account"
             )
         case .paymentsNotAllowed:
             return String(
@@ -158,6 +169,11 @@ struct PurchaseAlert: Identifiable, Sendable {
                 localized: "purchase.alert.account_mismatch.message",
                 defaultValue: "We detected a different Apple ID than the one linked to your ProEstimate account. Sign out of the other Apple ID in Settings → App Store, or tap Restore Purchases if you've already subscribed."
             )
+        case .subscriptionBoundToOtherUser:
+            return String(
+                localized: "purchase.alert.subscription_bound_to_other_user.message",
+                defaultValue: "This Apple subscription is already linked to a different ProEstimate account. Sign in to that account to access Pro features, or contact support if you need help."
+            )
         case .paymentsNotAllowed:
             return String(
                 localized: "purchase.alert.payments_not_allowed.message",
@@ -203,7 +219,11 @@ struct PurchaseAlert: Identifiable, Sendable {
              .pendingApproval,
              .productUnavailable,
              .nothingToRestore,
-             .paymentsNotAllowed:
+             .paymentsNotAllowed,
+             // Restore would just hit the same SUBSCRIPTION_BOUND_TO_OTHER_USER
+             // wall, so don't offer it. The recovery happens off-device:
+             // sign into the right ProEstimate account, or contact support.
+             .subscriptionBoundToOtherUser:
             return [.dismiss]
         case .accountMismatch:
             return [.dismiss, .restorePurchases]

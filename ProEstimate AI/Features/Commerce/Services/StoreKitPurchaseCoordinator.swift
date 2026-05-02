@@ -184,9 +184,23 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
                 let snapshot = try await commerceAPI.restoreTransactions(items)
                 await entitlementStore.updateFromSnapshot(snapshot)
                 logger.info("Restore synced \(items.count) transaction(s) to backend. New state: \(snapshot.subscriptionState.rawValue)")
+            } catch let APIError.server(code, message) where code == "SUBSCRIPTION_BOUND_TO_OTHER_USER" {
+                logger.error("Restore rejected — subscription owned by another ProEstimate user: \(message)")
+                await entitlementStore.refresh()
+                throw PurchaseError.subscriptionBoundToOtherUser
+            } catch let APIError.server(code, message) where code == "ACCOUNT_MISMATCH" {
+                // The restore endpoint doesn't currently emit this code,
+                // but mirror the sync path so any future tightening lands
+                // in the right alert without another iOS round-trip.
+                logger.error("Restore rejected with ACCOUNT_MISMATCH: \(message)")
+                await entitlementStore.refresh()
+                throw PurchaseError.accountMismatch
+            } catch let APIError.network(message) {
+                logger.warning("Network error during restore: \(message). Falling back to direct entitlement refresh.")
+                await entitlementStore.refresh()
+                throw PurchaseError.network(message)
             } catch {
                 logger.error("Backend restore sync failed: \(error.localizedDescription)")
-                // Still refresh in case backend reconciled via ASSN.
                 await entitlementStore.refresh()
                 throw PurchaseError.storeKitError(error.localizedDescription)
             }
@@ -330,6 +344,14 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
             // the user into the recovery flow (sign out / restore).
             await entitlementStore.refresh()
             throw PurchaseError.accountMismatch
+        } catch let APIError.server(code, message) where code == "SUBSCRIPTION_BOUND_TO_OTHER_USER" {
+            logger.error("Backend rejected transaction — subscription owned by another ProEstimate user: \(message)")
+            // Pull the canonical entitlement (the user remains FREE on this
+            // account) and propagate so the paywall can render the
+            // dedicated alert. Restore would just hit the same wall, so
+            // we don't suggest it.
+            await entitlementStore.refresh()
+            throw PurchaseError.subscriptionBoundToOtherUser
         } catch let APIError.network(message) {
             logger.warning("Network error syncing transaction: \(message). Falling back to direct entitlement refresh.")
             await entitlementStore.refresh()

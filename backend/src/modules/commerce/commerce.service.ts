@@ -2,6 +2,7 @@ import { prisma } from "../../config/database";
 import {
   AccountMismatchError,
   NotFoundError,
+  SubscriptionOwnedByOtherUserError,
   ValidationError,
 } from "../../lib/errors";
 import { v4 as uuidv4 } from "uuid";
@@ -127,6 +128,76 @@ export async function createPurchaseAttempt(
 // ─── Commerce Sync Service ─────────────────────────────
 
 /**
+ * Statuses that count as a *live* claim on an Apple subscription. If a
+ * `UserEntitlement` with one of these statuses already references an
+ * `originalTransactionId`, that subscription is considered bound to
+ * that user — a different ProEstimate user cannot reclaim it via sync
+ * or restore. Statuses outside this list (`EXPIRED`, `REVOKED`, `FREE`,
+ * `ADMIN_OVERRIDE`) leave the originalTransactionId free to be
+ * re-bound: an expired/refunded sub from user A can legitimately be
+ * resubscribed by user B sharing the same Apple ID.
+ */
+const ACTIVE_ENTITLEMENT_STATUSES = [
+  "TRIAL_ACTIVE",
+  "PRO_ACTIVE",
+  "GRACE_PERIOD",
+  "BILLING_RETRY",
+  "CANCELED_ACTIVE",
+] as const;
+
+/**
+ * Reject the request if `originalTransactionId` is already bound to a
+ * different ProEstimate user with a live entitlement. This is the
+ * server-side identity gate for the multi-Apple-ID case: even when
+ * Apple's JWS verifies cleanly and the requesting user is fully
+ * authenticated, we refuse to flip their entitlement if the
+ * subscription itself is owned by someone else.
+ *
+ * `syncTransaction` already gates on `PurchaseAttempt.userId`, but a
+ * crafted `PurchaseAttempt` could theoretically be created by user A
+ * for user B's transaction; this is defense in depth there.
+ *
+ * `restorePurchases` has *no* PurchaseAttempt to gate on, so this is
+ * the primary fix: without it, any user signed into the same Apple ID
+ * could call `/restore` and be granted Pro by replaying a JWS from
+ * another ProEstimate account on the device.
+ */
+async function assertOriginalTransactionOwnership(
+  userId: string,
+  originalTransactionId: string,
+): Promise<void> {
+  const existing = await prisma.userEntitlement.findFirst({
+    where: { originalTransactionId },
+    select: { userId: true, status: true },
+  });
+
+  if (!existing) {
+    return;
+  }
+  if (existing.userId === userId) {
+    return;
+  }
+  if (
+    !(ACTIVE_ENTITLEMENT_STATUSES as readonly string[]).includes(
+      existing.status,
+    )
+  ) {
+    return;
+  }
+
+  logger.warn(
+    {
+      requestUserId: userId,
+      claimedByUserId: existing.userId,
+      originalTransactionId,
+      currentStatus: existing.status,
+    },
+    "Apple subscription claim rejected — already bound to another active ProEstimate account",
+  );
+  throw new SubscriptionOwnedByOtherUserError();
+}
+
+/**
  * Verify the iOS-supplied StoreKit JWS and assert that the
  * Apple-signed payload corroborates every scalar field in the sync
  * request. We reject the request if Apple's signature doesn't validate
@@ -207,6 +278,14 @@ export async function syncTransaction(
     expectedProductId: input.store_product_id,
     expectedAppAccountToken: input.app_account_token,
   });
+
+  // Defense-in-depth identity gate: even with a valid JWS and a
+  // matching purchase attempt, refuse to bind this transaction if it
+  // is already claimed by a different ProEstimate user.
+  await assertOriginalTransactionOwnership(
+    userId,
+    input.original_transaction_id,
+  );
 
   // 2. Find and verify the purchase attempt by app account token
   const attempt = await prisma.purchaseAttempt.findUnique({
@@ -313,22 +392,35 @@ export async function syncTransaction(
       include: { plan: true },
     });
 
-    // Create subscription event
+    // Create subscription event — dedupe against {entitlementId,
+    // transactionId, eventType} so concurrent retries (e.g. iOS resending
+    // after a network blip on the response) don't pollute the audit
+    // trail with duplicate PURCHASED/TRIAL_STARTED rows.
     const eventType = product.hasIntroOffer ? "TRIAL_STARTED" : "PURCHASED";
-    await tx.subscriptionEvent.create({
-      data: {
+    const existingEvent = await tx.subscriptionEvent.findFirst({
+      where: {
         entitlementId: entitlement.id,
-        eventType,
-        storeProductId: input.store_product_id,
         transactionId: input.transaction_id,
-        environment: input.environment,
-        metadata: {
-          original_transaction_id: input.original_transaction_id,
-          purchase_attempt_id: input.purchase_attempt_id,
-          plan_code: planCode,
-        },
+        eventType,
       },
+      select: { id: true },
     });
+    if (!existingEvent) {
+      await tx.subscriptionEvent.create({
+        data: {
+          entitlementId: entitlement.id,
+          eventType,
+          storeProductId: input.store_product_id,
+          transactionId: input.transaction_id,
+          environment: input.environment,
+          metadata: {
+            original_transaction_id: input.original_transaction_id,
+            purchase_attempt_id: input.purchase_attempt_id,
+            plan_code: planCode,
+          },
+        },
+      });
+    }
 
     // Upgrade usage buckets to Pro limits (effectively unlimited)
     const PRO_INCLUDED_QUANTITY = 999999;
@@ -420,6 +512,17 @@ export async function restorePurchases(
   // the latest from the StoreKit 2 transaction history).
   const latestTx = transactions[transactions.length - 1];
 
+  // Identity gate: this is the primary fix for the multi-Apple-ID
+  // restore path. Without it, any ProEstimate user signed into the
+  // same device's Apple ID could call `/restore` and steal the active
+  // subscription owned by a different ProEstimate user. Apple's JWS
+  // verifies the transaction's authenticity, but says nothing about
+  // which ProEstimate account is allowed to claim it.
+  await assertOriginalTransactionOwnership(
+    userId,
+    latestTx.original_transaction_id,
+  );
+
   // Find the subscription product to determine what they are restoring
   const product = await prisma.subscriptionProduct.findUnique({
     where: { storeProductId: latestTx.store_product_id },
@@ -474,21 +577,35 @@ export async function restorePurchases(
       include: { plan: true },
     });
 
-    // Create RESTORED subscription event
-    await tx.subscriptionEvent.create({
-      data: {
+    // Create RESTORED subscription event — dedupe against
+    // {entitlementId, transactionId, eventType}. A user tapping
+    // "Restore Purchases" twice (or the listener firing while a manual
+    // restore is in flight) shouldn't write two RESTORED rows for the
+    // same Apple transaction.
+    const existingRestoreEvent = await tx.subscriptionEvent.findFirst({
+      where: {
         entitlementId: entitlement.id,
-        eventType: "RESTORED",
-        storeProductId: latestTx.store_product_id,
         transactionId: latestTx.transaction_id,
-        environment: latestTx.environment,
-        metadata: {
-          original_transaction_id: latestTx.original_transaction_id,
-          plan_code: planCode,
-          restored_transactions_count: transactions.length,
-        },
+        eventType: "RESTORED",
       },
+      select: { id: true },
     });
+    if (!existingRestoreEvent) {
+      await tx.subscriptionEvent.create({
+        data: {
+          entitlementId: entitlement.id,
+          eventType: "RESTORED",
+          storeProductId: latestTx.store_product_id,
+          transactionId: latestTx.transaction_id,
+          environment: latestTx.environment,
+          metadata: {
+            original_transaction_id: latestTx.original_transaction_id,
+            plan_code: planCode,
+            restored_transactions_count: transactions.length,
+          },
+        },
+      });
+    }
 
     // Upgrade usage buckets to Pro limits
     await tx.usageBucket.upsert({

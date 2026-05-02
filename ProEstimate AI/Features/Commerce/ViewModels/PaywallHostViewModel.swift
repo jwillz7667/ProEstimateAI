@@ -314,6 +314,9 @@ final class PaywallHostViewModel {
         case .accountMismatch:
             logger.error("Purchase blocked by account mismatch.")
             activeAlert = PurchaseAlert(kind: .accountMismatch, context: context)
+        case .subscriptionBoundToOtherUser:
+            logger.error("Purchase blocked — Apple subscription owned by another ProEstimate user.")
+            activeAlert = PurchaseAlert(kind: .subscriptionBoundToOtherUser, context: context)
         case .paymentsNotAllowed:
             logger.error("Purchase blocked: payments not allowed on this device/Apple ID.")
             activeAlert = PurchaseAlert(kind: .paymentsNotAllowed, context: context)

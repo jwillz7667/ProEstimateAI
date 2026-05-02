@@ -69,3 +69,20 @@ export class AccountMismatchError extends AppError {
     this.name = 'AccountMismatchError';
   }
 }
+
+/**
+ * Thrown when an Apple `originalTransactionId` is already bound to a
+ * different ProEstimate user with an active entitlement. Distinct from
+ * `AccountMismatchError`: that fires when the *device's* Apple ID doesn't
+ * match the user's purchase attempt token; this fires when the Apple
+ * subscription itself has already been claimed by a different
+ * ProEstimate account. The recovery is "sign into the ProEstimate
+ * account that owns the subscription" — restore won't help because it
+ * would just hit the same wall.
+ */
+export class SubscriptionOwnedByOtherUserError extends AppError {
+  constructor(message: string = 'This Apple subscription is already linked to a different ProEstimate account.') {
+    super(403, 'SUBSCRIPTION_BOUND_TO_OTHER_USER', message);
+    this.name = 'SubscriptionOwnedByOtherUserError';
+  }
+}

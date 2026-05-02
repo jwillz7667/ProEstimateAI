@@ -51,6 +51,14 @@ enum PurchaseError: Error, LocalizedError, Sendable {
     /// User must sign in with the matching Apple ID, or use Restore Purchases.
     case accountMismatch
 
+    /// The Apple subscription is already bound to a *different* ProEstimate
+    /// account with an active entitlement. Distinct from `accountMismatch`:
+    /// here the device's Apple ID is fine, but the ProEstimate user trying
+    /// to claim it is the wrong one. Restore won't help — it would just hit
+    /// the same wall — so the only recovery is signing into the ProEstimate
+    /// account that owns the subscription, or contacting support.
+    case subscriptionBoundToOtherUser
+
     /// A network error occurred during the purchase round-trip. Retryable.
     case network(String)
 
@@ -76,6 +84,11 @@ enum PurchaseError: Error, LocalizedError, Sendable {
             return String(
                 localized: "purchase.error.account_mismatch.message",
                 defaultValue: "We detected a different Apple ID than the one linked to your ProEstimate account. Sign out of the other Apple ID in Settings → App Store, or tap Restore Purchases if you've already subscribed."
+            )
+        case .subscriptionBoundToOtherUser:
+            return String(
+                localized: "purchase.error.subscription_bound_to_other_user.message",
+                defaultValue: "This Apple subscription is linked to a different ProEstimate account. Sign in to that account to access Pro features, or contact support if you need help."
             )
         case .network(let detail):
             return String(
