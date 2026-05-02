@@ -449,16 +449,34 @@ async function autoCreateEstimate(
   materialSuggestionIds: string[],
   projectType: string,
 ) {
-  // Fetch the stored material suggestions
-  const materials = await prisma.materialSuggestion.findMany({
-    where: { id: { in: materialSuggestionIds } },
-    orderBy: { sortOrder: "asc" },
-  });
+  // Fetch the stored material suggestions + company tax setting in parallel.
+  // Tax was previously hardcoded to 8.25%, which both ignored the contractor's
+  // saved default and over-charged for tax-free materials in states like OR,
+  // MT, NH, DE, AK. Reading defaultTaxRate keeps the auto-estimate consistent
+  // with what the estimate editor and the secondary AI-estimate path use.
+  const [materials, company] = await Promise.all([
+    prisma.materialSuggestion.findMany({
+      where: { id: { in: materialSuggestionIds } },
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.company.findUnique({
+      where: { id: companyId },
+      select: { defaultTaxRate: true },
+    }),
+  ]);
 
   if (materials.length === 0) {
     logger.warn({ projectId }, "No materials to create auto-estimate from");
     return;
   }
+
+  // company.defaultTaxRate is stored as a percentage (e.g., 8.25 for 8.25%);
+  // the line-item taxRate column is a fraction (0.0825). Convert here.
+  // Fall back to 0 (not 8.25%) so contractors who deliberately leave the
+  // setting unset don't have a silent national-average tax injected.
+  const companyTaxFraction = company?.defaultTaxRate
+    ? Number(company.defaultTaxRate) / 100
+    : 0;
 
   // Check if an estimate already exists for this project
   const existingEstimates = await prisma.estimate.findMany({
@@ -487,12 +505,14 @@ async function autoCreateEstimate(
     logger.info({ estimateId, projectId }, "Created new auto-estimate");
   }
 
-  // Convert MaterialSuggestions to line items. Gemini labor estimates are
-  // stored in the same MaterialSuggestion table with a "Labor - <trade>"
-  // category prefix, so we detect those and route them into the 'labor'
-  // line-item category (previously they were all routed to 'materials',
-  // which inflated the Materials subtotal and caused double-counting when
-  // combined with the default-labor line item below).
+  // Convert MaterialSuggestions to line items. The DeepSeek prompt contract
+  // (see materialJsonContract in lib/prompts/shared.ts) guarantees that
+  // MaterialSuggestion.estimatedCost is a PER-UNIT price in USD per the
+  // sibling unit field. The line-item math is `quantity * unitCost`, so
+  // estimatedCost flows directly into unit_cost without conversion.
+  // Gemini-style labor rows (categoryPrefix "Labor") are stored with
+  // estimatedCost = ratePerHour and quantity = hoursEstimate; same per-unit
+  // shape, so the same direct mapping is correct.
   let hasGeneratedLabor = false;
   const lineItems: CreateEstimateLineItemInput[] = materials.map((m, index) => {
     const isLabor =
@@ -519,11 +539,40 @@ async function autoCreateEstimate(
       unit: m.unit,
       unit_cost: Number(m.estimatedCost),
       markup_percent: 0,
-      tax_rate: 0.0825,
+      tax_rate: companyTaxFraction,
       sort_order: index,
       source_material_suggestion_id: m.id,
     };
   });
+
+  // Defense-in-depth audit log so we can spot LLM regressions (model
+  // returning totals despite the contract) before contractors see them.
+  // Pure observation — no enforcement — so a future legitimate luxury
+  // SKU above this threshold (e.g., a $40K natural-stone slab) still
+  // flows through cleanly with a warning attached.
+  const PER_UNIT_OUTLIER_THRESHOLD = 5000;
+  const outliers = lineItems.filter(
+    (li) =>
+      li.category === "materials" &&
+      li.unit_cost >= PER_UNIT_OUTLIER_THRESHOLD &&
+      li.quantity >= 5,
+  );
+  if (outliers.length > 0) {
+    logger.warn(
+      {
+        projectId,
+        estimateId,
+        outliers: outliers.map((o) => ({
+          name: o.name,
+          unit: o.unit,
+          quantity: o.quantity,
+          unit_cost: o.unit_cost,
+          implied_line_total: o.quantity * o.unit_cost,
+        })),
+      },
+      "Potential per-unit price outlier — review prompt output",
+    );
+  }
 
   // Only add a default flat labor line if Gemini did not already provide
   // labor estimates — otherwise the estimate double-counts labor.

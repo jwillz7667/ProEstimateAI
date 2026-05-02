@@ -9,6 +9,11 @@ struct MaterialSuggestion: Codable, Identifiable, Hashable, Sendable {
     let projectId: String
     let name: String
     let category: String
+    /// Per-unit price in USD, where the unit is `unit` below. The line
+    /// total is `quantity * estimatedCost`; treating this as a total and
+    /// then multiplying by quantity again produces N× inflated estimates.
+    /// Backend enforces the same invariant in the DeepSeek prompt
+    /// contract (`materialJsonContract` in lib/prompts/shared.ts).
     let estimatedCost: Decimal
     let unit: String
     let quantity: Decimal

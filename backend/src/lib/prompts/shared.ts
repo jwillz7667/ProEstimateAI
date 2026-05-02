@@ -56,6 +56,15 @@ export function tierLanguage(tier: QualityTier): {
  * Renders the universal output-contract block appended to every material
  * prompt. The contract is identical regardless of project type so the
  * orchestrator can deserialize results with one Zod schema.
+ *
+ * INVARIANT: `estimatedCost` is the per-unit price in USD, where the unit
+ * is the value of the sibling `unit` field. The downstream estimate
+ * line-item math is `lineTotal = quantity * estimatedCost * (1 + markup)`,
+ * so handing back a TOTAL here multiplies the cost by `quantity` again
+ * and produces N× inflated estimates. Every per-type prompt module's
+ * PRICING ANCHORS section quotes per-unit ranges already — this contract
+ * line keeps the model's output consistent with those anchors instead of
+ * forcing it to silently convert.
  */
 export function materialJsonContract(): string {
   return `
@@ -66,7 +75,7 @@ Return ONLY a JSON object of the form:
     {
       "name": "string — short, retailer-friendly product name",
       "category": "string — see allowed categories per project type",
-      "estimatedCost": number,                  // total cost for the quantity (USD)
+      "estimatedCost": number,                  // PER-UNIT price in USD (per the unit below)
       "unit": "string — sq_ft | linear_ft | cubic_yard | each | gallon | bag | ton | hour | visit | sheet | bundle | square (roofing) | pallet",
       "quantity": number,                       // numeric quantity in the unit above
       "supplierName": "string — e.g., Home Depot, Lowe's, SiteOne, Ferguson",
@@ -77,10 +86,23 @@ Return ONLY a JSON object of the form:
 }
 Rules:
 - 5–14 PRIMARY line items + exactly ONE final "Miscellaneous Supplies" line
-  (fasteners, caulk, blades, sandpaper, drop cloths, tape, etc.) at $80–$300
-  depending on tier and project size.
-- Prices are TOTAL for the quantity, NOT unit price.
+  (fasteners, caulk, blades, sandpaper, drop cloths, tape, etc.) priced at
+  $80–$300 TOTAL — i.e., for that one Misc line, set unit="each", quantity=1,
+  and estimatedCost between 80 and 300.
+- estimatedCost is PER UNIT — the cost of ONE unit of the item, not the
+  total for the quantity. The line total is computed downstream as
+  quantity * estimatedCost. Returning a total instead of a unit price
+  produces wildly inflated estimates.
+  WORKED EXAMPLE (luxury kitchen quartz):
+    name="Calacatta Quartz Slab", unit="sq_ft", quantity=45, estimatedCost=180
+    → downstream lineTotal = 45 * 180 = $8,100 ✓
+    Returning estimatedCost=8100 here would produce 45 * 8100 = $364,500 ✗.
+  When unit="each" and the item is a single unit (one range, one sink),
+  per-unit price IS the line total — quantity should be 1.
 - estimatedCost MUST be a number (not a string, no currency symbol).
+- The PRICING ANCHORS section above quotes prices in the same per-unit
+  format (e.g., "$140–$220/sf"). Anchor your numbers directly to that
+  range; do not multiply them by quantity.
 - supplierSearchQuery should be specific enough to land on the right product
   (e.g., "Hardie Plank cedarmill 8.25 inch" — NOT just "siding").
 - DO NOT include labor lines here; labor is generated separately.
