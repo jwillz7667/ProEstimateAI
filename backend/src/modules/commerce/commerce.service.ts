@@ -146,6 +146,17 @@ const ACTIVE_ENTITLEMENT_STATUSES = [
 ] as const;
 
 /**
+ * Statuses that signal the Apple subscription has fully ended — no
+ * service obligation remains. Hitting any of these via webhook is the
+ * trigger for downgrading the user's Pro-tier usage buckets back to
+ * the FREE quota (or 0 remaining if they exhausted their starter
+ * credits during the Pro window). Without this cleanup, a refunded
+ * user silently keeps `includedQuantity=999999` and any code path that
+ * trusts buckets alone treats them as Pro.
+ */
+const TERMINAL_ENTITLEMENT_STATUSES = ["EXPIRED", "REVOKED"] as const;
+
+/**
  * Reject the request if `originalTransactionId` is already bound to a
  * different ProEstimate user with a live entitlement. This is the
  * server-side identity gate for the multi-Apple-ID case: even when
@@ -364,6 +375,20 @@ export async function syncTransaction(
       },
     });
 
+    // Release the originalTransactionId from any prior owner's row.
+    // assertOriginalTransactionOwnership above guarantees no other user
+    // holds an *active* claim, so any matching row is necessarily
+    // terminal (EXPIRED/REVOKED). Clearing the lookup key keeps the
+    // webhook handler's findFirst-by-originalTransactionId stable when
+    // the new owner is later renewed/refunded.
+    await tx.userEntitlement.updateMany({
+      where: {
+        originalTransactionId: input.original_transaction_id,
+        userId: { not: userId },
+      },
+      data: { originalTransactionId: null },
+    });
+
     // Upsert the user entitlement
     const entitlement = await tx.userEntitlement.upsert({
       where: { userId },
@@ -549,6 +574,18 @@ export async function restorePurchases(
   const PRO_INCLUDED_QUANTITY = 999999;
 
   const result = await prisma.$transaction(async (tx) => {
+    // Release the originalTransactionId from any prior owner's row —
+    // see syncTransaction for full rationale. assertOriginalTransactionOwnership
+    // above guarantees the prior owner (if any) is terminal, so we
+    // preserve their audit fields but drop the lookup key.
+    await tx.userEntitlement.updateMany({
+      where: {
+        originalTransactionId: latestTx.original_transaction_id,
+        userId: { not: userId },
+      },
+      data: { originalTransactionId: null },
+    });
+
     // Upsert entitlement to PRO_ACTIVE for a restore
     const entitlement = await tx.userEntitlement.upsert({
       where: { userId },
@@ -744,6 +781,34 @@ export async function handleAppStoreWebhook(
         where: { id: entitlement.id },
         data: updateData,
       });
+
+      // Subscription terminated — downgrade Pro usage buckets so the
+      // user reverts to their STARTER quota. Setting includedQuantity=0
+      // (rather than deleting the row) preserves consumed-history audit
+      // and keeps the row idempotent: a future re-subscribe upserts
+      // PRO_INCLUDED_QUANTITY back into includedQuantity.
+      if (
+        (TERMINAL_ENTITLEMENT_STATUSES as readonly string[]).includes(
+          statusUpdate.status,
+        )
+      ) {
+        await tx.usageBucket.updateMany({
+          where: {
+            userId: entitlement.userId,
+            companyId: entitlement.companyId,
+            source: "PRO_SUBSCRIPTION",
+          },
+          data: { includedQuantity: 0 },
+        });
+        logger.info(
+          {
+            entitlementId: entitlement.id,
+            userId: entitlement.userId,
+            terminalStatus: statusUpdate.status,
+          },
+          "Subscription terminated — Pro usage buckets downgraded to 0",
+        );
+      }
     }
 
     await tx.subscriptionEvent.create({
