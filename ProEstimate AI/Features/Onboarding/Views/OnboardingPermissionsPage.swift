@@ -15,11 +15,6 @@ struct OnboardingPermissionsPage: View {
 
             ZStack {
                 Circle()
-                    .fill(ColorTokens.primaryOrange.opacity(0.18))
-                    .frame(width: 180, height: 180)
-                    .blur(radius: 24)
-
-                Circle()
                     .fill(
                         LinearGradient(
                             colors: [
@@ -31,7 +26,6 @@ struct OnboardingPermissionsPage: View {
                         )
                     )
                     .frame(width: 128, height: 128)
-                    .shadow(color: ColorTokens.primaryOrange.opacity(0.55), radius: 24, x: 0, y: 12)
 
                 Image(systemName: "camera.aperture")
                     .resizable()

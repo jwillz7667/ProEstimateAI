@@ -11,12 +11,9 @@ struct OnboardingWelcomePage: View {
             Spacer(minLength: SpacingTokens.xxl)
 
             // Hero mark — orange circle with a house glyph sized for prominence.
+            // No blurred orange halo and no orange drop-shadow: the brand
+            // glyph is the focal point, the page background should not glow.
             ZStack {
-                Circle()
-                    .fill(ColorTokens.primaryOrange.opacity(0.18))
-                    .frame(width: 200, height: 200)
-                    .blur(radius: 24)
-
                 Circle()
                     .fill(
                         LinearGradient(
@@ -29,7 +26,6 @@ struct OnboardingWelcomePage: View {
                         )
                     )
                     .frame(width: 140, height: 140)
-                    .shadow(color: ColorTokens.primaryOrange.opacity(0.55), radius: 24, x: 0, y: 12)
 
                 Image(systemName: "house.fill")
                     .resizable()

@@ -21,12 +21,20 @@ struct PromptCardCarousel: View {
 
     private let cardWidthFraction: CGFloat = 0.62
     private let cardHeight: CGFloat = 180
-    /// Selected card shadow is radius 12 / y 6 → ~12pt horizontal
-    /// visible reach per side; unselected adds another ~6pt from its
-    /// own shadow. 36pt clears the combined ~18pt with margin so the
-    /// gutter reads as deliberate negative space rather than two
-    /// touching cards.
-    private let cardSpacing: CGFloat = 36
+    /// Two visual reaches eat into the gutter and have to be cleared
+    /// separately:
+    ///   1. Shadow reach — selected card radius 12 + unselected radius 6
+    ///      ≈ 18pt of soft shadow bleeding into the gap.
+    ///   2. Gradient continuity — each card ends in a near-opaque black
+    ///      band (`.78` opacity) flush to its trailing edge. Adjacent
+    ///      cards' dark bands sit on the same dark app background and
+    ///      visually fuse into one continuous strip unless the gutter
+    ///      is wide enough to clearly break that band.
+    /// 36pt cleared (1) but lost to (2). 56pt holds a ~38pt visibly
+    /// empty channel between cards after both reaches are subtracted —
+    /// the gutter reads as deliberate negative space and the dark
+    /// gradient bands no longer fuse.
+    private let cardSpacing: CGFloat = 56
     private let edgeMargin: CGFloat = SpacingTokens.md
 
     var body: some View {
