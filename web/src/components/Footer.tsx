@@ -81,8 +81,10 @@ export default function Footer() {
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/logo.png"
-                  alt="ProEstimate"
+                  src="/favicon-32.png"
+                  alt="ProEstimate AI logo"
+                  width={20}
+                  height={20}
                   className="h-5 w-5 object-contain"
                 />
               </div>

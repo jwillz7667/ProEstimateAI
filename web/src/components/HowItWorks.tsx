@@ -121,10 +121,14 @@ function StepRow({ step, reverse }: { step: Step; reverse: boolean }) {
         />
         <div className="relative w-full rounded-[2.5rem] bg-ink-950 p-[6px] shadow-xl shadow-black/15 ring-1 ring-black/5 sm:p-[7px]">
           <div className="relative aspect-[1206/2622] w-full overflow-hidden rounded-[2.2rem] bg-ink-950">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={step.screenshot}
               alt={step.alt}
               loading="lazy"
+              decoding="async"
+              width={1206}
+              height={2622}
               className="block h-full w-full object-cover"
             />
           </div>

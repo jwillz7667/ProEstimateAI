@@ -94,10 +94,14 @@ function ScreenshotCard({ screen }: { screen: AppScreen }) {
         />
         <div className="relative w-full rounded-[2.4rem] bg-ink-950 p-[6px] shadow-2xl ring-1 ring-white/10 sm:p-[7px]">
           <div className="relative aspect-[1206/2622] w-full overflow-hidden rounded-[2.1rem] bg-ink-950">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={screen.screenshot}
-              alt={`${screen.title} screen of the ProEstimate AI app`}
+              alt={`${screen.title} screen of the ProEstimate AI iOS app — ${screen.caption}`}
               loading="lazy"
+              decoding="async"
+              width={1206}
+              height={2622}
               className="block h-full w-full object-cover"
             />
           </div>

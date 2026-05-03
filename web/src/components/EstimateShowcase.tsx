@@ -154,6 +154,9 @@ function PageCard({ src, alt, rotate, z, offsetX, offsetY }: PageCardProps) {
           src={src}
           alt={alt}
           loading="lazy"
+          decoding="async"
+          width={850}
+          height={1100}
           className="block h-auto w-full"
         />
       </div>

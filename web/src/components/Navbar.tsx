@@ -113,7 +113,14 @@ export default function Navbar() {
             onClick={handleNavClick}
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm">
-              <img src="/logo.png" alt="ProEstimate" className="h-5 w-5 object-contain" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/favicon-32.png"
+                alt="ProEstimate AI logo"
+                width={20}
+                height={20}
+                className="h-5 w-5 object-contain"
+              />
             </div>
             <span className="font-bold text-ink-950">ProEstimate</span>
           </a>
