@@ -2,9 +2,9 @@
 
 import { motion } from "framer-motion";
 
-/* ------------------------------------------------------------------ */
-/*  Feature data                                                       */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// Feature data — copy aligned to the real iOS feature set
+// ---------------------------------------------------------------------------
 
 interface Feature {
   icon: React.ReactNode;
@@ -15,7 +15,6 @@ interface Feature {
 const features: Feature[] = [
   {
     icon: (
-      /* Camera icon */
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="28"
@@ -31,13 +30,12 @@ const features: Feature[] = [
         <circle cx="12" cy="13" r="3" />
       </svg>
     ),
-    title: "AI Remodel Previews",
+    title: "Photoreal AI previews",
     description:
-      "Upload a photo and watch AI transform your space with photorealistic renovation previews in seconds.",
+      "Powered by Nano Banana 2. Upload a single photo and get a preview that holds the room layout while showing your renovation choices.",
   },
   {
     icon: (
-      /* Clipboard-list icon */
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="28"
@@ -57,13 +55,12 @@ const features: Feature[] = [
         <path d="M8 16h.01" />
       </svg>
     ),
-    title: "Smart Material Lists",
+    title: "Itemized material lists",
     description:
-      "Get itemized materials with quantities, costs, and direct links to suppliers like Home Depot and Lowe\u2019s.",
+      "Every preview comes with a quantified material breakdown — SKUs, quantities, unit costs, and direct supplier links you can hand off to your team.",
   },
   {
     icon: (
-      /* Calculator icon */
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="28"
@@ -87,35 +84,12 @@ const features: Feature[] = [
         <path d="M8 18h.01" />
       </svg>
     ),
-    title: "Instant Cost Estimates",
+    title: "Contractor-grade estimates",
     description:
-      "Professional-grade estimates with material costs, labor rates, markup, and tax \u2014 calculated automatically.",
+      "Materials, labor rates, markup, and tax — calculated from your pricing profile. Group line items, override anything, sign off in seconds.",
   },
   {
     icon: (
-      /* Toggle icon */
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="28"
-        height="28"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="1" y="5" width="22" height="14" rx="7" ry="7" />
-        <circle cx="16" cy="12" r="3" />
-      </svg>
-    ),
-    title: "DIY or Professional",
-    description:
-      "Toggle between DIY mode (materials only) and professional mode (with labor costs) to see both options.",
-  },
-  {
-    icon: (
-      /* File-text icon */
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="28"
@@ -134,13 +108,12 @@ const features: Feature[] = [
         <polyline points="10 9 9 9 8 9" />
       </svg>
     ),
-    title: "Proposals & Invoices",
+    title: "Branded proposals & invoices",
     description:
-      "Generate branded proposals and invoices from your estimates. Send to clients with one tap.",
+      "Turn an estimate into a proposal your client can approve from a link, then convert it into a numbered invoice — your logo, your terms, your colors.",
   },
   {
     icon: (
-      /* Shield icon */
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="28"
@@ -152,27 +125,43 @@ const features: Feature[] = [
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="M9 12l2 2 4-4" />
+        <path d="M3 9l9-6 9 6v11a2 2 0 0 1-2 2h-4v-7H10v7H6a2 2 0 0 1-2-2z" />
       </svg>
     ),
-    title: "Pro Subscription",
+    title: "Built for every trade",
     description:
-      "Free tier with 3 AI previews. Upgrade to Pro for unlimited generations, exports, and priority support.",
+      "Kitchen, bath, roofing, siding, painting, flooring, exterior, lawn & roof scout, garages — fourteen project types with prompt presets that get the AI right the first time.",
+  },
+  {
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
+    ),
+    title: "Your data stays yours",
+    description:
+      "Photos, estimates, and client info live in your account on dedicated infrastructure. Sign in with Apple keeps your identity private.",
   },
 ];
 
-/* ------------------------------------------------------------------ */
-/*  Animation variants                                                 */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// Animation
+// ---------------------------------------------------------------------------
 
 const sectionVariants = {
   hidden: {},
-  visible: {
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
+  visible: { transition: { staggerChildren: 0.08 } },
 };
 
 const headerVariants = {
@@ -193,17 +182,13 @@ const cardVariants = {
   },
 };
 
-/* ------------------------------------------------------------------ */
-/*  Component                                                          */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// Section
+// ---------------------------------------------------------------------------
 
 export default function Features() {
   return (
-    <section
-      id="features"
-      className="relative py-24 sm:py-32"
-    >
-      {/* Subtle background gradient for depth */}
+    <section id="features" className="relative py-24 sm:py-32">
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-transparent via-brand-50/40 to-transparent" />
 
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -213,39 +198,34 @@ export default function Features() {
           whileInView="visible"
           viewport={{ once: true, amount: 0.2 }}
         >
-          {/* ---- Section header ---- */}
-          <motion.div
-            variants={headerVariants}
-            className="mx-auto max-w-2xl text-center"
-          >
-            <h2 className="text-4xl font-bold tracking-tight text-ink-950">
-              Everything You Need
+          <motion.div variants={headerVariants} className="mx-auto max-w-2xl text-center">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand-600">
+              Built for the people doing the work
+            </p>
+            <h2 className="mt-3 text-4xl font-bold tracking-tight text-balance text-ink-950 sm:text-5xl">
+              Everything you need between the photo and the close.
             </h2>
-            <p className="mt-4 text-lg leading-relaxed text-ink-500">
-              From photo to professional estimate in one seamless flow.
+            <p className="mt-5 text-lg leading-relaxed text-pretty text-ink-500">
+              ProEstimate AI compresses the days of back-and-forth between a
+              walk-through and a signed proposal into a single uninterrupted
+              flow on your phone.
             </p>
           </motion.div>
 
-          {/* ---- Feature grid ---- */}
           <div className="mx-auto mt-16 grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {features.map((feature) => (
               <motion.div
                 key={feature.title}
                 variants={cardVariants}
-                className="glass group rounded-xl p-6 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-brand-500/10"
+                className="glass group rounded-2xl p-6 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-brand-500/10"
               >
-                {/* Icon container */}
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100 text-brand-500">
                   {feature.icon}
                 </div>
-
-                {/* Title */}
-                <h3 className="text-xl font-semibold text-ink-950">
+                <h3 className="text-lg font-semibold text-balance text-ink-950">
                   {feature.title}
                 </h3>
-
-                {/* Description */}
-                <p className="mt-2 leading-relaxed text-ink-500">
+                <p className="mt-2 text-sm leading-relaxed text-pretty text-ink-500">
                   {feature.description}
                 </p>
               </motion.div>

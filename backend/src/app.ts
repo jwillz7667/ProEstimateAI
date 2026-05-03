@@ -22,6 +22,7 @@ import generationsRoutes from "./modules/generations/generations.routes";
 import materialsRoutes from "./modules/materials/materials.routes";
 import estimatesRoutes from "./modules/estimates/estimates.routes";
 import estimateLineItemsRoutes from "./modules/estimate-line-items/estimate-line-items.routes";
+import estimateExportsRoutes from "./modules/estimate-exports/estimate-exports.routes";
 import proposalsRoutes from "./modules/proposals/proposals.routes";
 import proposalsShareRoutes from "./modules/proposals/proposals-share.routes";
 import invoicesRoutes from "./modules/invoices/invoices.routes";
@@ -121,6 +122,30 @@ export function createApp() {
       next(err);
     }
   });
+  v1.get("/estimate-exports/:id/file", async (req, res, next) => {
+    try {
+      const { getPublicPdf } = await import(
+        "./modules/estimate-exports/estimate-exports.service"
+      );
+      const result = await getPublicPdf(req.params.id);
+      if (!result) {
+        res.status(404).json({
+          ok: false,
+          error: { code: "NOT_FOUND", message: "Estimate export not found" },
+        });
+        return;
+      }
+      res.set("Content-Type", result.contentType);
+      res.set(
+        "Content-Disposition",
+        `inline; filename="${encodeURIComponent(result.fileName)}"`,
+      );
+      res.set("Cache-Control", "public, max-age=31536000, immutable");
+      res.send(result.data);
+    } catch (err) {
+      next(err);
+    }
+  });
   v1.get("/companies/:id/logo", async (req, res, next) => {
     try {
       const { getPublicCompanyLogo } = await import(
@@ -160,6 +185,7 @@ export function createApp() {
   v1.use("/materials", requireAuth, materialsRoutes);
   v1.use("/estimates", requireAuth, estimatesRoutes);
   v1.use("/estimate-line-items", requireAuth, estimateLineItemsRoutes);
+  v1.use("/estimate-exports", requireAuth, estimateExportsRoutes);
   v1.use("/proposals", requireAuth, proposalsRoutes);
   v1.use("/invoices", requireAuth, invoicesRoutes);
   v1.use("/invoice-line-items", requireAuth, invoiceLineItemsRoutes);

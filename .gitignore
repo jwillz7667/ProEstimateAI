@@ -45,3 +45,16 @@ fastlane/test_output/
 .secrets-staging/
 
 /app-store-listing/
+
+# App Store preview videos — re-encoded locally, uploaded to ASC, not tracked.
+/preview-*.mp4
+/preview.mp4
+/preview good.mp4
+/0430*.mp4
+
+# Local screenshot staging directories
+/new-screenshots/
+
+# Claude Code session artifacts
+/.claude/
+/build/

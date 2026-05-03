@@ -11,6 +11,7 @@ import { createProjectSchema, updateProjectSchema } from './projects.validators'
 import assetNestedRoutes from '../assets/assets.nested.routes';
 import generationNestedRoutes from '../generations/generations.nested.routes';
 import activityNestedRoutes from '../activity/activity.nested.routes';
+import estimateExportsProjectNestedRoutes from '../estimate-exports/estimate-exports.project-nested.routes';
 
 const router = Router();
 
@@ -29,5 +30,6 @@ router.delete('/:id', asyncHandler(deleteHandler));
 router.use('/:projectId/assets', assetNestedRoutes);
 router.use('/:projectId/generations', generationNestedRoutes);
 router.use('/:projectId/activity', activityNestedRoutes);
+router.use('/:projectId/estimate-exports', estimateExportsProjectNestedRoutes);
 
 export default router;

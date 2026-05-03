@@ -76,6 +76,14 @@ enum APIEndpoint: Sendable {
     case updateEstimateLineItem(id: String, body: Encodable & Sendable)
     case deleteEstimateLineItem(id: String)
 
+    // MARK: - Estimate Exports (saved PDFs)
+
+    case listEstimateExports(estimateId: String)
+    case listProjectEstimateExports(projectId: String)
+    case createEstimateExport(estimateId: String, body: Encodable & Sendable)
+    case getEstimateExport(id: String)
+    case deleteEstimateExport(id: String)
+
     // MARK: - Proposals
 
     case getProposal(id: String)
@@ -192,6 +200,12 @@ extension APIEndpoint {
         case let .createEstimateLineItem(estimateId, _): return "/estimates/\(estimateId)/line-items"
         case let .updateEstimateLineItem(id, _): return "/estimate-line-items/\(id)"
         case let .deleteEstimateLineItem(id): return "/estimate-line-items/\(id)"
+        // Estimate Exports
+        case let .listEstimateExports(estimateId): return "/estimates/\(estimateId)/exports"
+        case let .listProjectEstimateExports(projectId): return "/projects/\(projectId)/estimate-exports"
+        case let .createEstimateExport(estimateId, _): return "/estimates/\(estimateId)/exports"
+        case let .getEstimateExport(id): return "/estimate-exports/\(id)"
+        case let .deleteEstimateExport(id): return "/estimate-exports/\(id)"
         // Proposals
         case let .getProposal(id): return "/proposals/\(id)"
         case .createProposal: return "/proposals"
@@ -240,6 +254,7 @@ extension APIEndpoint {
              .uploadCompanyLogo,
              .createClient, .createProject, .uploadAsset, .createGeneration,
              .createEstimate, .generateAIEstimate, .createEstimateLineItem,
+             .createEstimateExport,
              .createProposal, .sendProposal,
              .createPricingProfile, .createLaborRateRule,
              .createPurchaseAttempt, .syncTransaction, .restorePurchases,
@@ -256,6 +271,7 @@ extension APIEndpoint {
              .deleteCompanyLogo,
              .deleteClient, .deleteProject, .deleteAsset,
              .deleteEstimate, .deleteEstimateLineItem,
+             .deleteEstimateExport,
              .deletePricingProfile, .deleteLaborRateRule:
             return .delete
 
@@ -330,6 +346,7 @@ extension APIEndpoint {
              let .createEstimate(body), let .generateAIEstimate(body),
              let .updateEstimate(_, body),
              let .createEstimateLineItem(_, body), let .updateEstimateLineItem(_, body),
+             let .createEstimateExport(_, body),
              let .createProposal(body),
              let .createPricingProfile(body), let .updatePricingProfile(_, body),
              let .createLaborRateRule(_, body), let .updateLaborRateRule(_, body),

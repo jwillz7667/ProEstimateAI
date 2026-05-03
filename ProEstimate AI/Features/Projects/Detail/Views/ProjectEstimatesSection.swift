@@ -1,16 +1,21 @@
 import SwiftUI
 
 /// Lists estimates linked to this project. Each row shows the estimate
-/// number, version, total amount, and status badge. Exposes a single
-/// primary "Generate Estimate" CTA that uses AI with any selected
-/// materials as context; a secondary menu houses the blank-estimate
-/// escape hatch for power users who want to start from scratch.
+/// number, version, total amount, status badge, and a per-estimate "Export
+/// PDF" action. Below each row, any previously-exported PDFs surface as
+/// tappable "Saved" rows so the contractor can re-share without
+/// regenerating. A single primary "Generate Estimate" CTA at the bottom
+/// uses AI with any selected materials as context.
 struct ProjectEstimatesSection: View {
     let estimates: [Estimate]
+    var exports: [String: [EstimateExport]] = [:]
+    var exportingEstimateId: String?
     var isGeneratingAI: Bool = false
     var onGenerateAI: (() -> Void)?
     var onCreateEstimate: (() -> Void)?
     var onEstimateTap: ((String) -> Void)?
+    var onExportEstimate: ((String) -> Void)?
+    var onTapSavedExport: ((EstimateExport) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
@@ -58,19 +63,30 @@ struct ProjectEstimatesSection: View {
     // MARK: - Subviews
 
     private var estimatesList: some View {
-        VStack(spacing: SpacingTokens.xs) {
+        VStack(spacing: SpacingTokens.sm) {
             ForEach(estimates) { estimate in
-                Button {
-                    onEstimateTap?(estimate.id)
-                } label: {
-                    estimateRow(estimate)
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
+                VStack(spacing: SpacingTokens.xs) {
                     Button {
                         onEstimateTap?(estimate.id)
                     } label: {
-                        Label("Edit Estimate", systemImage: "pencil")
+                        estimateRow(estimate)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button {
+                            onEstimateTap?(estimate.id)
+                        } label: {
+                            Label("Edit Estimate", systemImage: "pencil")
+                        }
+                        Button {
+                            onExportEstimate?(estimate.id)
+                        } label: {
+                            Label("Export Branded PDF", systemImage: "arrow.down.doc")
+                        }
+                    }
+
+                    if let saved = exports[estimate.id], !saved.isEmpty {
+                        savedExportsList(saved)
                     }
                 }
             }
@@ -115,8 +131,93 @@ struct ProjectEstimatesSection: View {
                 Spacer()
 
                 CurrencyText(amount: estimate.totalAmount, font: TypographyTokens.moneySmall)
+
+                exportButton(for: estimate)
             }
         }
+    }
+
+    /// Trailing icon button that triggers the branded export pipeline. Sits
+    /// inside the row's button so it gets ignored by the parent tap (the
+    /// row's `Button` wraps the row label, but a nested Button intercepts
+    /// the touch first when used inside `.buttonStyle(.plain)`).
+    private func exportButton(for estimate: Estimate) -> some View {
+        Button {
+            onExportEstimate?(estimate.id)
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(ColorTokens.inputBackground)
+                    .frame(width: 32, height: 32)
+                if exportingEstimateId == estimate.id {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "arrow.down.doc")
+                        .font(.callout)
+                        .foregroundStyle(ColorTokens.primaryOrange)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(exportingEstimateId != nil)
+        .accessibilityLabel("Export branded PDF")
+        .accessibilityHint("Render and save a branded PDF copy of this estimate")
+    }
+
+    private func savedExportsList(_ savedExports: [EstimateExport]) -> some View {
+        VStack(spacing: SpacingTokens.xxs) {
+            ForEach(savedExports) { export in
+                Button {
+                    onTapSavedExport?(export)
+                } label: {
+                    savedExportRow(export)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.leading, SpacingTokens.lg)
+    }
+
+    private func savedExportRow(_ export: EstimateExport) -> some View {
+        HStack(spacing: SpacingTokens.sm) {
+            Image(systemName: "doc.fill")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(width: 24, height: 24)
+                .background(ColorTokens.inputBackground, in: RoundedRectangle(cornerRadius: RadiusTokens.small))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(export.fileName)
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.primaryText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                HStack(spacing: SpacingTokens.xxs) {
+                    Text(export.createdAt.formatted(as: .relative))
+                    Text("·")
+                    Text(formatBytes(export.fileSize))
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            }
+
+            Spacer()
+
+            Image(systemName: "square.and.arrow.up")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, SpacingTokens.sm)
+        .padding(.vertical, SpacingTokens.xs)
+        .background(ColorTokens.inputBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: RadiusTokens.small))
+    }
+
+    private func formatBytes(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
     }
 
     private func estimateStatusBadge(_ status: Estimate.Status) -> some View {

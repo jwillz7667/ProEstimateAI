@@ -96,8 +96,8 @@ struct LoginView: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(height: 56)
                 .padding(SpacingTokens.md)
-                .background(ColorTokens.surface, in: Circle())
-                .shadow(color: ColorTokens.primaryOrange.opacity(0.18), radius: 12)
+                .background(Circle().fill(.white))
+                .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 2)
 
             Text("ProEstimate")
                 .font(TypographyTokens.largeTitle)

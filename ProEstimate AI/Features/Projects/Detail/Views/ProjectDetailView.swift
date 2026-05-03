@@ -1,5 +1,8 @@
 import CoreLocation
 import SwiftUI
+#if canImport(UIKit)
+    import UIKit
+#endif
 
 /// Full project detail screen. Shows overview, images, AI preview,
 /// materials, estimates, and activity in a scrollable layout.
@@ -20,6 +23,23 @@ struct ProjectDetailView: View {
     @State private var isGeneratingAIEstimate = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
+
+    /// Estimate export state. `exportingEstimateId` shows the inline
+    /// progress on the estimate row; `exportProgressMessage` drives the
+    /// full-screen overlay; `exportedPDF` triggers the share sheet once
+    /// the PDF is ready (whether freshly rendered or re-downloaded from a
+    /// saved export).
+    @State private var exportingEstimateId: String?
+    @State private var exportProgressMessage: String?
+    @State private var exportedPDF: ExportedPDF?
+
+    @AppStorage("estimatePDFIncludeBeforeAfter")
+    private var includeBeforeAfterImages: Bool = true
+
+    private struct ExportedPDF: Identifiable, Hashable {
+        let url: URL
+        var id: URL { url }
+    }
 
     /// Map measurement sheets. Presenting these as full-screen covers
     /// avoids a NavigationSplitView quirk where the first
@@ -137,6 +157,9 @@ struct ProjectDetailView: View {
                     }
             }
         }
+        .sheet(item: $exportedPDF) { pdf in
+            ActivityViewRepresentable(activityItems: [pdf.url])
+        }
         .fullScreenCover(isPresented: $showLawnMeasurement, onDismiss: {
             // Project may have a fresh lawn_area / lat-lng after the user
             // saves — refresh so the detail screen shows the new value.
@@ -249,6 +272,8 @@ struct ProjectDetailView: View {
                 // Estimates
                 ProjectEstimatesSection(
                     estimates: viewModel.estimates,
+                    exports: viewModel.estimateExports,
+                    exportingEstimateId: exportingEstimateId,
                     isGeneratingAI: isGeneratingAIEstimate,
                     onGenerateAI: {
                         handleGenerateAIEstimate()
@@ -258,6 +283,12 @@ struct ProjectDetailView: View {
                     },
                     onEstimateTap: { estimateId in
                         activeEstimate = ActiveEstimate(id: estimateId)
+                    },
+                    onExportEstimate: { estimateId in
+                        handleExportEstimate(estimateId: estimateId)
+                    },
+                    onTapSavedExport: { export in
+                        handleTapSavedExport(export)
                     }
                 )
 
@@ -270,7 +301,7 @@ struct ProjectDetailView: View {
             .padding(.vertical, SpacingTokens.sm)
         }
         .overlay {
-            if isCreatingEstimate || isGeneratingAIEstimate {
+            if isCreatingEstimate || isGeneratingAIEstimate || exportProgressMessage != nil {
                 Color.black.opacity(0.2)
                     .ignoresSafeArea()
                     .overlay {
@@ -449,6 +480,7 @@ struct ProjectDetailView: View {
     }
 
     private var progressOverlayLabel: String {
+        if let exportProgressMessage { return exportProgressMessage }
         if isGeneratingAIEstimate { return "Generating estimate with AI..." }
         return "Creating estimate..."
     }
@@ -485,6 +517,237 @@ struct ProjectDetailView: View {
             appState.selectedTab = .projects
             router.projectsPath = NavigationPath()
         }
+    }
+
+    // MARK: - Estimate Export
+
+    /// Per-row "Export PDF" handler. Same paywall gate as the in-editor
+    /// export so a free user can't sneak around the quote-export limit by
+    /// triggering from here. On success: render branded PDF, persist a copy
+    /// server-side, refresh the saved-exports list, and present the share
+    /// sheet — the same end-state the editor produces.
+    private func handleExportEstimate(estimateId: String) {
+        let result = featureGateCoordinator.guardExportQuote()
+        switch result {
+        case .allowed:
+            guard exportingEstimateId == nil else { return }
+            exportingEstimateId = estimateId
+            exportProgressMessage = "Preparing estimate..."
+            Task {
+                let url = await performBrandedExport(estimateId: estimateId)
+                if let url {
+                    await persistExportToProject(url: url, estimateId: estimateId)
+                }
+                await MainActor.run {
+                    if let url {
+                        exportedPDF = ExportedPDF(url: url)
+                    } else {
+                        viewModel.errorMessage = "Couldn't build the PDF. Make sure the estimate has at least one line item and try again."
+                    }
+                    exportingEstimateId = nil
+                    exportProgressMessage = nil
+                }
+            }
+        case let .blocked(decision):
+            paywallPresenter.present(decision)
+        }
+    }
+
+    /// Tap on a previously-saved export row. We re-download the PDF binary
+    /// from the public file endpoint into a temp file (so the share sheet
+    /// can write to disk targets), then trigger the share sheet.
+    private func handleTapSavedExport(_ export: EstimateExport) {
+        guard exportingEstimateId == nil else { return }
+        exportingEstimateId = export.estimateId
+        exportProgressMessage = "Loading saved PDF..."
+        Task {
+            let url = await downloadSavedExport(export)
+            await MainActor.run {
+                if let url {
+                    exportedPDF = ExportedPDF(url: url)
+                } else {
+                    viewModel.errorMessage = "Couldn't load the saved PDF. Check your connection and try again."
+                }
+                exportingEstimateId = nil
+                exportProgressMessage = nil
+            }
+        }
+    }
+
+    /// Streams the saved PDF from the backend's public file endpoint into a
+    /// temp file we can hand to `UIActivityViewController`. Uses URLSession
+    /// directly (not APIClient) because the file endpoint serves binary,
+    /// not the JSON envelope APIClient expects.
+    private func downloadSavedExport(_ export: EstimateExport) async -> URL? {
+        do {
+            let (data, _) = try await URLSession.shared.data(from: export.downloadURL)
+            let tmpDir = FileManager.default.temporaryDirectory
+            let dest = tmpDir.appendingPathComponent(export.fileName)
+            try? FileManager.default.removeItem(at: dest)
+            try data.write(to: dest, options: .atomic)
+            return dest
+        } catch {
+            return nil
+        }
+    }
+
+    /// Render the branded PDF for a specific estimate by ID. Mirrors
+    /// `EstimateEditorView.performBrandedExport` but loads the estimate +
+    /// line items fresh via a transient `EstimateEditorViewModel` so we
+    /// don't have to drag the editor onto the screen first. Each fetch is
+    /// independently optional so a missing logo / generation doesn't kill
+    /// the export.
+    private func performBrandedExport(estimateId: String) async -> URL? {
+        await setExportProgress("Fetching estimate...")
+
+        let editorVM = EstimateEditorViewModel()
+        await editorVM.loadEstimate(id: estimateId)
+        editorVM.isDIY = viewModel.isDIY
+
+        guard let estimate = editorVM.estimate else { return nil }
+        let projectId = estimate.projectId
+
+        await setExportProgress("Fetching branding...")
+
+        let settingsService = LiveSettingsService()
+        let projectService = LiveProjectService()
+
+        async let companyTask: Company? = try? await settingsService.loadCompanySettings()
+        async let projectTask: Project? = try? await projectService.getProject(id: projectId)
+        async let assetsTask: [Asset] = (try? await APIClient.shared.request(.listAssets(projectId: projectId))) ?? []
+        async let generationsTask: [AIGeneration] = (try? await APIClient.shared.request(.listGenerations(projectId: projectId))) ?? []
+
+        let company = await companyTask
+        let project = await projectTask
+        let assets = await assetsTask
+        let generations = await generationsTask
+
+        await setExportProgress("Downloading images...")
+
+        let beforeURL = assets
+            .filter { $0.assetType == .original }
+            .sorted { $0.sortOrder < $1.sortOrder || ($0.sortOrder == $1.sortOrder && $0.createdAt < $1.createdAt) }
+            .first?
+            .url
+
+        let afterURL = generations
+            .filter { $0.status == .completed }
+            .sorted { $0.createdAt > $1.createdAt }
+            .first?
+            .previewURL
+
+        let logoURL = company?.logoURL ?? appState.currentCompany?.logoURL
+
+        async let logoFetch: UIImage? = logoURL.flatMap { url in Task { try? await ImageFetcher.fetch(url) } }?.value
+        async let beforeFetch: UIImage? = (includeBeforeAfterImages ? beforeURL : nil)
+            .flatMap { url in Task { try? await ImageFetcher.fetch(url) } }?.value
+        async let afterFetch: UIImage? = (includeBeforeAfterImages ? afterURL : nil)
+            .flatMap { url in Task { try? await ImageFetcher.fetch(url) } }?.value
+
+        let logoImage = await logoFetch
+        let beforeImage = await beforeFetch
+        let afterImage = await afterFetch
+
+        let clientInfo = await resolveClient(for: project)
+        let branding = buildBranding(from: company, logoImage: logoImage)
+
+        await setExportProgress("Rendering PDF...")
+
+        return await MainActor.run {
+            editorVM.generatePDF(
+                branding: branding,
+                client: clientInfo,
+                beforeImage: beforeImage,
+                afterImage: afterImage,
+                projectTitle: project?.title
+            )
+        }
+    }
+
+    /// Upload the freshly-rendered PDF so it appears under the estimate row
+    /// next time the project loads. Fail-soft: any upload error is
+    /// swallowed so the user still gets their local file via the share
+    /// sheet. On success we register the new export locally so the row's
+    /// "Saved" sublist updates immediately without a full project reload.
+    private func persistExportToProject(url: URL, estimateId: String) async {
+        await setExportProgress("Saving to project...")
+        do {
+            let data = try Data(contentsOf: url)
+            let fileName = url.lastPathComponent
+            let service = LiveEstimateExportService()
+            let saved = try await service.upload(
+                estimateId: estimateId,
+                fileName: fileName,
+                pdfData: data
+            )
+            await MainActor.run {
+                viewModel.registerNewExport(saved)
+            }
+        } catch {
+            // Non-fatal: contractor still has the local copy.
+        }
+    }
+
+    @MainActor
+    private func setExportProgress(_ message: String) {
+        exportProgressMessage = message
+    }
+
+    /// Look up the project's client and shape it into the PDF's
+    /// "Prepared For" block. Returns nil if the project has no client or
+    /// if the lookup fails — the PDF renders fine without it.
+    private func resolveClient(for project: Project?) async -> PDFGenerator.ClientInfo? {
+        guard let clientId = project?.clientId, !clientId.isEmpty else { return nil }
+        guard let record: Client = try? await APIClient.shared.request(.getClient(id: clientId)) else {
+            return nil
+        }
+        let addressLines = AppState.CurrentCompany.composeAddressLines(
+            street: record.address,
+            city: record.city,
+            state: record.state,
+            zip: record.zip
+        )
+        return PDFGenerator.ClientInfo(
+            name: record.name,
+            company: nil,
+            phone: record.phone,
+            email: record.email,
+            addressLines: addressLines
+        )
+    }
+
+    /// Compose the branding block from the freshest available source —
+    /// the network-fetched Company first, then the AppState snapshot, then
+    /// bare defaults — so an offline export still produces a recognizable
+    /// header.
+    private func buildBranding(from company: Company?, logoImage: UIImage?) -> PDFGenerator.CompanyBranding {
+        if let company {
+            let addressLines = AppState.CurrentCompany.composeAddressLines(
+                street: company.address,
+                city: company.city,
+                state: company.state,
+                zip: company.zip
+            )
+            return PDFGenerator.CompanyBranding(
+                name: company.name,
+                phone: company.phone,
+                email: company.email,
+                addressLines: addressLines,
+                websiteUrl: company.websiteUrl,
+                logoImage: logoImage,
+                accentHex: company.primaryColor
+            )
+        }
+        let snapshot = appState.currentCompany
+        return PDFGenerator.CompanyBranding(
+            name: snapshot?.name ?? "ProEstimate AI",
+            phone: snapshot?.phone,
+            email: snapshot?.email,
+            addressLines: snapshot?.addressLines ?? [],
+            websiteUrl: snapshot?.websiteUrl,
+            logoImage: logoImage,
+            accentHex: snapshot?.primaryColorHex
+        )
     }
 }
 

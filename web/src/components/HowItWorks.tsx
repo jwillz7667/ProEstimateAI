@@ -1,239 +1,184 @@
 "use client";
 
 import { useRef } from "react";
-import {
-  motion,
-  useScroll,
-  useTransform,
-  useInView,
-  type MotionValue,
-} from "framer-motion";
+import { motion, useInView, type Variants } from "framer-motion";
 
-/* ------------------------------------------------------------------ */
-/*  Step data                                                         */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// Step data — pairs each workflow stage with a real app screenshot
+// ---------------------------------------------------------------------------
 
 interface Step {
   number: number;
+  eyebrow: string;
   title: string;
   description: string;
+  screenshot: string;
+  alt: string;
 }
 
 const STEPS: Step[] = [
   {
     number: 1,
-    title: "Upload Photos",
+    eyebrow: "Pick the project",
+    title: "Choose what you're estimating.",
     description:
-      "Take or upload photos of the space you want to remodel.",
+      "Kitchen, bath, roof, siding, painting, landscaping — nine project types, each with prompt presets tuned for the AI so you get a useful preview on the first shot.",
+    screenshot: "/screenshots/category-picker.jpg",
+    alt: "ProEstimate AI category picker with kitchen, bath, roofing, painting, siding, room remodel, exterior, and landscaping",
   },
   {
     number: 2,
-    title: "AI Generates Preview",
+    eyebrow: "Snap a photo",
+    title: "Upload up to 10 reference photos.",
     description:
-      "Our AI creates a photorealistic preview of your renovation in under 60 seconds.",
+      "Take photos in-app or pull from your library. Drop a style direction or write a custom prompt — the AI uses both to compose the preview.",
+    screenshot: "/screenshots/style-direction.jpg",
+    alt: "ProEstimate AI photo upload screen with style direction picker",
   },
   {
     number: 3,
-    title: "Review Materials",
+    eyebrow: "Watch it generate",
+    title: "Photoreal preview in under 60 seconds.",
     description:
-      "Get an itemized list of every material needed, with costs and supplier links.",
+      "Nano Banana 2 produces a before/after preview that holds the layout while showing the renovation. Slide to compare, pinch to zoom, double-tap to reset.",
+    screenshot: "/screenshots/ai-preview.jpg",
+    alt: "Before/after AI-generated landscape install with cobble path and retaining wall",
   },
   {
     number: 4,
-    title: "Get Your Estimate",
+    eyebrow: "Send the proposal",
+    title: "Hand off a contractor-grade estimate.",
     description:
-      "Choose DIY or professional mode. Export, share, or send to your client.",
+      "Materials and labor priced automatically, every line linked to a supplier. Edit line items, apply your branding, send a client-approval link, then convert to invoice.",
+    screenshot: "/screenshots/estimate-ready.jpg",
+    alt: "Garage Build-Out project with AI Estimate Ready showing $4,957 total",
   },
 ];
 
-/* ------------------------------------------------------------------ */
-/*  Step card component                                               */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// Animation variants
+// ---------------------------------------------------------------------------
 
-function StepCard({
-  step,
-  index,
-  parallaxY,
-}: {
-  step: Step;
-  index: number;
-  parallaxY: MotionValue<number>;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const isInView = useInView(ref, { once: true, margin: "-60px" });
+const headerVariants: Variants = {
+  hidden: { opacity: 0, y: 24 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] as const },
+  },
+};
 
-  return (
-    <motion.div
-      ref={ref}
-      className="relative flex flex-col items-center text-center"
-      /* Parallax: offset each card by a slightly different amount */
-      style={{ y: parallaxY }}
-      /* Staggered entrance animation */
-      initial={{ opacity: 0, y: 40 }}
-      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
-      transition={{
-        duration: 0.6,
-        delay: index * 0.15,
-        ease: [0.16, 1, 0.3, 1] as const, /* ease-out-expo from design tokens */
-      }}
-    >
-      {/* Step number circle */}
-      <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-brand-500 shadow-lg shadow-brand-500/25">
-        <span className="text-2xl font-bold text-white">{step.number}</span>
-      </div>
+const rowEnter: Variants = {
+  hidden: { opacity: 0, y: 40 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] as const },
+  },
+};
 
-      {/* Title */}
-      <h3 className="mt-6 text-xl font-semibold text-ink-950">
-        {step.title}
-      </h3>
+// ---------------------------------------------------------------------------
+// Step row — copy + phone screenshot, alternating sides
+// ---------------------------------------------------------------------------
 
-      {/* Description */}
-      <p className="mt-2 max-w-[260px] text-base leading-relaxed text-ink-400">
-        {step.description}
-      </p>
-    </motion.div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Dashed connector between steps                                    */
-/* ------------------------------------------------------------------ */
-
-function Connector({ index }: { index: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const isInView = useInView(ref, { once: true, margin: "-40px" });
-
-  return (
-    <motion.div
-      ref={ref}
-      className="relative flex items-center justify-center"
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={
-        isInView
-          ? { opacity: 1, scale: 1 }
-          : { opacity: 0, scale: 0.8 }
-      }
-      transition={{
-        duration: 0.5,
-        delay: index * 0.15 + 0.1,
-        ease: [0.16, 1, 0.3, 1] as const,
-      }}
-    >
-      {/* Horizontal connector (visible on lg+) */}
-      <div className="hidden lg:flex items-center">
-        <div className="h-px w-16 xl:w-24 border-t-2 border-dashed border-brand-300" />
-        <svg
-          className="h-4 w-4 -ml-1 text-brand-400"
-          viewBox="0 0 16 16"
-          fill="currentColor"
-          aria-hidden="true"
-        >
-          <path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06z" />
-        </svg>
-      </div>
-
-      {/* Vertical connector (visible on < lg) */}
-      <div className="flex flex-col items-center lg:hidden">
-        <div className="w-px h-10 border-l-2 border-dashed border-brand-300" />
-        <svg
-          className="h-4 w-4 -mt-1 text-brand-400"
-          viewBox="0 0 16 16"
-          fill="currentColor"
-          aria-hidden="true"
-        >
-          <path d="M3.22 6.22a.75.75 0 0 1 1.06 0L8 9.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 0-1.06z" />
-        </svg>
-      </div>
-    </motion.div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Section header                                                    */
-/* ------------------------------------------------------------------ */
-
-function SectionHeader() {
+function StepRow({ step, reverse }: { step: Step; reverse: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-80px" });
 
   return (
     <motion.div
       ref={ref}
-      className="mx-auto max-w-2xl text-center"
-      initial={{ opacity: 0, y: 32 }}
-      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 32 }}
-      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] as const }}
+      variants={rowEnter}
+      initial="hidden"
+      animate={isInView ? "visible" : "hidden"}
+      className={`grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16 ${
+        reverse ? "lg:[&>*:first-child]:order-2" : ""
+      }`}
     >
-      <h2 className="text-3xl font-bold tracking-tight text-ink-950 sm:text-4xl lg:text-5xl">
-        How It Works
-      </h2>
-      <p className="mt-4 text-lg leading-relaxed text-ink-400 sm:text-xl">
-        Four simple steps from photo to professional estimate.
-      </p>
+      {/* Copy column */}
+      <div className="min-w-0">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-500 text-base font-bold text-white shadow-md shadow-brand-500/25">
+            {step.number}
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">
+            {step.eyebrow}
+          </p>
+        </div>
+        <h3 className="mt-5 text-3xl font-bold tracking-tight text-balance text-ink-950 sm:text-4xl">
+          {step.title}
+        </h3>
+        <p className="mt-4 text-base leading-relaxed text-pretty text-ink-500 sm:text-lg">
+          {step.description}
+        </p>
+      </div>
+
+      {/* Phone screenshot */}
+      <div className="relative mx-auto w-full max-w-[280px] sm:max-w-[320px]">
+        <div
+          aria-hidden="true"
+          className="absolute -inset-6 -z-10 rounded-full bg-brand-100/60 blur-3xl"
+        />
+        <div className="relative w-full rounded-[2.5rem] bg-ink-950 p-[6px] shadow-xl shadow-black/15 ring-1 ring-black/5 sm:p-[7px]">
+          <div className="relative aspect-[1206/2622] w-full overflow-hidden rounded-[2.2rem] bg-ink-950">
+            <img
+              src={step.screenshot}
+              alt={step.alt}
+              loading="lazy"
+              className="block h-full w-full object-cover"
+            />
+          </div>
+        </div>
+      </div>
     </motion.div>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Main section                                                      */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// Section
+// ---------------------------------------------------------------------------
 
 export default function HowItWorks() {
-  const sectionRef = useRef<HTMLElement>(null);
-
-  /* Track the section's scroll progress for parallax */
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ["start end", "end start"],
-  });
-
-  /*
-   * Each step gets a slightly different parallax multiplier so the cards
-   * appear to shift at different rates as the user scrolls, creating
-   * a subtle depth effect. Values are intentionally small to keep
-   * the motion comfortable and non-distracting.
-   */
-  const y0 = useTransform(scrollYProgress, [0, 1], [30, -30]);
-  const y1 = useTransform(scrollYProgress, [0, 1], [20, -20]);
-  const y2 = useTransform(scrollYProgress, [0, 1], [25, -25]);
-  const y3 = useTransform(scrollYProgress, [0, 1], [15, -15]);
-  const parallaxValues = [y0, y1, y2, y3];
-
   return (
     <section
       id="how-it-works"
-      ref={sectionRef}
-      className="relative overflow-hidden bg-surface-secondary py-24 sm:py-32 lg:py-40"
+      className="relative overflow-hidden bg-surface-secondary py-24 sm:py-32 lg:py-36"
     >
-      {/* Decorative gradient blobs */}
+      {/* Decorative blobs */}
       <div
-        className="pointer-events-none absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-brand-100/50 blur-3xl"
         aria-hidden="true"
+        className="pointer-events-none absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-brand-100/50 blur-3xl"
       />
       <div
-        className="pointer-events-none absolute -bottom-40 -right-40 h-[400px] w-[400px] rounded-full bg-brand-50/60 blur-3xl"
         aria-hidden="true"
+        className="pointer-events-none absolute -bottom-40 -right-40 h-[400px] w-[400px] rounded-full bg-brand-50/60 blur-3xl"
       />
 
       <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
-        <SectionHeader />
+        {/* Section header */}
+        <motion.div
+          variants={headerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-80px" }}
+          className="mx-auto max-w-2xl text-center"
+        >
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand-600">
+            How it works
+          </p>
+          <h2 className="mt-3 text-4xl font-bold tracking-tight text-balance text-ink-950 sm:text-5xl">
+            From a phone in your pocket to a signed proposal.
+          </h2>
+          <p className="mt-5 text-lg leading-relaxed text-pretty text-ink-500">
+            Four steps, one app, no spreadsheets. The whole flow is designed
+            for the field — gloves on, sun in your eyes, client waiting.
+          </p>
+        </motion.div>
 
-        {/* Steps grid: vertical on mobile, horizontal row on lg+ */}
-        <div className="mt-16 flex flex-col items-center gap-8 lg:mt-20 lg:flex-row lg:justify-center lg:gap-0">
+        {/* Step rows */}
+        <div className="mt-20 flex flex-col gap-24 lg:gap-32">
           {STEPS.map((step, i) => (
-            <div
-              key={step.number}
-              className="flex flex-col items-center lg:flex-row lg:items-start"
-            >
-              <StepCard
-                step={step}
-                index={i}
-                parallaxY={parallaxValues[i]}
-              />
-
-              {/* Connector after every step except the last */}
-              {i < STEPS.length - 1 && <Connector index={i} />}
-            </div>
+            <StepRow key={step.number} step={step} reverse={i % 2 === 1} />
           ))}
         </div>
       </div>

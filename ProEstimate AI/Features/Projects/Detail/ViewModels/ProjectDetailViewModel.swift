@@ -16,6 +16,11 @@ final class ProjectDetailViewModel {
     var client: Client?
     var assets: [Asset] = []
 
+    /// Saved PDF exports for each estimate, keyed by `estimate.id`. Hydrated
+    /// from `GET /v1/projects/:id/estimate-exports` on project load and
+    /// updated locally after a fresh export upload returns.
+    var estimateExports: [String: [EstimateExport]] = [:]
+
     var isLoading: Bool = false
     var errorMessage: String?
 
@@ -57,6 +62,7 @@ final class ProjectDetailViewModel {
     private let generationService: GenerationServiceProtocol
     private let estimateService: EstimateServiceProtocol
     private let clientService: ClientServiceProtocol
+    private let estimateExportService: EstimateExportServiceProtocol
 
     // MARK: - Init
 
@@ -64,12 +70,14 @@ final class ProjectDetailViewModel {
         projectService: ProjectServiceProtocol = LiveProjectService(),
         generationService: GenerationServiceProtocol = LiveGenerationService(),
         estimateService: EstimateServiceProtocol = LiveEstimateService(),
-        clientService: ClientServiceProtocol = LiveClientService()
+        clientService: ClientServiceProtocol = LiveClientService(),
+        estimateExportService: EstimateExportServiceProtocol = LiveEstimateExportService()
     ) {
         self.projectService = projectService
         self.generationService = generationService
         self.estimateService = estimateService
         self.clientService = clientService
+        self.estimateExportService = estimateExportService
     }
 
     // MARK: - Loading
@@ -92,8 +100,9 @@ final class ProjectDetailViewModel {
         async let assetsTask: Void = loadAssets(projectId: id)
         async let activityTask: Void = loadActivity(projectId: id)
         async let clientTask: Void = loadClient()
+        async let exportsTask: Void = loadEstimateExports(projectId: id)
 
-        _ = await (gensTask, estimatesTask, assetsTask, activityTask, clientTask)
+        _ = await (gensTask, estimatesTask, assetsTask, activityTask, clientTask, exportsTask)
 
         // Load materials from completed generations
         await loadMaterials()
@@ -130,6 +139,33 @@ final class ProjectDetailViewModel {
     private func loadClient() async {
         guard let clientId = project?.clientId else { return }
         client = try? await clientService.getClient(id: clientId)
+    }
+
+    /// Pull every persisted PDF export for this project's estimates and
+    /// bucket them by `estimateId` so the per-row UI can render its
+    /// "Saved exports" sublist without a second round-trip per estimate.
+    private func loadEstimateExports(projectId: String) async {
+        let all = (try? await estimateExportService.listByProject(projectId: projectId)) ?? []
+        estimateExports = Dictionary(grouping: all, by: { $0.estimateId })
+    }
+
+    /// Insert a freshly-uploaded export at the top of its bucket so the UI
+    /// reflects the new save without waiting on the next project refresh.
+    func registerNewExport(_ export: EstimateExport) {
+        var existing = estimateExports[export.estimateId] ?? []
+        existing.insert(export, at: 0)
+        estimateExports[export.estimateId] = existing
+    }
+
+    /// Remove a deleted export from local state.
+    func removeExport(_ export: EstimateExport) {
+        guard var bucket = estimateExports[export.estimateId] else { return }
+        bucket.removeAll { $0.id == export.id }
+        if bucket.isEmpty {
+            estimateExports.removeValue(forKey: export.estimateId)
+        } else {
+            estimateExports[export.estimateId] = bucket
+        }
     }
 
     /// Fetch material suggestions from all completed generations.

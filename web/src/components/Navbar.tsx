@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence, useMotionValueEvent, useScroll } from "framer-motion";
 import clsx from "clsx";
+import { APP_STORE_URL } from "@/lib/constants";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,11 +20,10 @@ interface NavLink {
 
 const NAV_LINKS: NavLink[] = [
   { label: "Features", href: "#features" },
-  { label: "How It Works", href: "#how-it-works" },
+  { label: "How it works", href: "#how-it-works" },
+  { label: "Showcase", href: "#showcase" },
   { label: "Pricing", href: "#pricing" },
 ];
-
-const APP_STORE_URL = "https://apps.apple.com/app/proestimate-ai/id0000000000";
 
 const SCROLL_THRESHOLD = 32;
 

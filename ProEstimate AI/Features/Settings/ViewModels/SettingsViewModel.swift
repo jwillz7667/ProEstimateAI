@@ -223,6 +223,14 @@ final class SettingsViewModel {
     // MARK: - Commit (executed after debounce)
 
     private func commitBranding() async {
+        // Skip saves the backend validator would reject. Without this, every
+        // mid-typed email ("j") or bare website ("acme.com") fires a doomed
+        // PATCH that surfaces as a "Retry" status pill — making it look like
+        // the app errors continuously while the user is just typing.
+        guard isBrandingFormValid else {
+            saveStatus = .pending
+            return
+        }
         saveStatus = .saving
         do {
             let update = CompanyBrandingUpdate(
@@ -233,7 +241,7 @@ final class SettingsViewModel {
                 city: companyCity.isEmpty ? nil : companyCity,
                 state: companyState.isEmpty ? nil : companyState,
                 zip: companyZip.isEmpty ? nil : companyZip,
-                websiteUrl: companyWebsite.isEmpty ? nil : companyWebsite,
+                websiteUrl: normalizedWebsiteForSave,
                 primaryColor: primaryColorHex,
                 secondaryColor: secondaryColorHex
             )
@@ -241,8 +249,10 @@ final class SettingsViewModel {
             apply(updated: updated)
             markSaved()
         } catch {
+            // Surface failure on the toolbar pill only — the modal alert in
+            // CompanyBrandingView is for explicit user actions (logo upload),
+            // not for transient autosave failures.
             saveStatus = .failed(message: error.localizedDescription)
-            errorMessage = error.localizedDescription
         }
     }
 
@@ -263,7 +273,6 @@ final class SettingsViewModel {
             markSaved()
         } catch {
             saveStatus = .failed(message: error.localizedDescription)
-            errorMessage = error.localizedDescription
         }
     }
 
@@ -281,8 +290,45 @@ final class SettingsViewModel {
             markSaved()
         } catch {
             saveStatus = .failed(message: error.localizedDescription)
-            errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - Local Validation (keep autosave from firing doomed PATCHes)
+
+    /// True when the branding form passes the same checks the backend
+    /// validator enforces. We mirror only the contract-shaping rules
+    /// (presence of name, email format, URL structure) so partial edits
+    /// don't trigger 400s while the user is still typing.
+    private var isBrandingFormValid: Bool {
+        let trimmedName = companyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return false }
+        if !companyEmail.isEmpty, !looksLikeEmail(companyEmail) { return false }
+        if !companyWebsite.isEmpty, !looksLikeWebsite(companyWebsite) { return false }
+        return true
+    }
+
+    /// Normalize the website for transit: empty stays empty (omitted), bare
+    /// domains get an `https://` scheme so Zod's `.url()` validator accepts
+    /// them. Mirrors what most users intuit: typing "acme.com" should save.
+    private var normalizedWebsiteForSave: String? {
+        let trimmed = companyWebsite.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let lower = trimmed.lowercased()
+        if lower.hasPrefix("http://") || lower.hasPrefix("https://") { return trimmed }
+        return "https://\(trimmed)"
+    }
+
+    private func looksLikeEmail(_ s: String) -> Bool {
+        let pattern = #"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$"#
+        return s.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    private func looksLikeWebsite(_ s: String) -> Bool {
+        // Accept "https://example.com" or a bare "example.com" with a TLD.
+        // Stricter checks are the backend's job; we just want to gate
+        // obviously-invalid input from being PATCH'd while the user types.
+        let domainPattern = #"^([a-z][a-z0-9+\-.]*://)?[A-Z0-9.-]+\.[A-Z]{2,}([:/].*)?$"#
+        return s.range(of: domainPattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     // MARK: - Logo Operations (kept explicit — file I/O is naturally event-driven)

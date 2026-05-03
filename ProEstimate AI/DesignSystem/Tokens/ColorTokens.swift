@@ -74,11 +74,25 @@ enum ColorTokens {
     static let onDarkFillSubtle = Color.white.opacity(0.08)
 
     // MARK: - Always-Dark Card Surfaces
-    /// Slate fills used by `.glassCard()` / `.formField()` so those
-    /// surfaces stay reliably dark in both light and dark mode. The
-    /// modifiers force `\.colorScheme = .dark` on their content, so the
-    /// background must be dark in both modes — hence hardcoded hex
-    /// rather than the adaptive `Surface` / `InputBackground` tokens.
-    static let glassCardFill = Color(hex: 0x2A323A)
-    static let glassFieldFill = Color(hex: 0x353D45)
+    /// Card fill for `.glassCard()` / `.glassSurface()`. In light mode the
+    /// card is intentionally a dark slate (`#2A323A`) so the orange-bordered
+    /// surface pops against the white page. In dark mode it shifts to the
+    /// system grouped-cell color so cards visually match `List`/`Form`
+    /// rows (Settings, etc.) — keeping every elevated surface in the app
+    /// at one consistent shade.
+    static let glassCardFill = Color(UIColor { traits in
+        switch traits.userInterfaceStyle {
+        case .dark: return UIColor.secondarySystemGroupedBackground
+        default: return UIColor(red: 0x2A / 255.0, green: 0x32 / 255.0, blue: 0x3A / 255.0, alpha: 1.0)
+        }
+    })
+
+    /// Form-field fill (`.formField()`). Stays a hair lighter than the
+    /// card fill so inputs read as elevated chrome inside cards.
+    static let glassFieldFill = Color(UIColor { traits in
+        switch traits.userInterfaceStyle {
+        case .dark: return UIColor.tertiarySystemGroupedBackground
+        default: return UIColor(red: 0x35 / 255.0, green: 0x3D / 255.0, blue: 0x45 / 255.0, alpha: 1.0)
+        }
+    })
 }

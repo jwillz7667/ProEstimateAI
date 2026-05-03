@@ -203,6 +203,9 @@ struct EstimateEditorView: View {
                     await viewModel.save()
                 }
                 let url = await performBrandedExport()
+                if let url, let estimate = viewModel.estimate {
+                    await persistExportToProject(url: url, estimate: estimate)
+                }
                 await MainActor.run {
                     if let url {
                         exportedPDF = ExportedPDF(url: url)
@@ -215,6 +218,26 @@ struct EstimateEditorView: View {
             }
         case let .blocked(decision):
             paywallPresenter.present(decision)
+        }
+    }
+
+    /// Uploads the rendered PDF to the backend so it appears under the
+    /// estimate row on the project detail screen. Strictly fail-soft: any
+    /// upload error is swallowed so the user still gets their local copy.
+    private func persistExportToProject(url: URL, estimate: Estimate) async {
+        await setProgress("Saving to project...")
+        do {
+            let data = try Data(contentsOf: url)
+            let fileName = url.lastPathComponent
+            let service = LiveEstimateExportService()
+            _ = try await service.upload(
+                estimateId: estimate.id,
+                fileName: fileName,
+                pdfData: data
+            )
+        } catch {
+            // Non-fatal: the contractor still has the file locally.
+            print("[EstimateExport] Upload failed: \(error)")
         }
     }
 
