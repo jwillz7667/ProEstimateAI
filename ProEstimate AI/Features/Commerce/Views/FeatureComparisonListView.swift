@@ -22,12 +22,12 @@ struct FeatureComparisonListView: View {
                 }
             }
         }
-        // Use the canonical adaptive card surface so the comparison panel
-        // sits on dark slate in light mode and existing dark gray in dark
-        // mode. The white-tinted column copy inside stays readable on
-        // either rendering.
+        // Always-dark slate fill so the white-tinted column copy stays
+        // readable in both color schemes. (`Surface` is now adaptive —
+        // light gray in light mode — which would kill contrast for the
+        // onDark text styles used here.)
         .background(
-            ColorTokens.surface,
+            ColorTokens.glassCardFill,
             in: RoundedRectangle(cornerRadius: RadiusTokens.card)
         )
         .overlay(

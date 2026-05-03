@@ -22,6 +22,7 @@ struct ProjectTypeCard: View {
     let action: () -> Void
 
     @ScaledMetric(relativeTo: .caption2) private var labelHeight: CGFloat = 26
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: action) {
@@ -89,17 +90,35 @@ struct ProjectTypeCard: View {
     private var labelStrip: some View {
         Text(projectType.displayName)
             .font(.system(.caption2, design: .rounded, weight: .semibold))
-            .foregroundStyle(isSelected ? ColorTokens.primaryOrange : .white)
+            .foregroundStyle(labelForeground)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
             .padding(.horizontal, SpacingTokens.xxs)
             .frame(maxWidth: .infinity)
             .frame(minHeight: labelHeight)
-            .background(
-                isSelected
-                    ? ColorTokens.primaryOrange.opacity(0.22)
-                    : Color.black.opacity(0.78)
-            )
+            .background(labelBackground)
+    }
+
+    /// Brand-aligned label background that adapts to color scheme.
+    /// Selected: solid brand orange so the chosen tile reads instantly.
+    /// Unselected: a soft warm tint that keeps the brand palette visible
+    /// without competing with the photo above — pale peach in light mode,
+    /// deep warm brown in dark mode.
+    private var labelBackground: Color {
+        if isSelected { return ColorTokens.primaryOrange }
+        return colorScheme == .dark
+            ? Color(hex: 0x2D1A0A)
+            : Color(hex: 0xFFEAD5)
+    }
+
+    /// Foreground that pairs with `labelBackground` for AA contrast in
+    /// both modes. White on solid orange when selected; warm-dark on
+    /// peach in light, warm-light on brown in dark.
+    private var labelForeground: Color {
+        if isSelected { return .white }
+        return colorScheme == .dark
+            ? Color(hex: 0xFFCD9A)
+            : Color(hex: 0x7A3F0E)
     }
 
     // MARK: - Selection Affordances

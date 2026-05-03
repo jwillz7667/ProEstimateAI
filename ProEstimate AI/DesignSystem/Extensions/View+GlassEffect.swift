@@ -49,7 +49,7 @@ private struct GlassCardStyle: ViewModifier {
         content
             .environment(\.colorScheme, .dark)
             .background(
-                ColorTokens.surface,
+                ColorTokens.glassCardFill,
                 in: RoundedRectangle(cornerRadius: cornerRadius)
             )
             .overlay {
@@ -96,7 +96,7 @@ private struct FormFieldStyle: ViewModifier {
             .padding(SpacingTokens.sm)
             .environment(\.colorScheme, .dark)
             .background(
-                ColorTokens.inputBackground,
+                ColorTokens.glassFieldFill,
                 in: RoundedRectangle(cornerRadius: RadiusTokens.small)
             )
             .overlay(

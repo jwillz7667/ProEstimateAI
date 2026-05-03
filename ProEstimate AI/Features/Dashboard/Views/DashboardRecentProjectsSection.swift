@@ -13,14 +13,13 @@ struct DashboardRecentProjectsSection: View {
     /// Tuned so that after the leading content margin (16pt) and the
     /// trailing inter-card gutter, ~20pt of the next card peeks into
     /// the viewport on standard iPhone widths.
-    private let cardWidthFraction: CGFloat = 0.78
+    private let cardWidthFraction: CGFloat = 0.82
     private let cardHeight: CGFloat = 220
-    /// Wider than 2 × (shadow blur + |y offset|) so adjacent cards'
-    /// shadows fully clear each other in the gutter. Current card
-    /// shadow is radius 10 / y 4 → ~14pt visible spread per side, so
-    /// 28pt is the floor; 34pt buys a small safety margin and matches
-    /// what reads as "clearly separate" on-device.
-    private let cardSpacing: CGFloat = 34
+    /// Tight enough to read as a tile group (Apple-standard 16pt gutter)
+    /// while still wider than the card shadow's visible spread so the
+    /// blurs don't visibly merge. Shadow below is radius 6 / y 3 →
+    /// ~9pt spread per side, leaving ~7pt of clear gutter.
+    private let cardSpacing: CGFloat = 16
     private let edgeMargin: CGFloat = 16
 
     var body: some View {
@@ -99,7 +98,7 @@ struct DashboardRecentProjectsSection: View {
                 .strokeBorder(.white.opacity(0.06), lineWidth: 1)
         )
         // Tighter shadow so adjacent cards' bleed doesn't visually merge.
-        .shadow(color: .black.opacity(0.16), radius: 10, x: 0, y: 4)
+        .shadow(color: .black.opacity(0.16), radius: 6, x: 0, y: 3)
     }
 
     /// Top-right status pill, anchored via a VStack so the badge floats

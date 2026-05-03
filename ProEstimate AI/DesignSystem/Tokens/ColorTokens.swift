@@ -72,4 +72,13 @@ enum ColorTokens {
     // MARK: - On-Dark Chrome (separators, hairlines, subtle fills)
     static let onDarkSeparator = Color.white.opacity(0.15)
     static let onDarkFillSubtle = Color.white.opacity(0.08)
+
+    // MARK: - Always-Dark Card Surfaces
+    /// Slate fills used by `.glassCard()` / `.formField()` so those
+    /// surfaces stay reliably dark in both light and dark mode. The
+    /// modifiers force `\.colorScheme = .dark` on their content, so the
+    /// background must be dark in both modes — hence hardcoded hex
+    /// rather than the adaptive `Surface` / `InputBackground` tokens.
+    static let glassCardFill = Color(hex: 0x2A323A)
+    static let glassFieldFill = Color(hex: 0x353D45)
 }

@@ -175,13 +175,13 @@ struct PlanSelectorView: View {
             }
             .padding(SpacingTokens.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            // Surface stays dark slate in both modes (`Surface` =
-            // #2A323A in light, system dark in dark), so the white-tinted
-            // copy already defined inside reads correctly without per-
-            // mode overrides.
+            // Always-dark slate fill so the white-tinted copy inside
+            // stays readable. `Surface` itself is now adaptive (light
+            // gray in light mode), so the always-dark variant is required
+            // for paywall surfaces.
             .background(
                 RoundedRectangle(cornerRadius: RadiusTokens.card)
-                    .fill(ColorTokens.surface)
+                    .fill(ColorTokens.glassCardFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: RadiusTokens.card)
@@ -190,7 +190,7 @@ struct PlanSelectorView: View {
         } else {
             // Empty placeholder while products load.
             RoundedRectangle(cornerRadius: RadiusTokens.card)
-                .fill(ColorTokens.surface)
+                .fill(ColorTokens.glassCardFill)
                 .frame(height: 130)
                 .overlay {
                     ProgressView().tint(.white)

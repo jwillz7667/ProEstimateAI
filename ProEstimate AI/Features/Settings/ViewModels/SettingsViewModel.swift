@@ -374,9 +374,13 @@ final class SettingsViewModel {
         // without re-triggering autosave.
         isHydrating = true
         defer { isHydrating = false }
-        if let mode = updated.appearanceMode, let parsed = AppearanceMode(stringValue: mode) {
-            appearanceStore?.applyRemote(mode: parsed)
-        }
+        // Appearance mode is intentionally device-local and is NOT synced
+        // back from server responses here. Pulling the server's value into
+        // the local AppearanceStore on every save / Settings load could
+        // silently flip the user's chosen color scheme if the server's
+        // value diverged (e.g. a failed PATCH on another device left the
+        // record stale). Local UserDefaults remains authoritative; the
+        // PATCH on user pick still pushes outward.
         if let lang = updated.defaultLanguage, let parsed = AppLanguage(rawValue: lang) {
             selectedLanguage = parsed
             // Mirror to the AppearanceStore so the SwiftUI \.locale is in
@@ -425,9 +429,10 @@ final class SettingsViewModel {
             selectedLanguage = parsed
             appearanceStore?.applyRemote(language: parsed)
         }
-        if let mode = company.appearanceMode, let parsed = AppearanceMode(stringValue: mode) {
-            appearanceStore?.applyRemote(mode: parsed)
-        }
+        // See `apply(updated:)`: appearance mode is device-local. Pulling
+        // it from the server on Settings load was the cause of users seeing
+        // the screen flip light↔dark when entering Settings if the server
+        // value diverged from the local choice.
     }
 }
 
