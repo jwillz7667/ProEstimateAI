@@ -285,14 +285,14 @@ struct SettingsView: View {
                         }
                         .font(TypographyTokens.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundStyle(ColorTokens.primaryText)
+                        .foregroundStyle(colorScheme == .light ? Color.black : Color.white)
                         .padding(.horizontal, SpacingTokens.sm)
                         .padding(.vertical, SpacingTokens.xxs)
                         .background(ColorTokens.primaryOrange, in: Capsule())
                         .overlay(
                             Capsule()
                                 .strokeBorder(
-                                    colorScheme == .light ? ColorTokens.primaryText : Color.clear,
+                                    colorScheme == .light ? Color.black : Color.clear,
                                     lineWidth: colorScheme == .light ? 2 : 0
                                 )
                         )

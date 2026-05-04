@@ -41,7 +41,7 @@ struct PurchaseButtonSection: View {
             HStack(spacing: SpacingTokens.xs) {
                 if isPurchasing {
                     ProgressView()
-                        .tint(ColorTokens.primaryText)
+                        .tint(colorScheme == .light ? Color.black : Color.white)
                 } else {
                     Image(systemName: "crown.fill")
                     Text(primaryTitle)
@@ -52,23 +52,17 @@ struct PurchaseButtonSection: View {
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: RadiusTokens.button)
-                    .fill(
-                        LinearGradient(
-                            colors: [ColorTokens.primaryOrange, Color(hex: 0xEA580C)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(ColorTokens.primaryOrange)
                     .shadow(color: ColorTokens.primaryOrange.opacity(0.4), radius: 12, y: 4)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: RadiusTokens.button)
                     .strokeBorder(
-                        colorScheme == .light ? ColorTokens.primaryText : Color.clear,
+                        colorScheme == .light ? Color.black : Color.clear,
                         lineWidth: colorScheme == .light ? 2 : 0
                     )
             )
-            .foregroundStyle(ColorTokens.primaryText)
+            .foregroundStyle(colorScheme == .light ? Color.black : Color.white)
         }
         .disabled(isPurchasing || selectedProduct == nil)
         .opacity(selectedProduct == nil ? 0.5 : 1.0)

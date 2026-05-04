@@ -133,7 +133,7 @@ struct ProjectEstimatesSection: View {
                 if exportingEstimateId == estimate.id {
                     ProgressView()
                         .controlSize(.small)
-                        .tint(ColorTokens.primaryText)
+                        .tint(colorScheme == .light ? Color.black : Color.white)
                 } else {
                     Image(systemName: "arrow.down.doc.fill")
                         .font(.callout.weight(.semibold))
@@ -141,14 +141,14 @@ struct ProjectEstimatesSection: View {
                 Text(exportingEstimateId == estimate.id ? "Preparing PDF…" : "Export Branded PDF")
                     .font(TypographyTokens.subheadline.weight(.semibold))
             }
-            .foregroundStyle(ColorTokens.primaryText)
+            .foregroundStyle(colorScheme == .light ? Color.black : Color.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, SpacingTokens.sm)
             .background(ColorTokens.primaryOrange, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
             .overlay(
                 RoundedRectangle(cornerRadius: RadiusTokens.button)
                     .strokeBorder(
-                        colorScheme == .light ? ColorTokens.primaryText : Color.clear,
+                        colorScheme == .light ? Color.black : Color.clear,
                         lineWidth: colorScheme == .light ? 2 : 0
                     )
             )

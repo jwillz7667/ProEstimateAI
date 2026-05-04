@@ -14,7 +14,7 @@ struct PrimaryCTAButton: View {
             HStack(spacing: SpacingTokens.xs) {
                 if isLoading {
                     ProgressView()
-                        .tint(ColorTokens.primaryText)
+                        .tint(colorScheme == .light ? Color.black : Color.white)
                 } else {
                     if let icon {
                         Image(systemName: icon)
@@ -31,19 +31,13 @@ struct PrimaryCTAButton: View {
                     .fill(isDisabled ? ColorTokens.primaryOrange.opacity(0.4) : ColorTokens.primaryOrange)
             )
             .overlay(
-                // Slate outline in light mode mirrors the card-text slate so
-                // the orange CTA reads as part of the same visual family as
-                // the surrounding white card. Skipped in dark mode where the
-                // orange already pops against the dark surface.
                 RoundedRectangle(cornerRadius: RadiusTokens.button)
                     .strokeBorder(
-                        colorScheme == .light ? ColorTokens.primaryText : Color.clear,
+                        colorScheme == .light ? Color.black : Color.clear,
                         lineWidth: colorScheme == .light ? 2 : 0
                     )
             )
-            // primaryText adapts: slate (#2A323A) in light, system label
-            // (white) in dark — preserves dark-mode legibility unchanged.
-            .foregroundStyle(ColorTokens.primaryText)
+            .foregroundStyle(colorScheme == .light ? Color.black : Color.white)
         }
         .disabled(isDisabled || isLoading)
     }

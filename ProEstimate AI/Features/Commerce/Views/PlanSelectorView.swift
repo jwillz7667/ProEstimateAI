@@ -42,12 +42,12 @@ struct PlanSelectorView: View {
 
     private func tierButton(_ tier: PlanTier) -> some View {
         let isSelected = selectedTier == tier
-        // Premium-selected = orange fill. In light mode that orange capsule
-        // gets the slate border + slate text treatment so it matches the
-        // PrimaryCTA. Pro-selected = blue fill, untouched.
+        // Premium-selected = orange fill, gets the black border + black text
+        // treatment in light mode to match the PrimaryCTA. Pro-selected = blue
+        // fill, keeps white text untouched.
         let isOrangeFilled = isSelected && tier == .premium
         let selectedTextColor: Color = isOrangeFilled
-            ? ColorTokens.primaryText
+            ? (colorScheme == .light ? Color.black : Color.white)
             : .white
         return Button {
             // Update only the binding. The host view model's didSet
@@ -87,7 +87,7 @@ struct PlanSelectorView: View {
             .overlay(
                 Capsule()
                     .strokeBorder(
-                        (isOrangeFilled && colorScheme == .light) ? ColorTokens.primaryText : Color.clear,
+                        (isOrangeFilled && colorScheme == .light) ? Color.black : Color.clear,
                         lineWidth: (isOrangeFilled && colorScheme == .light) ? 2 : 0
                     )
             )
@@ -125,15 +125,19 @@ struct PlanSelectorView: View {
         badge: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
-        // Selected state is unconditionally orange-filled, so the slate
-        // border + slate text treatment is gated only on light mode.
+        // Selected state is unconditionally orange-filled; the black border
+        // + black text treatment is gated only on light mode.
         let isOrangeFilled = isSelected
         return Button(action: action) {
             HStack(spacing: SpacingTokens.xxs) {
                 Text(title)
                     .font(TypographyTokens.subheadline)
                     .fontWeight(isSelected ? .semibold : .regular)
-                    .foregroundStyle(isSelected ? ColorTokens.primaryText : ColorTokens.secondaryText)
+                    .foregroundStyle(
+                        isSelected
+                            ? (colorScheme == .light ? Color.black : Color.white)
+                            : ColorTokens.secondaryText
+                    )
                 if let badge {
                     Text(badge)
                         .font(.system(size: 9, weight: .bold))
@@ -153,7 +157,7 @@ struct PlanSelectorView: View {
             .overlay(
                 Capsule()
                     .strokeBorder(
-                        (isOrangeFilled && colorScheme == .light) ? ColorTokens.primaryText : Color.clear,
+                        (isOrangeFilled && colorScheme == .light) ? Color.black : Color.clear,
                         lineWidth: (isOrangeFilled && colorScheme == .light) ? 2 : 0
                     )
             )

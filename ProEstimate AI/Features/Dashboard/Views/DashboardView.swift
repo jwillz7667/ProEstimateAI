@@ -165,18 +165,18 @@ struct DashboardView: View {
 
                     Image(systemName: "plus")
                         .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(ColorTokens.primaryText)
+                        .foregroundStyle(colorScheme == .light ? Color.black : Color.white)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("New Project")
                         .font(TypographyTokens.title3)
                         .fontWeight(.semibold)
-                        .foregroundStyle(ColorTokens.primaryText)
+                        .foregroundStyle(colorScheme == .light ? Color.black : Color.white)
 
                     Text("Start a new renovation, estimate or invoice")
                         .font(TypographyTokens.caption)
-                        .foregroundStyle(ColorTokens.secondaryText)
+                        .foregroundStyle(colorScheme == .light ? Color.black.opacity(0.7) : Color.white.opacity(0.92))
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -185,26 +185,19 @@ struct DashboardView: View {
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(ColorTokens.secondaryText)
+                    .foregroundStyle(colorScheme == .light ? Color.black.opacity(0.7) : Color.white.opacity(0.85))
             }
             .padding(.vertical, SpacingTokens.md)
             .padding(.horizontal, SpacingTokens.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                LinearGradient(
-                    colors: [
-                        ColorTokens.primaryOrange,
-                        ColorTokens.primaryOrange.opacity(0.78),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
+                ColorTokens.primaryOrange,
                 in: RoundedRectangle(cornerRadius: RadiusTokens.card)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: RadiusTokens.card)
                     .strokeBorder(
-                        colorScheme == .light ? ColorTokens.primaryText : Color.clear,
+                        colorScheme == .light ? Color.black : Color.clear,
                         lineWidth: colorScheme == .light ? 2 : 0
                     )
             )
