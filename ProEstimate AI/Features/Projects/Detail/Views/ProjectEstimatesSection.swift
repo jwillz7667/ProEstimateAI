@@ -16,6 +16,8 @@ struct ProjectEstimatesSection: View {
     var onExportEstimate: ((String) -> Void)?
     var onTapSavedExport: ((EstimateExport) -> Void)?
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
             SectionHeaderView(
@@ -131,7 +133,7 @@ struct ProjectEstimatesSection: View {
                 if exportingEstimateId == estimate.id {
                     ProgressView()
                         .controlSize(.small)
-                        .tint(.white)
+                        .tint(ColorTokens.primaryText)
                 } else {
                     Image(systemName: "arrow.down.doc.fill")
                         .font(.callout.weight(.semibold))
@@ -139,10 +141,17 @@ struct ProjectEstimatesSection: View {
                 Text(exportingEstimateId == estimate.id ? "Preparing PDF…" : "Export Branded PDF")
                     .font(TypographyTokens.subheadline.weight(.semibold))
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(ColorTokens.primaryText)
             .frame(maxWidth: .infinity)
             .padding(.vertical, SpacingTokens.sm)
             .background(ColorTokens.primaryOrange, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.button)
+                    .strokeBorder(
+                        colorScheme == .light ? ColorTokens.primaryText : Color.clear,
+                        lineWidth: colorScheme == .light ? 2 : 0
+                    )
+            )
         }
         .buttonStyle(.plain)
         .disabled(exportingEstimateId != nil)

@@ -13,6 +13,7 @@ struct DashboardView: View {
     @State private var showSettings = false
     @State private var navigateToProjectId: String?
     @State private var navigateAutoGenerate: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         @Bindable var router = router
@@ -164,18 +165,18 @@ struct DashboardView: View {
 
                     Image(systemName: "plus")
                         .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(ColorTokens.primaryText)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("New Project")
                         .font(TypographyTokens.title3)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(ColorTokens.primaryText)
 
                     Text("Start a new renovation, estimate or invoice")
                         .font(TypographyTokens.caption)
-                        .foregroundStyle(.white.opacity(0.92))
+                        .foregroundStyle(ColorTokens.secondaryText)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -184,7 +185,7 @@ struct DashboardView: View {
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(ColorTokens.secondaryText)
             }
             .padding(.vertical, SpacingTokens.md)
             .padding(.horizontal, SpacingTokens.md)
@@ -199,6 +200,13 @@ struct DashboardView: View {
                     endPoint: .bottomTrailing
                 ),
                 in: RoundedRectangle(cornerRadius: RadiusTokens.card)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.card)
+                    .strokeBorder(
+                        colorScheme == .light ? ColorTokens.primaryText : Color.clear,
+                        lineWidth: colorScheme == .light ? 2 : 0
+                    )
             )
             .shadow(color: ColorTokens.primaryOrange.opacity(0.32), radius: 16, x: 0, y: 8)
         }

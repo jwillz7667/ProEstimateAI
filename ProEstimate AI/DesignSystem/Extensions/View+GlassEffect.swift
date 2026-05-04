@@ -3,10 +3,10 @@ import SwiftUI
 // MARK: - Public API
 
 extension View {
-    /// Applies the canonical card surface styling: dark slate fill in
-    /// light mode, brand-orange border, and a forced dark colorScheme on
-    /// the receiver's content so text and icons inside the card render
-    /// against the dark surface without per-call-site changes.
+    /// Applies the canonical card surface styling: white fill in light mode
+    /// (`#EBECEB` page beneath, orange border for separation) and the
+    /// system grouped-background color in dark mode. Card content adapts
+    /// to the parent color scheme — slate text in light, white text in dark.
     func glassCard(cornerRadius: CGFloat = RadiusTokens.card) -> some View {
         modifier(GlassCardStyle(cornerRadius: cornerRadius, drawsBorder: true))
     }
@@ -19,9 +19,9 @@ extension View {
     }
 
     /// Form-field chrome — a thin pill of input background with the
-    /// same orange-accent treatment as cards. Inputs inside cards
-    /// inherit the parent card's dark colorScheme, so their text reads
-    /// white in light mode automatically.
+    /// same orange-accent treatment as cards. Adapts to the parent
+    /// scheme (slate text on a `#EBECEB` fill in light mode; white text
+    /// on a darker fill in dark mode).
     func formField() -> some View {
         modifier(FormFieldStyle())
     }
@@ -31,14 +31,13 @@ extension View {
 
 /// Canonical card chrome.
 ///
-/// In light mode the card surface is intentionally dark slate (`#2A323A`)
-/// and the receiver's content is rendered with `\.colorScheme = .dark`
-/// so labels, secondary text, system materials, and SF Symbols inside
-/// adapt to the dark surface without each call site having to override
-/// foreground colors. The stroked orange border sits at full opacity in
-/// light mode (1.5pt) for clear separation against the white page
-/// background, and at 0.35 opacity in dark mode (1pt) as a subtle accent
-/// on the existing dark page background.
+/// In light mode the card surface is white sitting on a `#EBECEB` page
+/// background, with a solid orange border (1.5pt) for separation. In
+/// dark mode the card uses the system grouped-cell color with a subtle
+/// orange border (1pt @ 35%). Card content inherits the parent color
+/// scheme — `ColorTokens.primaryText` / `secondaryText` are adaptive,
+/// so labels and secondary text resolve to slate-on-white in light and
+/// system labels in dark without per-call-site overrides.
 private struct GlassCardStyle: ViewModifier {
     let cornerRadius: CGFloat
     let drawsBorder: Bool
@@ -47,7 +46,6 @@ private struct GlassCardStyle: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .environment(\.colorScheme, .dark)
             .background(
                 ColorTokens.glassCardFill,
                 in: RoundedRectangle(cornerRadius: cornerRadius)
@@ -63,7 +61,7 @@ private struct GlassCardStyle: ViewModifier {
 
     private var borderColor: Color {
         // Solid brand orange in light mode for confident separation
-        // against the white page background; a subtle accent in dark
+        // against the gray page background; a subtle accent in dark
         // mode where the existing chrome is already low-contrast.
         switch colorScheme {
         case .light: return ColorTokens.primaryOrange
@@ -77,24 +75,24 @@ private struct GlassCardStyle: ViewModifier {
     }
 
     private var shadowOpacity: Double {
-        // White page background swallows soft shadows — bump up in
-        // light mode so the elevation reads.
-        colorScheme == .light ? 0.12 : 0.06
+        // Light page swallows soft shadows — keep elevation readable.
+        colorScheme == .light ? 0.08 : 0.06
     }
 }
 
 // MARK: - Form Field Style
 
-/// Input chrome shared by inline form fields. Mirrors the card's dark
-/// surface + orange accent in light mode so freestanding inputs (not
-/// inside a card) carry the same theme.
+/// Input chrome shared by inline form fields. In light mode the field
+/// fill is the page-background gray (`#EBECEB`) so an input sits visually
+/// inset against a white card. In dark mode the field is a hair lighter
+/// than the surrounding card. Foreground tracks `primaryText`, which
+/// resolves to slate in light mode and system label in dark.
 private struct FormFieldStyle: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
             .padding(SpacingTokens.sm)
-            .environment(\.colorScheme, .dark)
             .background(
                 ColorTokens.glassFieldFill,
                 in: RoundedRectangle(cornerRadius: RadiusTokens.small)
@@ -103,18 +101,18 @@ private struct FormFieldStyle: ViewModifier {
                 RoundedRectangle(cornerRadius: RadiusTokens.small)
                     .strokeBorder(borderColor, lineWidth: borderWidth)
             )
-            .foregroundStyle(ColorTokens.onDarkPrimary)
+            .foregroundStyle(ColorTokens.primaryText)
     }
 
     private var borderColor: Color {
         switch colorScheme {
-        case .light: return ColorTokens.primaryOrange.opacity(0.85)
+        case .light: return ColorTokens.primaryOrange.opacity(0.55)
         case .dark: return ColorTokens.primaryOrange.opacity(0.3)
         @unknown default: return ColorTokens.primaryOrange.opacity(0.3)
         }
     }
 
     private var borderWidth: CGFloat {
-        colorScheme == .light ? 1.25 : 1
+        colorScheme == .light ? 1 : 1
     }
 }

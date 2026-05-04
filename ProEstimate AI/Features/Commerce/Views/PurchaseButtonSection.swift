@@ -15,6 +15,8 @@ struct PurchaseButtonSection: View {
     let onContinueFree: () -> Void
     let onRestore: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(spacing: SpacingTokens.sm) {
             // Primary CTA.
@@ -39,7 +41,7 @@ struct PurchaseButtonSection: View {
             HStack(spacing: SpacingTokens.xs) {
                 if isPurchasing {
                     ProgressView()
-                        .tint(.white)
+                        .tint(ColorTokens.primaryText)
                 } else {
                     Image(systemName: "crown.fill")
                     Text(primaryTitle)
@@ -59,7 +61,14 @@ struct PurchaseButtonSection: View {
                     )
                     .shadow(color: ColorTokens.primaryOrange.opacity(0.4), radius: 12, y: 4)
             )
-            .foregroundStyle(.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.button)
+                    .strokeBorder(
+                        colorScheme == .light ? ColorTokens.primaryText : Color.clear,
+                        lineWidth: colorScheme == .light ? 2 : 0
+                    )
+            )
+            .foregroundStyle(ColorTokens.primaryText)
         }
         .disabled(isPurchasing || selectedProduct == nil)
         .opacity(selectedProduct == nil ? 0.5 : 1.0)

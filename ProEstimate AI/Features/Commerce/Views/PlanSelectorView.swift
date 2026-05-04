@@ -16,6 +16,8 @@ struct PlanSelectorView: View {
     @Binding var selectedTier: PlanTier
     @Binding var isAnnualSelected: Bool
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(spacing: SpacingTokens.md) {
             tierToggle
@@ -40,6 +42,13 @@ struct PlanSelectorView: View {
 
     private func tierButton(_ tier: PlanTier) -> some View {
         let isSelected = selectedTier == tier
+        // Premium-selected = orange fill. In light mode that orange capsule
+        // gets the slate border + slate text treatment so it matches the
+        // PrimaryCTA. Pro-selected = blue fill, untouched.
+        let isOrangeFilled = isSelected && tier == .premium
+        let selectedTextColor: Color = isOrangeFilled
+            ? ColorTokens.primaryText
+            : .white
         return Button {
             // Update only the binding. The host view model's didSet
             // observer on `selectedTier` re-resolves `selectedProduct`
@@ -58,7 +67,7 @@ struct PlanSelectorView: View {
                 Text(tier.displayName.uppercased())
                     .font(TypographyTokens.caption.weight(.bold))
                     .tracking(0.5)
-                    .foregroundStyle(isSelected ? .white : ColorTokens.secondaryText)
+                    .foregroundStyle(isSelected ? selectedTextColor : ColorTokens.secondaryText)
                 if tier == .premium && isSelected {
                     Text("MOST POPULAR")
                         .font(.system(size: 9, weight: .bold))
@@ -74,6 +83,13 @@ struct PlanSelectorView: View {
                 isSelected
                     ? Capsule().fill(tier == .premium ? ColorTokens.primaryOrange : ColorTokens.accentBlue)
                     : Capsule().fill(Color.clear)
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        (isOrangeFilled && colorScheme == .light) ? ColorTokens.primaryText : Color.clear,
+                        lineWidth: (isOrangeFilled && colorScheme == .light) ? 2 : 0
+                    )
             )
         }
         .buttonStyle(.plain)
@@ -109,12 +125,15 @@ struct PlanSelectorView: View {
         badge: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        // Selected state is unconditionally orange-filled, so the slate
+        // border + slate text treatment is gated only on light mode.
+        let isOrangeFilled = isSelected
+        return Button(action: action) {
             HStack(spacing: SpacingTokens.xxs) {
                 Text(title)
                     .font(TypographyTokens.subheadline)
                     .fontWeight(isSelected ? .semibold : .regular)
-                    .foregroundStyle(isSelected ? .white : ColorTokens.secondaryText)
+                    .foregroundStyle(isSelected ? ColorTokens.primaryText : ColorTokens.secondaryText)
                 if let badge {
                     Text(badge)
                         .font(.system(size: 9, weight: .bold))
@@ -130,6 +149,13 @@ struct PlanSelectorView: View {
                 isSelected
                     ? Capsule().fill(ColorTokens.primaryOrange)
                     : Capsule().fill(Color.clear)
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        (isOrangeFilled && colorScheme == .light) ? ColorTokens.primaryText : Color.clear,
+                        lineWidth: (isOrangeFilled && colorScheme == .light) ? 2 : 0
+                    )
             )
         }
         .buttonStyle(.plain)

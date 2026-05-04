@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var showingDeleteAccountConfirmation = false
     @State private var isDeletingAccount = false
     @State private var preferredSupplier: MaterialSupplier? = MaterialSupplier.preferred
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -284,10 +285,17 @@ struct SettingsView: View {
                         }
                         .font(TypographyTokens.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(ColorTokens.primaryText)
                         .padding(.horizontal, SpacingTokens.sm)
                         .padding(.vertical, SpacingTokens.xxs)
                         .background(ColorTokens.primaryOrange, in: Capsule())
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(
+                                    colorScheme == .light ? ColorTokens.primaryText : Color.clear,
+                                    lineWidth: colorScheme == .light ? 2 : 0
+                                )
+                        )
                     }
                 }
             }

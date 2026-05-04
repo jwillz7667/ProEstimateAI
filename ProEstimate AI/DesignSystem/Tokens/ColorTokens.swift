@@ -29,8 +29,23 @@ enum ColorTokens {
     static let lightBorder = Color(.separator)
 
     // MARK: - Text
-    static let primaryText = Color(.label)
-    static let secondaryText = Color(.secondaryLabel)
+    /// Card-friendly slate (`#2A323A`) in light mode so text reads with a
+    /// brand-consistent dark slate against the white card / `#EBECEB` page
+    /// background. In dark mode falls back to system label so it adapts to
+    /// dynamic accessibility tweaks (high-contrast, etc.).
+    static let primaryText = Color(UIColor { traits in
+        switch traits.userInterfaceStyle {
+        case .dark: return UIColor.label
+        default: return UIColor(red: 0x2A / 255.0, green: 0x32 / 255.0, blue: 0x3A / 255.0, alpha: 1.0)
+        }
+    })
+    /// Same slate at ~65% opacity in light mode for the secondary text level.
+    static let secondaryText = Color(UIColor { traits in
+        switch traits.userInterfaceStyle {
+        case .dark: return UIColor.secondaryLabel
+        default: return UIColor(red: 0x2A / 255.0, green: 0x32 / 255.0, blue: 0x3A / 255.0, alpha: 0.65)
+        }
+    })
     static let lightPrimaryText = Color(.label)
     static let lightSecondaryText = Color(.secondaryLabel)
     static let tertiaryText = Color(.tertiaryLabel)
@@ -73,26 +88,26 @@ enum ColorTokens {
     static let onDarkSeparator = Color.white.opacity(0.15)
     static let onDarkFillSubtle = Color.white.opacity(0.08)
 
-    // MARK: - Always-Dark Card Surfaces
-    /// Card fill for `.glassCard()` / `.glassSurface()`. In light mode the
-    /// card is intentionally a dark slate (`#2A323A`) so the orange-bordered
-    /// surface pops against the white page. In dark mode it shifts to the
-    /// system grouped-cell color so cards visually match `List`/`Form`
-    /// rows (Settings, etc.) — keeping every elevated surface in the app
-    /// at one consistent shade.
+    // MARK: - Card Surfaces
+    /// Card fill for `.glassCard()` / `.glassSurface()`. Light mode renders
+    /// the card as solid white so it contrasts crisply against the
+    /// `#EBECEB` page background (the orange border supplies separation).
+    /// In dark mode it shifts to the system grouped-cell color so cards
+    /// visually match `List` / `Form` rows.
     static let glassCardFill = Color(UIColor { traits in
         switch traits.userInterfaceStyle {
         case .dark: return UIColor.secondarySystemGroupedBackground
-        default: return UIColor(red: 0x2A / 255.0, green: 0x32 / 255.0, blue: 0x3A / 255.0, alpha: 1.0)
+        default: return UIColor.white
         }
     })
 
-    /// Form-field fill (`.formField()`). Stays a hair lighter than the
-    /// card fill so inputs read as elevated chrome inside cards.
+    /// Form-field fill (`.formField()`). In light mode this matches the
+    /// page background (`#EBECEB`) so inputs sit visually inset against
+    /// the white card. In dark mode it stays a hair lighter than the card.
     static let glassFieldFill = Color(UIColor { traits in
         switch traits.userInterfaceStyle {
         case .dark: return UIColor.tertiarySystemGroupedBackground
-        default: return UIColor(red: 0x35 / 255.0, green: 0x3D / 255.0, blue: 0x45 / 255.0, alpha: 1.0)
+        default: return UIColor(red: 0xEB / 255.0, green: 0xEC / 255.0, blue: 0xEB / 255.0, alpha: 1.0)
         }
     })
 }
