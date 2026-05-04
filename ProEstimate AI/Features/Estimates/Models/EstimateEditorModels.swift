@@ -2,8 +2,8 @@ import Foundation
 
 // MARK: - Line Item Draft
 
-/// Mutable draft used when creating or editing a line item in the editor.
-/// Converted to/from EstimateLineItem for persistence.
+/// Mutable draft used when seeding line items from material suggestions
+/// or when computing PDF totals at export time.
 struct LineItemDraft: Identifiable, Sendable {
     var id: String = UUID().uuidString
     var estimateId: String = ""
@@ -17,27 +17,22 @@ struct LineItemDraft: Identifiable, Sendable {
     var taxRate: Decimal = 8.25
     var sortOrder: Int = 0
 
-    /// Computed base cost before markup.
     var baseCost: Decimal {
         quantity * unitCost
     }
 
-    /// Computed markup dollar amount.
     var markupAmount: Decimal {
         baseCost * (markupPercent / 100)
     }
 
-    /// Computed tax dollar amount on (base + markup).
     var taxAmount: Decimal {
         (baseCost + markupAmount) * (taxRate / 100)
     }
 
-    /// Computed line total including markup and tax.
     var lineTotal: Decimal {
         baseCost + markupAmount + taxAmount
     }
 
-    /// Whether this draft has enough data to be saved.
     var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty && quantity > 0 && unitCost >= 0
     }
@@ -46,7 +41,6 @@ struct LineItemDraft: Identifiable, Sendable {
 // MARK: - LineItemDraft ↔ EstimateLineItem
 
 extension LineItemDraft {
-    /// Initialize a draft from an existing line item for editing.
     init(from item: EstimateLineItem) {
         id = item.id
         estimateId = item.estimateId
@@ -75,7 +69,7 @@ extension LineItemDraft {
         taxRate = 8.25
         self.sortOrder = sortOrder
 
-        // Embed supplier info in description so it persists through the backend
+        // Embed supplier info in description so it persists through the backend.
         var desc = material.category
         if let supplier = material.supplierName {
             desc += " · \(supplier)"
@@ -87,7 +81,6 @@ extension LineItemDraft {
     }
 
     /// Creates a default labor line item based on project type.
-    /// Labor is estimated as a percentage of material costs, varying by trade.
     static func defaultLabor(
         estimateId: String,
         projectType: Project.ProjectType,
@@ -105,12 +98,11 @@ extension LineItemDraft {
         draft.unit = .hour
         draft.unitCost = rate
         draft.markupPercent = 15
-        draft.taxRate = 0 // Labor typically not taxed
+        draft.taxRate = 0
         draft.sortOrder = sortOrder
         return draft
     }
 
-    /// Returns (description, hourly rate, estimated hours) for a project type.
     private static func laborDefaults(
         for projectType: Project.ProjectType,
         materialsCost _: Decimal
@@ -135,25 +127,16 @@ extension LineItemDraft {
         case .landscaping:
             return ("Landscape Install Labor", 55, 32)
         case .lawnCare:
-            // Per-visit labor — recurring contracts override this from the
-            // service-level rate sheet, but the fallback assumes a small
-            // commercial property mowed by a 2-person crew.
             return ("Lawn Care Crew (per visit)", 50, 3)
         case .outdoorLiving:
-            // Hardscape/decking/pergola work — typically a 2-person crew
-            // for a multi-day mid-size patio install.
             return ("Outdoor Living Install Labor", 65, 40)
         case .garage:
-            // Garage build-outs span workshop fit-outs, EV bay upgrades,
-            // and livable conversions. Default assumes a finished
-            // workshop/storage tier (electrical + flooring + cabinetry).
             return ("Garage Build-Out Labor", 60, 28)
         case .custom:
             return ("General Contractor Labor", 65, 20)
         }
     }
 
-    /// Convert draft to an immutable EstimateLineItem for persistence.
     func toLineItem() -> EstimateLineItem {
         EstimateLineItem(
             id: id,
@@ -177,7 +160,6 @@ extension LineItemDraft {
 
 // MARK: - Line Item Unit
 
-/// Standard measurement units for estimate line items.
 enum LineItemUnit: String, CaseIterable, Identifiable, Sendable {
     case each
     case sqft = "sq ft"
@@ -199,59 +181,5 @@ enum LineItemUnit: String, CaseIterable, Identifiable, Sendable {
         case .day: "Day"
         case .lot: "Lot"
         }
-    }
-}
-
-// MARK: - Estimate Status Filter
-
-/// Filter options for the estimate list segmented control.
-enum EstimateStatusFilter: String, CaseIterable, Identifiable, Sendable {
-    case all
-    case draft
-    case sent
-    case approved
-    case declined
-    case expired
-
-    var id: String {
-        rawValue
-    }
-
-    var title: String {
-        switch self {
-        case .all: "All"
-        case .draft: "Draft"
-        case .sent: "Sent"
-        case .approved: "Approved"
-        case .declined: "Declined"
-        case .expired: "Expired"
-        }
-    }
-
-    /// The estimate statuses that match this filter.
-    var matchingStatuses: [Estimate.Status] {
-        switch self {
-        case .all: Estimate.Status.allCases
-        case .draft: [.draft]
-        case .sent: [.sent]
-        case .approved: [.approved]
-        case .declined: [.declined]
-        case .expired: [.expired]
-        }
-    }
-}
-
-// MARK: - Estimate Summary
-
-/// Lightweight summary for list display, combining estimate + project info.
-struct EstimateSummary: Identifiable, Sendable {
-    let id: String
-    let estimate: Estimate
-    let projectTitle: String
-
-    init(estimate: Estimate, projectTitle: String) {
-        id = estimate.id
-        self.estimate = estimate
-        self.projectTitle = projectTitle
     }
 }

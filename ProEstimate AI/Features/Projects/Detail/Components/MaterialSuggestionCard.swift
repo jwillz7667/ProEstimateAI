@@ -124,18 +124,24 @@ struct MaterialSuggestionCard: View {
             .foregroundStyle(ColorTokens.primaryOrange)
     }
 
-    /// Picker that opens the supplier's search page for `query`. The
-    /// AI-suggested supplier (if it matches one we know) is shown first;
-    /// the rest of the catalog falls below for the contractor's preferred
-    /// retailer relationship.
+    /// Picker that opens the supplier's search page for `query`. Order:
+    /// the contractor's saved default retailer first (set in Settings),
+    /// then the AI-suggested supplier, then the rest of the catalog.
+    /// Either of the first two slots may be missing — when neither is
+    /// set, the catalog renders in its declared order.
     @ViewBuilder
     private func verifyPriceMenu(query: String) -> some View {
+        let preferred = MaterialSupplier.preferred
         let suggested = MaterialSupplier.match(supplierName: material.supplierName)
         let ordered: [MaterialSupplier] = {
             var all = MaterialSupplier.allCases
-            if let s = suggested {
+            if let s = suggested, s != preferred {
                 all.removeAll { $0 == s }
                 all.insert(s, at: 0)
+            }
+            if let p = preferred {
+                all.removeAll { $0 == p }
+                all.insert(p, at: 0)
             }
             return all
         }()

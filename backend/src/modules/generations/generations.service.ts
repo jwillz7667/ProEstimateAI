@@ -97,7 +97,7 @@ function mapRecurrenceFrequency(
 function buildImageContext(
   project: {
     projectType: string;
-    qualityTier: string;
+    qualityTier: string | null;
     title: string;
     description: string | null;
     squareFootage: unknown;
@@ -124,7 +124,10 @@ function buildImageContext(
 
   return {
     projectType: project.projectType,
-    qualityTier: project.qualityTier,
+    // When the contractor leaves the tier on "Auto" we default to STANDARD
+    // for prompt language and clamping. The resolved tier is snapshotted on
+    // the AIGeneration record so audit trails show what was actually used.
+    qualityTier: project.qualityTier ?? "STANDARD",
     projectTitle: project.title,
     projectDescription: project.description ?? undefined,
     squareFootage: project.squareFootage
@@ -341,6 +344,11 @@ async function generateAndStoreMaterials(
     return;
   }
 
+  const tierForRecords = (matContext.qualityTier?.toUpperCase() ?? "STANDARD") as
+    | "STANDARD"
+    | "PREMIUM"
+    | "LUXURY";
+
   // Store material suggestions
   const materialRecords = materials.map((m) => ({
     generationId,
@@ -350,6 +358,7 @@ async function generateAndStoreMaterials(
     estimatedCost: m.estimatedCost,
     unit: m.unit,
     quantity: m.quantity,
+    qualityTier: tierForRecords,
     supplierName: m.supplierName ?? null,
     supplierSearchQuery: m.supplierSearchQuery ?? null,
     isSelected: true, // Default all to selected
@@ -365,6 +374,7 @@ async function generateAndStoreMaterials(
     estimatedCost: l.ratePerHour,
     unit: "hour",
     quantity: l.hoursEstimate,
+    qualityTier: tierForRecords,
     supplierName: null,
     supplierSearchQuery: null,
     isSelected: true,
@@ -717,7 +727,16 @@ export async function create(
 
   const generation = await prisma.$transaction(async (tx) => {
     const gen = await tx.aIGeneration.create({
-      data: { projectId, prompt: data.prompt, systemPrompt, status: "QUEUED" },
+      data: {
+        projectId,
+        prompt: data.prompt,
+        systemPrompt,
+        status: "QUEUED",
+        qualityTier: imageContext.qualityTier as
+          | "STANDARD"
+          | "PREMIUM"
+          | "LUXURY",
+      },
     });
     await tx.activityLogEntry.create({
       data: {

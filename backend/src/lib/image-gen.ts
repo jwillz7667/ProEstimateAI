@@ -292,8 +292,11 @@ async function generatePreviewImageGoogle(
       model: NANO_BANANA_2_MODEL,
       contents,
       config: {
-        temperature: 1,
-        topP: 0.95,
+        // 0.7 keeps the model creative enough to handle varied source photos
+        // while preventing the random reframing/style drift that temperature 1
+        // produced. Pairs with topP: 0.9 below.
+        temperature: 0.7,
+        topP: 0.9,
         maxOutputTokens: 32768,
         responseModalities: referencePhoto ? ["TEXT", "IMAGE"] : ["IMAGE"],
         safetySettings: [

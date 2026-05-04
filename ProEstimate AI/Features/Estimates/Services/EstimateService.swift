@@ -3,7 +3,6 @@ import Foundation
 // MARK: - Protocol
 
 protocol EstimateServiceProtocol: Sendable {
-    func listEstimates() async throws -> [EstimateSummary]
     func listByProject(projectId: String) async throws -> [Estimate]
     func listByClient(clientId: String) async throws -> [Estimate]
     func getEstimate(id: String) async throws -> Estimate
@@ -18,11 +17,6 @@ protocol EstimateServiceProtocol: Sendable {
 
 final class MockEstimateService: EstimateServiceProtocol {
     private let simulatedDelay: UInt64 = 500_000_000 // 0.5s
-
-    func listEstimates() async throws -> [EstimateSummary] {
-        try await Task.sleep(nanoseconds: simulatedDelay)
-        return Self.sampleSummaries
-    }
 
     func listByProject(projectId: String) async throws -> [Estimate] {
         try await Task.sleep(nanoseconds: simulatedDelay)
@@ -323,18 +317,4 @@ extension MockEstimateService {
         ),
     ]
 
-    static let sampleSummaries: [EstimateSummary] = [
-        EstimateSummary(
-            estimate: sampleEstimates[0],
-            projectTitle: "Kitchen Remodel – Mitchell Residence"
-        ),
-        EstimateSummary(
-            estimate: sampleEstimates[1],
-            projectTitle: "Master Bath – Johnson Home"
-        ),
-        EstimateSummary(
-            estimate: sampleEstimates[2],
-            projectTitle: "Full Flooring – Garcia Property"
-        ),
-    ]
 }

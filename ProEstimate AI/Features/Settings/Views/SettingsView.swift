@@ -6,12 +6,11 @@ struct SettingsView: View {
     @Environment(EntitlementStore.self) private var entitlementStore
     @Environment(UsageMeterStore.self) private var usageMeterStore
     @Environment(PaywallPresenter.self) private var paywallPresenter
-    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
-    @Environment(AppRouter.self) private var router
     @Environment(AppearanceStore.self) private var appearanceStore
     @State private var showingSignOutConfirmation = false
     @State private var showingDeleteAccountConfirmation = false
     @State private var isDeletingAccount = false
+    @State private var preferredSupplier: MaterialSupplier? = MaterialSupplier.preferred
 
     var body: some View {
         NavigationStack {
@@ -31,12 +30,8 @@ struct SettingsView: View {
                     TaxSettingsView(viewModel: viewModel)
                 case .numberingSettings:
                     NumberingSettingsView(viewModel: viewModel)
-                case .pricingProfiles:
-                    PricingProfilesView(viewModel: viewModel)
                 case .languageSettings:
                     LanguageSettingsView(viewModel: viewModel)
-                case .analytics:
-                    AnalyticsView()
                 default:
                     EmptyView()
                 }
@@ -94,29 +89,6 @@ struct SettingsView: View {
         let marketing = info?["CFBundleShortVersionString"] as? String ?? "—"
         let build = info?["CFBundleVersion"] as? String ?? "—"
         return "\(marketing) (\(build))"
-    }
-
-    // MARK: - Pro Badge
-
-    private var proBadge: some View {
-        Text("PRO")
-            .font(TypographyTokens.caption2.weight(.bold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, SpacingTokens.xs)
-            .padding(.vertical, 2)
-            .background(ColorTokens.primaryOrange, in: Capsule())
-    }
-
-    // MARK: - Feature Gates
-
-    private func handleAnalyticsTap() {
-        let result = featureGateCoordinator.guardAccessAnalytics()
-        switch result {
-        case .allowed:
-            router.settingsPath.append(AppDestination.analytics)
-        case let .blocked(decision):
-            paywallPresenter.present(decision)
-        }
     }
 
     // MARK: - Account Deletion
@@ -230,47 +202,25 @@ struct SettingsView: View {
                     }
                 }
 
-                Button {
-                    handleAnalyticsTap()
-                } label: {
-                    Label {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Analytics")
-                                    .foregroundStyle(ColorTokens.primaryText)
-                                Text("Projects, revenue & estimates")
-                                    .font(TypographyTokens.caption)
-                                    .foregroundStyle(.secondary)
+                Label {
+                    Picker(
+                        "Material Price Source",
+                        selection: Binding(
+                            get: { preferredSupplier },
+                            set: { newValue in
+                                preferredSupplier = newValue
+                                MaterialSupplier.preferred = newValue
                             }
-                            Spacer()
-                            if !entitlementStore.hasProAccess {
-                                proBadge
-                            } else {
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
+                        )
+                    ) {
+                        Text("No preference").tag(MaterialSupplier?.none)
+                        ForEach(MaterialSupplier.allCases) { supplier in
+                            Text(supplier.displayName).tag(MaterialSupplier?.some(supplier))
                         }
-                    } icon: {
-                        Image(systemName: "chart.bar.xaxis")
-                            .foregroundStyle(ColorTokens.primaryOrange)
                     }
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-
-                NavigationLink(value: AppDestination.pricingProfiles) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Pricing Profiles")
-                            Text("\(viewModel.pricingProfiles.count) profile\(viewModel.pricingProfiles.count == 1 ? "" : "s")")
-                                .font(TypographyTokens.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "dollarsign.gauge.chart.lefthalf.righthalf")
-                            .foregroundStyle(ColorTokens.accentGreen)
-                    }
+                } icon: {
+                    Image(systemName: "cart")
+                        .foregroundStyle(ColorTokens.accentGreen)
                 }
             }
 

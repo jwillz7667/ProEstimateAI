@@ -11,7 +11,9 @@ struct ProjectEditSheet: View {
     @State private var title: String
     @State private var description: String
     @State private var projectType: Project.ProjectType
-    @State private var qualityTier: Project.QualityTier
+    /// `nil` = Auto (backend picks tier-neutral defaults). When set, the
+    /// backend enforces tier price floors/ceilings on materials and labor.
+    @State private var qualityTier: Project.QualityTier?
     @State private var budgetMinText: String
     @State private var budgetMaxText: String
     @State private var squareFootageText: String
@@ -126,15 +128,16 @@ struct ProjectEditSheet: View {
     private var qualitySection: some View {
         Section {
             Picker("Quality", selection: $qualityTier) {
+                Text("Auto").tag(Project.QualityTier?.none)
                 ForEach(Project.QualityTier.allCases, id: \.self) { tier in
-                    Text(tierLabel(tier)).tag(tier)
+                    Text(tier.displayName).tag(Project.QualityTier?.some(tier))
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
         } header: {
             Text("Quality Tier")
         } footer: {
-            Text("Drives material suggestions and cost estimates.")
+            Text("Auto lets us pick tier-neutral defaults from the project type. Selecting a tier enforces price floors/ceilings on materials and labor.")
                 .font(TypographyTokens.caption)
         }
     }
@@ -229,13 +232,5 @@ struct ProjectEditSheet: View {
 
     private func typeLabel(_ type: Project.ProjectType) -> String {
         type.displayName
-    }
-
-    private func tierLabel(_ tier: Project.QualityTier) -> String {
-        switch tier {
-        case .standard: "Standard"
-        case .premium: "Premium"
-        case .luxury: "Luxury"
-        }
     }
 }

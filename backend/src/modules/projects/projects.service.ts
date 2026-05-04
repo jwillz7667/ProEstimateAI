@@ -114,9 +114,13 @@ export async function create(
         : undefined,
       budgetMin: data.budget_min ?? null,
       budgetMax: data.budget_max ?? null,
-      qualityTier: data.quality_tier
-        ? (data.quality_tier.toUpperCase() as QualityTier)
-        : undefined,
+      // null = explicit "Auto"; undefined = field omitted, leave default (null).
+      qualityTier:
+        data.quality_tier === null
+          ? null
+          : data.quality_tier
+            ? (data.quality_tier.toUpperCase() as QualityTier)
+            : undefined,
       squareFootage: data.square_footage ?? null,
       dimensions: data.dimensions ?? null,
       language: data.language ?? undefined,
@@ -174,7 +178,11 @@ export async function update(
       ...(data.budget_min !== undefined && { budgetMin: data.budget_min }),
       ...(data.budget_max !== undefined && { budgetMax: data.budget_max }),
       ...(data.quality_tier !== undefined && {
-        qualityTier: data.quality_tier.toUpperCase() as QualityTier,
+        // null = clear back to Auto; string = explicit tier.
+        qualityTier:
+          data.quality_tier === null
+            ? null
+            : (data.quality_tier.toUpperCase() as QualityTier),
       }),
       ...(data.square_footage !== undefined && {
         squareFootage: data.square_footage,

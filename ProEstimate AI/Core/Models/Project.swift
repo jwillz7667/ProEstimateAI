@@ -13,7 +13,11 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     let status: Status
     let budgetMin: Decimal?
     let budgetMax: Decimal?
-    let qualityTier: QualityTier
+    /// Optional. `nil` means "Auto" — the backend chooses tier-neutral defaults
+    /// driven by the project type. When set, every downstream artifact (image
+    /// prompt, materials, estimate, post-AI clamps) is anchored to this tier's
+    /// price/quality bounds via `backend/src/lib/prompts/tier-bounds.ts`.
+    let qualityTier: QualityTier?
     let squareFootage: Decimal?
     let dimensions: String?
     let language: String?
@@ -161,10 +165,31 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     }
 
     /// Material and finish quality tier, affects AI generation and cost estimation.
+    /// Optional on `Project` — `nil` means "Auto" (backend picks tier-neutral
+    /// defaults). When set, the backend enforces tier price floors/ceilings on
+    /// materials and labor via `tier-bounds.ts`.
     enum QualityTier: String, Codable, CaseIterable, Sendable {
         case standard
         case premium
         case luxury
+
+        var displayName: String {
+            switch self {
+            case .standard: return "Standard"
+            case .premium: return "Premium"
+            case .luxury: return "Luxury"
+            }
+        }
+
+        /// Short helper text shown under each option in the picker. Sets
+        /// expectations on price band so contractors don't have to guess.
+        var subtitle: String {
+            switch self {
+            case .standard: return "Builder-grade materials, contractor labor rates"
+            case .premium: return "Mid-range finishes, skilled trade labor"
+            case .luxury: return "High-end finishes, master tradesperson labor"
+            }
+        }
     }
 
     /// Cadence options for recurring service contracts. Stored as the
@@ -239,7 +264,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         status = try c.decode(Status.self, forKey: .status)
         budgetMin = try c.decodeIfPresent(Decimal.self, forKey: .budgetMin)
         budgetMax = try c.decodeIfPresent(Decimal.self, forKey: .budgetMax)
-        qualityTier = try c.decode(QualityTier.self, forKey: .qualityTier)
+        qualityTier = try c.decodeIfPresent(QualityTier.self, forKey: .qualityTier)
         squareFootage = try c.decodeIfPresent(Decimal.self, forKey: .squareFootage)
         dimensions = try c.decodeIfPresent(String.self, forKey: .dimensions)
         language = try c.decodeIfPresent(String.self, forKey: .language)
@@ -267,7 +292,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         status: Status,
         budgetMin: Decimal?,
         budgetMax: Decimal?,
-        qualityTier: QualityTier,
+        qualityTier: QualityTier? = nil,
         squareFootage: Decimal?,
         dimensions: String?,
         language: String?,

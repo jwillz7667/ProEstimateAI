@@ -156,11 +156,7 @@ struct ProjectOverviewSection: View {
     }
 
     private var qualityLabel: String {
-        switch project.qualityTier {
-        case .standard: "Standard"
-        case .premium: "Premium"
-        case .luxury: "Luxury"
-        }
+        project.qualityTier?.displayName ?? "Auto"
     }
 }
 

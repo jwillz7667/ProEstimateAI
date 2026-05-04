@@ -179,6 +179,31 @@ enum MaterialSupplier: String, CaseIterable, Identifiable, Sendable {
         }
         return nil
     }
+
+    // MARK: - User Preference
+
+    /// UserDefaults key for the contractor's preferred default retailer.
+    /// Local-only — no backend persistence — because the deep-link picker
+    /// is purely a UI helper.
+    static let preferredDefaultsKey = "preferredMaterialSupplier"
+
+    /// The retailer the contractor wants to verify pricing against by
+    /// default. `nil` means "no preference set", in which case the
+    /// AI-suggested supplier (if any) wins in the picker. Setting `nil`
+    /// removes the stored preference.
+    static var preferred: MaterialSupplier? {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: preferredDefaultsKey) else { return nil }
+            return MaterialSupplier(rawValue: raw)
+        }
+        set {
+            if let newValue {
+                UserDefaults.standard.set(newValue.rawValue, forKey: preferredDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: preferredDefaultsKey)
+            }
+        }
+    }
 }
 
 // MARK: - Sample Data

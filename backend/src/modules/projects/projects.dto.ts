@@ -10,7 +10,7 @@ export interface ProjectDto {
   status: string;
   budget_min: number | null;
   budget_max: number | null;
-  quality_tier: string;
+  quality_tier: string | null;
   square_footage: number | null;
   dimensions: string | null;
   language: string | null;
@@ -50,7 +50,7 @@ export function toProjectDto(
     status: project.status.toLowerCase(),
     budget_min: project.budgetMin ? Number(project.budgetMin) : null,
     budget_max: project.budgetMax ? Number(project.budgetMax) : null,
-    quality_tier: project.qualityTier.toLowerCase(),
+    quality_tier: project.qualityTier?.toLowerCase() ?? null,
     square_footage: project.squareFootage
       ? Number(project.squareFootage)
       : null,

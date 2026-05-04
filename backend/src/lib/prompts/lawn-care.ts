@@ -5,8 +5,17 @@ import {
   materialJsonContract,
   projectFactsBlock,
   supplierGuidance,
+  tierBoundsBlock,
   tierLanguage,
 } from "./shared";
+
+const LAWN_CARE_CATEGORIES = [
+  "fertilizer",
+  "seed",
+  "fuel",
+  "disposal",
+  "other",
+];
 
 /**
  * LAWN_CARE — sold as a RECURRING service contract (typically B2B / HOA /
@@ -101,6 +110,8 @@ ALLOWED CATEGORIES
 Fuel, Mower Blades, String Trimmer Line, Fertilizer, Pre-Emergent,
 Post-Emergent Herbicide, Insecticide, Fungicide, Seed, Aeration,
 Soil Test, Equipment Wear, PPE, Disposal, Other
+
+${tierBoundsBlock(ctx.qualityTier, LAWN_CARE_CATEGORIES)}
 
 PER-VISIT CONSUMABLES (ALWAYS quote these as ONE visit's worth)
 - Fuel: 1.0–1.5 gal per acre mowed (riding mower) + 0.5 gal per acre
@@ -210,9 +221,10 @@ CREW SIZE
 - For commercial / HOA properties, 2-person crew typical. For per-acre
   mowing time, double to total man-hours (one operator + one trim/edge).
 
-TIER RATE MULTIPLIER: ${tier.pricingMultiplier}. Lawn-care crew rates
-typically $35–$50/hr STANDARD, $50–$70/hr PREMIUM (certified applicator,
-liability-bonded), $70–$100/hr LUXURY (white-glove HOA, ITM-certified).
+TIER LABOR RATES: ${tier.pricingMultiplier}. The orchestrator clamps every
+ratePerHour to the tier's band — quoting outside will be silently adjusted.
+Lawn-care crews typically sit in the lower half of each band; certified
+applicator + liability-bonded crews push toward the top.
 
 ${laborJsonContract()}
 `.trim();

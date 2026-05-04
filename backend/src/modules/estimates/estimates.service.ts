@@ -105,6 +105,10 @@ export async function create(
         contingencyAmount: data.contingency_amount ?? null,
         validUntil: data.valid_until ? new Date(data.valid_until) : null,
         createdByUserId: userId,
+        // Snapshot the tier the project carried at create time. If the project
+        // is on Auto (null), we leave the estimate's tier null so audit shows
+        // the contractor didn't lock a tier in.
+        qualityTier: project.qualityTier,
       },
     });
 
@@ -257,7 +261,10 @@ export async function generateAI(
 
   const context: EstimateGenContext = {
     projectType: project.projectType,
-    qualityTier: project.qualityTier,
+    // Auto-mode falls back to STANDARD for the prompt + clamping; the audit
+    // snapshot below preserves the original null so we can tell apart "user
+    // chose STANDARD" from "user left it on Auto".
+    qualityTier: project.qualityTier ?? "STANDARD",
     projectTitle: project.title,
     projectDescription: project.description ?? undefined,
     squareFootage: project.squareFootage?.toString(),
@@ -363,6 +370,9 @@ export async function generateAI(
         title: generated.title,
         pricingProfileId: defaultPricingProfile?.id ?? null,
         createdByUserId: userId,
+        // Snapshot the project's tier (or null for Auto). Stored alongside
+        // the line items so audit trails show what was clamped against.
+        qualityTier: project.qualityTier,
         subtotalMaterials,
         subtotalLabor,
         subtotalOther,

@@ -7,6 +7,7 @@
 /screenshots/
 /Screenshot*.png
 /Simulator Screenshot*.png
+/issue-screenshots/
 
 # Source thumbnails for the project-type tiles. These are the unprocessed
 # 62-image PNG dump that gets resized to JPG and imported under

@@ -8,18 +8,24 @@
  */
 
 import { PromptContext, QualityTier } from "./types";
+import { LABOR_RATE_BOUNDS, renderTierBoundsBlock } from "./tier-bounds";
 
 /**
  * Human-readable quality tier description, woven into both image and
  * material prompts so the AI ladders pricing and visual fidelity to the
- * tier the contractor chose.
+ * tier the contractor chose. Pairs with `tierBoundsBlock()` below — this
+ * function gives the model brand vocabulary and design language; the
+ * bounds block gives it the numeric rails the orchestrator enforces.
  */
 export function tierLanguage(tier: QualityTier): {
   label: string;
   visualDescription: string;
   materialAnchor: string;
   pricingMultiplier: string;
+  laborRateRange: string;
 } {
+  const labor = LABOR_RATE_BOUNDS[tier];
+  const laborRateRange = `$${labor.min}–$${labor.max}/hr`;
   switch (tier) {
     case "LUXURY":
       return {
@@ -27,8 +33,9 @@ export function tierLanguage(tier: QualityTier): {
         visualDescription:
           "top-of-market, designer-spec materials and finishes; bespoke detailing; magazine-grade composition; thoughtful uplighting; spotless staging.",
         materialAnchor:
-          "high-end specialty retailer or designer-grade SKUs (Ferguson, The Tile Shop, Restoration Hardware, SiteOne premium imports). Honest labor rates 1.6–1.9x mid-market.",
-        pricingMultiplier: "1.75x mid-market floor",
+          "high-end specialty retailer or designer-grade SKUs (Ferguson, The Tile Shop, Restoration Hardware, SiteOne premium imports).",
+        pricingMultiplier: `roughly 1.75× mid-market; labor ${laborRateRange}`,
+        laborRateRange,
       };
     case "PREMIUM":
       return {
@@ -36,8 +43,9 @@ export function tierLanguage(tier: QualityTier): {
         visualDescription:
           "upgraded mid-market materials; clean, considered design; soft natural light with a warm key; well-staged but not theatrical.",
         materialAnchor:
-          "upper-tier mainstream retail (Home Depot Pro, Lowe's Pro, Floor & Decor, SiteOne mid-grade). Labor rates 1.2–1.4x standard.",
-        pricingMultiplier: "1.3x mid-market floor",
+          "upper-tier mainstream retail (Home Depot Pro, Lowe's Pro, Floor & Decor, SiteOne mid-grade).",
+        pricingMultiplier: `roughly 1.3× mid-market; labor ${laborRateRange}`,
+        laborRateRange,
       };
     case "STANDARD":
     default:
@@ -46,10 +54,24 @@ export function tierLanguage(tier: QualityTier): {
         visualDescription:
           "clean, contemporary, builder-grade quality; honest natural light; realistic — not aspirational.",
         materialAnchor:
-          "mass-market big-box pricing (Home Depot, Lowe's, Menards everyday SKUs). Honest, competitive labor rates.",
-        pricingMultiplier: "1.0x — anchor to current big-box retail",
+          "mass-market big-box pricing (Home Depot, Lowe's, Menards everyday SKUs).",
+        pricingMultiplier: `mid-market floor; labor ${laborRateRange}`,
+        laborRateRange,
       };
   }
+}
+
+/**
+ * Numeric tier-bounds block. Per-type prompt modules splice this in below
+ * their narrative PRICING ANCHORS section so the model sees the same
+ * ranges the post-AI clamp will enforce. Categories are passed in by the
+ * caller (each project type cares about a different subset).
+ */
+export function tierBoundsBlock(
+  tier: QualityTier,
+  categories: string[],
+): string {
+  return renderTierBoundsBlock(tier, categories);
 }
 
 /**

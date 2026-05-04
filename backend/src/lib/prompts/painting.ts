@@ -5,8 +5,17 @@ import {
   materialJsonContract,
   projectFactsBlock,
   supplierGuidance,
+  tierBoundsBlock,
   tierLanguage,
 } from "./shared";
+
+const PAINTING_CATEGORIES = [
+  "paint",
+  "drywall",
+  "trim",
+  "hardware",
+  "other",
+];
 
 export function imagePrompt(ctx: PromptContext): string {
   return `
@@ -44,13 +53,15 @@ ${projectFactsBlock(ctx)}
 ALLOWED CATEGORIES
 Paint, Primer, Caulk, Patching, Masking, Tools/Consumables, Other
 
-PAINT PRODUCT ANCHORS
-- STANDARD: Behr Premium Plus, Valspar Optimus — $35–$45/gal interior;
-  $40–$50/gal exterior.
-- PREMIUM: Sherwin-Williams ProMar 200, BM Regal Select — $55–$75/gal
-  interior; $70–$90/gal exterior.
-- LUXURY: SW Emerald Designer Edition, BM Aura — $90–$120/gal.
-- Primer (drywall PVA or stain-block Kilz): $30–$45/gal.
+${tierBoundsBlock(ctx.qualityTier, PAINTING_CATEGORIES)}
+
+NARRATIVE EXAMPLES (informative — use the enforced ranges above as the source of truth)
+- STANDARD: Behr Premium Plus, Valspar Optimus.
+- PREMIUM: Sherwin-Williams ProMar 200, Benjamin Moore Regal Select.
+- LUXURY: SW Emerald Designer Edition, BM Aura, lacquer/high-gloss
+  specialty finishes.
+- Primer (drywall PVA or stain-block Kilz) sits at the floor of the paint
+  range regardless of tier.
 
 COVERAGE GUIDANCE
 - Interior wall paint: ~350 sf/gal at 1 coat; quote 2 coats minimum.
@@ -91,9 +102,9 @@ LABOR GUIDANCE
 - Hand-cut walls without taping is faster (0.010 hr/sf) only on simple
   rectangles; add 30% for cut-up rooms.
 
-TIER RATE MULTIPLIER: ${tier.pricingMultiplier}. Painters typically
-$35–$50/hr STANDARD, $50–$70/hr PREMIUM, $70–$100/hr LUXURY (lacquer/
-high-gloss specialty).
+TIER LABOR RATES: ${tier.pricingMultiplier}. The orchestrator clamps every
+ratePerHour to the tier's band — quoting outside will be silently adjusted.
+Painters typically sit in the lower-to-middle of each band.
 
 ${laborJsonContract()}
 `.trim();

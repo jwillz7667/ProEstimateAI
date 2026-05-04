@@ -301,7 +301,10 @@ model Project {
   status        ProjectStatus @default(DRAFT)
   budgetMin     Decimal?      @db.Decimal(12, 2)
   budgetMax     Decimal?      @db.Decimal(12, 2)
-  qualityTier   QualityTier   @default(STANDARD)
+  /// Optional. When null, the AI infers the tier from project description
+  /// + photos at generation time. When set, the orchestrator clamps every
+  /// material price and labor rate to the tier's band.
+  qualityTier   QualityTier?
   squareFootage Decimal?      @db.Decimal(10, 2)
   dimensions    String?
   language      String?       @default("en")
@@ -366,6 +369,10 @@ model AIGeneration {
   prompt               String
   systemPrompt         String?
   status               GenerationStatus @default(QUEUED)
+  /// Tier this generation was anchored to. Snapshot at request time so a
+  /// later edit to Project.qualityTier doesn't retroactively reinterpret
+  /// the bounds the AI was clamped against.
+  qualityTier          QualityTier?
   previewUrl           String?
   thumbnailUrl         String?
   imageData            String?          @db.Text
@@ -381,14 +388,18 @@ model AIGeneration {
 }
 
 model MaterialSuggestion {
-  id                  String  @id @default(cuid())
+  id                  String       @id @default(cuid())
   generationId        String
   projectId           String
   name                String
   category            String
-  estimatedCost       Decimal @db.Decimal(12, 2)
+  estimatedCost       Decimal      @db.Decimal(12, 2)
   unit                String
-  quantity            Decimal @db.Decimal(10, 2)
+  quantity            Decimal      @db.Decimal(10, 2)
+  /// Tier this material was clamped against. Audit/UI use; the orchestrator
+  /// snapshot is on AIGeneration but propagating here keeps single-row
+  /// queries useful (e.g., "show me LUXURY items below $500").
+  qualityTier         QualityTier?
   supplierName        String?
   supplierUrl         String?
   // Free-form query string the iOS client uses to deep-link out to retailer
@@ -396,8 +407,8 @@ model MaterialSuggestion {
   // by the material gen prompt with retailer-friendly terms so the user can
   // verify our AI estimate against live retail prices before sending the bid.
   supplierSearchQuery String?
-  isSelected          Boolean @default(false)
-  sortOrder           Int     @default(0)
+  isSelected          Boolean      @default(false)
+  sortOrder           Int          @default(0)
 
   generation AIGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
 
@@ -416,6 +427,9 @@ model Estimate {
   title             String?
   pricingProfileId  String?
   createdByUserId   String?
+  /// Tier the estimate was generated against (snapshot at create time).
+  /// Allows audit + downstream display without re-reading the project.
+  qualityTier       QualityTier?
   subtotalMaterials Decimal        @default(0) @db.Decimal(12, 2)
   subtotalLabor     Decimal        @default(0) @db.Decimal(12, 2)
   subtotalOther     Decimal        @default(0) @db.Decimal(12, 2)

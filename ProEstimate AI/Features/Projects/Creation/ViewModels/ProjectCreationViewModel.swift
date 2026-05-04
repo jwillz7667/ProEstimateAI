@@ -111,7 +111,11 @@ final class ProjectCreationViewModel {
     var lotSizeText: String = ""
     var budgetMinText: String = ""
     var budgetMaxText: String = ""
-    var qualityTier: Project.QualityTier = .standard
+    /// `nil` = Auto (backend picks tier-neutral defaults driven by project
+    /// type). When set, every downstream artifact is anchored to this tier's
+    /// price/quality bounds. The picker lives on the Photos & Vision step
+    /// so the contractor sets quality intent before generation runs.
+    var qualityTier: Project.QualityTier? = nil
 
     var squareFootage: Decimal? {
         Decimal(string: squareFootageText)

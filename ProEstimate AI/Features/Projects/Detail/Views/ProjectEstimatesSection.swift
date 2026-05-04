@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Lists estimates linked to this project. Each row shows the estimate
-/// number, version, total amount, status badge, and a per-estimate "Export
-/// PDF" action. Below each row, any previously-exported PDFs surface as
+/// number, version, total amount, status badge, and a prominent "Export PDF"
+/// action button. Below each row, any previously-exported PDFs surface as
 /// tappable "Saved" rows so the contractor can re-share without
 /// regenerating. A single primary "Generate Estimate" CTA at the bottom
 /// uses AI with any selected materials as context.
@@ -13,7 +13,6 @@ struct ProjectEstimatesSection: View {
     var isGeneratingAI: Bool = false
     var onGenerateAI: (() -> Void)?
     var onCreateEstimate: (() -> Void)?
-    var onEstimateTap: ((String) -> Void)?
     var onExportEstimate: ((String) -> Void)?
     var onTapSavedExport: ((EstimateExport) -> Void)?
 
@@ -66,24 +65,16 @@ struct ProjectEstimatesSection: View {
         VStack(spacing: SpacingTokens.sm) {
             ForEach(estimates) { estimate in
                 VStack(spacing: SpacingTokens.xs) {
-                    Button {
-                        onEstimateTap?(estimate.id)
-                    } label: {
-                        estimateRow(estimate)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button {
-                            onEstimateTap?(estimate.id)
-                        } label: {
-                            Label("Edit Estimate", systemImage: "pencil")
+                    estimateRow(estimate)
+                        .contextMenu {
+                            Button {
+                                onExportEstimate?(estimate.id)
+                            } label: {
+                                Label("Export Branded PDF", systemImage: "arrow.down.doc")
+                            }
                         }
-                        Button {
-                            onExportEstimate?(estimate.id)
-                        } label: {
-                            Label("Export Branded PDF", systemImage: "arrow.down.doc")
-                        }
-                    }
+
+                    exportCTA(for: estimate)
 
                     if let saved = exports[estimate.id], !saved.isEmpty {
                         savedExportsList(saved)
@@ -97,7 +88,6 @@ struct ProjectEstimatesSection: View {
     private func estimateRow(_ estimate: Estimate) -> some View {
         GlassCard {
             HStack(spacing: SpacingTokens.sm) {
-                // Estimate icon
                 Image(systemName: "doc.text")
                     .font(.title3)
                     .foregroundStyle(ColorTokens.primaryOrange)
@@ -117,47 +107,42 @@ struct ProjectEstimatesSection: View {
                             .background(ColorTokens.inputBackground, in: Capsule())
                     }
 
-                    HStack(spacing: SpacingTokens.xs) {
-                        estimateStatusBadge(estimate.status)
-
-                        Spacer()
-
-                        Text(estimate.createdAt.formatted(as: .relative))
-                            .font(TypographyTokens.caption)
-                            .foregroundStyle(.tertiary)
-                    }
+                    Text(estimate.createdAt.formatted(as: .relative))
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.tertiary)
                 }
 
                 Spacer()
 
                 CurrencyText(amount: estimate.totalAmount, font: TypographyTokens.moneySmall)
-
-                exportButton(for: estimate)
             }
         }
     }
 
-    /// Trailing icon button that triggers the branded export pipeline. Sits
-    /// inside the row's button so it gets ignored by the parent tap (the
-    /// row's `Button` wraps the row label, but a nested Button intercepts
-    /// the touch first when used inside `.buttonStyle(.plain)`).
-    private func exportButton(for estimate: Estimate) -> some View {
+    /// Prominent full-width "Export PDF" CTA underneath the row. Replaces
+    /// the old trailing icon button so the export action reads as the row's
+    /// primary action — that's what the contractor actually does next once
+    /// an estimate exists.
+    private func exportCTA(for estimate: Estimate) -> some View {
         Button {
             onExportEstimate?(estimate.id)
         } label: {
-            ZStack {
-                Circle()
-                    .fill(ColorTokens.inputBackground)
-                    .frame(width: 32, height: 32)
+            HStack(spacing: SpacingTokens.xs) {
                 if exportingEstimateId == estimate.id {
                     ProgressView()
                         .controlSize(.small)
+                        .tint(.white)
                 } else {
-                    Image(systemName: "arrow.down.doc")
-                        .font(.callout)
-                        .foregroundStyle(ColorTokens.primaryOrange)
+                    Image(systemName: "arrow.down.doc.fill")
+                        .font(.callout.weight(.semibold))
                 }
+                Text(exportingEstimateId == estimate.id ? "Preparing PDF…" : "Export Branded PDF")
+                    .font(TypographyTokens.subheadline.weight(.semibold))
             }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, SpacingTokens.sm)
+            .background(ColorTokens.primaryOrange, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
         }
         .buttonStyle(.plain)
         .disabled(exportingEstimateId != nil)
@@ -218,20 +203,6 @@ struct ProjectEstimatesSection: View {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(bytes))
-    }
-
-    private func estimateStatusBadge(_ status: Estimate.Status) -> some View {
-        let (text, style): (String, StatusBadge.Style) = {
-            switch status {
-            case .draft: ("Draft", .neutral)
-            case .sent: ("Sent", .info)
-            case .approved: ("Approved", .success)
-            case .declined: ("Declined", .error)
-            case .expired: ("Expired", .warning)
-            }
-        }()
-
-        return StatusBadge(text: text, style: style)
     }
 
     private var emptyView: some View {

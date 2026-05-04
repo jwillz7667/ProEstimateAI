@@ -84,13 +84,6 @@ enum APIEndpoint: Sendable {
     case getEstimateExport(id: String)
     case deleteEstimateExport(id: String)
 
-    // MARK: - Proposals
-
-    case getProposal(id: String)
-    case createProposal(body: Encodable & Sendable)
-    case sendProposal(id: String)
-    case listProposals(projectId: String?)
-
     // MARK: - Pricing Profiles
 
     case listPricingProfiles
@@ -206,11 +199,6 @@ extension APIEndpoint {
         case let .createEstimateExport(estimateId, _): return "/estimates/\(estimateId)/exports"
         case let .getEstimateExport(id): return "/estimate-exports/\(id)"
         case let .deleteEstimateExport(id): return "/estimate-exports/\(id)"
-        // Proposals
-        case let .getProposal(id): return "/proposals/\(id)"
-        case .createProposal: return "/proposals"
-        case let .sendProposal(id): return "/proposals/\(id)/send"
-        case .listProposals: return "/proposals"
         // Pricing Profiles
         case .listPricingProfiles: return "/pricing-profiles"
         case let .getPricingProfile(id): return "/pricing-profiles/\(id)"
@@ -255,7 +243,6 @@ extension APIEndpoint {
              .createClient, .createProject, .uploadAsset, .createGeneration,
              .createEstimate, .generateAIEstimate, .createEstimateLineItem,
              .createEstimateExport,
-             .createProposal, .sendProposal,
              .createPricingProfile, .createLaborRateRule,
              .createPurchaseAttempt, .syncTransaction, .restorePurchases,
              .checkUsage,
@@ -303,8 +290,6 @@ extension APIEndpoint {
             if let projectId { items.append(URLQueryItem(name: "project_id", value: projectId)) }
             if let clientId { items.append(URLQueryItem(name: "client_id", value: clientId)) }
             return items.isEmpty ? nil : items
-        case let .listProposals(projectId):
-            return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
         case let .listActivityLog(_, cursor):
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
         case let .searchMaterialsPricing(query, zipCode, sort, maxResults):
@@ -347,7 +332,6 @@ extension APIEndpoint {
              let .updateEstimate(_, body),
              let .createEstimateLineItem(_, body), let .updateEstimateLineItem(_, body),
              let .createEstimateExport(_, body),
-             let .createProposal(body),
              let .createPricingProfile(body), let .updatePricingProfile(_, body),
              let .createLaborRateRule(_, body), let .updateLaborRateRule(_, body),
              let .createPurchaseAttempt(body), let .syncTransaction(body),

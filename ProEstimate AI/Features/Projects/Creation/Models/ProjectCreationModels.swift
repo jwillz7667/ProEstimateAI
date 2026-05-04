@@ -12,7 +12,10 @@ struct ProjectCreationRequest: Codable, Sendable {
     let description: String?
     let budgetMin: Decimal?
     let budgetMax: Decimal?
-    let qualityTier: Project.QualityTier
+    /// Optional. `nil` means "Auto" — backend persists null and uses
+    /// tier-neutral defaults. When set, the backend enforces tier price
+    /// floors/ceilings on materials and labor.
+    let qualityTier: Project.QualityTier?
     let squareFootage: Decimal?
     let dimensions: String?
     let language: String?
@@ -42,6 +45,34 @@ struct ProjectCreationRequest: Codable, Sendable {
         case visitsPerMonth = "visits_per_month"
         case contractMonths = "contract_months"
         case recurrenceStartDate = "recurrence_start_date"
+    }
+
+    /// Emit `quality_tier: null` when the user picked Auto. The backend's
+    /// PATCH endpoint treats absent fields as "leave unchanged"; a literal
+    /// null is the only way to clear a previously-set tier back to Auto.
+    /// Other optional fields retain default Codable omission until they
+    /// hit the same need.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(title, forKey: .title)
+        try c.encode(projectType, forKey: .projectType)
+        try c.encodeIfPresent(clientId, forKey: .clientId)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encodeIfPresent(budgetMin, forKey: .budgetMin)
+        try c.encodeIfPresent(budgetMax, forKey: .budgetMax)
+        if let tier = qualityTier {
+            try c.encode(tier, forKey: .qualityTier)
+        } else {
+            try c.encodeNil(forKey: .qualityTier)
+        }
+        try c.encodeIfPresent(squareFootage, forKey: .squareFootage)
+        try c.encodeIfPresent(dimensions, forKey: .dimensions)
+        try c.encodeIfPresent(language, forKey: .language)
+        try c.encodeIfPresent(isRecurring, forKey: .isRecurring)
+        try c.encodeIfPresent(recurrenceFrequency, forKey: .recurrenceFrequency)
+        try c.encodeIfPresent(visitsPerMonth, forKey: .visitsPerMonth)
+        try c.encodeIfPresent(contractMonths, forKey: .contractMonths)
+        try c.encodeIfPresent(recurrenceStartDate, forKey: .recurrenceStartDate)
     }
 }
 

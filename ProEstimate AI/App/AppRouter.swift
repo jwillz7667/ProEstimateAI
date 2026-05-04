@@ -5,13 +5,6 @@ enum AppDestination: Hashable {
     case projectDetail(id: String, autoGenerate: Bool = false)
     case projectCreation
 
-    // Estimates
-    case estimateEditor(id: String)
-    case estimateList(projectId: String)
-
-    /// Proposals
-    case proposalPreview(id: String)
-
     // Clients
     case clientDetail(id: String)
     case clientForm(id: String?)
@@ -20,10 +13,8 @@ enum AppDestination: Hashable {
     case companyBranding
     case taxSettings
     case numberingSettings
-    case pricingProfiles
     case languageSettings
     case subscriptionSettings
-    case analytics
 
     /// Commerce
     case paywall(placement: String)

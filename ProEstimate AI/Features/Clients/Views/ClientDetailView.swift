@@ -336,56 +336,41 @@ struct ClientDetailView: View {
     }
 
     private func estimateRow(_ estimate: Estimate) -> some View {
-        Button {
-            router.navigate(to: .estimateEditor(id: estimate.id))
-        } label: {
-            GlassCard {
-                HStack(spacing: SpacingTokens.sm) {
-                    Image(systemName: "doc.text.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(ColorTokens.primaryOrange)
-                        .frame(width: 28)
+        GlassCard {
+            HStack(spacing: SpacingTokens.sm) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(ColorTokens.primaryOrange)
+                    .frame(width: 28)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: SpacingTokens.xs) {
-                            Text(estimate.estimateNumber)
-                                .font(TypographyTokens.headline)
-                            StatusBadge(
-                                text: estimate.status.rawValue.capitalized,
-                                style: badgeStyle(for: estimate.status)
-                            )
-                        }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(estimate.estimateNumber)
+                        .font(TypographyTokens.headline)
 
-                        if let title = estimate.title, !title.isEmpty {
-                            Text(title)
-                                .font(TypographyTokens.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-
-                        Text("Created \(estimate.createdAt.formatted(as: .medium))")
-                            .font(TypographyTokens.caption2)
+                    if let title = estimate.title, !title.isEmpty {
+                        Text(title)
+                            .font(TypographyTokens.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
 
-                    Spacer()
+                    Text("Created \(estimate.createdAt.formatted(as: .medium))")
+                        .font(TypographyTokens.caption2)
+                        .foregroundStyle(.secondary)
+                }
 
-                    VStack(alignment: .trailing, spacing: 2) {
-                        CurrencyText(amount: estimate.totalAmount, font: TypographyTokens.moneyMedium)
-                        if let validUntil = estimate.validUntil {
-                            Text("Valid \(validUntil.formatted(as: .short))")
-                                .font(TypographyTokens.caption2)
-                                .foregroundStyle(estimate.isExpired ? ColorTokens.error : .secondary)
-                        }
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    CurrencyText(amount: estimate.totalAmount, font: TypographyTokens.moneyMedium)
+                    if let validUntil = estimate.validUntil {
+                        Text("Valid \(validUntil.formatted(as: .short))")
+                            .font(TypographyTokens.caption2)
+                            .foregroundStyle(estimate.isExpired ? ColorTokens.error : .secondary)
                     }
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.tertiary)
                 }
             }
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Data Loading
@@ -434,13 +419,4 @@ struct ClientDetailView: View {
         }
     }
 
-    private func badgeStyle(for status: Estimate.Status) -> StatusBadge.Style {
-        switch status {
-        case .draft: return .neutral
-        case .sent: return .info
-        case .approved: return .success
-        case .declined: return .error
-        case .expired: return .warning
-        }
-    }
 }

@@ -5,8 +5,19 @@ import {
   materialJsonContract,
   projectFactsBlock,
   supplierGuidance,
+  tierBoundsBlock,
   tierLanguage,
 } from "./shared";
+
+const SIDING_CATEGORIES = [
+  "siding",
+  "trim",
+  "flashing",
+  "underlayment",
+  "fasteners",
+  "disposal",
+  "other",
+];
 
 export function imagePrompt(ctx: PromptContext): string {
   return `
@@ -45,21 +56,20 @@ ALLOWED CATEGORIES
 Siding, Trim, Flashing, Insulation, Underlayment, Fasteners, Sealant,
 Disposal, Other
 
-SIDING SYSTEM PRICING ANCHORS
-- Vinyl Dutch lap (D4 or D5): $1.40–$2.20/sf material STANDARD.
-- Vinyl insulated panel: $3.00–$4.50/sf PREMIUM.
-- Hardie Plank lap (cedarmill 8.25"): $3.20–$4.20/sf material; $5.50–$7
-  installed; pre-finished ColorPlus +$1/sf.
-- LP SmartSide lap: $2.40–$3.40/sf material.
-- Cedar shingle 18": $3.50–$6/sf material STANDARD; $8–$12 LUXURY clear.
-- Standing-seam metal panel as siding: $5.50–$9/sf.
+${tierBoundsBlock(ctx.qualityTier, SIDING_CATEGORIES)}
 
-ANCILLARY ANCHORS
-- House wrap (Tyvek HomeWrap 9 ft × 100 ft): $180–$220.
-- Self-adhered window flashing 4"×75': $18–$28 per roll.
-- J-channel (vinyl 12.5'): $4.50–$8 each. Hardie trim 5/4×4×12: $22–$30.
-- Stainless ring-shank siding nails (5 lb): $25–$40.
-- Color-matched touch-up paint quart: $20–$35.
+NARRATIVE EXAMPLES (informative — use the enforced ranges above as the source of truth)
+- STANDARD: Vinyl Dutch lap (D4/D5), LP SmartSide lap.
+- PREMIUM: Vinyl insulated panel, Hardie Plank lap (cedarmill 8.25"),
+  pre-finished ColorPlus.
+- LUXURY: Standing-seam metal panel as siding, cedar shingle clear-grade,
+  custom millwork copper accents.
+- Ancillary anchors (independent of tier):
+  - House wrap (Tyvek HomeWrap 9 ft × 100 ft): $180–$220.
+  - Self-adhered window flashing 4"×75': $18–$28 per roll.
+  - J-channel (vinyl 12.5'): $4.50–$8 each.
+  - Hardie trim 5/4×4×12: $22–$30.
+  - Stainless ring-shank siding nails (5 lb): $25–$40.
 
 QUANTITY GUIDANCE
 - Compute wall sf from perimeter × wall height, subtract 80% of openings
@@ -93,9 +103,9 @@ LABOR GUIDANCE
   +30% if pre-finished ColorPlus needs caulk + paint.
 - Trim work: ~0.30 hr/lf at corners, 0.50 hr/lf at windows/doors.
 
-TIER RATE MULTIPLIER: ${tier.pricingMultiplier}. Siding crews typically
-$50–$70/hr STANDARD, $70–$95/hr PREMIUM, $95–$130/hr LUXURY copper /
-custom millwork.
+TIER LABOR RATES: ${tier.pricingMultiplier}. The orchestrator clamps every
+ratePerHour to the tier's band — quoting outside will be silently adjusted.
+Siding crews typically sit in the upper half of each band.
 
 ${laborJsonContract()}
 `.trim();

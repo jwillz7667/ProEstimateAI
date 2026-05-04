@@ -5,8 +5,19 @@ import {
   materialJsonContract,
   projectFactsBlock,
   supplierGuidance,
+  tierBoundsBlock,
   tierLanguage,
 } from "./shared";
+
+const ROOFING_CATEGORIES = [
+  "roofing",
+  "shingles",
+  "underlayment",
+  "flashing",
+  "ventilation",
+  "fasteners",
+  "disposal",
+];
 
 export function imagePrompt(ctx: PromptContext): string {
   return `
@@ -67,19 +78,17 @@ ROOFING SYSTEM (DEFAULT IF NOT SPECIFIED)
 - New pipe boots (lead-flange recommended), step flashing at wall
   intersections, counter-flashing at chimneys.
 
-PRICING ANCHORS (US, current market)
-- Architectural shingle bundle (covers 33 sf): $35–$48 STANDARD
-  (GAF Timberline HDZ, Owens Corning Duration); $55–$80 PREMIUM
-  (Designer / Class IV impact); $100+ LUXURY (CertainTeed Grand Manor,
-  metal panels).
-- 4 sq roll synthetic underlayment: $90–$140.
-- Ice-and-water shield 200 sf roll: $80–$120.
-- Galvanized drip edge 10 ft: $11–$16.
-- Ridge vent (Cobra II / ShingleVent II) 4 ft strip: $9–$14.
-- Ridge cap shingles bundle: $48–$80.
-- Pipe boot lead flange: $18–$30 each. Step flashing 100 pc box: $35–$55.
-- 1.5" coil roofing nails 50 lb: $80–$110.
-- 30 cu yd dumpster (tear-off): $450–$700 depending on region and weight.
+${tierBoundsBlock(ctx.qualityTier, ROOFING_CATEGORIES)}
+
+NARRATIVE EXAMPLES (informative — use the enforced ranges above as the source of truth)
+- Architectural shingle bundle covers 33 sf:
+    GAF Timberline HDZ, Owens Corning Duration → STANDARD bundle pricing.
+    Designer / Class IV impact-rated → PREMIUM bundle pricing.
+    CertainTeed Grand Manor / metal panels → LUXURY bundle pricing.
+- One bundle ≈ 1/3 of a square. Synthetic underlayment ~$90–$140 per 4-sq roll.
+- Ice-and-water shield 200 sf roll ~$80–$120.
+- Pipe boot lead flange ~$18–$30 each.
+- 30 cu yd tear-off dumpster usually $450–$700 (categorize as Disposal).
 
 QUANTITY GUIDANCE
 - 10% waste on shingles for hips/valleys/cuts; 15% if cut-up roof.
@@ -129,9 +138,9 @@ PITCH & ACCESS RULES
 - If the description mentions steep pitch (8/12+), 2nd-story walk-off,
   conservatory, or solar panels, add 15–25% to total hours.
 
-TIER RATE MULTIPLIER: ${tier.pricingMultiplier}. Roofing labor in the US
-typically falls $55–$85/hr for STANDARD crews, $85–$110/hr for PREMIUM,
-$110–$150/hr for LUXURY copper / standing seam crews.
+TIER LABOR RATES: ${tier.pricingMultiplier}. The orchestrator clamps every
+ratePerHour to the tier's band, so quoting outside it will be silently
+adjusted. Roofing crews skew toward the upper half of each band.
 
 ${laborJsonContract()}
 `.trim();

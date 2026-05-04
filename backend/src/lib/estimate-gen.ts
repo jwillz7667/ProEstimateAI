@@ -1,6 +1,11 @@
 import { env } from '../config/env';
 import { logger } from '../config/logger';
 import { AppError } from './errors';
+import {
+  clampLaborRate,
+  clampMaterialCost,
+} from './prompts/tier-bounds';
+import type { QualityTier } from './prompts/types';
 
 // DeepSeek is OpenAI-compatible. `deepseek-chat` is the V3 alias and supports
 // JSON-mode output. No SDK needed — the request shape is a standard chat
@@ -275,7 +280,10 @@ async function callDeepSeek(systemPrompt: string): Promise<string> {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: 'Produce the estimate JSON now. Output the JSON object only.' },
         ],
-        temperature: 0.4,
+        // 0.3 keeps line-item variety without letting the model invent novel
+        // pricing scales — the tier-bounds clamp catches drift, but a lower
+        // temperature reduces how often we have to clamp in the first place.
+        temperature: 0.3,
         response_format: { type: 'json_object' },
         max_tokens: 8192,
       }),
@@ -346,6 +354,16 @@ function errorSummary(err: unknown): string {
 function normalizeGenerated(raw: unknown, context: EstimateGenContext): GeneratedEstimate {
   const obj = (raw ?? {}) as Record<string, unknown>;
   const lineItemsRaw = Array.isArray(obj.lineItems) ? obj.lineItems : [];
+  const tier = normalizeTier(context.qualityTier);
+
+  const clampLog: Array<{
+    category: LineItemCategory;
+    name: string;
+    inferredBoundsCategory: string | null;
+    original: number;
+    clamped: number;
+    reason: string;
+  }> = [];
 
   const lineItems: EstimateGenLineItem[] = lineItemsRaw.map((li) => {
     const item = (li ?? {}) as Record<string, unknown>;
@@ -353,17 +371,62 @@ function normalizeGenerated(raw: unknown, context: EstimateGenContext): Generate
     const category: LineItemCategory = ['materials', 'labor', 'other'].includes(categoryRaw)
       ? (categoryRaw as LineItemCategory)
       : 'other';
+    const name = String(item.name ?? 'Untitled line item');
+    const unit = String(item.unit ?? 'each');
+    const rawUnitCost = Number(item.unitCost) || 0;
+
+    let finalUnitCost = rawUnitCost;
+    let inferredCategory: string | null = null;
+
+    if (category === 'labor' || isHourUnit(unit)) {
+      const result = clampLaborRate(rawUnitCost, tier);
+      if (result.clamped) {
+        clampLog.push({
+          category,
+          name,
+          inferredBoundsCategory: 'labor',
+          original: result.originalCost,
+          clamped: result.estimatedCost,
+          reason: result.reason ?? 'unknown',
+        });
+      }
+      finalUnitCost = result.estimatedCost;
+    } else {
+      inferredCategory = inferBoundsCategory(name, unit);
+      if (inferredCategory) {
+        const result = clampMaterialCost(inferredCategory, unit, rawUnitCost, tier);
+        if (result.clamped) {
+          clampLog.push({
+            category,
+            name,
+            inferredBoundsCategory: inferredCategory,
+            original: result.originalCost,
+            clamped: result.estimatedCost,
+            reason: result.reason ?? 'unknown',
+          });
+        }
+        finalUnitCost = result.estimatedCost;
+      }
+    }
+
     return {
       category,
-      name: String(item.name ?? 'Untitled line item'),
+      name,
       description: String(item.description ?? ''),
       quantity: Number(item.quantity) || 1,
-      unit: String(item.unit ?? 'each'),
-      unitCost: Number(item.unitCost) || 0,
+      unit,
+      unitCost: finalUnitCost,
       markupPercent: Number(item.markupPercent) || 0,
       taxRate: clampTaxFraction(Number(item.taxRate)),
     };
   });
+
+  if (clampLog.length > 0) {
+    logger.info(
+      { tier, clamped: clampLog },
+      'Estimate line items clamped to tier bounds',
+    );
+  }
 
   return {
     title: String(obj.title ?? context.projectTitle),
@@ -375,6 +438,82 @@ function normalizeGenerated(raw: unknown, context: EstimateGenContext): Generate
     contingencyPercent: Number(obj.contingencyPercent) || (context.pricingProfile?.contingencyPercent ?? 10),
     validDays: Number(obj.validDays) || 30,
   };
+}
+
+/**
+ * Estimate-gen line items only carry a coarse `materials | labor | other`
+ * category, but the tier-bounds table is keyed by trade-specific categories
+ * like `cabinets`, `countertops`, `paint`. This best-effort lookup keys off
+ * the line item name + unit so labor and material clamping can still apply.
+ * Returns null when the line is too generic to classify confidently.
+ */
+function inferBoundsCategory(name: string, unit: string): string | null {
+  const n = name.toLowerCase();
+  const u = unit.toLowerCase();
+
+  if (/(cabinet|cab\s|drawer base|wall cab|vanity)/i.test(n)) {
+    if (/vanity/.test(n)) return 'vanity';
+    return 'cabinets';
+  }
+  if (/(countertop|quartz|granite|butcher|laminate top|solid surface)/.test(n)) {
+    return 'countertops';
+  }
+  if (/(backsplash|subway|porcelain|ceramic tile|mosaic|wall tile|floor tile)/.test(n)) {
+    return 'tile';
+  }
+  if (/(lvp|luxury vinyl|engineered hardwood|hardwood floor|laminate floor|carpet)/.test(n)) {
+    return 'flooring';
+  }
+  if (/(refrigerator|range hood|dishwasher|microwave|oven|cooktop|appliance)/.test(n)) {
+    return 'appliances';
+  }
+  if (/(faucet|sink|toilet|shower head|valve|disposer|water heater)/.test(n)) {
+    return 'plumbing';
+  }
+  if (/(sconce|pendant|chandelier|fixture|recessed|under.cabinet light)/.test(n)) {
+    return 'lighting';
+  }
+  if (/(outlet|switch|breaker|panel|gfci|wire run)/.test(n)) {
+    return 'electrical';
+  }
+  if (/(pull|knob|hinge|cabinet hardware|drawer slide)/.test(n)) {
+    return 'hardware';
+  }
+  if (/(paint|primer|stain|sealer)/.test(n) || u === 'gallon' || u === 'gal') {
+    return 'paint';
+  }
+  if (/(drywall|sheetrock|gypsum|mud|joint compound)/.test(n)) {
+    return 'drywall';
+  }
+  if (/(baseboard|crown|casing|shoe mold|trim)/.test(n)) {
+    return 'trim';
+  }
+  if (/(shower glass|frameless|enclosure)/.test(n)) {
+    return 'glass';
+  }
+  if (/shingle/.test(n)) return 'shingles';
+  if (/underlayment/.test(n)) return 'underlayment';
+  if (/(flashing|drip edge)/.test(n)) return 'flashing';
+  if (/(ridge vent|soffit vent|attic fan|ventilation)/.test(n)) return 'ventilation';
+  if (/(siding|hardie|cedar shake|vinyl plank siding)/.test(n)) return 'siding';
+  if (/(fertilizer|pre.emergent|herbicide|granular)/.test(n)) return 'fertilizer';
+  if (/(seed|overseed)/.test(n)) return 'seed';
+  if (/(fuel|gasoline|diesel)/.test(n)) return 'fuel';
+  if (/(dumpster|disposal|debris|haul.away|permit)/.test(n)) return 'disposal';
+  if (/(screw|nail|fastener|anchor|caulk|tape|adhesive)/.test(n)) return 'fasteners';
+
+  return null;
+}
+
+function isHourUnit(unit: string): boolean {
+  const u = unit.toLowerCase().replace(/[\s_]+/g, '');
+  return u === 'hr' || u === 'hour' || u === 'hours' || u === 'manhour' || u === 'manhr';
+}
+
+function normalizeTier(tier: string): QualityTier {
+  const upper = (tier ?? '').toUpperCase();
+  if (upper === 'LUXURY' || upper === 'PREMIUM') return upper;
+  return 'STANDARD';
 }
 
 /**

@@ -5,8 +5,19 @@ import {
   materialJsonContract,
   projectFactsBlock,
   supplierGuidance,
+  tierBoundsBlock,
   tierLanguage,
 } from "./shared";
+
+const EXTERIOR_CATEGORIES = [
+  "trim",
+  "fasteners",
+  "hardware",
+  "lighting",
+  "paint",
+  "disposal",
+  "other",
+];
 
 export function imagePrompt(ctx: PromptContext): string {
   return `
@@ -51,19 +62,22 @@ ALLOWED CATEGORIES
 Lumber, Composite Decking, Fasteners, Hardware, Concrete, Stain/Paint,
 Railing, Fencing, Lighting, Other
 
-PRICING ANCHORS
-- Pressure-treated 2×8 SYP 12 ft: $18–$26. 5/4×6 deck board 12 ft: $11–$16.
-- Cedar 5/4×6 deck board 12 ft: $26–$38.
-- Composite deck board 12 ft (Trex Enhance / TimberTech AZEK):
-  STANDARD $48–$68, PREMIUM $80–$120, LUXURY capped polymer $130–$200.
-- Composite fascia 12 ft: $35–$55. Composite hidden fastener bucket
-  (Camo / Cortex) per 100 sf: $80–$110.
-- Galvanized joist hangers: $1.50–$3 each. Simpson SDWS structural screws
-  5" 50 ct: $42–$65.
-- Concrete deck-block / 80 lb bag: $7–$9. Sonotube + bag concrete pier
-  for footing: ~$25 each + 1 bag rebar.
-- 4×4×8 cedar fence picket: $4–$7. 6 ft pre-built fence panel: $80–$140.
-- Outdoor low-voltage path light: $25 STANDARD; $80 PREMIUM (brass).
+${tierBoundsBlock(ctx.qualityTier, EXTERIOR_CATEGORIES)}
+
+NARRATIVE EXAMPLES (informative — use the enforced ranges above as the source of truth)
+- STANDARD: Pressure-treated SYP 5/4×6 deck boards, builder-grade galvanized
+  hardware, basic low-voltage path lighting.
+- PREMIUM: Cedar 5/4×6 deck boards, Trex Enhance / TimberTech AZEK composite,
+  brass low-voltage lights, hidden fastener systems (Camo / Cortex).
+- LUXURY: Capped polymer composite (TimberTech AZEK Vintage), thermally-
+  modified ash, integrated cable/aluminum railing.
+- Bulk material reference points (independent of tier):
+  - PT 2×8 SYP 12 ft: $18–$26.
+  - Composite deck board 12 ft: STANDARD $48–$68, PREMIUM $80–$120,
+    LUXURY $130–$200.
+  - 6 ft pre-built cedar fence panel: $80–$140.
+  - Concrete deck-block / 80 lb bag: $7–$9.
+  - Galvanized joist hangers: $1.50–$3 each.
 
 QUANTITY GUIDANCE
 - Deck boards: deck sf × 1.10 / board face coverage; account for picture-
@@ -99,8 +113,9 @@ LABOR GUIDANCE
 - Stairs: 4–6 hr per 3-rise flight; +6 hr if landing.
 - 6-ft cedar fence panel install: 1.0–1.5 hr per 8 ft section + post setting.
 
-TIER RATE MULTIPLIER: ${tier.pricingMultiplier}. Outdoor-living crews
-typically $60–$80/hr STANDARD, $80–$110/hr PREMIUM, $110–$150/hr LUXURY.
+TIER LABOR RATES: ${tier.pricingMultiplier}. The orchestrator clamps every
+ratePerHour to the tier's band — quoting outside will be silently adjusted.
+Outdoor-living crews typically sit in the upper half of each band.
 
 ${laborJsonContract()}
 `.trim();

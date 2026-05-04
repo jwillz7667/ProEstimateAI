@@ -49,8 +49,6 @@ enum PaywallPlacement: String, Codable, CaseIterable, Sendable {
     case brandingLocked = "BRANDING_LOCKED"
     case approvalShareLocked = "APPROVAL_SHARE_LOCKED"
     case watermarkRemovalLocked = "WATERMARK_REMOVAL_LOCKED"
-    case analyticsLocked = "ANALYTICS_LOCKED"
-    case pricingProfileLocked = "PRICING_PROFILE_LOCKED"
     case settingsUpgrade = "SETTINGS_UPGRADE"
 }
 
@@ -72,7 +70,7 @@ extension PaywallPlacement {
             return true
         case .generationLimitHit, .quoteLimitHit, .invoiceLocked,
              .aiEstimateLocked, .brandingLocked, .approvalShareLocked,
-             .watermarkRemovalLocked, .analyticsLocked, .pricingProfileLocked:
+             .watermarkRemovalLocked:
             return false
         }
     }

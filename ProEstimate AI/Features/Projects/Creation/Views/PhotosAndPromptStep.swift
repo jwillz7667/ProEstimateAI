@@ -24,6 +24,7 @@ struct PhotosAndPromptStep: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
                 photosSection
+                qualityTierSection
                 promptSuggestionsSection
                 customInstructionsSection
             }
@@ -283,6 +284,104 @@ struct PhotosAndPromptStep: View {
                         .stroke(ColorTokens.warning.opacity(0.35), lineWidth: 1)
                 )
         )
+    }
+
+    // MARK: - Quality Tier
+    //
+    // Optional tier selection. `nil` = Auto (backend picks tier-neutral
+    // defaults driven by project type). When set, every downstream
+    // artifact (image prompt, materials, estimate, post-AI clamps) is
+    // anchored to this tier's price/quality bounds. Sits under photos
+    // so the contractor sets quality intent before generation runs.
+
+    private var qualityTierSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.sm) {
+            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                Text("Quality tier")
+                    .font(TypographyTokens.title3)
+                Text("Sets the price band for materials, labor, and the AI design's finish quality. Skip and we'll choose sensible defaults from the project type.")
+                    .font(TypographyTokens.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, SpacingTokens.md)
+
+            VStack(spacing: SpacingTokens.xs) {
+                tierRow(
+                    title: "Auto",
+                    subtitle: "Let the AI pick tier-neutral defaults from the project type",
+                    icon: "wand.and.stars",
+                    isSelected: viewModel.qualityTier == nil,
+                    action: { viewModel.qualityTier = nil }
+                )
+                ForEach(Project.QualityTier.allCases, id: \.self) { tier in
+                    tierRow(
+                        title: tier.displayName,
+                        subtitle: tier.subtitle,
+                        icon: tierIcon(tier),
+                        isSelected: viewModel.qualityTier == tier,
+                        action: { viewModel.qualityTier = tier }
+                    )
+                }
+            }
+            .padding(.horizontal, SpacingTokens.md)
+        }
+    }
+
+    private func tierRow(
+        title: String,
+        subtitle: String,
+        icon: String,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: SpacingTokens.sm) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? ColorTokens.primaryOrange : ColorTokens.secondaryText)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                    Text(title)
+                        .font(TypographyTokens.headline)
+                        .foregroundStyle(ColorTokens.primaryText)
+                    Text(subtitle)
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? ColorTokens.primaryOrange : ColorTokens.subtleBorder)
+            }
+            .padding(SpacingTokens.md)
+            .background(
+                RoundedRectangle(cornerRadius: RadiusTokens.card)
+                    .fill(isSelected ? ColorTokens.primaryOrange.opacity(0.10) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.card)
+                    .strokeBorder(
+                        isSelected ? ColorTokens.primaryOrange : ColorTokens.subtleBorder,
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func tierIcon(_ tier: Project.QualityTier) -> String {
+        switch tier {
+        case .standard: return "checkmark.seal"
+        case .premium: return "star.circle"
+        case .luxury: return "crown"
+        }
     }
 
     // MARK: - Prompt Suggestions

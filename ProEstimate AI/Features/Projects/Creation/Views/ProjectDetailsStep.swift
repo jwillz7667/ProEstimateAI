@@ -1,8 +1,11 @@
 import SwiftUI
 
 /// Step 2 of the simplified creation flow. Project name is the lead;
-/// advanced fields (square footage, lot size, budget, quality tier) sit
-/// below as optional context the AI uses for material/labor estimates.
+/// advanced fields (square footage, lot size, budget) sit below as
+/// optional context the AI uses for material/labor estimates. The
+/// quality-tier picker has moved to the Photos & Vision step (sits
+/// directly under the photo grid) so the contractor sets quality
+/// intent before generation runs.
 struct ProjectDetailsStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
 
@@ -22,7 +25,6 @@ struct ProjectDetailsStep: View {
                 squareFootageSection
                 lotSizeSection
                 budgetSection
-                qualityTierSection
             }
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.sm)
@@ -179,28 +181,6 @@ struct ProjectDetailsStep: View {
         .glassCard(cornerRadius: RadiusTokens.card)
     }
 
-    // MARK: - Quality Tier
-
-    private var qualityTierSection: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            Label("Quality tier", systemImage: "star.circle")
-                .font(TypographyTokens.headline)
-
-            Text("Influences material suggestions and cost estimates.")
-                .font(TypographyTokens.caption)
-                .foregroundStyle(.secondary)
-
-            Picker("Quality", selection: $viewModel.qualityTier) {
-                ForEach(Project.QualityTier.allCases, id: \.self) { tier in
-                    Text(tierLabel(tier)).tag(tier)
-                }
-            }
-            .pickerStyle(.segmented)
-        }
-        .padding(SpacingTokens.md)
-        .glassCard(cornerRadius: RadiusTokens.card)
-    }
-
     // MARK: - Helpers
 
     private func currencyField(text: Binding<String>, placeholder: String, focus: Field) -> some View {
@@ -216,14 +196,6 @@ struct ProjectDetailsStep: View {
         .padding(.horizontal, SpacingTokens.sm)
         .padding(.vertical, SpacingTokens.xs)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
-    }
-
-    private func tierLabel(_ tier: Project.QualityTier) -> String {
-        switch tier {
-        case .standard: "Standard"
-        case .premium: "Premium"
-        case .luxury: "Luxury"
-        }
     }
 }
 

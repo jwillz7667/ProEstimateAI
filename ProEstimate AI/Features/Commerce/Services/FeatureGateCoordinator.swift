@@ -215,34 +215,6 @@ final class FeatureGateCoordinator {
         )
     }
 
-    /// Check whether the user can open the Analytics dashboard.
-    func guardAccessAnalytics() -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.hasProAccess { return .allowed }
-        logger.info("Analytics blocked — subscription required.")
-        return blockWithTrialOffer(
-            placement: .analyticsLocked,
-            triggerReason: "Analytics requires a subscription",
-            headline: "Business Analytics",
-            subheadline: "Track revenue, win rates, and project trends across your pipeline."
-        )
-    }
-
-    /// Check whether the user can create an additional pricing profile.
-    /// Free users hit the paywall on the first attempt — Pro/Premium can
-    /// create unlimited.
-    func guardAddPricingProfile(currentCount _: Int) -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.hasProAccess { return .allowed }
-        logger.info("Pricing profile creation blocked — subscription required.")
-        return blockWithTrialOffer(
-            placement: .pricingProfileLocked,
-            triggerReason: "Pricing profiles require a subscription",
-            headline: "Custom Pricing Profiles",
-            subheadline: "Build reusable pricing templates for residential, commercial, and specialty work — switch between them in one tap."
-        )
-    }
-
     /// Check whether the user can remove watermarks from exports.
     func guardRemoveWatermark() -> FeatureGateResult {
         guard let entitlementStore else { return .allowed }
