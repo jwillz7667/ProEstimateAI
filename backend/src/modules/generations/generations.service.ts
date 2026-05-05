@@ -13,6 +13,7 @@ import {
   generateLaborEstimates,
   MaterialGenContext,
 } from "../../lib/material-gen";
+import { sendGenerationReady } from "../../lib/apns";
 import { recordUsage } from "../../lib/usage-limits";
 import { gateAIAction } from "../commerce/entitlement-gate";
 import { env } from "../../config/env";
@@ -269,6 +270,21 @@ async function processGeneration(
     logger.info(
       { generationId, durationMs: result.durationMs },
       "Generation completed successfully",
+    );
+
+    // Push notification to user's registered devices. Best-effort —
+    // failures are swallowed inside the lib because the in-app polling
+    // path is the canonical delivery channel; APNs is the path that
+    // catches the user when the app is backgrounded or killed.
+    sendGenerationReady(userId, {
+      generationId,
+      projectId,
+      projectTitle: context.projectTitle,
+    }).catch((err) =>
+      logger.warn(
+        { err, generationId },
+        "APNs send failed for completed generation (non-critical)",
+      ),
     );
 
     // Auto-generate material suggestions and create estimate in the background

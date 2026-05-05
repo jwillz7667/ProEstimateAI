@@ -211,6 +211,7 @@ model User {
   usageEvents      UsageEvent[]
   purchaseAttempts PurchaseAttempt[]
   identities       UserIdentity[]
+  deviceTokens     DeviceToken[]
 
   @@index([companyId])
 }
@@ -266,6 +267,34 @@ model RefreshToken {
 
   @@index([userId])
   @@index([token])
+}
+
+/// Push notification device registration. One row per device per user;
+/// the same physical device can register multiple times across user
+/// accounts (sign-out/sign-in). Token is unique globally because Apple
+/// guarantees one APNs token per device per app, and we want a hard
+/// constraint that prevents two rows from claiming the same token.
+///
+/// `lastSeenAt` is bumped on every register call so we can prune
+/// long-stale rows on a periodic sweep, and used by the send path to
+/// prefer the most-recent token per user when fanning out a push.
+model DeviceToken {
+  id         String         @id @default(cuid())
+  userId     String
+  token      String         @unique
+  platform   DevicePlatform @default(APNS)
+  bundleId   String
+  createdAt  DateTime       @default(now())
+  lastSeenAt DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum DevicePlatform {
+  APNS
+  FCM
 }
 
 // ─── DOMAIN ──────────────────────────────────────────────

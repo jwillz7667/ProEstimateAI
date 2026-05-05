@@ -85,7 +85,11 @@ struct ProjectImagesSection: View {
     }
 
     private func imageCard(_ asset: Asset) -> some View {
-        AsyncImage(url: asset.thumbnailURL ?? asset.url) { image in
+        // Grid card renders at 160×120pt — request the small bucket.
+        // The full-screen preview below intentionally stays on the
+        // original-resolution URL; the contractor expects to pinch-zoom
+        // there and a downscaled JPEG would betray that.
+        AsyncImage(url: (asset.thumbnailURL ?? asset.url).thumbnail(width: 320)) { image in
             image
                 .resizable()
                 .scaledToFill()

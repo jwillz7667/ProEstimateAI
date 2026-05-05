@@ -3,6 +3,14 @@ import SwiftUI
 
 @main
 struct ProEstimate_AIApp: App {
+    /// Tiny UIApplicationDelegate that captures the APNs device token
+    /// so the backend can deliver real-time "preview ready" pushes when
+    /// the app is killed. SwiftUI does not surface
+    /// `didRegisterForRemoteNotificationsWithDeviceToken` on its own —
+    /// the AppDelegate adaptor is the supported bridge. Everything else
+    /// stays SwiftUI-native.
+    @UIApplicationDelegateAdaptor(ApnsAppDelegate.self) private var apnsDelegate
+
     @State private var appState = AppState()
     @State private var appRouter = AppRouter()
     // Anchor the App's @State to the canonical singletons so that any
@@ -19,11 +27,35 @@ struct ProEstimate_AIApp: App {
     @State private var onboardingStore = OnboardingStore.shared
     @State private var networkMonitor = NetworkMonitor.shared
 
+    /// App-level coordinator that owns AI generation polling so a
+    /// closed-detail-screen / backgrounded / killed app still
+    /// reconciles completions and surfaces notifications.
+    @State private var generationLifecycle = GenerationLifecycleCoordinator.shared
+
     @Environment(\.scenePhase) private var scenePhase
 
     let modelContainer: ModelContainer
 
     init() {
+        // Lift URLCache.shared well above the URLSession default
+        // (~512 KB memory, ~10 MB disk). AsyncImage rides URLSession.shared,
+        // so once a thumbnail is fetched, every subsequent render of the
+        // same URL — pull-to-refresh, tab switches, scroll-back — must hit
+        // this cache or it'll re-download. 50 MB / 250 MB comfortably
+        // covers the dashboard carousel, recent assets, and a few
+        // projects' worth of generation previews without bloating disk
+        // beyond what a contractor working out of the app expects.
+        URLCache.shared = URLCache(
+            memoryCapacity: 50 * 1024 * 1024,
+            diskCapacity: 250 * 1024 * 1024,
+            directory: nil
+        )
+
+        // Apple docs require the UNUserNotificationCenter delegate to be
+        // set before applicationDidFinishLaunching, otherwise a
+        // launch-from-notification-tap is silently dropped on cold start.
+        GenerationNotificationCenter.shared.bootstrap()
+
         do {
             modelContainer = try ModelContainer(
                 for: CachedProject.self, CachedEstimate.self, CachedClient.self
@@ -83,6 +115,7 @@ struct ProEstimate_AIApp: App {
                     await bootstrap()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
+                    generationLifecycle.handleScenePhase(newPhase)
                     if newPhase == .active {
                         Task {
                             await entitlementStore.refresh()
@@ -105,11 +138,19 @@ struct ProEstimate_AIApp: App {
                 // which calls `reset()` on both stores, so we only act on
                 // the false → true transition.
                 .onChange(of: appState.isAuthenticated) { wasAuthed, isAuthed in
-                    guard !wasAuthed, isAuthed else { return }
-                    Task {
-                        await entitlementStore.refresh()
-                        await usageMeterStore.refresh()
-                        await featureGateCoordinator.loadProducts()
+                    if !wasAuthed, isAuthed {
+                        Task {
+                            await entitlementStore.refresh()
+                            await usageMeterStore.refresh()
+                            await featureGateCoordinator.loadProducts()
+                            await generationLifecycle.resumeAll()
+                        }
+                    } else if wasAuthed, !isAuthed {
+                        // Sign-out: drop any pending generations so a
+                        // different account on the same device doesn't
+                        // see a stranger's in-flight work or get a stale
+                        // notification scheduled before sign-out.
+                        generationLifecycle.clearAll()
                     }
                 }
                 .sheet(item: $paywallPresenter.activeDecision) { decision in
@@ -162,5 +203,33 @@ struct ProEstimate_AIApp: App {
         await entitlementStore.refresh()
         await usageMeterStore.refresh()
         await featureGateCoordinator.loadProducts()
+
+        // Cold-launch resume: if the user had a generation running when
+        // the app was killed, the App-level coordinator picks it up here
+        // so the UI shows correct in-flight state without waiting for
+        // the user to navigate to the project.
+        if appState.isAuthenticated {
+            await generationLifecycle.resumeAll()
+            // Refresh APNs registration on every authed cold launch.
+            // Apple recommends calling `registerForRemoteNotifications()`
+            // each launch so a token rotation (rare, but happens after
+            // restore-from-backup or iCloud account changes) is captured
+            // and posted to the backend without waiting for the user to
+            // start their next generation.
+            await ApnsRegistrar.bootstrapIfPermitted()
+        }
+
+        // Long-running tap-stream consumer. Translates a notification
+        // tap into a tab-switch + push so the user lands on the right
+        // project's detail screen. Survives App lifecycle transitions
+        // because the singleton outlives the scene's task.
+        Task { @MainActor in
+            for await payload in GenerationNotificationCenter.shared.tapStream {
+                appState.selectedTab = .projects
+                appRouter.projectsPath.append(
+                    AppDestination.projectDetail(id: payload.projectId, autoGenerate: false)
+                )
+            }
+        }
     }
 }

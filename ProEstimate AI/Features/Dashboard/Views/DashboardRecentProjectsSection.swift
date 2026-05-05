@@ -158,7 +158,11 @@ struct DashboardRecentProjectsSection: View {
         Color.clear
             .overlay {
                 if let url = resolvedThumbnailURL(for: project) {
-                    AsyncImage(url: url) { phase in
+                    // Carousel cards render at ~82% of viewport width.
+                    // 480px is the backend's mid-bucket: high enough for
+                    // crisp Retina rendering on iPhone widths, small
+                    // enough that decode + transfer stays sub-150ms.
+                    AsyncImage(url: url.thumbnail(width: 480)) { phase in
                         switch phase {
                         case let .success(image):
                             image

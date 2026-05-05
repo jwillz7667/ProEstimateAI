@@ -121,5 +121,13 @@ final class DashboardViewModel {
         }
 
         projectThumbnails = resolved
+
+        // Warm URLCache for the carousel widths the dashboard renders so
+        // AsyncImage resolves from disk on first paint instead of
+        // opening a fresh HTTPS request after the View body materializes.
+        // 480px aligns with the backend's mid-bucket and is already the
+        // size the carousel cards request via `.thumbnail(width: 480)`.
+        let prefetchURLs = resolved.values.map { $0.thumbnail(width: 480) }
+        ThumbnailPrefetcher.shared.prefetch(prefetchURLs)
     }
 }
