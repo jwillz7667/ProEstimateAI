@@ -253,7 +253,10 @@ async function processGeneration(
 
     // Store the image data and mark as COMPLETED
     const previewUrl = `${env.API_BASE_URL}/v1/generations/${generationId}/preview`;
-    const thumbnailUrl = previewUrl;
+    // Carousel thumbs hit the resize variant — sharp downscales to 240px
+    // wide and the response is cached separately by `?w=240`. Avoids
+    // pulling the full multi-MB preview for every tile in the picker.
+    const thumbnailUrl = `${previewUrl}?w=240`;
 
     await prisma.aIGeneration.update({
       where: { id: generationId },

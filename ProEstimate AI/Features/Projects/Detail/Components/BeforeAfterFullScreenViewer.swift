@@ -27,7 +27,18 @@ struct BeforeAfterFullScreenViewer: View {
             Color.black.ignoresSafeArea()
 
             GeometryReader { geometry in
-                let height = geometry.size.height * 0.78
+                // Cap the slider's box to a 4:3-ish aspect of its
+                // available width. The previous "78% of screen height"
+                // produced a ~430×730 portrait box on iPhone 16 Pro Max,
+                // which forced `scaledToFill` to crop the photos
+                // aggressively top-to-bottom — clients lost the outer
+                // edges of the scene. Using width × 1.25 (and clamping
+                // to the available height) keeps the frame close to the
+                // source photo's native aspect so the comparison view
+                // shows the full scene.
+                let availableWidth = geometry.size.width
+                let availableHeight = geometry.size.height * 0.85
+                let height = min(availableWidth * 1.25, availableHeight)
                 VStack(spacing: SpacingTokens.md) {
                     Spacer(minLength: 0)
 

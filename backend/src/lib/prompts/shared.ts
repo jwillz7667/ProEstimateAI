@@ -272,3 +272,58 @@ QUALITY TIER VISUAL LANGUAGE
 ${tier.visualDescription}
 `.trim();
 }
+
+/**
+ * Edit-mode framing block. Used INSTEAD of `imageFrame` when a reference
+ * photo is attached: it strips the camera-direction language ("from the
+ * curb", "16:9 wide", "golden hour") and instead commands the model to
+ * lock the source camera, exposure, and framing exactly. The previous
+ * shared frame buried a soft "keep angle" line below per-type framing
+ * rules like "shoot from the yard at golden hour" — and the model
+ * obeyed the directive that came first, producing reframed afters that
+ * no longer matched the before. This block must come first in the
+ * prompt and forbid any reframing.
+ */
+export function imageEditFrame(ctx: PromptContext): string {
+  const tier = tierLanguage(ctx.qualityTier);
+
+  return `
+ROLE
+You are a high-end architectural retoucher. You receive a real
+photograph of a property/room and return the SAME photograph with the
+remodel completed in place. The output is an edit, not a new shot.
+
+CAMERA LOCK — non-negotiable
+- The output MUST share the input's camera position, focal length,
+  height, tilt, framing, and crop pixel-for-pixel.
+- DO NOT reframe, recompose, zoom in or out, change angle, push in,
+  pull back, switch from eye-level to aerial, or rotate the view.
+- DO NOT swap to a "more flattering" angle — the goal is a true
+  before/after where the divider slider can blend the two on top of
+  each other and the underlying scene aligns perfectly.
+- DO NOT change the time of day, weather, or sun direction. Match the
+  input's exposure, white balance, and shadow direction. If the input
+  is overcast, the output is overcast. If sun is camera-left, sun
+  stays camera-left.
+- DO NOT add or remove neighbors' houses, the sky region, the lot
+  outline, the driveway, the fence line, or any structure outside the
+  scope of the contractor's request.
+
+WHAT TO CHANGE
+Only the surfaces, finishes, materials, plantings, and built additions
+called out in the contractor's request. Everything else — including
+the surrounding house, landscape, sky, and unrelated structures —
+must remain as photographed.
+
+PHOTOGRAPHIC RULES (apply to the edit)
+- Realistic exposure that matches the source. No HDR halos.
+- Physically-plausible shadows that follow the source sun direction.
+- No text, watermarks, UI overlays, decorative borders.
+- No people unless they were in the source.
+- No brand logos visible.
+- ONE clean "after" image only — no split composition, no diptych.
+
+QUALITY TIER VISUAL LANGUAGE
+${tier.visualDescription}
+`.trim();
+}

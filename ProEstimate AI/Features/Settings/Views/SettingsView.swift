@@ -325,11 +325,22 @@ struct SettingsView: View {
                 Text("About")
             } footer: {
                 VStack(spacing: SpacingTokens.xs) {
+                    // White circular plate in dark mode keeps the brand mark
+                    // legible — `housd-icon-light` is drawn for light
+                    // backgrounds (gray-fill house with black outline), so
+                    // dropping it directly on a dark page reads as a dark
+                    // blob. Light mode page is already light, no plate
+                    // needed.
                     Image("housd-icon-light")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(height: 32)
-                        .opacity(0.6)
+                        .frame(width: 32, height: 32)
+                        .padding(6)
+                        .background(
+                            colorScheme == .dark ? Color.white : Color.clear,
+                            in: Circle()
+                        )
+                        .opacity(0.85)
 
                     Text("ProEstimate AI")
                         .font(TypographyTokens.caption)

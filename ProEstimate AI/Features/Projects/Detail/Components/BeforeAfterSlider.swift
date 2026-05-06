@@ -30,7 +30,11 @@ struct BeforeAfterSlider: View {
             let dividerX = width * sliderPosition
 
             ZStack(alignment: .leading) {
-                // After image (full width, underneath)
+                // After image (full width, underneath). Both photos use
+                // `scaledToFill` + center alignment so the before and
+                // after share the exact same crop window — that way
+                // the slider blends two views of the same scene rather
+                // than two differently-letterboxed canvases.
                 afterImage
                     .frame(width: width, height: height, alignment: .center)
                     .clipped()

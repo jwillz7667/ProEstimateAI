@@ -502,6 +502,48 @@ function inferBoundsCategory(name: string, unit: string): string | null {
   if (/(dumpster|disposal|debris|haul.away|permit)/.test(n)) return 'disposal';
   if (/(screw|nail|fastener|anchor|caulk|tape|adhesive)/.test(n)) return 'fasteners';
 
+  // ─── Pool & outdoor-living ──────────────────────────────────────────
+  // Order matters: more specific patterns first so a "swim-up bar"
+  // doesn't get pulled into the generic "bar" branch, and a "pool
+  // decking" line doesn't fall into wood "decking".
+  if (/(swim.?up.?bar|pool.?bar|wet.?bar)/.test(n)) return 'swim_up_bar';
+  if (/(outdoor.?kitchen|grill.?island|outdoor.?grill|bbq.?island)/.test(n)) {
+    return 'outdoor_kitchen';
+  }
+  if (/(pool.?(equip|pump|filter|heater|cleaner|automation|salt|chlorinator))/.test(n)) {
+    return 'pool_equipment';
+  }
+  if (/(pool.?(deck|coping|surround))|tanning.?ledge|pool.?apron/.test(n)) {
+    return 'pool_decking';
+  }
+  if (/(pool.?(shell|liner|gunite|fiberglass|finish|plaster|tile|interior))|in.?ground.?pool|swimming.?pool/.test(n)) {
+    return 'pool_shell';
+  }
+  if (/(deck.?board|deck.?planks?|deck.?frame|composite.?deck|wood.?deck|trex|timbertech|azek|ip[eé])/.test(n)) {
+    return 'decking';
+  }
+  if (/(railing|baluster|rail.?post|cable.?rail|guard.?rail)/.test(n)) return 'railing';
+  if (/(paver|paving.?stone|cobble|belgard|techo|unilock|travertine.?paver|bluestone)/.test(n)) {
+    return 'pavers';
+  }
+  if (/(concrete.?(slab|flat|pour|pad|footing)|gunite|shotcrete|stamped.?concrete)/.test(n)) {
+    return 'concrete';
+  }
+  if (/(excavat|dig|grading|trench|backfill|dirt.?haul)/.test(n)) return 'excavation';
+  if (/(gravel|crushed.?stone|aggregate|57.?stone|pea.?stone|river.?rock|base.?rock)/.test(n)) {
+    return 'aggregate';
+  }
+  if (/(fence.?(panel|section|post|run)|fencing|privacy.?fence|chain.?link)/.test(n)) {
+    return 'fencing';
+  }
+  if (/(\bsod\b|turf.?roll|grass.?roll|zoysia|bermuda.?sod|kentucky.?bluegrass)/.test(n)) {
+    return 'sod';
+  }
+  if (/(\bmulch\b|wood.?chip|bark.?nugget|cypress.?mulch)/.test(n)) return 'mulch';
+  if (/(plant|tree|shrub|perennial|annual|sapling|hedge|bush|specimen)/.test(n)) {
+    return 'plants';
+  }
+
   return null;
 }
 

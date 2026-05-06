@@ -239,6 +239,132 @@ export const CATEGORY_TIER_BOUNDS: Record<string, CategoryBounds> = {
     promptHint: "vinyl / engineered wood → fiber cement / cedar shake → real stone / true cedar / ipé",
   },
 
+  // ─── Pool & outdoor-living (project-scale anchors, USD 2026) ───
+  // Numbers are calibrated to current US contractor pricing for the Sun
+  // Belt + Midwest mid-volume markets. Sources: HomeAdvisor 2026 reports,
+  // Pool & Spa Marketing Quarterly, NARI cost vs. value 2026.
+  pool_shell: {
+    // Whole-pool unit (gunite/vinyl/fiberglass shell, plumbing, finish).
+    // The orchestrator sees one big "Pool" line item — clamping is at
+    // project scale, not at material scale.
+    unit: "each",
+    STANDARD: { min: 25000, max: 60000 },
+    PREMIUM: { min: 50000, max: 95000 },
+    LUXURY: { min: 90000, max: 160000 },
+    promptHint: "vinyl-liner / fiberglass shell → gunite mid-size → custom gunite with tanning ledge / spa",
+  },
+  pool_equipment: {
+    // Pump + filter + heater + automation as a packaged line.
+    unit: "each",
+    STANDARD: { min: 2500, max: 7000 },
+    PREMIUM: { min: 6500, max: 15000 },
+    LUXURY: { min: 14000, max: 32000 },
+    promptHint: "Hayward standard package → Pentair IntelliConnect → smart automation + UV/salt + heat pump",
+  },
+  swim_up_bar: {
+    unit: "each",
+    STANDARD: { min: 5000, max: 12000 },
+    PREMIUM: { min: 11000, max: 28000 },
+    LUXURY: { min: 26000, max: 55000 },
+    promptHint: "concrete bar with stools → tiled bar with seating + grill stub → custom shade + outdoor TV + wet bar",
+  },
+  outdoor_kitchen: {
+    unit: "each",
+    STANDARD: { min: 3000, max: 10000 },
+    PREMIUM: { min: 9000, max: 28000 },
+    LUXURY: { min: 26000, max: 70000 },
+    promptHint: "drop-in grill + island → built-in grill + side burner + sink → Lynx/Wolf grill + smoker + pizza oven + fridge",
+  },
+  pool_decking: {
+    // Around-the-pool flatwork (broom-finish concrete, exposed
+    // aggregate, travertine, premium pavers).
+    unit: "sq_ft",
+    unitAliases: ["sf"],
+    STANDARD: { min: 8, max: 22 },
+    PREMIUM: { min: 20, max: 38 },
+    LUXURY: { min: 35, max: 70 },
+    promptHint: "broom-finish concrete → stamped concrete / travertine → cut natural stone / premium imported pavers",
+  },
+  decking: {
+    // Built-up wood / composite deck (separate from pool_decking).
+    unit: "sq_ft",
+    unitAliases: ["sf"],
+    STANDARD: { min: 20, max: 40 },
+    PREMIUM: { min: 35, max: 60 },
+    LUXURY: { min: 55, max: 100 },
+    promptHint: "pressure-treated SYP → cedar / Trex Enhance composite → ipé / TimberTech AZEK Vintage / mahogany",
+  },
+  railing: {
+    unit: "linear_ft",
+    unitAliases: ["lf"],
+    STANDARD: { min: 25, max: 60 },
+    PREMIUM: { min: 55, max: 130 },
+    LUXURY: { min: 120, max: 280 },
+    promptHint: "PT 2x2 baluster → aluminum / cable rail → bronze cable / glass panel / custom welded steel",
+  },
+  pavers: {
+    unit: "sq_ft",
+    unitAliases: ["sf"],
+    STANDARD: { min: 12, max: 28 },
+    PREMIUM: { min: 25, max: 48 },
+    LUXURY: { min: 45, max: 90 },
+    promptHint: "Belgard standard → Techo-Bloc / Unilock signature → bluestone / travertine / imported clay",
+  },
+  concrete: {
+    unit: "sq_ft",
+    unitAliases: ["sf"],
+    STANDARD: { min: 5, max: 11 },
+    PREMIUM: { min: 9, max: 18 },
+    LUXURY: { min: 16, max: 35 },
+    promptHint: "broom finish 4\" → stamped or stained → polished / decorative integral color",
+  },
+  excavation: {
+    unit: "cubic_yard",
+    unitAliases: ["cy", "yd3"],
+    STANDARD: { min: 20, max: 60 },
+    PREMIUM: { min: 40, max: 100 },
+    LUXURY: { min: 80, max: 200 },
+    promptHint: "soil dig & haul → rock breaking / limited access → blast / shoring / crane-set",
+  },
+  aggregate: {
+    unit: "ton",
+    STANDARD: { min: 15, max: 50 },
+    PREMIUM: { min: 30, max: 80 },
+    LUXURY: { min: 60, max: 160 },
+    promptHint: "crushed limestone / 57 stone → washed gravel / pea pebble → decorative river rock / Mexican beach",
+  },
+  fencing: {
+    unit: "linear_ft",
+    unitAliases: ["lf"],
+    STANDARD: { min: 18, max: 40 },
+    PREMIUM: { min: 35, max: 75 },
+    LUXURY: { min: 70, max: 160 },
+    promptHint: "PT shadowbox / dog-ear → cedar privacy / vinyl premium → ornamental aluminum / custom steel / horizontal cedar",
+  },
+  sod: {
+    unit: "sq_ft",
+    unitAliases: ["sf"],
+    STANDARD: { min: 0.4, max: 0.9 },
+    PREMIUM: { min: 0.85, max: 1.6 },
+    LUXURY: { min: 1.5, max: 4.0 },
+    promptHint: "Bermuda / Kentucky bluegrass roll → Zoysia premium → certified Empire / Palmetto / specialty cultivar",
+  },
+  mulch: {
+    unit: "cubic_yard",
+    unitAliases: ["cy", "yd3"],
+    STANDARD: { min: 25, max: 55 },
+    PREMIUM: { min: 45, max: 95 },
+    LUXURY: { min: 85, max: 180 },
+    promptHint: "double-shredded hardwood → dyed black / brown premium → cypress / cedar / decorative pine bark nuggets",
+  },
+  plants: {
+    unit: "each",
+    STANDARD: { min: 8, max: 80 },
+    PREMIUM: { min: 50, max: 280 },
+    LUXURY: { min: 200, max: 1500 },
+    promptHint: "1-gal nursery → 7–15 gal field-grown → mature specimen tree (B&B 6\" caliper)",
+  },
+
   // --- Lawn / landscape (per-sq-ft and per-bag pricing) ---
   fertilizer: {
     unit: "bag",

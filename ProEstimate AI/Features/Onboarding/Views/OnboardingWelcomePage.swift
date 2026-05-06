@@ -10,31 +10,20 @@ struct OnboardingWelcomePage: View {
         VStack(spacing: SpacingTokens.xl) {
             Spacer(minLength: SpacingTokens.xxl)
 
-            // Hero mark — orange circle with a house glyph sized for prominence.
-            // No blurred orange halo and no orange drop-shadow: the brand
-            // glyph is the focal point, the page background should not glow.
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                ColorTokens.primaryOrange,
-                                ColorTokens.primaryOrange.opacity(0.82),
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 140, height: 140)
-
-                Image(systemName: "house.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 64, height: 64)
-                    .foregroundStyle(.white)
-                    .accessibilityHidden(true)
-            }
-            .padding(.bottom, SpacingTokens.md)
+            // Hero mark — the real app icon, masked into iOS's continuous
+            // squircle. Using the actual `app-mark` asset (sourced from
+            // AppIcon) keeps onboarding aligned with what the user sees
+            // on their Home Screen and the App Store, instead of a
+            // synthetic SF-Symbol mash-up. The asset auto-switches to
+            // the dark variant in dark mode.
+            Image("app-mark")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 140, height: 140)
+                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                .shadow(color: .black.opacity(0.25), radius: 18, x: 0, y: 10)
+                .accessibilityHidden(true)
+                .padding(.bottom, SpacingTokens.md)
 
             VStack(spacing: SpacingTokens.sm) {
                 Text("Welcome to ProEstimate AI")

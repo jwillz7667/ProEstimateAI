@@ -9,7 +9,7 @@ import {
 import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { generatePreviewImagePiAPI } from "./piapi-image-gen";
-import { getImagePrompt } from "./prompts";
+import { getImageEditPrompt, getImagePrompt } from "./prompts";
 import {
   PromptContext,
   QualityTier,
@@ -124,9 +124,13 @@ function aspectRatioForProjectType(projectType: string): string {
 
 /**
  * The full prompt sent to the image model. For the reference-photo path
- * (PiAPI / Google with attached photo) we want a tight edit instruction
- * that preserves the room/property; for the text-to-image path we lead
- * with the per-type prompt and append the contractor's user prompt.
+ * (PiAPI / Google with attached photo) we use the camera-locked
+ * `getImageEditPrompt` and explicitly do NOT splice in the per-type
+ * `getImagePrompt`, because per-type modules carry their own framing
+ * language ("16:9 from the curb at golden hour") that used to override
+ * the soft "keep angle" hint and produce reframed afters that no longer
+ * matched the source. For text-to-image we lead with the full per-type
+ * system prompt.
  */
 function buildFullPrompt(
   userPrompt: string,
@@ -134,27 +138,29 @@ function buildFullPrompt(
   hasReferencePhoto: boolean,
 ): string {
   const promptCtx = toPromptContext(context);
-  const systemPrompt = getImagePrompt(promptCtx);
 
   if (hasReferencePhoto) {
-    // Edit-mode: keep the camera and structure of the reference photo.
-    // The per-type system prompt establishes design + photographic rules;
-    // the editing directive forces the model to preserve the existing
-    // scene rather than imagining a new one.
-    return `${systemPrompt}
+    const editFrame = getImageEditPrompt(promptCtx);
+    return `${editFrame}
 
-EDIT INSTRUCTION
-The provided photo is the actual property/room. Edit it in place: keep
-the same camera angle, same vantage point, same structural elements
-(walls, windows, roofline, lot boundaries, plant beds present). Only
-change the finishes, plants, materials, and surfaces to show the
-COMPLETED project as described below.
+CONTRACTOR'S REQUEST (this is what to build/change in the existing scene)
+"${userPrompt}"
 
-Contractor's request: "${userPrompt}"
-
-Photorealistic only. No text, no labels, no watermarks.`;
+Reinforcement — read before generating:
+- The output is the SAME photograph with the renovation completed in
+  place. It is NOT a new shot.
+- Preserve the input's camera position, focal length, height, and tilt
+  pixel-for-pixel. The before/after slider must blend the two on top of
+  each other.
+- Match the input's exposure, white balance, time of day, and shadow
+  direction.
+- Touch ONLY the surfaces, materials, plantings, and built additions
+  called out above. Leave everything else exactly as it appears in the
+  source photo.
+- Photorealistic. No text, labels, watermarks, or imagined neighbors.`;
   }
 
+  const systemPrompt = getImagePrompt(promptCtx);
   return `${systemPrompt}
 
 CONTRACTOR'S REQUEST
@@ -265,6 +271,13 @@ async function generatePreviewImageGoogle(
 
     const aspectRatio = aspectRatioForProjectType(context.projectType);
 
+    // Edit-mode wants a tight camera lock so the after lines up with the
+    // before in the slider. Text-to-image wants enough creativity to
+    // produce an aspirational hero shot. The two modes get different
+    // (temperature, topP) accordingly.
+    const temperature = referencePhoto ? 0.3 : 0.7;
+    const topP = referencePhoto ? 0.85 : 0.9;
+
     logger.info(
       {
         model: NANO_BANANA_2_MODEL,
@@ -274,6 +287,9 @@ async function generatePreviewImageGoogle(
         aspectRatio,
         imageSize: "2K",
         hasReferencePhoto: !!referencePhoto,
+        mode: referencePhoto ? "edit" : "text-to-image",
+        temperature,
+        topP,
       },
       "Starting Google GenAI image generation (primary)",
     );
@@ -292,11 +308,8 @@ async function generatePreviewImageGoogle(
       model: NANO_BANANA_2_MODEL,
       contents,
       config: {
-        // 0.7 keeps the model creative enough to handle varied source photos
-        // while preventing the random reframing/style drift that temperature 1
-        // produced. Pairs with topP: 0.9 below.
-        temperature: 0.7,
-        topP: 0.9,
+        temperature,
+        topP,
         maxOutputTokens: 32768,
         responseModalities: referencePhoto ? ["TEXT", "IMAGE"] : ["IMAGE"],
         safetySettings: [
