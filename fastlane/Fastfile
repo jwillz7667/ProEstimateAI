@@ -229,6 +229,113 @@ platform :ios do
     )
   end
 
+  desc "Upload the iPhone 6.9 app preview video to ASC for the editable version. " \
+       "deliver doesn't handle .mov files, so this lane drives the AppPreviewSet API directly."
+  lane :metadata_preview do
+    require "spaceship"
+    require "base64"
+
+    # ----------------------------------------------------------------
+    # Build a Spaceship token. Mirrors the auth pattern in `submit` so
+    # the lane works with the same APP_STORE_CONNECT_API_KEY_* env that
+    # the rest of CI already provides.
+    # ----------------------------------------------------------------
+    key_content = ENV.fetch("APP_STORE_CONNECT_API_KEY_CONTENT").strip
+    key_is_pem  = key_content.include?("BEGIN PRIVATE KEY")
+    token = if key_is_pem
+              tmp_key = File.join(Dir.mktmpdir("asc_preview"), "AuthKey.p8")
+              File.write(tmp_key, key_content)
+              Spaceship::ConnectAPI::Token.create(
+                key_id:    ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+                issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+                filepath:  tmp_key
+              )
+            else
+              Spaceship::ConnectAPI::Token.create(
+                key_id:    ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+                issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+                key:       Base64.decode64(key_content)
+              )
+            end
+    Spaceship::ConnectAPI.token = token
+
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+
+    preview_path = File.expand_path("../fastlane/app_previews/iPhone_6.9_preview.mov", __dir__)
+    UI.user_error!("Preview not found at #{preview_path}") unless File.exist?(preview_path)
+    UI.message("Preview file: #{preview_path} (#{File.size(preview_path) / 1024 / 1024} MB)")
+
+    # Pin the target version from the project's MARKETING_VERSION so we
+    # never accidentally attach a preview to a previously-released
+    # train. Same pattern the `submit` lane uses.
+    pbx_path = File.expand_path("../#{XCODE_PROJECT}/project.pbxproj", __dir__)
+    pbx_match = File.read(pbx_path).match(/MARKETING_VERSION = ([0-9.]+);/)
+    target_version = pbx_match && pbx_match[1]
+    UI.user_error!("Could not determine MARKETING_VERSION from #{pbx_path}") if target_version.nil? || target_version.empty?
+    UI.success("Target marketing version: #{target_version}")
+
+    versions = app.get_app_store_versions(
+      filter: { versionString: target_version, platform: "IOS" }
+    )
+    version = versions.first
+    UI.user_error!("No App Store version #{target_version} found — run `fastlane submit` (or create the version in ASC) first.") unless version
+    UI.message("App Store version #{target_version} (id: #{version.id}, state: #{version.app_store_state || version.app_version_state})")
+
+    # ASC stores app previews on each AppStoreVersionLocalization; we
+    # mirror the screenshots set across en-US + es-MX so users in
+    # either storefront see the preview.
+    locales = ["en-US", "es-MX"]
+    preview_type = "IPHONE_69" # 1290x2796 — Apple's enum string. The
+                                # Spaceship constant doesn't include this
+                                # value yet (the gem ships only up through
+                                # IPHONE_67), but the API accepts the raw
+                                # string so we pass it through directly.
+
+    locales.each do |locale|
+      UI.message("─── #{locale} ─────────────────────────────────────────")
+      localizations = version.get_app_store_version_localizations(
+        filter: { locale: locale }
+      )
+      loc = localizations.first
+      UI.user_error!("No localization for #{locale} on version #{target_version}") unless loc
+      UI.message("Localization id: #{loc.id}")
+
+      # Find or create the IPHONE_69 preview set.
+      sets = loc.get_app_preview_sets
+      set = sets.find { |s| s.preview_type == preview_type }
+      if set
+        UI.message("Found existing #{preview_type} set (id: #{set.id})")
+        # Replace, not append. Apple allows up to 3 previews per device
+        # size per locale, but we only ship one and want the new one to
+        # be the only one shown. Delete any prior previews first.
+        (set.app_previews || []).each do |existing|
+          UI.message("  Deleting prior preview #{existing.id} (#{existing.file_name})")
+          existing.delete!
+        end
+      else
+        UI.message("Creating new #{preview_type} preview set...")
+        set = loc.create_app_preview_set(attributes: { previewType: preview_type })
+      end
+
+      UI.message("Uploading preview from #{File.basename(preview_path)}...")
+      # wait_for_processing: true blocks until Apple finishes ingesting.
+      # Processing typically takes 2-10 minutes per video; the lane
+      # surfaces clearer errors if processing fails than firing-and-
+      # forgetting and discovering breakage in the ASC UI later.
+      set.upload_preview(path: preview_path, wait_for_processing: true)
+      UI.success("Uploaded preview for #{locale}")
+    end
+
+    UI.success("App previews uploaded for: #{locales.join(', ')}")
+  end
+
+  desc "Push screenshots + app preview in one go (no metadata, no binary)."
+  lane :metadata_assets do
+    metadata_screenshots
+    metadata_preview
+  end
+
   desc "Submit the most recent build for App Store review"
   lane :submit do
     api_key = make_api_key
