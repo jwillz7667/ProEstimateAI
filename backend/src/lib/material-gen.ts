@@ -6,6 +6,11 @@ import {
   QualityTier,
   RecurrenceFrequency,
 } from "./prompts/types";
+import {
+  clampLaborRate,
+  clampMaterialCost,
+  ClampResult,
+} from "./prompts/tier-bounds";
 
 // DeepSeek is OpenAI-compatible. `deepseek-chat` supports JSON-mode output
 // via `response_format: { type: 'json_object' }`. We reuse the same transport
@@ -127,9 +132,21 @@ CONTRACTOR'S REQUEST
     const parsed = JSON.parse(text) as { materials?: unknown };
     const arr = Array.isArray(parsed?.materials) ? parsed.materials : [];
 
+    const clampLog: Array<{
+      name: string;
+      category: string;
+      unit: string;
+      tier: QualityTier;
+      original: number;
+      clamped: number;
+      reason: string;
+    }> = [];
+
     const materials: GeneratedMaterial[] = arr.map((raw, i) => {
       const m = (raw ?? {}) as Record<string, unknown>;
       const name = String(m.name ?? "Unknown Material");
+      const category = String(m.category ?? "Other");
+      const unit = String(m.unit ?? "each");
       const supplierName =
         typeof m.supplierName === "string" && m.supplierName.trim()
           ? String(m.supplierName)
@@ -144,11 +161,31 @@ CONTRACTOR'S REQUEST
           : undefined;
       const supplierSearchQuery = explicitQuery ?? defaultSearchQuery(name);
       const sortOrderRaw = Number(m.sortOrder);
+
+      const rawCost = Number(m.estimatedCost) || 0;
+      const clampResult = clampMaterialCost(
+        category,
+        unit,
+        rawCost,
+        promptCtx.qualityTier,
+      );
+      if (clampResult.clamped) {
+        clampLog.push({
+          name,
+          category,
+          unit,
+          tier: promptCtx.qualityTier,
+          original: clampResult.originalCost,
+          clamped: clampResult.estimatedCost,
+          reason: clampResult.reason ?? "unknown",
+        });
+      }
+
       return {
         name,
-        category: String(m.category ?? "Other"),
-        estimatedCost: Number(m.estimatedCost) || 0,
-        unit: String(m.unit ?? "each"),
+        category,
+        estimatedCost: clampResult.estimatedCost,
+        unit,
         quantity: Number(m.quantity) || 1,
         supplierName,
         supplierSearchQuery,
@@ -156,7 +193,16 @@ CONTRACTOR'S REQUEST
       };
     });
 
-    logger.info({ count: materials.length }, "Material suggestions generated");
+    if (clampLog.length > 0) {
+      logger.info(
+        { tier: promptCtx.qualityTier, clamped: clampLog },
+        "Material costs clamped to tier bounds",
+      );
+    }
+    logger.info(
+      { count: materials.length, clampedCount: clampLog.length },
+      "Material suggestions generated",
+    );
     return materials;
   } catch (err) {
     logger.error({ err }, "Material suggestion generation failed");
@@ -206,17 +252,46 @@ export async function generateLaborEstimates(
         ? parsed.laborItems
         : [];
 
+    const clampLog: Array<{
+      taskName: string;
+      tier: QualityTier;
+      original: number;
+      clamped: number;
+      reason: string;
+    }> = [];
+
     const items: LaborEstimate[] = arr.map((raw) => {
       const l = (raw ?? {}) as Record<string, unknown>;
+      const taskName = String(l.taskName ?? "General Labor");
+      const rawRate = Number(l.ratePerHour) || 40;
+      const result: ClampResult = clampLaborRate(rawRate, promptCtx.qualityTier);
+      if (result.clamped) {
+        clampLog.push({
+          taskName,
+          tier: promptCtx.qualityTier,
+          original: result.originalCost,
+          clamped: result.estimatedCost,
+          reason: result.reason ?? "unknown",
+        });
+      }
       return {
-        taskName: String(l.taskName ?? "General Labor"),
+        taskName,
         hoursEstimate: Number(l.hoursEstimate) || 1,
-        ratePerHour: Number(l.ratePerHour) || 40,
+        ratePerHour: result.estimatedCost,
         category: String(l.category ?? "General Labor"),
       };
     });
 
-    logger.info({ count: items.length }, "Labor estimates generated");
+    if (clampLog.length > 0) {
+      logger.info(
+        { tier: promptCtx.qualityTier, clamped: clampLog },
+        "Labor rates clamped to tier bounds",
+      );
+    }
+    logger.info(
+      { count: items.length, clampedCount: clampLog.length },
+      "Labor estimates generated",
+    );
     return items;
   } catch (err) {
     logger.error({ err }, "Labor estimate generation failed");

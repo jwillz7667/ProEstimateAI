@@ -4,30 +4,17 @@ enum AppDestination: Hashable {
     // Projects
     case projectDetail(id: String, autoGenerate: Bool = false)
     case projectCreation
-    /// Full searchable/filterable project list — pushed from the Projects home "View All".
-    case projectsList
-
-    // Estimates / Quotes
-    case estimateEditor(id: String)
-    case estimateList(projectId: String)
-
-    /// Proposals
-    case proposalPreview(id: String)
 
     // Clients
-    /// Full clients list — pushed from the Account tab.
-    case clientsList
     case clientDetail(id: String)
     case clientForm(id: String?)
 
-    // Account / Settings
+    // Settings
     case companyBranding
     case taxSettings
     case numberingSettings
-    case pricingProfiles
     case languageSettings
     case subscriptionSettings
-    case analytics
 
     /// Commerce
     case paywall(placement: String)
@@ -44,14 +31,11 @@ enum AppDestination: Hashable {
 
 @Observable
 final class AppRouter {
-    /// Projects tab navigation (home → project detail → editors).
+    var dashboardPath = NavigationPath()
     var projectsPath = NavigationPath()
-    /// Studio tab navigation (AI Remodel Studio → result push).
-    var studioPath = NavigationPath()
-    /// Quotes tab navigation (quote list → quote editor → proposal preview).
-    var quotesPath = NavigationPath()
-    /// Account tab navigation (settings sub-screens, clients, subscription).
-    var accountPath = NavigationPath()
+    var estimatesPath = NavigationPath()
+    var clientsPath = NavigationPath()
+    var settingsPath = NavigationPath()
 
     /// Legacy single path — unused, kept for compile compatibility.
     var path = NavigationPath()

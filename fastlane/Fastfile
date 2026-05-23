@@ -229,6 +229,113 @@ platform :ios do
     )
   end
 
+  desc "Upload the iPhone 6.9 app preview video to ASC for the editable version. " \
+       "deliver doesn't handle .mov files, so this lane drives the AppPreviewSet API directly."
+  lane :metadata_preview do
+    require "spaceship"
+    require "base64"
+
+    # ----------------------------------------------------------------
+    # Build a Spaceship token. Mirrors the auth pattern in `submit` so
+    # the lane works with the same APP_STORE_CONNECT_API_KEY_* env that
+    # the rest of CI already provides.
+    # ----------------------------------------------------------------
+    key_content = ENV.fetch("APP_STORE_CONNECT_API_KEY_CONTENT").strip
+    key_is_pem  = key_content.include?("BEGIN PRIVATE KEY")
+    token = if key_is_pem
+              tmp_key = File.join(Dir.mktmpdir("asc_preview"), "AuthKey.p8")
+              File.write(tmp_key, key_content)
+              Spaceship::ConnectAPI::Token.create(
+                key_id:    ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+                issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+                filepath:  tmp_key
+              )
+            else
+              Spaceship::ConnectAPI::Token.create(
+                key_id:    ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+                issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+                key:       Base64.decode64(key_content)
+              )
+            end
+    Spaceship::ConnectAPI.token = token
+
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+
+    preview_path = File.expand_path("../fastlane/app_previews/iPhone_6.9_preview.mov", __dir__)
+    UI.user_error!("Preview not found at #{preview_path}") unless File.exist?(preview_path)
+    UI.message("Preview file: #{preview_path} (#{File.size(preview_path) / 1024 / 1024} MB)")
+
+    # Pin the target version from the project's MARKETING_VERSION so we
+    # never accidentally attach a preview to a previously-released
+    # train. Same pattern the `submit` lane uses.
+    pbx_path = File.expand_path("../#{XCODE_PROJECT}/project.pbxproj", __dir__)
+    pbx_match = File.read(pbx_path).match(/MARKETING_VERSION = ([0-9.]+);/)
+    target_version = pbx_match && pbx_match[1]
+    UI.user_error!("Could not determine MARKETING_VERSION from #{pbx_path}") if target_version.nil? || target_version.empty?
+    UI.success("Target marketing version: #{target_version}")
+
+    versions = app.get_app_store_versions(
+      filter: { versionString: target_version, platform: "IOS" }
+    )
+    version = versions.first
+    UI.user_error!("No App Store version #{target_version} found — run `fastlane submit` (or create the version in ASC) first.") unless version
+    UI.message("App Store version #{target_version} (id: #{version.id}, state: #{version.app_store_state || version.app_version_state})")
+
+    # ASC stores app previews on each AppStoreVersionLocalization; we
+    # mirror the screenshots set across en-US + es-MX so users in
+    # either storefront see the preview.
+    locales = ["en-US", "es-MX"]
+    preview_type = "IPHONE_69" # 1290x2796 — Apple's enum string. The
+                                # Spaceship constant doesn't include this
+                                # value yet (the gem ships only up through
+                                # IPHONE_67), but the API accepts the raw
+                                # string so we pass it through directly.
+
+    locales.each do |locale|
+      UI.message("─── #{locale} ─────────────────────────────────────────")
+      localizations = version.get_app_store_version_localizations(
+        filter: { locale: locale }
+      )
+      loc = localizations.first
+      UI.user_error!("No localization for #{locale} on version #{target_version}") unless loc
+      UI.message("Localization id: #{loc.id}")
+
+      # Find or create the IPHONE_69 preview set.
+      sets = loc.get_app_preview_sets
+      set = sets.find { |s| s.preview_type == preview_type }
+      if set
+        UI.message("Found existing #{preview_type} set (id: #{set.id})")
+        # Replace, not append. Apple allows up to 3 previews per device
+        # size per locale, but we only ship one and want the new one to
+        # be the only one shown. Delete any prior previews first.
+        (set.app_previews || []).each do |existing|
+          UI.message("  Deleting prior preview #{existing.id} (#{existing.file_name})")
+          existing.delete!
+        end
+      else
+        UI.message("Creating new #{preview_type} preview set...")
+        set = loc.create_app_preview_set(attributes: { previewType: preview_type })
+      end
+
+      UI.message("Uploading preview from #{File.basename(preview_path)}...")
+      # wait_for_processing: true blocks until Apple finishes ingesting.
+      # Processing typically takes 2-10 minutes per video; the lane
+      # surfaces clearer errors if processing fails than firing-and-
+      # forgetting and discovering breakage in the ASC UI later.
+      set.upload_preview(path: preview_path, wait_for_processing: true)
+      UI.success("Uploaded preview for #{locale}")
+    end
+
+    UI.success("App previews uploaded for: #{locales.join(', ')}")
+  end
+
+  desc "Push screenshots + app preview in one go (no metadata, no binary)."
+  lane :metadata_assets do
+    metadata_screenshots
+    metadata_preview
+  end
+
   desc "Submit the most recent build for App Store review"
   lane :submit do
     api_key = make_api_key
@@ -281,23 +388,64 @@ platform :ios do
       parsed
     end
 
+    # ------------------------------------------------------------------
+    # Determine which marketing version we're submitting from the
+    # checked-out project file rather than from "the latest build in
+    # ASC". The latest-build heuristic was wrong on iteration #2 of
+    # this lane: when v1.0.2 was uploaded but Apple hadn't yet surfaced
+    # the new build in their `/v1/builds` query (typical 2-15 min
+    # indexing lag), the lane picked up the prior v1.0.1 build, then
+    # tried to attach metadata to v1.0.1's already-RELEASED App Store
+    # version and aborted. Reading CFBundleShortVersionString from the
+    # project pins the target version up-front so the polling loop
+    # waits for the *right* build to appear.
+    # ------------------------------------------------------------------
+    pbx_path = File.expand_path("../#{XCODE_PROJECT}/project.pbxproj", __dir__)
+    pbx_match = File.read(pbx_path).match(/MARKETING_VERSION = ([0-9.]+);/)
+    target_marketing_version = pbx_match ? pbx_match[1] : nil
+    UI.user_error!("Could not determine MARKETING_VERSION from #{pbx_path}") if target_marketing_version.nil? || target_marketing_version.empty?
+    UI.success("Target marketing version: #{target_marketing_version}")
+
+    # `latest` is hoisted out of the loop so the post-loop App Store
+    # version creation step can read its id + attributes (Ruby block
+    # locals would otherwise go out of scope on `break`).
+    latest = nil
     deadline = Time.now + 2700 # 45 minutes total
     loop do
-      builds_resp = asc_get.call("builds?filter[app]=#{submit_app.id}&sort=-uploadedDate&limit=1")
-      latest = (builds_resp["data"] || []).first
-      if latest.nil?
-        UI.important("No TestFlight build visible yet — waiting 30s...")
+      # Find the preReleaseVersion record for our target marketing
+      # version, then walk its builds. This filters out builds for
+      # other marketing versions (older, already-shipped) so the lane
+      # never confuses a previously-released train for the current one.
+      prv_resp = asc_get.call(
+        "preReleaseVersions?filter[app]=#{submit_app.id}&filter[platform]=IOS&filter[version]=#{target_marketing_version}&include=builds&limit=1"
+      )
+      prv_record = (prv_resp["data"] || []).first
+
+      if prv_record.nil?
+        UI.important("No TestFlight train for #{target_marketing_version} visible yet — waiting 30s...")
       else
-        state   = latest.dig("attributes", "processingState")
-        version = latest.dig("attributes", "version")
-        bnum    = latest.dig("attributes", "version") # version is the Marketing version; build number is elsewhere
-        UI.message("Latest build (v#{version}) — processingState: #{state.inspect}")
-        case state
-        when "VALID"
-          UI.success("Build v#{version} is processed — continuing to submit")
-          break
-        when "FAILED", "INVALID"
-          UI.user_error!("Latest build (v#{version}) is in terminal state #{state} — cannot submit")
+        prv_id = prv_record["id"]
+        # The related `preReleaseVersions/{id}/builds` endpoint rejects
+        # `sort=…` (PARAMETER_ERROR.ILLEGAL); the top-level /builds
+        # endpoint supports both filter[preReleaseVersion] and
+        # sort=-uploadedDate, so use that for the "newest build" pick.
+        builds_resp = asc_get.call(
+          "builds?filter[preReleaseVersion]=#{prv_id}&sort=-uploadedDate&limit=1"
+        )
+        latest = (builds_resp["data"] || []).first
+        if latest.nil?
+          UI.important("No build attached to #{target_marketing_version} yet — waiting 30s...")
+        else
+          state = latest.dig("attributes", "processingState")
+          bnum  = latest.dig("attributes", "version") # build number
+          UI.message("v#{target_marketing_version} build #{bnum} — processingState: #{state.inspect}")
+          case state
+          when "VALID"
+            UI.success("v#{target_marketing_version} build #{bnum} is processed — continuing")
+            break
+          when "FAILED", "INVALID"
+            UI.user_error!("v#{target_marketing_version} build #{bnum} is in terminal state #{state} — cannot submit")
+          end
         end
       end
 
@@ -306,6 +454,8 @@ platform :ios do
       end
       sleep 30
     end
+
+    UI.user_error!("No build available after polling — cannot submit") if latest.nil?
 
     # ------------------------------------------------------------------
     # Clear any stale review submissions before calling deliver.
@@ -378,8 +528,60 @@ platform :ios do
     # Give ASC a beat to flip state before deliver's pre-check runs.
     sleep 15 unless open_submissions.empty?
 
+    # ------------------------------------------------------------------
+    # Ensure an editable App Store version exists for the build's
+    # marketing version. Bumping CFBundleShortVersionString uploads a
+    # build under a new pre-release train but does NOT create the
+    # corresponding App Store version automatically. Without an
+    # EDITABLE / PREPARE_FOR_SUBMISSION version, deliver fails with
+    # "Cannot update languages - could not find an editable version
+    # for 'IOS'". Create one via the createAppStoreVersion API if
+    # missing — idempotent, since we GET first.
+    #
+    # We already pinned `target_marketing_version` from the project
+    # file at the top of the lane and waited for a build matching it
+    # to finish processing — reuse it here so we never accidentally
+    # attach metadata to a different version's record.
+    # ------------------------------------------------------------------
+    target_version = target_marketing_version
+
+    versions_resp = asc_get.call(
+      "apps/#{submit_app.id}/appStoreVersions?filter[platform]=IOS&filter[versionString]=#{target_version}&limit=10"
+    )
+    matching_versions = versions_resp["data"] || []
+    editable_states = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED REJECTED METADATA_REJECTED INVALID_BINARY]
+    editable_match = matching_versions.find { |v| editable_states.include?(v.dig("attributes", "appStoreState")) }
+
+    if editable_match
+      UI.success("Editable App Store version #{target_version} already exists (#{editable_match['id']}, state: #{editable_match.dig('attributes', 'appStoreState')})")
+    elsif !matching_versions.empty?
+      states_seen = matching_versions.map { |v| v.dig("attributes", "appStoreState") }.uniq
+      UI.user_error!("App Store version #{target_version} exists but is in non-editable state(s): #{states_seen.join(', ')}. Bump CFBundleShortVersionString to a new value and re-run.")
+    else
+      UI.message("Creating App Store version #{target_version} for IOS platform...")
+      create_code, create_body = asc_raw.call(:post, "appStoreVersions", {
+        data: {
+          type: "appStoreVersions",
+          attributes: {
+            platform:      "IOS",
+            versionString: target_version,
+            releaseType:   "MANUAL"
+          },
+          relationships: {
+            app: { data: { type: "apps", id: submit_app.id } }
+          }
+        }
+      })
+      if create_code >= 400
+        UI.user_error!("Failed to create App Store version #{target_version} (#{create_code}): #{(create_body.dig('errors') || []).map { |e| e['detail'] }.join('; ')}")
+      end
+      UI.success("Created App Store version #{target_version} (#{create_body.dig('data', 'id')})")
+      sleep 5
+    end
+
     deliver(
       api_key:                           api_key,
+      app_version:                       target_version,
       skip_binary_upload:                true,
       skip_screenshots:                  false,
       skip_metadata:                     false,

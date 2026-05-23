@@ -5,12 +5,21 @@ import { prisma } from './config/database';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import { disconnectRedis, getRedis } from './config/redis';
+import { markStuckGenerationsFailed } from './lib/generation-cleanup';
 
 async function main() {
   try {
     // Connect to database
     await prisma.$connect();
     logger.info('Database connected');
+
+    // Recover any AI generations orphaned by a previous container's
+    // crash / SIGKILL / Railway redeploy. processGeneration is
+    // fire-and-forget and has no durable queue, so a row that was
+    // PROCESSING on a dead container stays PROCESSING forever
+    // unless we sweep it here. Runs before we start accepting
+    // traffic so clients see a clean state on first reconnect.
+    await markStuckGenerationsFailed();
 
     // Warm up Redis connection (non-blocking — null if not configured)
     const redis = getRedis();

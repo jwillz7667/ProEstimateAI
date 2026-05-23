@@ -6,7 +6,7 @@ final class AppState {
     var isAuthenticated: Bool = false
     var currentUser: CurrentUser?
     var currentCompany: CurrentCompany?
-    var selectedTab: AppTab = .projects
+    var selectedTab: AppTab = .dashboard
 
     struct CurrentUser: Sendable {
         let id: String
@@ -38,7 +38,7 @@ final class AppState {
                 name: company.name,
                 phone: company.phone,
                 email: company.email,
-                addressLines: composeAddressLines(
+                addressLines: Self.composeAddressLines(
                     street: company.address,
                     city: company.city,
                     state: company.state,
@@ -87,38 +87,33 @@ final class AppState {
         isAuthenticated = false
         currentUser = nil
         currentCompany = nil
-        selectedTab = .projects
+        selectedTab = .dashboard
     }
 }
 
-/// The four primary tabs that anchor the new visual structure:
-/// Projects (home), Studio (AI generation), Quotes (unified pipeline),
-/// Account (settings + clients + subscription).
 enum AppTab: Int, CaseIterable, Identifiable {
+    case dashboard
     case projects
-    case studio
-    case quotes
-    case account
+    case clients
+    case settings
 
-    var id: Int {
-        rawValue
-    }
+    var id: Int { rawValue }
 
     var title: String {
         switch self {
+        case .dashboard: "Dashboard"
         case .projects: "Projects"
-        case .studio: "Studio"
-        case .quotes: "Quotes"
-        case .account: "Account"
+        case .clients: "Clients"
+        case .settings: "Settings"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .projects: "rectangle.grid.2x2.fill"
-        case .studio: "sparkles"
-        case .quotes: "doc.text.fill"
-        case .account: "person.fill"
+        case .dashboard: "square.grid.2x2"
+        case .projects: "folder"
+        case .clients: "person.2"
+        case .settings: "gearshape"
         }
     }
 }

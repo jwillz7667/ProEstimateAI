@@ -36,15 +36,21 @@ final class PaywallHostViewModel {
     }
 
     /// Resolve the (tier, period) intersection from the current product
-    /// catalog and assign it to `selectedProduct`. Falls back to the
-    /// nearest tier match when the exact intersection isn't available
-    /// (e.g. before Premium ships in App Store Connect).
+    /// catalog and assign it to `selectedProduct`. When the catalog
+    /// hasn't shipped the exact match yet (e.g. Premium not yet in App
+    /// Store Connect, or StoreKit still resolving), substitute the
+    /// canonical fallback so the rendered price + description always
+    /// match the user's stated tier/period. The purchase flow validates
+    /// against the real StoreKit catalog separately, so a fallback never
+    /// silently completes a checkout against a price that isn't live.
     private func resyncSelectedProduct() {
         let exact = products.first {
             $0.tier == selectedTier && $0.isAnnual == isAnnualSelected
         }
-        let fallback = products.first { $0.tier == selectedTier }
-        selectedProduct = exact ?? fallback ?? selectedProduct
+        selectedProduct = exact ?? .canonicalFallback(
+            tier: selectedTier,
+            isAnnual: isAnnualSelected
+        )
     }
 
     /// Whether products are loading.
@@ -60,8 +66,15 @@ final class PaywallHostViewModel {
     /// offer on the subscription group. `nil` until products have been loaded.
     private(set) var isEligibleForTrial: Bool?
 
-    /// Error message to display, if any.
+    /// Inline notice for non-fatal issues (catalog load failure with fallback
+    /// available). Purchase / restore outcomes go through `activeAlert`
+    /// instead so the user can't miss the result of their tap.
     var errorMessage: String?
+
+    /// Modal alert for purchase, restore, and other transactional outcomes.
+    /// Distinct copy + actions per failure mode (account mismatch, payments
+    /// disabled, network, retryable error). Cancelled purchases are silent.
+    var activeAlert: PurchaseAlert?
 
     /// Whether the purchase completed successfully.
     private(set) var purchaseSucceeded: Bool = false
@@ -224,13 +237,19 @@ final class PaywallHostViewModel {
     /// Follows the full flow: backend purchase attempt -> StoreKit purchase -> sync.
     func purchase() async {
         guard let selectedProduct else {
-            errorMessage = "Please select a plan."
+            activeAlert = .selectionRequired
             return
         }
 
         guard !isPurchasing else { return }
 
+        // Set the in-flight flag BEFORE any async work so a rapid double-tap
+        // is rejected by the guard above even while the first
+        // `createPurchaseAttempt` round-trip is mid-flight. The previous
+        // ordering set the flag after the RPC, leaving a brief window where
+        // two attempts could be created back-to-back.
         isPurchasing = true
+        activeAlert = nil
         errorMessage = nil
 
         do {
@@ -259,23 +278,64 @@ final class PaywallHostViewModel {
             purchaseSucceeded = true
             logger.info("Purchase completed successfully for product: \(selectedProduct.productId)")
         } catch let error as PurchaseError {
-            switch error {
-            case .cancelled:
-                // User cancelled — no error message needed.
-                logger.info("Purchase cancelled by user.")
-            case .pending:
-                errorMessage = "Your purchase is pending approval. You'll get access once approved."
-                logger.info("Purchase pending approval.")
-            default:
-                errorMessage = error.localizedDescription
-                logger.error("Purchase failed: \(error.localizedDescription)")
-            }
+            handlePurchaseError(error, context: .purchase)
+        } catch let APIError.network(detail) {
+            handlePurchaseError(.network(detail), context: .purchase)
         } catch {
-            errorMessage = "Something went wrong. Please try again."
             logger.error("Purchase failed with unexpected error: \(error.localizedDescription)")
+            activeAlert = PurchaseAlert(
+                kind: .genericFailure(message: error.localizedDescription),
+                context: .purchase
+            )
         }
 
+        // Always reconcile entitlement after a purchase round-trip — whether
+        // it succeeded, failed, or threw. The backend may have partially
+        // updated state (e.g. PurchaseAttempt marked COMPLETED but the
+        // response was lost to a network blip) and the user shouldn't be
+        // stranded on a stale FREE snapshot.
+        await entitlementStore.refresh()
         isPurchasing = false
+    }
+
+    /// Map a `PurchaseError` to the alert state. Centralised so both
+    /// `purchase()` and `restorePurchases()` route through the same
+    /// translation; `context` decides whether the alert's "Try Again"
+    /// button re-runs the purchase or the restore flow.
+    private func handlePurchaseError(_ error: PurchaseError, context: PurchaseAlert.Context) {
+        switch error {
+        case .cancelled:
+            // User cancelled the StoreKit dialog — no UI noise.
+            logger.info("Purchase cancelled by user.")
+            activeAlert = nil
+        case .pending:
+            logger.info("Purchase pending approval.")
+            activeAlert = PurchaseAlert(kind: .pendingApproval, context: context)
+        case .accountMismatch:
+            logger.error("Purchase blocked by account mismatch.")
+            activeAlert = PurchaseAlert(kind: .accountMismatch, context: context)
+        case .subscriptionBoundToOtherUser:
+            logger.error("Purchase blocked — Apple subscription owned by another ProEstimate user.")
+            activeAlert = PurchaseAlert(kind: .subscriptionBoundToOtherUser, context: context)
+        case .paymentsNotAllowed:
+            logger.error("Purchase blocked: payments not allowed on this device/Apple ID.")
+            activeAlert = PurchaseAlert(kind: .paymentsNotAllowed, context: context)
+        case .unverified:
+            logger.error("Purchase verification failed.")
+            activeAlert = PurchaseAlert(kind: .verificationFailed, context: context)
+        case .productNotFound:
+            logger.error("Selected product not available.")
+            activeAlert = PurchaseAlert(kind: .productUnavailable, context: context)
+        case .network(let detail):
+            logger.warning("Purchase network error: \(detail)")
+            activeAlert = PurchaseAlert(kind: .networkProblem, context: context)
+        case .storeKitError(let detail):
+            logger.error("StoreKit error: \(detail)")
+            activeAlert = PurchaseAlert(
+                kind: .genericFailure(message: error.localizedDescription),
+                context: context
+            )
+        }
     }
 
     // MARK: - Restore
@@ -285,6 +345,7 @@ final class PaywallHostViewModel {
         guard !isRestoring else { return }
 
         isRestoring = true
+        activeAlert = nil
         errorMessage = nil
 
         do {
@@ -295,12 +356,18 @@ final class PaywallHostViewModel {
                 purchaseSucceeded = true
                 logger.info("Restore successful — Pro access confirmed.")
             } else {
-                errorMessage = "No active subscription found for this Apple ID."
                 logger.info("Restore completed but no active subscription found.")
+                activeAlert = .restoreNothingToRestore
             }
+        } catch let error as PurchaseError {
+            // Restore can surface the same error space as purchase (network,
+            // payments-disabled, etc.) — reuse the mapping so the user sees
+            // consistent copy and recovery actions, but tag the alert with
+            // restore context so "Try Again" re-runs the restore flow.
+            handlePurchaseError(error, context: .restore)
         } catch {
-            errorMessage = "Unable to restore purchases. Please try again."
             logger.error("Restore failed: \(error.localizedDescription)")
+            activeAlert = .restoreFailed
         }
 
         isRestoring = false
@@ -353,6 +420,9 @@ final class PaywallHostViewModel {
 
 extension PaywallHostViewModel {
     /// Create a view model for SwiftUI previews with mock data.
+    /// Loads the full sample catalog (Pro + Premium × Monthly + Annual)
+    /// and lets the tier/period bindings drive `selectedProduct` so the
+    /// preview surfaces the same selection logic used in production.
     static func preview(
         decision: PaywallDecision = .sampleSoftGate
     ) -> PaywallHostViewModel {
@@ -361,8 +431,9 @@ extension PaywallHostViewModel {
             commerceAPI: MockCommerceAPIClient(),
             entitlementStore: .preview()
         )
-        vm.products = [.sampleMonthly, .sampleAnnual]
-        vm.selectedProduct = .sampleAnnual
+        vm.products = StoreProductModel.sampleAll
+        vm.selectedTier = .premium
+        vm.isAnnualSelected = false
         return vm
     }
 }

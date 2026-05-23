@@ -5,8 +5,20 @@ import {
   materialJsonContract,
   projectFactsBlock,
   supplierGuidance,
+  tierBoundsBlock,
   tierLanguage,
 } from "./shared";
+
+const ROOM_REMODEL_CATEGORIES = [
+  "drywall",
+  "trim",
+  "flooring",
+  "paint",
+  "lighting",
+  "electrical",
+  "hardware",
+  "other",
+];
 
 export function imagePrompt(ctx: PromptContext): string {
   return `
@@ -45,15 +57,17 @@ ALLOWED CATEGORIES
 Drywall, Trim, Flooring, Paint, Lighting, Electrical, Doors, Hardware,
 Insulation, Other
 
-PRICING ANCHORS
-- 1/2" drywall sheet 4×8: $14–$18. Mud + tape per sheet ~$8.
-- Baseboard MDF 5.25" 16': $14–$22. Casing 2.5" 16': $11–$16.
-- Hollow-core door pre-hung 30" interior: $90–$140 STANDARD; solid-core
-  $200–$320 PREMIUM; barn door package $400+ LUXURY.
-- 6" recessed LED can: $18–$28 STANDARD; $35–$55 PREMIUM (Halo, Lithonia
-  thin-can).
-- Switch + Decora outlet: $4–$8 STANDARD; $12–$18 PREMIUM (smart).
-- Ceiling fan: $80 STANDARD; $250 PREMIUM; $700+ LUXURY.
+${tierBoundsBlock(ctx.qualityTier, ROOM_REMODEL_CATEGORIES)}
+
+NARRATIVE EXAMPLES (informative — use the enforced ranges above as the source of truth)
+- Hollow-core door pre-hung 30" interior → STANDARD; solid-core → PREMIUM;
+  barn door package or custom solid-wood → LUXURY.
+- 6" recessed LED can: builder-grade → STANDARD; Halo / Lithonia thin-can →
+  PREMIUM.
+- Switch + Decora outlet: builder-grade → STANDARD; smart switches → PREMIUM.
+- Ceiling fan: $80 STANDARD; $250 PREMIUM; $700+ LUXURY designer.
+- Drywall and trim consumables (sheet rock, mud, tape, MDF baseboard) sit
+  near the floor of the range regardless of tier.
 
 QUANTITY GUIDANCE
 - Drywall sheets ≈ wall sf / 32 (per 4×8 sheet) plus ceiling sf / 32; add
@@ -87,7 +101,8 @@ LABOR GUIDANCE
   device.
 - Paint: see painting module estimates.
 
-TIER RATE MULTIPLIER: ${tier.pricingMultiplier}.
+TIER LABOR RATES: ${tier.pricingMultiplier}. The orchestrator clamps every
+ratePerHour to the tier's band — quoting outside will be silently adjusted.
 
 ${laborJsonContract()}
 `.trim();

@@ -12,7 +12,10 @@ struct ProjectCreationRequest: Codable, Sendable {
     let description: String?
     let budgetMin: Decimal?
     let budgetMax: Decimal?
-    let qualityTier: Project.QualityTier
+    /// Optional. `nil` means "Auto" — backend persists null and uses
+    /// tier-neutral defaults. When set, the backend enforces tier price
+    /// floors/ceilings on materials and labor.
+    let qualityTier: Project.QualityTier?
     let squareFootage: Decimal?
     let dimensions: String?
     let language: String?
@@ -42,6 +45,34 @@ struct ProjectCreationRequest: Codable, Sendable {
         case visitsPerMonth = "visits_per_month"
         case contractMonths = "contract_months"
         case recurrenceStartDate = "recurrence_start_date"
+    }
+
+    /// Emit `quality_tier: null` when the user picked Auto. The backend's
+    /// PATCH endpoint treats absent fields as "leave unchanged"; a literal
+    /// null is the only way to clear a previously-set tier back to Auto.
+    /// Other optional fields retain default Codable omission until they
+    /// hit the same need.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(title, forKey: .title)
+        try c.encode(projectType, forKey: .projectType)
+        try c.encodeIfPresent(clientId, forKey: .clientId)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encodeIfPresent(budgetMin, forKey: .budgetMin)
+        try c.encodeIfPresent(budgetMax, forKey: .budgetMax)
+        if let tier = qualityTier {
+            try c.encode(tier, forKey: .qualityTier)
+        } else {
+            try c.encodeNil(forKey: .qualityTier)
+        }
+        try c.encodeIfPresent(squareFootage, forKey: .squareFootage)
+        try c.encodeIfPresent(dimensions, forKey: .dimensions)
+        try c.encodeIfPresent(language, forKey: .language)
+        try c.encodeIfPresent(isRecurring, forKey: .isRecurring)
+        try c.encodeIfPresent(recurrenceFrequency, forKey: .recurrenceFrequency)
+        try c.encodeIfPresent(visitsPerMonth, forKey: .visitsPerMonth)
+        try c.encodeIfPresent(contractMonths, forKey: .contractMonths)
+        try c.encodeIfPresent(recurrenceStartDate, forKey: .recurrenceStartDate)
     }
 }
 
@@ -94,28 +125,35 @@ enum ProjectStatusFilter: String, CaseIterable, Identifiable, Sendable {
 
 // MARK: - Creation Step
 
-/// The six sequential steps of the project creation flow.
+/// Steps in the project creation flow.
+///
+/// Standard projects walk: `type → photos → details → generating`.
+/// Lawn-care projects insert a `lawnMap` step between photos and
+/// details so the contractor can pin the lawn polygon on a satellite
+/// map and capture an area measurement for estimation. The wizard
+/// skips `.lawnMap` for any non-lawn-care project type — see
+/// `ProjectCreationViewModel.nextStep` / `previousStep` for the
+/// step-skipping logic and `navigableStepCount` for the progress-bar
+/// length.
+///
+/// `generating` is a non-interactive loading state — it sits at the
+/// end of the enum and is excluded from the navigable count for both
+/// flows.
 enum ProjectCreationStep: Int, CaseIterable, Sendable {
     case type = 0
-    case client = 1
-    case photos = 2
-    case prompt = 3
-    case details = 4
-    case review = 5
+    case photos = 1
+    case lawnMap = 2
+    case details = 3
+    case generating = 4
 
     var title: String {
         switch self {
-        case .type: "Type"
-        case .client: "Client"
-        case .photos: "Photos"
-        case .prompt: "Description"
+        case .type: "Category"
+        case .photos: "Photos & Vision"
+        case .lawnMap: "Measure Lawn"
         case .details: "Details"
-        case .review: "Review"
+        case .generating: "Generating"
         }
-    }
-
-    var stepCount: Int {
-        ProjectCreationStep.allCases.count
     }
 }
 

@@ -469,32 +469,31 @@ async function main() {
     },
   });
 
-  // Usage buckets for free users
+  // Starter credits for free users. Quote export stays gated to Pro,
+  // so the only metric we seed is AI_GENERATION at the canonical
+  // FREE_TIER_AI_GENERATION_CREDITS allowance (5 at time of writing).
+  // Jessica gets one consumed so demos can show the counter mid-progress;
+  // Tom is fresh so his bucket reads 5/5.
   for (const u of [jessica, tom]) {
-    for (const metric of [
-      UsageMetricCode.AI_GENERATION,
-      UsageMetricCode.QUOTE_EXPORT,
-    ]) {
-      await prisma.usageBucket.upsert({
-        where: {
-          userId_companyId_metricCode_source: {
-            userId: u.id,
-            companyId: companyA.id,
-            metricCode: metric,
-            source: "STARTER_CREDITS",
-          },
-        },
-        update: {},
-        create: {
+    await prisma.usageBucket.upsert({
+      where: {
+        userId_companyId_metricCode_source: {
           userId: u.id,
           companyId: companyA.id,
-          metricCode: metric,
-          includedQuantity: 3,
-          consumedQuantity: metric === UsageMetricCode.AI_GENERATION ? 1 : 0,
+          metricCode: UsageMetricCode.AI_GENERATION,
           source: "STARTER_CREDITS",
         },
-      });
-    }
+      },
+      update: {},
+      create: {
+        userId: u.id,
+        companyId: companyA.id,
+        metricCode: UsageMetricCode.AI_GENERATION,
+        includedQuantity: 5,
+        consumedQuantity: u === jessica ? 1 : 0,
+        source: "STARTER_CREDITS",
+      },
+    });
   }
 
   // Subscription events

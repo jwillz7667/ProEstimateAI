@@ -11,6 +11,10 @@ export type ProjectType =
   | "SIDING"
   | "ROOM_REMODEL"
   | "EXTERIOR"
+  | "LANDSCAPING"
+  | "LAWN_CARE"
+  | "OUTDOOR_LIVING"
+  | "GARAGE"
   | "CUSTOM";
 
 export type ProjectStatus =

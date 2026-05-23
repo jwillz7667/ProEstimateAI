@@ -1,1 +1,1 @@
-kitchen,bathroom,flooring,roofing,siding,diy,bid,materials,labor,budget,house,renovate,reno,flip
+kitchen,bathroom,paint,roof,siding,contractor,handyman,reno,flip,renovate,materials,labor,scope,plan

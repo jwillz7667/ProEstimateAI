@@ -11,6 +11,8 @@ const projectTypeEnum = z.enum([
   "exterior",
   "landscaping",
   "lawn_care",
+  "outdoor_living",
+  "garage",
   "custom",
 ]);
 
@@ -68,7 +70,7 @@ export const createProjectSchema = z.object({
   status: projectStatusEnum.optional(),
   budget_min: z.number().min(0).nullable().optional(),
   budget_max: z.number().min(0).nullable().optional(),
-  quality_tier: qualityTierEnum.optional(),
+  quality_tier: qualityTierEnum.nullable().optional(),
   square_footage: z.number().min(0).nullable().optional(),
   dimensions: z.string().max(500).nullable().optional(),
   language: z.string().max(10).nullable().optional(),
@@ -91,7 +93,7 @@ export const updateProjectSchema = z.object({
   status: projectStatusEnum.optional(),
   budget_min: z.number().min(0).nullable().optional(),
   budget_max: z.number().min(0).nullable().optional(),
-  quality_tier: qualityTierEnum.optional(),
+  quality_tier: qualityTierEnum.nullable().optional(),
   square_footage: z.number().min(0).nullable().optional(),
   dimensions: z.string().max(500).nullable().optional(),
   language: z.string().max(10).nullable().optional(),

@@ -8,11 +8,49 @@ import { requestIdMiddleware } from "./middleware/request-id.middleware";
 import { globalRateLimit } from "./middleware/rate-limit.middleware";
 import { errorHandler } from "./middleware/error-handler.middleware";
 import { requireAuth } from "./middleware/auth.middleware";
+import { resizeImage, parseWidthParam } from "./lib/image-resize";
+
+interface PublicImage {
+  data: Buffer;
+  mimeType: string;
+}
+
+/**
+ * Decide whether the caller asked for a resized variant via `?w=` and
+ * dispatch through the on-the-fly resizer. SVG and (defensively) any
+ * non-raster mime type bypasses sharp — vector logos shouldn't be
+ * re-encoded as JPEG, and an unsupported codec would just throw.
+ *
+ * On any resize failure we fall back to the source buffer so a transient
+ * sharp issue can never take a public image offline. The CDN cache key
+ * includes `?w=`, so a one-off failed resize cannot poison subsequent
+ * requests for the resized variant either.
+ */
+async function maybeResize(
+  id: string,
+  source: PublicImage,
+  rawWidth: unknown,
+): Promise<PublicImage> {
+  const requested = parseWidthParam(rawWidth);
+  if (requested === null) return source;
+  if (!source.mimeType.startsWith("image/")) return source;
+  if (source.mimeType === "image/svg+xml") return source;
+  try {
+    return await resizeImage(id, source.data, requested);
+  } catch (err) {
+    logger.warn(
+      { id, requested, err },
+      "image-resize failed; serving original buffer",
+    );
+    return source;
+  }
+}
 
 // Route imports
 import healthRoutes from "./modules/health/health.routes";
 import authRoutes from "./modules/auth/auth.routes";
 import usersRoutes from "./modules/users/users.routes";
+import devicesRoutes from "./modules/devices/devices.routes";
 import companiesRoutes from "./modules/companies/companies.routes";
 import mapsRoutes from "./modules/maps/maps.routes";
 import clientsRoutes from "./modules/clients/clients.routes";
@@ -22,6 +60,7 @@ import generationsRoutes from "./modules/generations/generations.routes";
 import materialsRoutes from "./modules/materials/materials.routes";
 import estimatesRoutes from "./modules/estimates/estimates.routes";
 import estimateLineItemsRoutes from "./modules/estimate-line-items/estimate-line-items.routes";
+import estimateExportsRoutes from "./modules/estimate-exports/estimate-exports.routes";
 import proposalsRoutes from "./modules/proposals/proposals.routes";
 import proposalsShareRoutes from "./modules/proposals/proposals-share.routes";
 import invoicesRoutes from "./modules/invoices/invoices.routes";
@@ -94,9 +133,14 @@ export function createApp() {
         });
         return;
       }
-      res.set("Content-Type", imageResult.mimeType);
+      const variant = await maybeResize(
+        req.params.id,
+        imageResult,
+        req.query.w,
+      );
+      res.set("Content-Type", variant.mimeType);
       res.set("Cache-Control", "public, max-age=31536000, immutable");
-      res.send(imageResult.data);
+      res.send(variant.data);
     } catch (err) {
       next(err);
     }
@@ -114,9 +158,38 @@ export function createApp() {
         });
         return;
       }
-      res.set("Content-Type", imageResult.mimeType);
+      const variant = await maybeResize(
+        req.params.id,
+        imageResult,
+        req.query.w,
+      );
+      res.set("Content-Type", variant.mimeType);
       res.set("Cache-Control", "public, max-age=31536000, immutable");
-      res.send(imageResult.data);
+      res.send(variant.data);
+    } catch (err) {
+      next(err);
+    }
+  });
+  v1.get("/estimate-exports/:id/file", async (req, res, next) => {
+    try {
+      const { getPublicPdf } = await import(
+        "./modules/estimate-exports/estimate-exports.service"
+      );
+      const result = await getPublicPdf(req.params.id);
+      if (!result) {
+        res.status(404).json({
+          ok: false,
+          error: { code: "NOT_FOUND", message: "Estimate export not found" },
+        });
+        return;
+      }
+      res.set("Content-Type", result.contentType);
+      res.set(
+        "Content-Disposition",
+        `inline; filename="${encodeURIComponent(result.fileName)}"`,
+      );
+      res.set("Cache-Control", "public, max-age=31536000, immutable");
+      res.send(result.data);
     } catch (err) {
       next(err);
     }
@@ -137,9 +210,14 @@ export function createApp() {
         });
         return;
       }
-      res.set("Content-Type", imageResult.mimeType);
+      const variant = await maybeResize(
+        `logo:${req.params.id}`,
+        imageResult,
+        req.query.w,
+      );
+      res.set("Content-Type", variant.mimeType);
       res.set("Cache-Control", "public, max-age=86400, immutable");
-      res.send(imageResult.data);
+      res.send(variant.data);
     } catch (err) {
       next(err);
     }
@@ -152,6 +230,7 @@ export function createApp() {
   v1.use("/commerce/webhooks", commerceWebhookRoutes);
 
   v1.use("/users", requireAuth, usersRoutes);
+  v1.use("/devices", requireAuth, devicesRoutes);
   v1.use("/companies", requireAuth, companiesRoutes);
   v1.use("/clients", requireAuth, clientsRoutes);
   v1.use("/projects", requireAuth, projectsRoutes);
@@ -160,6 +239,7 @@ export function createApp() {
   v1.use("/materials", requireAuth, materialsRoutes);
   v1.use("/estimates", requireAuth, estimatesRoutes);
   v1.use("/estimate-line-items", requireAuth, estimateLineItemsRoutes);
+  v1.use("/estimate-exports", requireAuth, estimateExportsRoutes);
   v1.use("/proposals", requireAuth, proposalsRoutes);
   v1.use("/invoices", requireAuth, invoicesRoutes);
   v1.use("/invoice-line-items", requireAuth, invoiceLineItemsRoutes);

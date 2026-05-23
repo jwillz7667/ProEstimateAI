@@ -32,57 +32,76 @@ struct PaywallHostView: View {
 
     var body: some View {
         ZStack {
-            // Soft canvas — the dark hero strip sits at the top of the
-            // scrolling content rather than the whole sheet, matching the
-            // overhaul's three-tier card layout.
-            ColorTokens.background.ignoresSafeArea()
+            // Dark gradient background.
+            backgroundGradient
 
             ScrollView {
-                VStack(spacing: SpacingTokens.xl) {
-                    heroStrip
-                        .padding(.top, SpacingTokens.huge)
+                VStack(spacing: 0) {
+                    // Hero section with headline and subheadline.
+                    PaywallHeroSection(decision: viewModel.decision)
 
-                    if !viewModel.products.isEmpty {
-                        PlanSelectorView(
-                            products: viewModel.products,
+                    VStack(spacing: SpacingTokens.xl) {
+                        // Free-tier counter — only rendered when the
+                        // paywall fired because starter credits ran out.
+                        // Hidden everywhere else so the rest of the app
+                        // reads as "fully open" until exhaustion.
+                        StarterCreditsExhaustedCard(
+                            isVisible: viewModel.decision.placement == .generationLimitHit
+                        )
+
+                        // Tier + period picker.
+                        if !viewModel.products.isEmpty {
+                            PlanSelectorView(
+                                products: viewModel.products,
+                                selectedProduct: viewModel.selectedProduct,
+                                selectedTier: $viewModel.selectedTier,
+                                isAnnualSelected: $viewModel.isAnnualSelected
+                            )
+                        }
+
+                        // Feature comparison — Free vs Pro vs Premium.
+                        FeatureComparisonListView()
+
+                        // Inline catalog-load failure with retry. Purchase
+                        // and restore outcomes go through `.alert(...)`
+                        // bound at the bottom of this view, so this banner
+                        // only fires when the StoreKit + backend catalog
+                        // both failed to load.
+                        if let errorMessage = viewModel.errorMessage {
+                            errorBanner(errorMessage) {
+                                Task { await viewModel.loadProducts() }
+                            }
+                        }
+
+                        // Purchase CTA and secondary actions.
+                        PurchaseButtonSection(
+                            primaryTitle: viewModel.primaryCtaTitle,
+                            isPurchasing: viewModel.isPurchasing,
+                            isRestoring: viewModel.isRestoring,
+                            showContinueFree: viewModel.showContinueFree,
+                            showRestorePurchases: viewModel.showRestorePurchases,
+                            secondaryCtaTitle: viewModel.decision.secondaryCtaTitle,
                             selectedProduct: viewModel.selectedProduct,
-                            selectedTier: $viewModel.selectedTier,
-                            isAnnualSelected: $viewModel.isAnnualSelected,
-                            onSelect: { product in
-                                viewModel.selectProduct(product)
+                            onPurchase: {
                                 Task { await viewModel.purchase() }
+                            },
+                            onContinueFree: {
+                                dismiss()
+                            },
+                            onRestore: {
+                                Task { await viewModel.restorePurchases() }
                             }
                         )
-                    }
 
-                    if let errorMessage = viewModel.errorMessage {
-                        errorBanner(errorMessage) {
-                            Task { await viewModel.purchase() }
-                        }
+                        // Legal disclosure.
+                        LegalDisclosureSection(selectedProduct: viewModel.selectedProduct)
                     }
-
-                    if viewModel.showRestorePurchases {
-                        Button {
-                            Task { await viewModel.restorePurchases() }
-                        } label: {
-                            HStack(spacing: 6) {
-                                if viewModel.isRestoring {
-                                    ProgressView().controlSize(.small)
-                                }
-                                Text("Restore Purchases")
-                                    .font(TypographyTokens.subheadline.weight(.semibold))
-                            }
-                            .foregroundStyle(ColorTokens.textSecondary)
-                        }
-                        .disabled(viewModel.isRestoring)
-                    }
-
-                    LegalDisclosureSection(selectedProduct: viewModel.selectedProduct)
+                    .padding(.horizontal, SpacingTokens.lg)
+                    .padding(.bottom, SpacingTokens.xxxl)
                 }
-                .padding(.horizontal, SpacingTokens.lg)
-                .padding(.bottom, SpacingTokens.xxxl)
             }
 
+            // Dismiss button — always shown so user can back out
             dismissButton
         }
         .task {
@@ -94,56 +113,76 @@ struct PaywallHostView: View {
                 dismiss()
             }
         }
+        .alert(
+            viewModel.activeAlert?.title ?? "",
+            isPresented: Binding(
+                get: { viewModel.activeAlert != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        viewModel.activeAlert = nil
+                    }
+                }
+            ),
+            presenting: viewModel.activeAlert,
+            actions: { alert in
+                ForEach(alert.actions, id: \.self) { action in
+                    Button(action.title, role: action.buttonRole) {
+                        handle(action, in: alert.context)
+                    }
+                }
+            },
+            message: { alert in
+                Text(alert.message)
+            }
+        )
         .interactiveDismissDisabled(false)
     }
 
-    // MARK: - Hero Strip
+    // MARK: - Alert Action Dispatch
 
-    private var heroStrip: some View {
-        VStack(alignment: .center, spacing: SpacingTokens.xs) {
-            Text("PROESTIMATE AI")
-                .font(.caption.weight(.bold))
-                .tracking(1.2)
-                .foregroundStyle(ColorTokens.heroForeground.opacity(0.65))
-
-            Text(viewModel.decision.headline.isEmpty ? "Unlock Your Professional Potential" : viewModel.decision.headline)
-                .font(.system(.largeTitle, design: .default, weight: .bold))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(ColorTokens.heroForeground)
-
-            Text(viewModel.decision.subheadline.isEmpty
-                ? "Scale your remodeling business with precision tools, unlimited rendering capabilities, and seamless client management. Choose the tier that matches your ambition."
-                : viewModel.decision.subheadline)
-                .font(TypographyTokens.subheadline)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(ColorTokens.heroForeground.opacity(0.78))
-                .padding(.top, SpacingTokens.xxs)
+    /// Route a tapped alert action back into the view model. SwiftUI auto-
+    /// dismisses the alert as soon as any button fires, so we only have to
+    /// trigger the side-effect — the binding's `set` closure clears
+    /// `activeAlert` for us.
+    private func handle(_ action: PurchaseAlert.Action, in context: PurchaseAlert.Context) {
+        switch action {
+        case .dismiss:
+            // No-op — the alert binding clears `activeAlert` automatically
+            // when SwiftUI dismisses on tap.
+            break
+        case .tryAgain:
+            switch context {
+            case .purchase:
+                Task { await viewModel.purchase() }
+            case .restore:
+                Task { await viewModel.restorePurchases() }
+            }
+        case .restorePurchases:
+            Task { await viewModel.restorePurchases() }
         }
-        .padding(SpacingTokens.lg)
-        .frame(maxWidth: .infinity)
-        .background(
-            LinearGradient(
-                colors: [ColorTokens.overlayAccent, ColorTokens.heroBackground],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: RadiusTokens.hero)
-        )
     }
 
     // MARK: - Background
 
+    /// Adaptive paywall backdrop. Uses the same page background token as
+    /// the rest of the app — white in light mode, system-dark in dark
+    /// mode — so the paywall reads as part of the host theme rather than
+    /// a permanently-dark "premium hero". A subtle warm orange wash at
+    /// the top keeps the paywall feeling distinct from a regular screen.
     private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [
-                ColorTokens.overlayBackground,
-                ColorTokens.overlayAccent,
-                ColorTokens.overlayBackground,
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        ZStack {
+            ColorTokens.background
+                .ignoresSafeArea()
+            LinearGradient(
+                colors: [
+                    ColorTokens.primaryOrange.opacity(0.06),
+                    Color.clear,
+                ],
+                startPoint: .top,
+                endPoint: .center
+            )
+            .ignoresSafeArea()
+        }
     }
 
     // MARK: - Dismiss Button
@@ -157,10 +196,9 @@ struct PaywallHostView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(ColorTokens.textSecondary)
-                        .frame(width: 32, height: 32)
-                        .background(ColorTokens.surface, in: Circle())
-                        .overlay(Circle().strokeBorder(ColorTokens.cardStroke, lineWidth: 1))
+                        .foregroundStyle(ColorTokens.secondaryText)
+                        .frame(width: 30, height: 30)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
                 .padding(.trailing, SpacingTokens.md)
                 .padding(.top, SpacingTokens.md)
@@ -180,7 +218,7 @@ struct PaywallHostView: View {
 
             Text(message)
                 .font(TypographyTokens.footnote)
-                .foregroundStyle(ColorTokens.textPrimary)
+                .foregroundStyle(ColorTokens.primaryText)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button("Try Again", action: onRetry)

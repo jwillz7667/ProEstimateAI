@@ -34,6 +34,19 @@ const envSchema = z.object({
     .string()
     .default("https://proestimate-api-production.up.railway.app"),
   APP_STORE_ISSUER_ID: z.string().optional(),
+  // App Store Server API credentials. When the issuer ID, key ID, and
+  // PEM private key are all present, the backend cross-checks every
+  // JWS-verified transaction against Apple's authoritative transaction
+  // history as a defense-in-depth layer. If any are missing, the check
+  // is skipped (warned once at the call site).
+  APP_STORE_API_KEY_ID: z.string().optional(),
+  APP_STORE_API_PRIVATE_KEY: z.string().optional(),
+  // Selects which App Store Server API host to call. Sandbox/Production
+  // host the same API surface but only return their own transactions —
+  // hitting Production with a Sandbox transactionId returns 404, and
+  // vice versa. We try the configured host first and fall back to the
+  // other if Apple says the transaction wasn't found.
+  APP_STORE_ENVIRONMENT: z.enum(["Production", "Sandbox"]).default("Production"),
 });
 
 function loadEnv() {

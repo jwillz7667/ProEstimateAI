@@ -5,8 +5,24 @@ import {
   materialJsonContract,
   projectFactsBlock,
   supplierGuidance,
+  tierBoundsBlock,
   tierLanguage,
 } from "./shared";
+
+const KITCHEN_CATEGORIES = [
+  "cabinets",
+  "countertops",
+  "tile",
+  "flooring",
+  "appliances",
+  "plumbing",
+  "lighting",
+  "electrical",
+  "hardware",
+  "paint",
+  "drywall",
+  "trim",
+];
 
 export function imagePrompt(ctx: PromptContext): string {
   return `
@@ -50,18 +66,16 @@ ALLOWED CATEGORIES (use exactly these strings)
 Cabinets, Countertops, Tile, Flooring, Plumbing, Lighting, Electrical,
 Appliances, Hardware, Paint, Drywall, Trim, Other
 
-PRICING ANCHORS (US, current market)
-- Stock shaker cabinets: $150–$250 per linear foot installed (cabinets
-  only, no install labor here).
-- Semi-custom cabinets: $250–$450/lf. Inset custom: $500–$900/lf.
-- Quartz countertop slabs: $55–$95/sf (STANDARD), $95–$140/sf (PREMIUM),
-  $140–$220/sf (LUXURY). Granite roughly $50–$120/sf.
-- Subway tile: $4–$12/sf. Designer ceramic: $12–$30/sf. Natural stone
-  mosaics: $25–$60/sf.
-- Engineered hardwood: $4–$9/sf STANDARD, $9–$14/sf PREMIUM.
-- 30" gas range: $700 (STANDARD GE/Whirlpool), $1,800 (PREMIUM Bosch/KA),
-  $5,000+ (LUXURY Wolf/Thermador).
-- Cabinet hardware: $4–$8/pull STANDARD, $14–$28/pull PREMIUM.
+${tierBoundsBlock(ctx.qualityTier, KITCHEN_CATEGORIES)}
+
+NARRATIVE EXAMPLES (informative — use the enforced ranges above as the source of truth)
+- Stock shaker cabinets, $150–$250/lf, are STANDARD; semi-custom $250–$450/lf
+  is PREMIUM; inset/custom $500–$900/lf is LUXURY.
+- Quartz countertops trend toward the upper third of each tier's range;
+  granite often sits at the floor.
+- Cabinet hardware is per-pull; a typical kitchen has 18–32 pulls.
+- 30" range examples: GE/Whirlpool (~$700), Bosch/KitchenAid (~$1,800),
+  Wolf/Thermador ($5,000+).
 
 QUANTITY GUIDANCE
 - Estimate linear feet of cabinetry from the project description or square
@@ -99,8 +113,9 @@ LABOR GUIDANCE
 - Painting walls + ceiling: 12–20 hr.
 - Appliance set + final punch: 4–8 hr.
 
-TIER MULTIPLIER: ${tier.pricingMultiplier} on rates. Do NOT inflate hours
-beyond the realistic range above.
+TIER LABOR RATES: ${tier.pricingMultiplier}. The orchestrator clamps every
+ratePerHour to the tier's band, so quoting outside it will be silently
+adjusted. Do NOT inflate hours beyond the realistic range above.
 
 ${laborJsonContract()}
 `.trim();

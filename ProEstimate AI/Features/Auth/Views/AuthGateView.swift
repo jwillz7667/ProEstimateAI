@@ -43,18 +43,6 @@ struct AuthGateView: View {
 
     private var splashView: some View {
         ZStack {
-            // Subtle orange radial glow behind logo
-            RadialGradient(
-                colors: [
-                    ColorTokens.primaryOrange.opacity(0.08),
-                    Color.clear,
-                ],
-                center: .center,
-                startRadius: 40,
-                endRadius: 260
-            )
-            .ignoresSafeArea()
-
             VStack(spacing: SpacingTokens.lg) {
                 Spacer()
 
@@ -62,7 +50,7 @@ struct AuthGateView: View {
                     Circle()
                         .fill(.white)
                         .frame(width: 140, height: 140)
-                        .shadow(color: ColorTokens.primaryOrange.opacity(0.3), radius: 20, x: 0, y: 8)
+                        .shadow(color: .black.opacity(0.18), radius: 16, x: 0, y: 6)
 
                     Image("housd-icon-light")
                         .resizable()

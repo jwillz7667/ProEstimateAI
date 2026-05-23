@@ -2,11 +2,36 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SupportChat } from "./SupportChat";
 
+const PAGE_URL = "https://proestimateai.com/support";
+const PAGE_DESCRIPTION =
+  "Get help with ProEstimate AI — answers to common questions about AI remodel previews, free vs Pro plans, branded estimates, photo privacy, and supported devices. Live AI assistant and direct email to the team.";
+
 export const metadata: Metadata = {
-  title: "Support",
-  description:
-    "Get help with ProEstimate AI — FAQs, live AI assistant, and a direct email to the team.",
-  alternates: { canonical: "https://proestimateai.com/support" },
+  title: "Support & FAQ",
+  description: PAGE_DESCRIPTION,
+  alternates: { canonical: PAGE_URL },
+  openGraph: {
+    type: "website",
+    url: PAGE_URL,
+    title: "Support & FAQ | ProEstimate AI",
+    description: PAGE_DESCRIPTION,
+    siteName: "ProEstimate AI",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "ProEstimate AI Support",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Support & FAQ | ProEstimate AI",
+    description: PAGE_DESCRIPTION,
+    images: ["/og-image.png"],
+  },
+  robots: { index: true, follow: true },
 };
 
 const faqs: Array<{ q: string; a: string }> = [
@@ -44,9 +69,49 @@ const faqs: Array<{ q: string; a: string }> = [
   },
 ];
 
+const faqLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.a,
+    },
+  })),
+};
+
+const breadcrumbLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://proestimateai.com",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Support",
+      item: PAGE_URL,
+    },
+  ],
+};
+
 export default function SupportPage() {
   return (
     <main className="min-h-screen bg-surface">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+      />
       <header className="border-b border-gray-100">
         <div className="mx-auto max-w-4xl px-6 py-6 flex items-center justify-between">
           <Link href="/" className="text-xl font-bold text-gray-900">

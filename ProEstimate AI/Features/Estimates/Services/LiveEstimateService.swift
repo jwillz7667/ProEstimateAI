@@ -11,23 +11,12 @@ final class LiveEstimateService: EstimateServiceProtocol, Sendable {
 
     // MARK: - EstimateServiceProtocol
 
-    func listEstimates() async throws -> [EstimateSummary] {
-        // The API returns full Estimate objects. Map them into EstimateSummary
-        // using the projectId as a placeholder title. Callers that need the
-        // real project title can enrich this later.
-        let estimates: [Estimate] = try await apiClient.request(
-            .listEstimates(projectId: nil)
-        )
-        return estimates.map { estimate in
-            EstimateSummary(
-                estimate: estimate,
-                projectTitle: estimate.projectId
-            )
-        }
-    }
-
     func listByProject(projectId: String) async throws -> [Estimate] {
         try await apiClient.request(.listEstimates(projectId: projectId))
+    }
+
+    func listByClient(clientId: String) async throws -> [Estimate] {
+        try await apiClient.request(.listEstimates(projectId: nil, clientId: clientId))
     }
 
     func getEstimate(id: String) async throws -> Estimate {

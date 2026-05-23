@@ -8,18 +8,24 @@
  */
 
 import { PromptContext, QualityTier } from "./types";
+import { LABOR_RATE_BOUNDS, renderTierBoundsBlock } from "./tier-bounds";
 
 /**
  * Human-readable quality tier description, woven into both image and
  * material prompts so the AI ladders pricing and visual fidelity to the
- * tier the contractor chose.
+ * tier the contractor chose. Pairs with `tierBoundsBlock()` below — this
+ * function gives the model brand vocabulary and design language; the
+ * bounds block gives it the numeric rails the orchestrator enforces.
  */
 export function tierLanguage(tier: QualityTier): {
   label: string;
   visualDescription: string;
   materialAnchor: string;
   pricingMultiplier: string;
+  laborRateRange: string;
 } {
+  const labor = LABOR_RATE_BOUNDS[tier];
+  const laborRateRange = `$${labor.min}–$${labor.max}/hr`;
   switch (tier) {
     case "LUXURY":
       return {
@@ -27,8 +33,9 @@ export function tierLanguage(tier: QualityTier): {
         visualDescription:
           "top-of-market, designer-spec materials and finishes; bespoke detailing; magazine-grade composition; thoughtful uplighting; spotless staging.",
         materialAnchor:
-          "high-end specialty retailer or designer-grade SKUs (Ferguson, The Tile Shop, Restoration Hardware, SiteOne premium imports). Honest labor rates 1.6–1.9x mid-market.",
-        pricingMultiplier: "1.75x mid-market floor",
+          "high-end specialty retailer or designer-grade SKUs (Ferguson, The Tile Shop, Restoration Hardware, SiteOne premium imports).",
+        pricingMultiplier: `roughly 1.75× mid-market; labor ${laborRateRange}`,
+        laborRateRange,
       };
     case "PREMIUM":
       return {
@@ -36,8 +43,9 @@ export function tierLanguage(tier: QualityTier): {
         visualDescription:
           "upgraded mid-market materials; clean, considered design; soft natural light with a warm key; well-staged but not theatrical.",
         materialAnchor:
-          "upper-tier mainstream retail (Home Depot Pro, Lowe's Pro, Floor & Decor, SiteOne mid-grade). Labor rates 1.2–1.4x standard.",
-        pricingMultiplier: "1.3x mid-market floor",
+          "upper-tier mainstream retail (Home Depot Pro, Lowe's Pro, Floor & Decor, SiteOne mid-grade).",
+        pricingMultiplier: `roughly 1.3× mid-market; labor ${laborRateRange}`,
+        laborRateRange,
       };
     case "STANDARD":
     default:
@@ -46,16 +54,39 @@ export function tierLanguage(tier: QualityTier): {
         visualDescription:
           "clean, contemporary, builder-grade quality; honest natural light; realistic — not aspirational.",
         materialAnchor:
-          "mass-market big-box pricing (Home Depot, Lowe's, Menards everyday SKUs). Honest, competitive labor rates.",
-        pricingMultiplier: "1.0x — anchor to current big-box retail",
+          "mass-market big-box pricing (Home Depot, Lowe's, Menards everyday SKUs).",
+        pricingMultiplier: `mid-market floor; labor ${laborRateRange}`,
+        laborRateRange,
       };
   }
+}
+
+/**
+ * Numeric tier-bounds block. Per-type prompt modules splice this in below
+ * their narrative PRICING ANCHORS section so the model sees the same
+ * ranges the post-AI clamp will enforce. Categories are passed in by the
+ * caller (each project type cares about a different subset).
+ */
+export function tierBoundsBlock(
+  tier: QualityTier,
+  categories: string[],
+): string {
+  return renderTierBoundsBlock(tier, categories);
 }
 
 /**
  * Renders the universal output-contract block appended to every material
  * prompt. The contract is identical regardless of project type so the
  * orchestrator can deserialize results with one Zod schema.
+ *
+ * INVARIANT: `estimatedCost` is the per-unit price in USD, where the unit
+ * is the value of the sibling `unit` field. The downstream estimate
+ * line-item math is `lineTotal = quantity * estimatedCost * (1 + markup)`,
+ * so handing back a TOTAL here multiplies the cost by `quantity` again
+ * and produces N× inflated estimates. Every per-type prompt module's
+ * PRICING ANCHORS section quotes per-unit ranges already — this contract
+ * line keeps the model's output consistent with those anchors instead of
+ * forcing it to silently convert.
  */
 export function materialJsonContract(): string {
   return `
@@ -66,7 +97,7 @@ Return ONLY a JSON object of the form:
     {
       "name": "string — short, retailer-friendly product name",
       "category": "string — see allowed categories per project type",
-      "estimatedCost": number,                  // total cost for the quantity (USD)
+      "estimatedCost": number,                  // PER-UNIT price in USD (per the unit below)
       "unit": "string — sq_ft | linear_ft | cubic_yard | each | gallon | bag | ton | hour | visit | sheet | bundle | square (roofing) | pallet",
       "quantity": number,                       // numeric quantity in the unit above
       "supplierName": "string — e.g., Home Depot, Lowe's, SiteOne, Ferguson",
@@ -77,10 +108,23 @@ Return ONLY a JSON object of the form:
 }
 Rules:
 - 5–14 PRIMARY line items + exactly ONE final "Miscellaneous Supplies" line
-  (fasteners, caulk, blades, sandpaper, drop cloths, tape, etc.) at $80–$300
-  depending on tier and project size.
-- Prices are TOTAL for the quantity, NOT unit price.
+  (fasteners, caulk, blades, sandpaper, drop cloths, tape, etc.) priced at
+  $80–$300 TOTAL — i.e., for that one Misc line, set unit="each", quantity=1,
+  and estimatedCost between 80 and 300.
+- estimatedCost is PER UNIT — the cost of ONE unit of the item, not the
+  total for the quantity. The line total is computed downstream as
+  quantity * estimatedCost. Returning a total instead of a unit price
+  produces wildly inflated estimates.
+  WORKED EXAMPLE (luxury kitchen quartz):
+    name="Calacatta Quartz Slab", unit="sq_ft", quantity=45, estimatedCost=180
+    → downstream lineTotal = 45 * 180 = $8,100 ✓
+    Returning estimatedCost=8100 here would produce 45 * 8100 = $364,500 ✗.
+  When unit="each" and the item is a single unit (one range, one sink),
+  per-unit price IS the line total — quantity should be 1.
 - estimatedCost MUST be a number (not a string, no currency symbol).
+- The PRICING ANCHORS section above quotes prices in the same per-unit
+  format (e.g., "$140–$220/sf"). Anchor your numbers directly to that
+  range; do not multiply them by quantity.
 - supplierSearchQuery should be specific enough to land on the right product
   (e.g., "Hardie Plank cedarmill 8.25 inch" — NOT just "siding").
 - DO NOT include labor lines here; labor is generated separately.
@@ -223,6 +267,61 @@ PHOTOGRAPHIC RULES (apply to every shot)
 - No people in the frame unless absolutely necessary for scale.
 - No brand logos visible on products or signage.
 - No before/after split composition. ONE clean "after" image only.
+
+QUALITY TIER VISUAL LANGUAGE
+${tier.visualDescription}
+`.trim();
+}
+
+/**
+ * Edit-mode framing block. Used INSTEAD of `imageFrame` when a reference
+ * photo is attached: it strips the camera-direction language ("from the
+ * curb", "16:9 wide", "golden hour") and instead commands the model to
+ * lock the source camera, exposure, and framing exactly. The previous
+ * shared frame buried a soft "keep angle" line below per-type framing
+ * rules like "shoot from the yard at golden hour" — and the model
+ * obeyed the directive that came first, producing reframed afters that
+ * no longer matched the before. This block must come first in the
+ * prompt and forbid any reframing.
+ */
+export function imageEditFrame(ctx: PromptContext): string {
+  const tier = tierLanguage(ctx.qualityTier);
+
+  return `
+ROLE
+You are a high-end architectural retoucher. You receive a real
+photograph of a property/room and return the SAME photograph with the
+remodel completed in place. The output is an edit, not a new shot.
+
+CAMERA LOCK — non-negotiable
+- The output MUST share the input's camera position, focal length,
+  height, tilt, framing, and crop pixel-for-pixel.
+- DO NOT reframe, recompose, zoom in or out, change angle, push in,
+  pull back, switch from eye-level to aerial, or rotate the view.
+- DO NOT swap to a "more flattering" angle — the goal is a true
+  before/after where the divider slider can blend the two on top of
+  each other and the underlying scene aligns perfectly.
+- DO NOT change the time of day, weather, or sun direction. Match the
+  input's exposure, white balance, and shadow direction. If the input
+  is overcast, the output is overcast. If sun is camera-left, sun
+  stays camera-left.
+- DO NOT add or remove neighbors' houses, the sky region, the lot
+  outline, the driveway, the fence line, or any structure outside the
+  scope of the contractor's request.
+
+WHAT TO CHANGE
+Only the surfaces, finishes, materials, plantings, and built additions
+called out in the contractor's request. Everything else — including
+the surrounding house, landscape, sky, and unrelated structures —
+must remain as photographed.
+
+PHOTOGRAPHIC RULES (apply to the edit)
+- Realistic exposure that matches the source. No HDR halos.
+- Physically-plausible shadows that follow the source sun direction.
+- No text, watermarks, UI overlays, decorative borders.
+- No people unless they were in the source.
+- No brand logos visible.
+- ONE clean "after" image only — no split composition, no diptych.
 
 QUALITY TIER VISUAL LANGUAGE
 ${tier.visualDescription}

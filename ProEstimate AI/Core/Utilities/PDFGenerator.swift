@@ -1,7 +1,7 @@
 import UIKit
 
-/// Produces professional, customer-ready PDF documents for estimates,
-/// invoices, and proposals. Renders at US Letter (612×792 pt) using
+/// Produces professional, customer-ready PDF documents for estimates
+/// and invoices. Renders at US Letter (612×792 pt) using
 /// `UIGraphicsPDFRenderer`, with a branded letterhead, an accent color
 /// bar, grouped line items, a totals panel, and footer sections for
 /// assumptions / exclusions / notes / terms.
@@ -123,7 +123,6 @@ enum PDFGenerator {
         title: String? = nil,
         date: Date,
         validUntil: Date? = nil,
-        status: String,
         lineItems: [PDFLineItem],
         subtotalMaterials: Decimal,
         subtotalLabor: Decimal,
@@ -146,7 +145,6 @@ enum PDFGenerator {
                 title: title,
                 date: date,
                 validUntil: validUntil,
-                status: status,
                 lineItems: lineItems,
                 subtotalMaterials: subtotalMaterials,
                 subtotalLabor: subtotalLabor,
@@ -166,48 +164,11 @@ enum PDFGenerator {
         return writeToTemp(data: data, filename: "\(estimateNumber).pdf")
     }
 
-    static func generateProposalPDF(
-        branding: CompanyBranding,
-        client: ClientInfo? = nil,
-        projectTitle: String,
-        proposalDate: Date,
-        expiresAt: Date?,
-        clientMessage: String?,
-        lineItems: [PDFLineItem],
-        subtotalMaterials: Decimal,
-        subtotalLabor: Decimal,
-        subtotalOther: Decimal,
-        taxAmount: Decimal,
-        totalAmount: Decimal,
-        termsAndConditions: String?
-    ) -> URL? {
-        let data = render { ctx in
-            Renderer(ctx: ctx, branding: branding).drawProposal(
-                client: client,
-                projectTitle: projectTitle,
-                date: proposalDate,
-                expiresAt: expiresAt,
-                clientMessage: clientMessage,
-                lineItems: lineItems,
-                subtotalMaterials: subtotalMaterials,
-                subtotalLabor: subtotalLabor,
-                subtotalOther: subtotalOther,
-                taxAmount: taxAmount,
-                totalAmount: totalAmount,
-                terms: termsAndConditions
-            )
-        }
-        let sanitizedTitle = projectTitle
-            .replacingOccurrences(of: " ", with: "_")
-            .replacingOccurrences(of: "/", with: "-")
-        return writeToTemp(data: data, filename: "Proposal_\(sanitizedTitle).pdf")
-    }
-
     // MARK: - Renderer
 
     /// Stateful drawing helper — carries page metrics, cursor, current
-    /// page, and reusable text styles. Shared across estimate, invoice,
-    /// and proposal entry points so they render with a consistent system.
+    /// page, and reusable text styles. Shared across estimate and
+    /// invoice entry points so they render with a consistent system.
     private final class Renderer {
         let ctx: UIGraphicsPDFRendererContext
         let branding: CompanyBranding
@@ -268,7 +229,6 @@ enum PDFGenerator {
             title: String?,
             date: Date,
             validUntil: Date?,
-            status: String,
             lineItems: [PDFLineItem],
             subtotalMaterials: Decimal,
             subtotalLabor: Decimal,
@@ -291,8 +251,7 @@ enum PDFGenerator {
                 primaryDate: date,
                 primaryDateLabel: "Issued",
                 secondaryDate: validUntil,
-                secondaryDateLabel: "Valid until",
-                statusText: status
+                secondaryDateLabel: "Valid until"
             )
             if let client { drawClientBlock(client: client) }
 
@@ -326,54 +285,6 @@ enum PDFGenerator {
             drawFooter()
         }
 
-        // MARK: - Proposal
-
-        func drawProposal(
-            client: ClientInfo?,
-            projectTitle: String,
-            date: Date,
-            expiresAt: Date?,
-            clientMessage: String?,
-            lineItems: [PDFLineItem],
-            subtotalMaterials: Decimal,
-            subtotalLabor: Decimal,
-            subtotalOther: Decimal,
-            taxAmount: Decimal,
-            totalAmount: Decimal,
-            terms: String?
-        ) {
-            drawHeader(
-                documentKind: "PROPOSAL",
-                documentNumber: projectTitle,
-                documentTitle: nil,
-                primaryDate: date,
-                primaryDateLabel: "Prepared",
-                secondaryDate: expiresAt,
-                secondaryDateLabel: "Expires",
-                statusText: nil
-            )
-            if let client { drawClientBlock(client: client) }
-
-            if let msg = clientMessage?.trimmingCharacters(in: .whitespacesAndNewlines), !msg.isEmpty {
-                drawSectionTitle("Message")
-                drawMultiline(msg, font: bodyFont, color: bodyColor)
-                y += 10
-            }
-
-            drawGroupedLineItemsTable(lineItems: lineItems)
-
-            drawTotalsPanel(rows: [
-                TotalRow(label: "Materials", amount: subtotalMaterials),
-                TotalRow(label: "Labor", amount: subtotalLabor),
-                TotalRow(label: "Other", amount: subtotalOther),
-                TotalRow(label: "Tax", amount: taxAmount),
-            ], grandTotalLabel: "Total", grandTotal: totalAmount)
-
-            drawNotesBlocks([("Terms & Conditions", terms)])
-
-            drawFooter()
-        }
-
         // MARK: - Building blocks
 
         private func drawAccentBar() {
@@ -389,8 +300,7 @@ enum PDFGenerator {
             primaryDate: Date,
             primaryDateLabel: String,
             secondaryDate: Date?,
-            secondaryDateLabel: String,
-            statusText: String?
+            secondaryDateLabel: String
         ) {
             let startY = y + 4
             let leftX = margin
@@ -465,15 +375,6 @@ enum PDFGenerator {
             drawKeyValueRight(label: primaryDateLabel, value: dateFormatter.string(from: primaryDate), atY: &rightY)
             if let secondaryDate {
                 drawKeyValueRight(label: secondaryDateLabel, value: dateFormatter.string(from: secondaryDate), atY: &rightY)
-            }
-            if let status = statusText, !status.isEmpty {
-                drawKeyValueRight(
-                    label: "Status",
-                    value: status.uppercased(),
-                    atY: &rightY,
-                    valueColor: branding.accentColor,
-                    valueFont: boldBodyFont
-                )
             }
 
             y = max(leftY, rightY) + 18

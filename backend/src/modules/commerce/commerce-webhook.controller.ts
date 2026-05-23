@@ -1,7 +1,7 @@
-import { Request, Response } from 'express';
-import { logger } from '../../config/logger';
-import { verifyAndDecodeNotification } from '../../lib/apple-storekit';
-import { appStoreNotificationSchema } from './commerce-webhook.validators';
+import { Request, Response } from "express";
+import { logger } from "../../config/logger";
+import { verifyAndDecodeNotification } from "../../lib/apple-storekit";
+import { appStoreNotificationSchema } from "./commerce-webhook.validators";
 
 export async function handleAppStoreNotification(
   req: Request,
@@ -14,7 +14,7 @@ export async function handleAppStoreNotification(
     if (!parseResult.success) {
       logger.warn(
         { errors: parseResult.error.flatten().fieldErrors },
-        'App Store webhook received invalid payload',
+        "App Store webhook received invalid payload",
       );
       // Return 200 so Apple does not retry for malformed requests
       res.status(200).json({ ok: true });
@@ -23,8 +23,10 @@ export async function handleAppStoreNotification(
 
     const { signedPayload } = parseResult.data;
 
-    // 2. Verify and decode the JWS notification
-    const decoded = verifyAndDecodeNotification(signedPayload);
+    // 2. Verify and decode the JWS notification (full chain validation
+    // against Apple Root CA G3; throws on any signature, anchor, or
+    // bundle-ID mismatch).
+    const decoded = await verifyAndDecodeNotification(signedPayload);
 
     logger.info(
       {
@@ -36,11 +38,11 @@ export async function handleAppStoreNotification(
         productId: decoded.transactionInfo.productId,
         environment: decoded.payload.data.environment,
       },
-      'App Store webhook decoded successfully',
+      "App Store webhook decoded successfully",
     );
 
     // 3. Delegate to commerce service for entitlement state updates
-    const { handleAppStoreWebhook } = await import('./commerce.service');
+    const { handleAppStoreWebhook } = await import("./commerce.service");
     await handleAppStoreWebhook(decoded);
 
     // 4. Acknowledge the notification — Apple expects 200 for success
@@ -48,11 +50,11 @@ export async function handleAppStoreNotification(
   } catch (error: unknown) {
     // Always return 200 to prevent Apple from retrying on our parse/processing errors.
     // Retries should only happen if our server is genuinely unreachable (non-200).
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const message = error instanceof Error ? error.message : "Unknown error";
 
     logger.error(
       { err: error, message },
-      'App Store webhook processing failed',
+      "App Store webhook processing failed",
     );
 
     res.status(200).json({ ok: true });

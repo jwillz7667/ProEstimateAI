@@ -32,6 +32,25 @@ struct UpdateClientRequest: Codable, Sendable {
     let state: String?
     let zip: String?
     let notes: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name, email, phone, address, city, state, zip, notes
+    }
+
+    /// Emit `null` for cleared optional fields instead of omitting them.
+    /// The backend treats omitted keys as "leave unchanged", so without this
+    /// a user clearing email/phone/etc. would silently fail to persist.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(email, forKey: .email)
+        try container.encode(phone, forKey: .phone)
+        try container.encode(address, forKey: .address)
+        try container.encode(city, forKey: .city)
+        try container.encode(state, forKey: .state)
+        try container.encode(zip, forKey: .zip)
+        try container.encode(notes, forKey: .notes)
+    }
 }
 
 // MARK: - Mock Implementation
@@ -190,7 +209,7 @@ enum ClientServiceError: LocalizedError {
         switch self {
         case .notFound:
             return "Client not found."
-        case .validationFailed(let reason):
+        case let .validationFailed(reason):
             return "Validation failed: \(reason)"
         }
     }

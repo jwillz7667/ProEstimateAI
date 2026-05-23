@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LanguageSettingsView: View {
     @Bindable var viewModel: SettingsViewModel
+    @Environment(AppearanceStore.self) private var appearanceStore
 
     var body: some View {
         Form {
@@ -12,6 +13,12 @@ struct LanguageSettingsView: View {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             viewModel.selectedLanguage = language
                         }
+                        // Drive the SwiftUI `\.locale` environment so the
+                        // app interface flips immediately, in addition to
+                        // the document-level backend save below. Without
+                        // this, the UI was frozen on whatever locale was
+                        // active at launch.
+                        appearanceStore.setLanguage(language)
                         Task { await viewModel.saveLanguageImmediately() }
                     } label: {
                         HStack {
@@ -38,9 +45,9 @@ struct LanguageSettingsView: View {
                     }
                 }
             } header: {
-                Text("Document Language")
+                Text("Language")
             } footer: {
-                Text("This affects the language used in generated estimates, proposals, and invoices sent to clients. It does not change the app interface language.")
+                Text("Switches the app interface and the language used in generated estimates, proposals, and invoices sent to clients. Takes effect immediately — no relaunch needed.")
             }
 
             // Preview Section

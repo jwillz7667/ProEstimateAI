@@ -1,0 +1,25 @@
+build/
+node_modules/
+**/node_modules/
+backend/node_modules/
+backend/dist/
+backend/coverage/
+ProEstimate AI/
+ProEstimate AI.xcodeproj/
+.git/
+*.log
+.DS_Store
+.vscode/
+.idea/
+/screenshots/
+/category-thumbs/
+/category-tiles-source/
+/style-cards-source/
+/app-store-listing/
+/project-specs/
+/docs/
+.claude/
+*.png
+*.jpg
+*.jpeg
+*.heic

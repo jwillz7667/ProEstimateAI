@@ -16,6 +16,17 @@ enum APIEndpoint: Sendable {
     case authLogout
     case authForgotPassword(email: String)
 
+    // MARK: - Devices (APNs)
+
+    /// Register or refresh the device's APNs token. The backend rebinds the
+    /// token to the current authed user, so resigning into a different
+    /// account on the same device transparently transfers ownership.
+    case registerApnsToken(token: String, bundleId: String)
+    /// Best-effort deregister on sign-out. Apple also reports 410 to APNs
+    /// when the app is uninstalled, so the backend prunes those rows
+    /// independently — this endpoint just keeps the table tight.
+    case deregisterApnsToken(token: String)
+
     // MARK: - User / Company
 
     case getMe
@@ -60,7 +71,7 @@ enum APIEndpoint: Sendable {
 
     // MARK: - Estimates
 
-    case listEstimates(projectId: String?)
+    case listEstimates(projectId: String?, clientId: String? = nil)
     case getEstimate(id: String)
     case createEstimate(body: Encodable & Sendable)
     /// AI-generate a complete estimate from the project's materials + the
@@ -76,12 +87,13 @@ enum APIEndpoint: Sendable {
     case updateEstimateLineItem(id: String, body: Encodable & Sendable)
     case deleteEstimateLineItem(id: String)
 
-    // MARK: - Proposals
+    // MARK: - Estimate Exports (saved PDFs)
 
-    case getProposal(id: String)
-    case createProposal(body: Encodable & Sendable)
-    case sendProposal(id: String)
-    case listProposals(projectId: String?)
+    case listEstimateExports(estimateId: String)
+    case listProjectEstimateExports(projectId: String)
+    case createEstimateExport(estimateId: String, body: Encodable & Sendable)
+    case getEstimateExport(id: String)
+    case deleteEstimateExport(id: String)
 
     // MARK: - Pricing Profiles
 
@@ -150,6 +162,9 @@ extension APIEndpoint {
         case .authRefreshToken: return "/auth/refresh"
         case .authLogout: return "/auth/logout"
         case .authForgotPassword: return "/auth/forgot-password"
+        // Devices
+        case .registerApnsToken: return "/devices/apns"
+        case .deregisterApnsToken: return "/devices/apns"
         // User / Company
         case .getMe: return "/users/me"
         case .deleteMe: return "/users/me"
@@ -192,11 +207,12 @@ extension APIEndpoint {
         case let .createEstimateLineItem(estimateId, _): return "/estimates/\(estimateId)/line-items"
         case let .updateEstimateLineItem(id, _): return "/estimate-line-items/\(id)"
         case let .deleteEstimateLineItem(id): return "/estimate-line-items/\(id)"
-        // Proposals
-        case let .getProposal(id): return "/proposals/\(id)"
-        case .createProposal: return "/proposals"
-        case let .sendProposal(id): return "/proposals/\(id)/send"
-        case .listProposals: return "/proposals"
+        // Estimate Exports
+        case let .listEstimateExports(estimateId): return "/estimates/\(estimateId)/exports"
+        case let .listProjectEstimateExports(projectId): return "/projects/\(projectId)/estimate-exports"
+        case let .createEstimateExport(estimateId, _): return "/estimates/\(estimateId)/exports"
+        case let .getEstimateExport(id): return "/estimate-exports/\(id)"
+        case let .deleteEstimateExport(id): return "/estimate-exports/\(id)"
         // Pricing Profiles
         case .listPricingProfiles: return "/pricing-profiles"
         case let .getPricingProfile(id): return "/pricing-profiles/\(id)"
@@ -238,9 +254,10 @@ extension APIEndpoint {
              .authRefreshToken, .authLogout,
              .authForgotPassword,
              .uploadCompanyLogo,
+             .registerApnsToken,
              .createClient, .createProject, .uploadAsset, .createGeneration,
              .createEstimate, .generateAIEstimate, .createEstimateLineItem,
-             .createProposal, .sendProposal,
+             .createEstimateExport,
              .createPricingProfile, .createLaborRateRule,
              .createPurchaseAttempt, .syncTransaction, .restorePurchases,
              .checkUsage,
@@ -254,8 +271,10 @@ extension APIEndpoint {
 
         case .deleteMe,
              .deleteCompanyLogo,
+             .deregisterApnsToken,
              .deleteClient, .deleteProject, .deleteAsset,
              .deleteEstimate, .deleteEstimateLineItem,
+             .deleteEstimateExport,
              .deletePricingProfile, .deleteLaborRateRule:
             return .delete
 
@@ -282,10 +301,11 @@ extension APIEndpoint {
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
         case let .listProjects(cursor):
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
-        case let .listEstimates(projectId):
-            return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
-        case let .listProposals(projectId):
-            return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
+        case let .listEstimates(projectId, clientId):
+            var items: [URLQueryItem] = []
+            if let projectId { items.append(URLQueryItem(name: "project_id", value: projectId)) }
+            if let clientId { items.append(URLQueryItem(name: "client_id", value: clientId)) }
+            return items.isEmpty ? nil : items
         case let .listActivityLog(_, cursor):
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
         case let .searchMaterialsPricing(query, zipCode, sort, maxResults):
@@ -327,7 +347,7 @@ extension APIEndpoint {
              let .createEstimate(body), let .generateAIEstimate(body),
              let .updateEstimate(_, body),
              let .createEstimateLineItem(_, body), let .updateEstimateLineItem(_, body),
-             let .createProposal(body),
+             let .createEstimateExport(_, body),
              let .createPricingProfile(body), let .updatePricingProfile(_, body),
              let .createLaborRateRule(_, body), let .updateLaborRateRule(_, body),
              let .createPurchaseAttempt(body), let .syncTransaction(body),
@@ -337,6 +357,10 @@ extension APIEndpoint {
             return body
         case let .updateMaterialSelection(_, isSelected):
             return MaterialSelectionBody(isSelected: isSelected)
+        case let .registerApnsToken(token, bundleId):
+            return ApnsRegisterBody(token: token, bundleId: bundleId)
+        case let .deregisterApnsToken(token):
+            return ApnsDeregisterBody(token: token)
         default:
             return nil
         }
@@ -396,4 +420,22 @@ private struct MaterialSelectionBody: Encodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case isSelected = "is_selected"
     }
+}
+
+/// APNs token registration body. The hex string is what
+/// `application(_:didRegisterForRemoteNotificationsWithDeviceToken:)`
+/// produces from the raw `Data` token Apple hands back — the backend
+/// uses it as the unique key in its `DeviceToken` table.
+private struct ApnsRegisterBody: Encodable, Sendable {
+    let token: String
+    let bundleId: String
+
+    enum CodingKeys: String, CodingKey {
+        case token
+        case bundleId = "bundle_id"
+    }
+}
+
+private struct ApnsDeregisterBody: Encodable, Sendable {
+    let token: String
 }

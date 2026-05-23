@@ -13,7 +13,11 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     let status: Status
     let budgetMin: Decimal?
     let budgetMax: Decimal?
-    let qualityTier: QualityTier
+    /// Optional. `nil` means "Auto" — the backend chooses tier-neutral defaults
+    /// driven by the project type. When set, every downstream artifact (image
+    /// prompt, materials, estimate, post-AI clamps) is anchored to this tier's
+    /// price/quality bounds via `backend/src/lib/prompts/tier-bounds.ts`.
+    let qualityTier: QualityTier?
     let squareFootage: Decimal?
     let dimensions: String?
     let language: String?
@@ -53,6 +57,11 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     // MARK: - Nested Enums
 
     /// The category of remodel or construction work.
+    ///
+    /// Renamed `exterior` displayName from "Exterior / Outdoor Living"
+    /// to just "Exterior" once `outdoorLiving` was added — outdoor decks,
+    /// patios, pergolas, pools, and firepits live there now, leaving
+    /// `exterior` to mean curb appeal / facade work specifically.
     enum ProjectType: String, Codable, CaseIterable, Sendable {
         case kitchen
         case bathroom
@@ -64,6 +73,8 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         case exterior
         case landscaping
         case lawnCare = "lawn_care"
+        case outdoorLiving = "outdoor_living"
+        case garage
         case custom
 
         /// Display name for project type pickers and detail headers.
@@ -76,14 +87,18 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
             case .painting: return "Painting"
             case .siding: return "Siding"
             case .roomRemodel: return "Room Remodel"
-            case .exterior: return "Exterior / Outdoor Living"
+            case .exterior: return "Exterior"
             case .landscaping: return "Landscaping"
-            case .lawnCare: return "Lawn Care (Recurring)"
+            case .lawnCare: return "Lawn Care"
+            case .outdoorLiving: return "Outdoor Living"
+            case .garage: return "Garage"
             case .custom: return "Custom"
             }
         }
 
-        /// SF Symbol used in the project picker grid and list rows.
+        /// SF Symbol used in legacy small-icon contexts (project list rows,
+        /// dashboard tiles, detail header). The new image-driven category
+        /// picker uses `thumbnailAssetName` instead.
         var iconName: String {
             switch self {
             case .kitchen: return "fork.knife"
@@ -96,7 +111,33 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
             case .exterior: return "house.lodge"
             case .landscaping: return "leaf.fill"
             case .lawnCare: return "scissors"
+            case .outdoorLiving: return "sofa.fill"
+            case .garage: return "car.fill"
             case .custom: return "wrench.and.screwdriver"
+            }
+        }
+
+        /// Asset-catalog name of the dedicated category hero rendered in
+        /// the project creation category picker. One bespoke HEIC per
+        /// category lives under `Assets.xcassets/CategoryTiles/` — unlike
+        /// the legacy `CategoryThumbs/` library (which is a shared pool of
+        /// generic room photos), each tile here is purpose-shot for its
+        /// category and never reused across categories.
+        var thumbnailAssetName: String {
+            switch self {
+            case .kitchen: return "CategoryTiles/01_kitchen"
+            case .bathroom: return "CategoryTiles/02_bathroom"
+            case .flooring: return "CategoryTiles/03_flooring"
+            case .roofing: return "CategoryTiles/04_roofing"
+            case .painting: return "CategoryTiles/05_painting"
+            case .siding: return "CategoryTiles/06_siding"
+            case .roomRemodel: return "CategoryTiles/07_room_remodel"
+            case .exterior: return "CategoryTiles/08_exterior"
+            case .landscaping: return "CategoryTiles/09_landscaping"
+            case .lawnCare: return "CategoryTiles/10_lawn_care"
+            case .outdoorLiving: return "CategoryTiles/11_outdoor_living"
+            case .garage: return "CategoryTiles/12_garage"
+            case .custom: return "CategoryTiles/13_custom"
             }
         }
 
@@ -124,10 +165,31 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     }
 
     /// Material and finish quality tier, affects AI generation and cost estimation.
+    /// Optional on `Project` — `nil` means "Auto" (backend picks tier-neutral
+    /// defaults). When set, the backend enforces tier price floors/ceilings on
+    /// materials and labor via `tier-bounds.ts`.
     enum QualityTier: String, Codable, CaseIterable, Sendable {
         case standard
         case premium
         case luxury
+
+        var displayName: String {
+            switch self {
+            case .standard: return "Standard"
+            case .premium: return "Premium"
+            case .luxury: return "Luxury"
+            }
+        }
+
+        /// Short helper text shown under each option in the picker. Sets
+        /// expectations on price band so contractors don't have to guess.
+        var subtitle: String {
+            switch self {
+            case .standard: return "Builder-grade materials, contractor labor rates"
+            case .premium: return "Mid-range finishes, skilled trade labor"
+            case .luxury: return "High-end finishes, master tradesperson labor"
+            }
+        }
     }
 
     /// Cadence options for recurring service contracts. Stored as the
@@ -202,7 +264,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         status = try c.decode(Status.self, forKey: .status)
         budgetMin = try c.decodeIfPresent(Decimal.self, forKey: .budgetMin)
         budgetMax = try c.decodeIfPresent(Decimal.self, forKey: .budgetMax)
-        qualityTier = try c.decode(QualityTier.self, forKey: .qualityTier)
+        qualityTier = try c.decodeIfPresent(QualityTier.self, forKey: .qualityTier)
         squareFootage = try c.decodeIfPresent(Decimal.self, forKey: .squareFootage)
         dimensions = try c.decodeIfPresent(String.self, forKey: .dimensions)
         language = try c.decodeIfPresent(String.self, forKey: .language)
@@ -230,7 +292,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         status: Status,
         budgetMin: Decimal?,
         budgetMax: Decimal?,
-        qualityTier: QualityTier,
+        qualityTier: QualityTier? = nil,
         squareFootage: Decimal?,
         dimensions: String?,
         language: String?,

@@ -1,54 +1,74 @@
 import SwiftUI
 
-/// Sign-in screen — matches the overhaul auth.png screenshot.
-/// Light surface, square brand mark, all-caps input labels, full-width
-/// black SIGN IN button, neutral Apple / Google rows, footer create-account.
 struct LoginView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = AuthViewModel()
-    @State private var isPasswordVisible: Bool = false
-    @FocusState private var focusedField: Field?
-
-    private enum Field {
-        case email
-        case password
-    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: SpacingTokens.lg) {
-                    brandSection
+                VStack(spacing: SpacingTokens.xl) {
+                    // MARK: - Logo / Header
+
+                    logoSection
                         .padding(.top, SpacingTokens.huge)
 
-                    emailField
-                    passwordField
+                    // MARK: - Form
+
+                    formSection
+
+                    // MARK: - Sign In Button
 
                     PrimaryCTAButton(
-                        title: "SIGN IN",
-                        trailingIcon: "arrow.right",
+                        title: "Sign In",
+                        icon: "arrow.right",
                         isLoading: viewModel.isLoading,
                         isDisabled: !viewModel.isLoginFormValid,
-                        style: .dark
-                    ) {
-                        focusedField = nil
-                        Task { await viewModel.login(appState: appState) }
-                    }
-                    .padding(.top, SpacingTokens.xs)
+                        action: {
+                            Task { await viewModel.login(appState: appState) }
+                        }
+                    )
+
+                    // MARK: - Divider
 
                     dividerSection
+
+                    // MARK: - Sign in with Apple / Google
 
                     appleSignInButton
                     googleSignInButton
 
-                    Spacer(minLength: SpacingTokens.huge)
+                    // MARK: - Forgot Password
 
-                    createAccountFooter
+                    Button {
+                        viewModel.showForgotPassword = true
+                    } label: {
+                        Text("Forgot Password?")
+                            .font(TypographyTokens.subheadline)
+                            .foregroundStyle(ColorTokens.primaryOrange)
+                    }
+
+                    // MARK: - Sign Up Link
+
+                    HStack(spacing: SpacingTokens.xxs) {
+                        Text("Don't have an account?")
+                            .font(TypographyTokens.subheadline)
+                            .foregroundStyle(ColorTokens.secondaryText)
+
+                        Button {
+                            viewModel.showSignUp = true
+                        } label: {
+                            Text("Sign Up")
+                                .font(TypographyTokens.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(ColorTokens.primaryOrange)
+                        }
+                    }
+                    .padding(.bottom, SpacingTokens.xxl)
                 }
                 .padding(.horizontal, SpacingTokens.xl)
                 .readableFormWidth()
             }
-            .background(ColorTokens.surface.ignoresSafeArea())
             .scrollDismissesKeyboard(.interactively)
             .alert("Error", isPresented: .init(
                 get: { viewModel.errorMessage != nil },
@@ -67,239 +87,129 @@ struct LoginView: View {
         }
     }
 
-    // MARK: - Brand Section
+    // MARK: - Logo Section
 
-    private var brandSection: some View {
-        VStack(spacing: SpacingTokens.md) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(ColorTokens.brandLogoTint)
-                    .frame(width: 72, height: 72)
+    private var logoSection: some View {
+        VStack(spacing: SpacingTokens.sm) {
+            Image("housd-icon-light")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 56)
+                .padding(SpacingTokens.md)
+                .background(Circle().fill(.white))
+                .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 2)
 
-                Image(systemName: "compass.drawing")
-                    .font(.system(size: 32, weight: .regular))
-                    .foregroundStyle(ColorTokens.textPrimary)
-            }
+            Text("ProEstimate")
+                .font(TypographyTokens.largeTitle)
 
-            VStack(spacing: SpacingTokens.xs) {
-                Text("ProEstimate AI")
-                    .font(.system(.largeTitle, design: .default, weight: .bold))
-                    .foregroundStyle(ColorTokens.textPrimary)
-
-                Text("Sign in to access your projects.")
-                    .font(TypographyTokens.subheadline)
-                    .foregroundStyle(ColorTokens.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
+            Text("AI-powered estimates for professionals")
+                .font(TypographyTokens.subheadline)
+                .foregroundStyle(ColorTokens.secondaryText)
+                .multilineTextAlignment(.center)
         }
     }
 
-    // MARK: - Email Field
+    // MARK: - Form Section
 
-    private var emailField: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            Text("EMAIL ADDRESS")
-                .font(TypographyTokens.inputLabel)
-                .tracking(0.6)
-                .foregroundStyle(ColorTokens.textSecondary)
+    private var formSection: some View {
+        VStack(spacing: SpacingTokens.md) {
+            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                Text("Email")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.secondaryText)
 
-            HStack(spacing: SpacingTokens.sm) {
-                Image(systemName: "envelope")
-                    .foregroundStyle(ColorTokens.textTertiary)
-
-                TextField("name@company.com", text: $viewModel.email)
+                TextField("you@company.com", text: $viewModel.email)
+                    .formField()
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .focused($focusedField, equals: .email)
-                    .submitLabel(.next)
-                    .onSubmit { focusedField = .password }
-            }
-            .padding(.vertical, SpacingTokens.sm + 2)
-            .padding(.horizontal, SpacingTokens.md)
-            .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.input))
-            .overlay(
-                RoundedRectangle(cornerRadius: RadiusTokens.input)
-                    .strokeBorder(
-                        focusedField == .email ? ColorTokens.primaryOrange : ColorTokens.cardStroke,
-                        lineWidth: focusedField == .email ? 1.5 : 1
-                    )
-            )
 
-            if !viewModel.email.isEmpty && !viewModel.isEmailValid {
-                Text("Please enter a valid email address.")
-                    .font(TypographyTokens.caption2)
-                    .foregroundStyle(ColorTokens.error)
-            }
-        }
-    }
-
-    // MARK: - Password Field
-
-    private var passwordField: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            HStack {
-                Text("PASSWORD")
-                    .font(TypographyTokens.inputLabel)
-                    .tracking(0.6)
-                    .foregroundStyle(ColorTokens.textSecondary)
-
-                Spacer()
-
-                Button {
-                    viewModel.showForgotPassword = true
-                } label: {
-                    Text("Forgot Password?")
-                        .font(TypographyTokens.caption.weight(.semibold))
-                        .foregroundStyle(ColorTokens.accentBlue)
+                if !viewModel.email.isEmpty && !viewModel.isEmailValid {
+                    Text("Please enter a valid email address.")
+                        .font(TypographyTokens.caption2)
+                        .foregroundStyle(ColorTokens.error)
                 }
             }
 
-            HStack(spacing: SpacingTokens.sm) {
-                Image(systemName: "lock")
-                    .foregroundStyle(ColorTokens.textTertiary)
+            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                Text("Password")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.secondaryText)
 
-                Group {
-                    if isPasswordVisible {
-                        TextField("••••••••", text: $viewModel.password)
-                    } else {
-                        SecureField("••••••••", text: $viewModel.password)
-                    }
-                }
-                .textContentType(.password)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .focused($focusedField, equals: .password)
-                .submitLabel(.go)
-                .onSubmit {
-                    focusedField = nil
-                    Task { await viewModel.login(appState: appState) }
-                }
-
-                Button {
-                    isPasswordVisible.toggle()
-                } label: {
-                    Image(systemName: isPasswordVisible ? "eye.slash" : "eye")
-                        .foregroundStyle(ColorTokens.textTertiary)
-                }
-                .accessibilityLabel(isPasswordVisible ? "Hide password" : "Show password")
+                SecureField("Enter your password", text: $viewModel.password)
+                    .formField()
+                    .textContentType(.password)
             }
-            .padding(.vertical, SpacingTokens.sm + 2)
-            .padding(.horizontal, SpacingTokens.md)
-            .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.input))
-            .overlay(
-                RoundedRectangle(cornerRadius: RadiusTokens.input)
-                    .strokeBorder(
-                        focusedField == .password ? ColorTokens.primaryOrange : ColorTokens.cardStroke,
-                        lineWidth: focusedField == .password ? 1.5 : 1
-                    )
-            )
         }
     }
 
     // MARK: - Divider
 
     private var dividerSection: some View {
-        HStack(spacing: SpacingTokens.sm) {
+        HStack {
             Rectangle()
-                .fill(ColorTokens.cardStroke)
+                .fill(ColorTokens.subtleBorder)
                 .frame(height: 1)
 
-            Text("or continue with")
+            Text("or")
                 .font(TypographyTokens.caption)
-                .foregroundStyle(ColorTokens.textSecondary)
+                .foregroundStyle(ColorTokens.secondaryText)
 
             Rectangle()
-                .fill(ColorTokens.cardStroke)
+                .fill(ColorTokens.subtleBorder)
                 .frame(height: 1)
         }
-        .padding(.vertical, SpacingTokens.xs)
     }
 
-    // MARK: - Apple / Google
+    // MARK: - Apple Sign In
 
     private var appleSignInButton: some View {
         Button {
             Task { await viewModel.signInWithApple(appState: appState) }
         } label: {
-            HStack(spacing: SpacingTokens.sm) {
+            HStack(spacing: SpacingTokens.xs) {
                 Image(systemName: "apple.logo")
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(ColorTokens.textPrimary)
                 Text("Sign in with Apple")
-                    .font(TypographyTokens.bodyEmphasized)
-                    .foregroundStyle(ColorTokens.textPrimary)
+                    .font(TypographyTokens.headline)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, SpacingTokens.sm + 4)
-            .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.input))
+            .padding(.vertical, SpacingTokens.sm)
+            .padding(.horizontal, SpacingTokens.md)
+            .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
             .overlay(
-                RoundedRectangle(cornerRadius: RadiusTokens.input)
-                    .strokeBorder(ColorTokens.cardStroke, lineWidth: 1)
+                RoundedRectangle(cornerRadius: RadiusTokens.button)
+                    .strokeBorder(ColorTokens.primaryOrange.opacity(0.35), lineWidth: 1)
             )
+            .foregroundStyle(ColorTokens.primaryText)
         }
-        .buttonStyle(.plain)
         .disabled(viewModel.isLoading)
     }
+
+    // MARK: - Google Sign In
 
     private var googleSignInButton: some View {
         Button {
             Task { await viewModel.signInWithGoogle(appState: appState) }
         } label: {
-            HStack(spacing: SpacingTokens.sm) {
-                googleGlyph
+            HStack(spacing: SpacingTokens.xs) {
+                Text("G")
+                    .font(.system(size: 18, weight: .heavy))
+                    .foregroundStyle(.blue)
                 Text("Sign in with Google")
-                    .font(TypographyTokens.bodyEmphasized)
-                    .foregroundStyle(ColorTokens.textPrimary)
+                    .font(TypographyTokens.headline)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, SpacingTokens.sm + 4)
-            .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.input))
+            .padding(.vertical, SpacingTokens.sm)
+            .padding(.horizontal, SpacingTokens.md)
+            .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
             .overlay(
-                RoundedRectangle(cornerRadius: RadiusTokens.input)
-                    .strokeBorder(ColorTokens.cardStroke, lineWidth: 1)
+                RoundedRectangle(cornerRadius: RadiusTokens.button)
+                    .strokeBorder(ColorTokens.subtleBorder, lineWidth: 1)
             )
+            .foregroundStyle(ColorTokens.primaryText)
         }
-        .buttonStyle(.plain)
         .disabled(viewModel.isLoading)
-    }
-
-    /// Multi-color "G" mark approximating Google's logo without redistributing
-    /// the brand asset. Good enough for sign-in row recognition.
-    private var googleGlyph: some View {
-        Text("G")
-            .font(.system(size: 20, weight: .heavy, design: .default))
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [
-                        Color(hex: 0x4285F4),
-                        Color(hex: 0xEA4335),
-                        Color(hex: 0xFBBC05),
-                        Color(hex: 0x34A853),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-    }
-
-    // MARK: - Create Account Footer
-
-    private var createAccountFooter: some View {
-        HStack(spacing: 4) {
-            Text("Don't have an account?")
-                .font(TypographyTokens.subheadline)
-                .foregroundStyle(ColorTokens.textSecondary)
-
-            Button {
-                viewModel.showSignUp = true
-            } label: {
-                Text("Create Account")
-                    .font(TypographyTokens.subheadline.weight(.bold))
-                    .foregroundStyle(ColorTokens.textPrimary)
-            }
-        }
-        .padding(.bottom, SpacingTokens.xl)
     }
 }

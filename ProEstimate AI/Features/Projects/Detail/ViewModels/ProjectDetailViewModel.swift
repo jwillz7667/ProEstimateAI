@@ -16,6 +16,11 @@ final class ProjectDetailViewModel {
     var client: Client?
     var assets: [Asset] = []
 
+    /// Saved PDF exports for each estimate, keyed by `estimate.id`. Hydrated
+    /// from `GET /v1/projects/:id/estimate-exports` on project load and
+    /// updated locally after a fresh export upload returns.
+    var estimateExports: [String: [EstimateExport]] = [:]
+
     var isLoading: Bool = false
     var errorMessage: String?
 
@@ -24,8 +29,23 @@ final class ProjectDetailViewModel {
     var isGenerating: Bool = false
     var currentGenerationStage: Int = 0
 
-    /// Backing tasks for in-flight generation work so we can cancel on view disappear.
-    private var generationTask: Task<Void, Never>?
+    /// Long-running observer of the App-level generation lifecycle
+    /// coordinator. Owned by the VM so its lifetime matches the
+    /// detail screen — we never want this to outlive the VM.
+    /// Polling itself is owned by the coordinator and is independent
+    /// of this Task, so cancelling it never interrupts an in-flight
+    /// generation.
+    private var lifecycleObservation: Task<Void, Never>?
+
+    /// The generation ID this VM is currently animating progress for.
+    /// `nil` when no foreground run is in flight from this screen — a
+    /// completion event for any other gen on the project still
+    /// refreshes data, but only this ID's terminal event stops the
+    /// progress simulation and clears `isGenerating`.
+    private var awaitingGenerationId: String?
+
+    /// Backing task for the staged progress simulation. Local to the
+    /// VM since it drives only UI animation, not server interaction.
     private var progressTask: Task<Void, Never>?
 
     // MARK: - Material Selection
@@ -57,6 +77,7 @@ final class ProjectDetailViewModel {
     private let generationService: GenerationServiceProtocol
     private let estimateService: EstimateServiceProtocol
     private let clientService: ClientServiceProtocol
+    private let estimateExportService: EstimateExportServiceProtocol
 
     // MARK: - Init
 
@@ -64,12 +85,14 @@ final class ProjectDetailViewModel {
         projectService: ProjectServiceProtocol = LiveProjectService(),
         generationService: GenerationServiceProtocol = LiveGenerationService(),
         estimateService: EstimateServiceProtocol = LiveEstimateService(),
-        clientService: ClientServiceProtocol = LiveClientService()
+        clientService: ClientServiceProtocol = LiveClientService(),
+        estimateExportService: EstimateExportServiceProtocol = LiveEstimateExportService()
     ) {
         self.projectService = projectService
         self.generationService = generationService
         self.estimateService = estimateService
         self.clientService = clientService
+        self.estimateExportService = estimateExportService
     }
 
     // MARK: - Loading
@@ -92,8 +115,23 @@ final class ProjectDetailViewModel {
         async let assetsTask: Void = loadAssets(projectId: id)
         async let activityTask: Void = loadActivity(projectId: id)
         async let clientTask: Void = loadClient()
+        async let exportsTask: Void = loadEstimateExports(projectId: id)
 
-        _ = await (gensTask, estimatesTask, assetsTask, activityTask, clientTask)
+        _ = await (gensTask, estimatesTask, assetsTask, activityTask, clientTask, exportsTask)
+
+        // Warm URLCache for the photo grid (~320pt wide cards) and the
+        // before/after preview (full-bleed). Backend snaps to canonical
+        // buckets, so 320 → 480 and 960 → 960 in practice. Both fire in
+        // parallel; the prefetcher silently dedups against URLs already
+        // resolved by the dashboard.
+        let assetURLs = assets.flatMap { asset -> [URL] in
+            let base = asset.thumbnailURL ?? asset.url
+            return [base.thumbnail(width: 320)]
+        }
+        let generationURLs = generations
+            .compactMap { $0.previewURL }
+            .map { $0.thumbnail(width: 960) }
+        ThumbnailPrefetcher.shared.prefetch(assetURLs + generationURLs)
 
         // Load materials from completed generations
         await loadMaterials()
@@ -105,10 +143,27 @@ final class ProjectDetailViewModel {
 
         isLoading = false
 
-        // If the project was being generated when we left and is still in
-        // flight, resume polling so the UI catches the completion even if
-        // the original Task died during the first run.
-        resumePollingIfInFlight()
+        // Make sure we're listening for terminal events on any in-flight
+        // gen this VM cares about. Idempotent.
+        startObservingLifecycleIfNeeded()
+
+        // If the project shows a queued/processing gen on load (either
+        // freshly resumed from cold launch by the App-level coordinator
+        // or carried over from a previous VM instance), make sure the
+        // coordinator is polling it AND that our local UI reflects the
+        // in-flight state. Both calls are idempotent so a repeat
+        // navigation back to the screen is harmless.
+        if let inFlight = generations.first(where: { $0.status == .processing || $0.status == .queued }) {
+            GenerationLifecycleCoordinator.shared.registerStart(
+                generationId: inFlight.id,
+                projectId: id,
+                projectTitle: project?.title
+            )
+            awaitingGenerationId = inFlight.id
+            isGenerating = true
+            currentGenerationStage = 2
+            startProgressSimulation()
+        }
     }
 
     private func loadGenerations(projectId: String) async {
@@ -132,6 +187,33 @@ final class ProjectDetailViewModel {
         client = try? await clientService.getClient(id: clientId)
     }
 
+    /// Pull every persisted PDF export for this project's estimates and
+    /// bucket them by `estimateId` so the per-row UI can render its
+    /// "Saved exports" sublist without a second round-trip per estimate.
+    private func loadEstimateExports(projectId: String) async {
+        let all = (try? await estimateExportService.listByProject(projectId: projectId)) ?? []
+        estimateExports = Dictionary(grouping: all, by: { $0.estimateId })
+    }
+
+    /// Insert a freshly-uploaded export at the top of its bucket so the UI
+    /// reflects the new save without waiting on the next project refresh.
+    func registerNewExport(_ export: EstimateExport) {
+        var existing = estimateExports[export.estimateId] ?? []
+        existing.insert(export, at: 0)
+        estimateExports[export.estimateId] = existing
+    }
+
+    /// Remove a deleted export from local state.
+    func removeExport(_ export: EstimateExport) {
+        guard var bucket = estimateExports[export.estimateId] else { return }
+        bucket.removeAll { $0.id == export.id }
+        if bucket.isEmpty {
+            estimateExports.removeValue(forKey: export.estimateId)
+        } else {
+            estimateExports[export.estimateId] = bucket
+        }
+    }
+
     /// Fetch material suggestions from all completed generations.
     private func loadMaterials() async {
         var allMaterials: [MaterialSuggestion] = []
@@ -150,13 +232,8 @@ final class ProjectDetailViewModel {
     func startGeneration(prompt: String? = nil, materials: [MaterialSpec]? = nil) async {
         guard let project else { return }
 
-        // If a previous run is still in flight, cancel it before starting a new one.
-        cancelGeneration()
-
         isGenerating = true
         currentGenerationStage = 0
-
-        // Start the progress simulation.
         startProgressSimulation()
 
         let effectivePrompt = prompt ?? project.description ?? "Generate a remodel preview for \(project.title)"
@@ -169,81 +246,80 @@ final class ProjectDetailViewModel {
             return selected.map { MaterialSpec(from: $0) }
         }()
 
-        // Drive the actual generation + polling on a cancellable Task so navigating
-        // away tears it down cleanly.
-        let task = Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer {
-                self.stopProgressSimulation()
-                self.isGenerating = false
-            }
+        do {
+            let generation = try await generationService.startGeneration(
+                projectId: project.id,
+                prompt: effectivePrompt,
+                materials: effectiveMaterials
+            )
+            // Backend has consumed one starter credit inside the gate's
+            // transaction; mirror that locally so the next tap reflects
+            // the new remaining count without waiting on entitlement
+            // refresh.
+            UsageMeterStore.shared.recordGenerationConsumed()
 
-            do {
-                let generation = try await self.generationService.startGeneration(
-                    projectId: project.id,
-                    prompt: effectivePrompt,
-                    materials: effectiveMaterials
-                )
-                await self.pollUntilFinished(generation: generation, project: project)
-            } catch is CancellationError {
-                // Silent — caller cancelled deliberately.
-            } catch {
-                self.errorMessage = error.localizedDescription
-            }
+            // Insert the QUEUED record so the UI immediately shows
+            // "in progress" state without waiting for a refresh.
+            generations.insert(generation, at: 0)
+            awaitingGenerationId = generation.id
+
+            // Hand off polling to the coordinator. From here, completion
+            // arrives via the lifecycle event stream — this method is
+            // free to return.
+            GenerationLifecycleCoordinator.shared.registerStart(
+                generationId: generation.id,
+                projectId: project.id,
+                projectTitle: project.title
+            )
+            startObservingLifecycleIfNeeded()
+        } catch is CancellationError {
+            stopProgressSimulation()
+            isGenerating = false
+        } catch {
+            stopProgressSimulation()
+            isGenerating = false
+            errorMessage = error.localizedDescription
         }
-
-        generationTask = task
-        await task.value
     }
 
-    /// Poll the generation endpoint until the record is either `.completed`
-    /// or `.failed`, survive transient network blips without bailing, and
-    /// surface a clear error + retry when the window expires.
-    ///
-    /// Split out from `startGeneration` so the same logic powers "resume"
-    /// on project re-load (see `resumePollingIfInFlight`).
-    private func pollUntilFinished(generation: AIGeneration, project: Project) async {
-        // PiAPI typically finishes in 60–130s. Google GenAI fallback adds a
-        // bit more. Poll for up to 4 minutes before declaring the run stuck.
-        let maxAttempts = 80          // 80 × 3s = 240s = 4 minutes
-        let pollInterval: Double = 3
-        var transientFailures = 0
+    // MARK: - Lifecycle Observation
 
-        var latest = generation
-        var reachedTerminalState = false
-
-        for _ in 0..<maxAttempts {
-            if Task.isCancelled { return }
-            try? await Task.sleep(for: .seconds(pollInterval))
-            if Task.isCancelled { return }
-
-            do {
-                latest = try await generationService.getGenerationStatus(id: generation.id)
-                transientFailures = 0
-                if latest.status == .completed || latest.status == .failed {
-                    reachedTerminalState = true
-                    break
-                }
-            } catch is CancellationError {
-                return
-            } catch {
-                // One dropped request shouldn't kill the whole run. Allow a
-                // short streak of consecutive failures before giving up.
-                transientFailures += 1
-                if transientFailures >= 5 {
-                    errorMessage = "Lost connection to the preview service. Pull down to refresh and we'll pick up where we left off."
-                    return
-                }
+    /// Subscribe to the App-level coordinator's event stream, filtering
+    /// for events that belong to this project. Idempotent — repeat
+    /// calls do not stack observation tasks.
+    @MainActor
+    func startObservingLifecycleIfNeeded() {
+        guard lifecycleObservation == nil else { return }
+        let coordinator = GenerationLifecycleCoordinator.shared
+        lifecycleObservation = Task { @MainActor [weak self] in
+            for await event in coordinator.events {
+                guard let self else { return }
+                await self.handleLifecycleEvent(event)
             }
         }
+    }
 
-        if Task.isCancelled { return }
+    /// Stop observing without cancelling any in-flight polling. Called
+    /// from `.onDisappear` and on sign-out so the VM doesn't leak its
+    /// observation Task while the coordinator keeps polling globally.
+    @MainActor
+    func stopObservingLifecycle() {
+        lifecycleObservation?.cancel()
+        lifecycleObservation = nil
+        progressTask?.cancel()
+        progressTask = nil
+    }
 
-        // Insert whatever we have — either the terminal record or the last
-        // PROCESSING snapshot — so the UI shows something meaningful.
-        generations.insert(latest, at: 0)
+    private func handleLifecycleEvent(_ event: GenerationLifecycleCoordinator.Event) async {
+        guard let project, event.projectId == project.id else { return }
 
-        if reachedTerminalState && latest.status == .completed {
+        switch event {
+        case let .completed(generationId, _):
+            // Refresh the canonical generation record + dependent
+            // materials/estimates. We re-fetch instead of trusting a
+            // local snapshot to avoid stale-write races against the
+            // backend's auto-created estimate insert.
+            await refreshGenerationStatus()
             await loadMaterials()
             for material in materials {
                 if materialSelectionState[material.id] == nil {
@@ -251,49 +327,22 @@ final class ProjectDetailViewModel {
                 }
             }
             await loadEstimates(projectId: project.id)
-        } else if reachedTerminalState && latest.status == .failed {
-            errorMessage = latest.errorMessage ?? "Image generation failed. Please try again."
-        } else {
-            // Loop exhausted without terminal status. Don't pretend success —
-            // tell the user what happened and point them at the refresh.
-            errorMessage = "Preview is taking longer than expected. Pull down to refresh — if it's done on the server, it'll appear, otherwise tap Generate to try again."
-        }
-    }
 
-    /// If the project has a generation still in `.processing` / `.queued`
-    /// state when the detail view (re)loads, start a background poll for
-    /// it so the UI catches the completion even if the original Task died.
-    /// Idempotent — does nothing if a poll is already running.
-    @MainActor
-    func resumePollingIfInFlight() {
-        guard let project,
-              generationTask == nil,
-              !isGenerating,
-              let inFlight = generations.first(where: { $0.status == .processing || $0.status == .queued })
-        else { return }
-
-        isGenerating = true
-        currentGenerationStage = 2 // show "Render" stage for resumed runs
-        startProgressSimulation()
-
-        let task = Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer {
-                self.stopProgressSimulation()
-                self.isGenerating = false
+            if generationId == awaitingGenerationId {
+                stopProgressSimulation()
+                isGenerating = false
+                awaitingGenerationId = nil
             }
-            await self.pollUntilFinished(generation: inFlight, project: project)
-        }
-        generationTask = task
-    }
+        case let .failed(generationId, _, message):
+            await refreshGenerationStatus()
+            errorMessage = message ?? "Image generation failed. Please try again."
 
-    /// Cancel any in-flight generation polling and progress simulation.
-    /// Call from `.onDisappear` so navigating away doesn't leak background work.
-    func cancelGeneration() {
-        generationTask?.cancel()
-        generationTask = nil
-        progressTask?.cancel()
-        progressTask = nil
+            if generationId == awaitingGenerationId {
+                stopProgressSimulation()
+                isGenerating = false
+                awaitingGenerationId = nil
+            }
+        }
     }
 
     // MARK: - Deletion
@@ -303,7 +352,16 @@ final class ProjectDetailViewModel {
     @discardableResult
     func deleteProject() async -> Bool {
         guard let project else { return false }
-        cancelGeneration()
+        // Tear down any in-flight polling for this project's generations
+        // so the coordinator doesn't continue ticking against a now-404
+        // record after the cascade delete commits server-side.
+        let coordinator = GenerationLifecycleCoordinator.shared
+        for inFlight in generations where inFlight.status == .processing || inFlight.status == .queued {
+            coordinator.cancel(generationId: inFlight.id)
+        }
+        stopObservingLifecycle()
+        isGenerating = false
+        awaitingGenerationId = nil
         do {
             try await projectService.deleteProject(id: project.id)
             return true

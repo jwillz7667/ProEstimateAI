@@ -1,24 +1,20 @@
 "use client";
 
 import { motion, type Variants } from "framer-motion";
+import { APP_STORE_URL } from "@/lib/constants";
 
 // ---------------------------------------------------------------------------
-// Animation Variants
+// Animation
 // ---------------------------------------------------------------------------
 
-/** Container orchestrates staggered children entrance */
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.12,
-      delayChildren: 0.1,
-    },
+    transition: { staggerChildren: 0.12, delayChildren: 0.1 },
   },
 };
 
-/** Fade-in-up for text and button children */
 const fadeInUp: Variants = {
   hidden: { opacity: 0, y: 32 },
   visible: {
@@ -29,13 +25,7 @@ const fadeInUp: Variants = {
 };
 
 // ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const APP_STORE_URL = "https://apps.apple.com/app/proestimate-ai/id0000000000";
-
-// ---------------------------------------------------------------------------
-// Decorative Floating Circles
+// Decorative orbs
 // ---------------------------------------------------------------------------
 
 interface FloatingCircle {
@@ -51,11 +41,10 @@ const FLOATING_CIRCLES: FloatingCircle[] = [
   { size: 200, top: "60%", left: "85%", opacity: 0.08, delay: 0.4 },
   { size: 140, top: "15%", left: "75%", opacity: 0.05, delay: 0.8 },
   { size: 100, top: "70%", left: "10%", opacity: 0.07, delay: 1.2 },
-  { size: 80, top: "30%", left: "50%", opacity: 0.04, delay: 0.6 },
 ];
 
 // ---------------------------------------------------------------------------
-// Apple Icon (inline SVG)
+// Apple icon
 // ---------------------------------------------------------------------------
 
 function AppleIcon({ className }: { className?: string }) {
@@ -74,7 +63,7 @@ function AppleIcon({ className }: { className?: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// CTA Component
+// Section
 // ---------------------------------------------------------------------------
 
 export default function CTA() {
@@ -83,7 +72,6 @@ export default function CTA() {
       id="get-started"
       className="relative overflow-hidden bg-gradient-to-br from-brand-500 to-brand-600 py-24 sm:py-32"
     >
-      {/* Floating decorative circles */}
       {FLOATING_CIRCLES.map((circle, i) => (
         <motion.div
           key={i}
@@ -109,8 +97,8 @@ export default function CTA() {
         />
       ))}
 
-      {/* Subtle radial glow behind content */}
       <div
+        aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
           background:
@@ -118,7 +106,6 @@ export default function CTA() {
         }}
       />
 
-      {/* Content */}
       <motion.div
         className="relative z-10 mx-auto max-w-4xl px-6 text-center sm:px-8 lg:px-12"
         variants={containerVariants}
@@ -126,49 +113,44 @@ export default function CTA() {
         whileInView="visible"
         viewport={{ once: true, amount: 0.4 }}
       >
-        {/* Heading */}
         <motion.h2
-          className="text-4xl font-bold leading-tight tracking-tight text-white md:text-5xl lg:text-6xl"
+          className="text-4xl font-bold leading-tight tracking-tight text-balance text-white md:text-5xl lg:text-6xl"
           variants={fadeInUp}
         >
-          Ready to Transform Your Next Project?
+          Your next quote, in the time it takes to take a photo.
         </motion.h2>
 
-        {/* Subtext */}
         <motion.p
-          className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/85 md:text-xl"
+          className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-white/90 md:text-xl"
           variants={fadeInUp}
         >
-          Join thousands of contractors and homeowners using AI to estimate
-          smarter.
+          Free to start. Three full AI previews on the house. No credit card
+          required.
         </motion.p>
 
-        {/* CTA buttons */}
         <motion.div
-          className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row"
+          className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row"
           variants={fadeInUp}
         >
-          {/* Primary — Download on App Store */}
           <motion.a
             href={APP_STORE_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2.5 rounded-full bg-white px-8 py-4 text-base font-semibold text-brand-600 shadow-lg transition-colors duration-200 hover:bg-white/95"
-            whileHover={{ scale: 1.05 }}
+            className="inline-flex items-center gap-2.5 rounded-full bg-white px-7 py-3.5 text-base font-semibold text-brand-600 shadow-lg shadow-black/15 transition-colors duration-200 hover:bg-white/95"
+            whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.97 }}
           >
             <AppleIcon />
             Download on App Store
           </motion.a>
 
-          {/* Secondary — Try Web Demo */}
           <motion.a
-            href="#demo"
-            className="inline-flex items-center gap-2 rounded-full border-2 border-white px-8 py-4 text-base font-semibold text-white transition-colors duration-200 hover:bg-white/10"
-            whileHover={{ scale: 1.05 }}
+            href="#pricing"
+            className="inline-flex items-center gap-2 rounded-full border-2 border-white px-7 py-3.5 text-base font-semibold text-white transition-colors duration-200 hover:bg-white/10"
+            whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.97 }}
           >
-            Try Web Demo
+            See pricing
           </motion.a>
         </motion.div>
       </motion.div>

@@ -1,14 +1,34 @@
-import { prisma } from '../../config/database';
-import { NotFoundError, ValidationError } from '../../lib/errors';
-import { v4 as uuidv4 } from 'uuid';
-import { isAdminUser } from '../../lib/admin';
-import { logger } from '../../config/logger';
-import { cached, invalidateCache, CacheKeys, CacheTTL } from '../../config/redis';
+import { prisma } from "../../config/database";
+import {
+  AccountMismatchError,
+  NotFoundError,
+  SubscriptionOwnedByOtherUserError,
+  ValidationError,
+} from "../../lib/errors";
+import { v4 as uuidv4 } from "uuid";
+import { isAdminUser } from "../../lib/admin";
+import { logger } from "../../config/logger";
+import {
+  cached,
+  invalidateCache,
+  CacheKeys,
+  CacheTTL,
+} from "../../config/redis";
 import {
   DecodedAppleNotification,
   AppleNotificationType,
   AppleNotificationSubtype,
-} from '../../lib/apple-storekit';
+  AppleTransactionInfo,
+  AppleJWSVerificationError,
+  EXPECTED_BUNDLE_ID,
+  verifyAppleJWS,
+} from "../../lib/apple-storekit";
+import {
+  AppStoreServerApiError,
+  AppStoreTransactionNotFoundError,
+  assertTransactionInHistory,
+  isAppStoreServerApiConfigured,
+} from "../../lib/apple-server-api";
 import {
   StoreProductDto,
   toStoreProductDto,
@@ -16,11 +36,11 @@ import {
   toEntitlementSnapshotDto,
   PurchaseAttemptResponseDto,
   ADMIN_ENTITLEMENT_SNAPSHOT,
-} from './commerce.dto';
+} from "./commerce.dto";
 import {
   SyncTransactionInput,
   RestoreTransactionInput,
-} from './commerce.validators';
+} from "./commerce.validators";
 
 // ─── Entitlement Service ───────────────────────────────
 
@@ -44,7 +64,7 @@ export async function getEffectiveEntitlement(
       });
 
       if (!entitlement) {
-        throw new NotFoundError('UserEntitlement');
+        throw new NotFoundError("UserEntitlement");
       }
 
       // Fetch all usage buckets for this user
@@ -60,17 +80,32 @@ export async function getEffectiveEntitlement(
 // ─── Commerce Product Service ──────────────────────────
 
 export async function getProducts(): Promise<StoreProductDto[]> {
-  return cached(CacheKeys.commerceProducts(), CacheTTL.COMMERCE_PRODUCTS, async () => {
-    const products = await prisma.subscriptionProduct.findMany({
-      include: { plan: true },
-      orderBy: { sortOrder: 'asc' },
-    });
+  return cached(
+    CacheKeys.commerceProducts(),
+    CacheTTL.COMMERCE_PRODUCTS,
+    async () => {
+      const products = await prisma.subscriptionProduct.findMany({
+        include: { plan: true },
+        orderBy: { sortOrder: "asc" },
+      });
 
-    return products.map(toStoreProductDto);
-  });
+      return products.map(toStoreProductDto);
+    },
+  );
 }
 
 // ─── Purchase Attempt Service ──────────────────────────
+
+/**
+ * How long a `PurchaseAttempt` may sit in `PENDING` before we treat it
+ * as abandoned. The StoreKit purchase sheet itself has no analog of
+ * "session expired", but realistically a user either completes the buy
+ * within minutes or walks away. Anything older than a day is dead
+ * weight — keeping it around bloats the table and clutters the audit
+ * view. 24h is generous enough to absorb users who started a purchase
+ * on Apple's pending-approval flow (Ask to Buy) and confirmed later.
+ */
+const PURCHASE_ATTEMPT_EXPIRY_HOURS = 24;
 
 export async function createPurchaseAttempt(
   userId: string,
@@ -84,8 +119,23 @@ export async function createPurchaseAttempt(
   });
 
   if (!product) {
-    throw new NotFoundError('SubscriptionProduct', productId);
+    throw new NotFoundError("SubscriptionProduct", productId);
   }
+
+  // Lazy expiry: roll any of this user's stale PENDING attempts to
+  // ABANDONED before minting a new one. Cheap (uses the userId index)
+  // and keeps the table's PENDING set bounded without needing a cron.
+  const expiryCutoff = new Date(
+    Date.now() - PURCHASE_ATTEMPT_EXPIRY_HOURS * 60 * 60 * 1000,
+  );
+  await prisma.purchaseAttempt.updateMany({
+    where: {
+      userId,
+      status: "PENDING",
+      createdAt: { lt: expiryCutoff },
+    },
+    data: { status: "ABANDONED" },
+  });
 
   // Generate a unique app account token for StoreKit 2 purchase tracking
   const appAccountToken = uuidv4();
@@ -97,7 +147,7 @@ export async function createPurchaseAttempt(
       productId: product.id,
       placement: placement ?? null,
       appAccountToken,
-      status: 'PENDING',
+      status: "PENDING",
     },
   });
 
@@ -109,56 +159,278 @@ export async function createPurchaseAttempt(
 
 // ─── Commerce Sync Service ─────────────────────────────
 
+/**
+ * Statuses that count as a *live* claim on an Apple subscription. If a
+ * `UserEntitlement` with one of these statuses already references an
+ * `originalTransactionId`, that subscription is considered bound to
+ * that user — a different ProEstimate user cannot reclaim it via sync
+ * or restore. Statuses outside this list (`EXPIRED`, `REVOKED`, `FREE`,
+ * `ADMIN_OVERRIDE`) leave the originalTransactionId free to be
+ * re-bound: an expired/refunded sub from user A can legitimately be
+ * resubscribed by user B sharing the same Apple ID.
+ */
+const ACTIVE_ENTITLEMENT_STATUSES = [
+  "TRIAL_ACTIVE",
+  "PRO_ACTIVE",
+  "GRACE_PERIOD",
+  "BILLING_RETRY",
+  "CANCELED_ACTIVE",
+] as const;
+
+/**
+ * Statuses that signal the Apple subscription has fully ended — no
+ * service obligation remains. Hitting any of these via webhook is the
+ * trigger for downgrading the user's Pro-tier usage buckets back to
+ * the FREE quota (or 0 remaining if they exhausted their starter
+ * credits during the Pro window). Without this cleanup, a refunded
+ * user silently keeps `includedQuantity=999999` and any code path that
+ * trusts buckets alone treats them as Pro.
+ */
+const TERMINAL_ENTITLEMENT_STATUSES = ["EXPIRED", "REVOKED"] as const;
+
+/**
+ * Reject the request if `originalTransactionId` is already bound to a
+ * different ProEstimate user with a live entitlement. This is the
+ * server-side identity gate for the multi-Apple-ID case: even when
+ * Apple's JWS verifies cleanly and the requesting user is fully
+ * authenticated, we refuse to flip their entitlement if the
+ * subscription itself is owned by someone else.
+ *
+ * `syncTransaction` already gates on `PurchaseAttempt.userId`, but a
+ * crafted `PurchaseAttempt` could theoretically be created by user A
+ * for user B's transaction; this is defense in depth there.
+ *
+ * `restorePurchases` has *no* PurchaseAttempt to gate on, so this is
+ * the primary fix: without it, any user signed into the same Apple ID
+ * could call `/restore` and be granted Pro by replaying a JWS from
+ * another ProEstimate account on the device.
+ */
+async function assertOriginalTransactionOwnership(
+  userId: string,
+  originalTransactionId: string,
+): Promise<void> {
+  const existing = await prisma.userEntitlement.findFirst({
+    where: { originalTransactionId },
+    select: { userId: true, status: true },
+  });
+
+  if (!existing) {
+    return;
+  }
+  if (existing.userId === userId) {
+    return;
+  }
+  if (
+    !(ACTIVE_ENTITLEMENT_STATUSES as readonly string[]).includes(
+      existing.status,
+    )
+  ) {
+    return;
+  }
+
+  logger.warn(
+    {
+      requestUserId: userId,
+      claimedByUserId: existing.userId,
+      originalTransactionId,
+      currentStatus: existing.status,
+    },
+    "Apple subscription claim rejected — already bound to another active ProEstimate account",
+  );
+  throw new SubscriptionOwnedByOtherUserError();
+}
+
+/**
+ * Verify the iOS-supplied StoreKit JWS and assert that the
+ * Apple-signed payload corroborates every scalar field in the sync
+ * request. We reject the request if Apple's signature doesn't validate
+ * against the embedded Root CA, if the bundle ID isn't ours, if the
+ * decoded transaction IDs don't match what the client claims, or if
+ * the Apple-bound `appAccountToken` (when present) doesn't match the
+ * `PurchaseAttempt`'s token. Any mismatch means we're either looking
+ * at a forged transaction or a confused-deputy attempt to graft one
+ * user's subscription onto another account.
+ */
+async function verifySignedTransactionPayload(args: {
+  signedTransaction: string;
+  expectedTransactionId: string;
+  expectedOriginalTransactionId: string;
+  expectedProductId: string;
+  expectedAppAccountToken?: string;
+}): Promise<AppleTransactionInfo> {
+  let payload: AppleTransactionInfo;
+  try {
+    payload = await verifyAppleJWS<AppleTransactionInfo>(
+      args.signedTransaction,
+      "syncTransaction",
+    );
+  } catch (err) {
+    if (err instanceof AppleJWSVerificationError) {
+      throw new ValidationError(
+        `Signed transaction failed Apple verification: ${err.message}`,
+      );
+    }
+    throw err;
+  }
+
+  if (payload.bundleId !== EXPECTED_BUNDLE_ID) {
+    throw new ValidationError(
+      `Signed transaction bundleId mismatch: expected ${EXPECTED_BUNDLE_ID}, got ${payload.bundleId}`,
+    );
+  }
+  if (payload.transactionId !== args.expectedTransactionId) {
+    throw new ValidationError(
+      "Signed transaction transactionId does not match request body",
+    );
+  }
+  if (payload.originalTransactionId !== args.expectedOriginalTransactionId) {
+    throw new ValidationError(
+      "Signed transaction originalTransactionId does not match request body",
+    );
+  }
+  if (payload.productId !== args.expectedProductId) {
+    throw new ValidationError(
+      "Signed transaction productId does not match request body",
+    );
+  }
+  if (
+    args.expectedAppAccountToken &&
+    payload.appAccountToken &&
+    payload.appAccountToken.toLowerCase() !==
+      args.expectedAppAccountToken.toLowerCase()
+  ) {
+    throw new ValidationError(
+      "Signed transaction appAccountToken does not match purchase attempt",
+    );
+  }
+
+  // Defense-in-depth: when the App Store Server API credentials are
+  // provisioned, cross-check the transaction against Apple's
+  // authoritative server-side history. JWS verification proves the
+  // payload was signed by Apple at some point; the history check proves
+  // Apple still considers the transaction live and present right now.
+  // Transactions Apple has refunded or revoked between issuance and
+  // this call show up missing here, so we reject them as forgeries
+  // alongside actual replay attacks.
+  //
+  // Fail-closed on missing transactions, fail-open on transient API
+  // failures: a single Apple outage shouldn't take down purchases.
+  if (isAppStoreServerApiConfigured()) {
+    try {
+      await assertTransactionInHistory({
+        originalTransactionId: payload.originalTransactionId,
+        transactionId: payload.transactionId,
+      });
+    } catch (err) {
+      if (err instanceof AppStoreTransactionNotFoundError) {
+        logger.warn(
+          {
+            transactionId: payload.transactionId,
+            originalTransactionId: payload.originalTransactionId,
+          },
+          "Rejecting transaction — not present in Apple's server-side history",
+        );
+        throw new ValidationError(
+          "Transaction could not be confirmed against Apple's server-side history",
+        );
+      }
+      if (err instanceof AppStoreServerApiError) {
+        logger.warn(
+          {
+            statusCode: err.statusCode,
+            transactionId: payload.transactionId,
+            originalTransactionId: payload.originalTransactionId,
+          },
+          "App Store Server API check failed — proceeding with JWS-only verification",
+        );
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  return payload;
+}
+
 export async function syncTransaction(
   userId: string,
   companyId: string,
   input: SyncTransactionInput,
 ): Promise<EntitlementSnapshotDto> {
-  // 1. Find and verify the purchase attempt by app account token
+  // 1. Authenticate the transaction with Apple BEFORE any DB write.
+  // Anything below this line operates on a payload Apple has signed.
+  await verifySignedTransactionPayload({
+    signedTransaction: input.signed_transaction,
+    expectedTransactionId: input.transaction_id,
+    expectedOriginalTransactionId: input.original_transaction_id,
+    expectedProductId: input.store_product_id,
+    expectedAppAccountToken: input.app_account_token,
+  });
+
+  // Defense-in-depth identity gate: even with a valid JWS and a
+  // matching purchase attempt, refuse to bind this transaction if it
+  // is already claimed by a different ProEstimate user.
+  await assertOriginalTransactionOwnership(
+    userId,
+    input.original_transaction_id,
+  );
+
+  // 2. Find and verify the purchase attempt by app account token
   const attempt = await prisma.purchaseAttempt.findUnique({
     where: { appAccountToken: input.app_account_token },
   });
 
   if (!attempt) {
-    throw new NotFoundError('PurchaseAttempt');
+    throw new NotFoundError("PurchaseAttempt");
   }
 
   if (attempt.userId !== userId) {
-    throw new ValidationError('Purchase attempt does not belong to this user');
+    // The iOS client signed and submitted a transaction whose
+    // `appAccountToken` was minted for a different ProEstimate account.
+    // Don't leak which account owns the token; the message stays generic.
+    logger.warn(
+      {
+        attemptUserId: attempt.userId,
+        requestUserId: userId,
+        appAccountToken: input.app_account_token,
+      },
+      "Purchase attempt user mismatch — rejecting with ACCOUNT_MISMATCH",
+    );
+    throw new AccountMismatchError();
   }
 
   // Idempotency: if already completed, return current snapshot
-  if (attempt.status === 'COMPLETED') {
+  if (attempt.status === "COMPLETED") {
     return getEffectiveEntitlement(userId, companyId);
   }
 
-  // 2. Find the subscription product by store product ID
+  // 3. Find the subscription product by store product ID
   const product = await prisma.subscriptionProduct.findUnique({
     where: { storeProductId: input.store_product_id },
     include: { plan: true },
   });
 
   if (!product) {
-    throw new NotFoundError('SubscriptionProduct', input.store_product_id);
+    throw new NotFoundError("SubscriptionProduct", input.store_product_id);
   }
 
   const planCode = product.plan.code;
   const now = new Date();
 
-  // 3. Determine new entitlement status and dates
-  let newStatus: 'TRIAL_ACTIVE' | 'PRO_ACTIVE';
+  // 4. Determine new entitlement status and dates
+  let newStatus: "TRIAL_ACTIVE" | "PRO_ACTIVE";
   let trialEndsAt: Date | null = null;
   let renewalDate: Date;
 
   if (product.hasIntroOffer) {
     // Product has a 7-day free trial intro offer
-    newStatus = 'TRIAL_ACTIVE';
+    newStatus = "TRIAL_ACTIVE";
     trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     renewalDate = trialEndsAt;
   } else {
-    newStatus = 'PRO_ACTIVE';
+    newStatus = "PRO_ACTIVE";
     // Set renewal date based on billing period
-    if (product.billingPeriodLabel === 'month') {
+    if (product.billingPeriodLabel === "month") {
       renewalDate = new Date(now);
       renewalDate.setMonth(renewalDate.getMonth() + 1);
     } else {
@@ -168,16 +440,30 @@ export async function syncTransaction(
     }
   }
 
-  // 4. Execute all state changes atomically in a transaction
+  // 5. Execute all state changes atomically in a transaction
   const result = await prisma.$transaction(async (tx) => {
     // Update purchase attempt to COMPLETED
     await tx.purchaseAttempt.update({
       where: { id: attempt.id },
       data: {
-        status: 'COMPLETED',
+        status: "COMPLETED",
         transactionId: input.transaction_id,
         completedAt: now,
       },
+    });
+
+    // Release the originalTransactionId from any prior owner's row.
+    // assertOriginalTransactionOwnership above guarantees no other user
+    // holds an *active* claim, so any matching row is necessarily
+    // terminal (EXPIRED/REVOKED). Clearing the lookup key keeps the
+    // webhook handler's findFirst-by-originalTransactionId stable when
+    // the new owner is later renewed/refunded.
+    await tx.userEntitlement.updateMany({
+      where: {
+        originalTransactionId: input.original_transaction_id,
+        userId: { not: userId },
+      },
+      data: { originalTransactionId: null },
     });
 
     // Upsert the user entitlement
@@ -208,22 +494,35 @@ export async function syncTransaction(
       include: { plan: true },
     });
 
-    // Create subscription event
-    const eventType = product.hasIntroOffer ? 'TRIAL_STARTED' : 'PURCHASED';
-    await tx.subscriptionEvent.create({
-      data: {
+    // Create subscription event — dedupe against {entitlementId,
+    // transactionId, eventType} so concurrent retries (e.g. iOS resending
+    // after a network blip on the response) don't pollute the audit
+    // trail with duplicate PURCHASED/TRIAL_STARTED rows.
+    const eventType = product.hasIntroOffer ? "TRIAL_STARTED" : "PURCHASED";
+    const existingEvent = await tx.subscriptionEvent.findFirst({
+      where: {
         entitlementId: entitlement.id,
-        eventType,
-        storeProductId: input.store_product_id,
         transactionId: input.transaction_id,
-        environment: input.environment,
-        metadata: {
-          original_transaction_id: input.original_transaction_id,
-          purchase_attempt_id: input.purchase_attempt_id,
-          plan_code: planCode,
-        },
+        eventType,
       },
+      select: { id: true },
     });
+    if (!existingEvent) {
+      await tx.subscriptionEvent.create({
+        data: {
+          entitlementId: entitlement.id,
+          eventType,
+          storeProductId: input.store_product_id,
+          transactionId: input.transaction_id,
+          environment: input.environment,
+          metadata: {
+            original_transaction_id: input.original_transaction_id,
+            purchase_attempt_id: input.purchase_attempt_id,
+            plan_code: planCode,
+          },
+        },
+      });
+    }
 
     // Upgrade usage buckets to Pro limits (effectively unlimited)
     const PRO_INCLUDED_QUANTITY = 999999;
@@ -231,17 +530,20 @@ export async function syncTransaction(
     await tx.usageBucket.upsert({
       where: {
         userId_companyId_metricCode_source: {
-          userId, companyId, metricCode: 'AI_GENERATION', source: 'PRO_SUBSCRIPTION',
+          userId,
+          companyId,
+          metricCode: "AI_GENERATION",
+          source: "PRO_SUBSCRIPTION",
         },
       },
       create: {
         userId,
         companyId,
-        metricCode: 'AI_GENERATION',
+        metricCode: "AI_GENERATION",
         includedQuantity: PRO_INCLUDED_QUANTITY,
         consumedQuantity: 0,
-        resetPolicy: 'MONTHLY',
-        source: 'PRO_SUBSCRIPTION',
+        resetPolicy: "MONTHLY",
+        source: "PRO_SUBSCRIPTION",
       },
       update: {
         includedQuantity: PRO_INCLUDED_QUANTITY,
@@ -251,17 +553,20 @@ export async function syncTransaction(
     await tx.usageBucket.upsert({
       where: {
         userId_companyId_metricCode_source: {
-          userId, companyId, metricCode: 'QUOTE_EXPORT', source: 'PRO_SUBSCRIPTION',
+          userId,
+          companyId,
+          metricCode: "QUOTE_EXPORT",
+          source: "PRO_SUBSCRIPTION",
         },
       },
       create: {
         userId,
         companyId,
-        metricCode: 'QUOTE_EXPORT',
+        metricCode: "QUOTE_EXPORT",
         includedQuantity: PRO_INCLUDED_QUANTITY,
         consumedQuantity: 0,
-        resetPolicy: 'MONTHLY',
-        source: 'PRO_SUBSCRIPTION',
+        resetPolicy: "MONTHLY",
+        source: "PRO_SUBSCRIPTION",
       },
       update: {
         includedQuantity: PRO_INCLUDED_QUANTITY,
@@ -290,9 +595,48 @@ export async function restorePurchases(
     return getEffectiveEntitlement(userId, companyId);
   }
 
-  // Process the most recent transaction (last in the array, which is typically
-  // the latest from the StoreKit 2 transaction history).
-  const latestTx = transactions[transactions.length - 1];
+  // Authenticate every restored entitlement with Apple before we
+  // mutate any state. A restore can carry transactions from other
+  // devices, Family Sharing, or older accounts; any one of them being
+  // forged would let a free user grant themselves Pro by replaying a
+  // crafted body. Verifying each JWS closes that path.
+  //
+  // We capture each Apple-signed payload so we can pick the canonical
+  // "latest" transaction by Apple's own `purchaseDate` instead of
+  // trusting the array order — `Transaction.currentEntitlements` on
+  // iOS doesn't guarantee chronological order, and a user with a
+  // legacy product alongside the current one could otherwise have
+  // their entitlement bound to the wrong (older) subscription.
+  const verifiedItems: Array<{
+    input: RestoreTransactionInput;
+    payload: AppleTransactionInfo;
+  }> = [];
+  for (const tx of transactions) {
+    const payload = await verifySignedTransactionPayload({
+      signedTransaction: tx.signed_transaction,
+      expectedTransactionId: tx.transaction_id,
+      expectedOriginalTransactionId: tx.original_transaction_id,
+      expectedProductId: tx.store_product_id,
+      expectedAppAccountToken: tx.app_account_token ?? undefined,
+    });
+    verifiedItems.push({ input: tx, payload });
+  }
+
+  // Sort ascending by Apple-signed purchaseDate; the last entry is the
+  // canonical latest. Stable order in the unlikely tie case.
+  verifiedItems.sort((a, b) => a.payload.purchaseDate - b.payload.purchaseDate);
+  const latestTx = verifiedItems[verifiedItems.length - 1].input;
+
+  // Identity gate: this is the primary fix for the multi-Apple-ID
+  // restore path. Without it, any ProEstimate user signed into the
+  // same device's Apple ID could call `/restore` and steal the active
+  // subscription owned by a different ProEstimate user. Apple's JWS
+  // verifies the transaction's authenticity, but says nothing about
+  // which ProEstimate account is allowed to claim it.
+  await assertOriginalTransactionOwnership(
+    userId,
+    latestTx.original_transaction_id,
+  );
 
   // Find the subscription product to determine what they are restoring
   const product = await prisma.subscriptionProduct.findUnique({
@@ -301,7 +645,7 @@ export async function restorePurchases(
   });
 
   if (!product) {
-    throw new NotFoundError('SubscriptionProduct', latestTx.store_product_id);
+    throw new NotFoundError("SubscriptionProduct", latestTx.store_product_id);
   }
 
   const now = new Date();
@@ -309,7 +653,7 @@ export async function restorePurchases(
 
   // For restores, assume an active Pro subscription (non-trial)
   let renewalDate: Date;
-  if (product.billingPeriodLabel === 'month') {
+  if (product.billingPeriodLabel === "month") {
     renewalDate = new Date(now);
     renewalDate.setMonth(renewalDate.getMonth() + 1);
   } else {
@@ -320,6 +664,18 @@ export async function restorePurchases(
   const PRO_INCLUDED_QUANTITY = 999999;
 
   const result = await prisma.$transaction(async (tx) => {
+    // Release the originalTransactionId from any prior owner's row —
+    // see syncTransaction for full rationale. assertOriginalTransactionOwnership
+    // above guarantees the prior owner (if any) is terminal, so we
+    // preserve their audit fields but drop the lookup key.
+    await tx.userEntitlement.updateMany({
+      where: {
+        originalTransactionId: latestTx.original_transaction_id,
+        userId: { not: userId },
+      },
+      data: { originalTransactionId: null },
+    });
+
     // Upsert entitlement to PRO_ACTIVE for a restore
     const entitlement = await tx.userEntitlement.upsert({
       where: { userId },
@@ -327,7 +683,7 @@ export async function restorePurchases(
         userId,
         companyId,
         planId: product.planId,
-        status: 'PRO_ACTIVE',
+        status: "PRO_ACTIVE",
         storeProductId: latestTx.store_product_id,
         originalTransactionId: latestTx.original_transaction_id,
         renewalDate,
@@ -337,7 +693,7 @@ export async function restorePurchases(
       },
       update: {
         planId: product.planId,
-        status: 'PRO_ACTIVE',
+        status: "PRO_ACTIVE",
         storeProductId: latestTx.store_product_id,
         originalTransactionId: latestTx.original_transaction_id,
         renewalDate,
@@ -348,37 +704,54 @@ export async function restorePurchases(
       include: { plan: true },
     });
 
-    // Create RESTORED subscription event
-    await tx.subscriptionEvent.create({
-      data: {
+    // Create RESTORED subscription event — dedupe against
+    // {entitlementId, transactionId, eventType}. A user tapping
+    // "Restore Purchases" twice (or the listener firing while a manual
+    // restore is in flight) shouldn't write two RESTORED rows for the
+    // same Apple transaction.
+    const existingRestoreEvent = await tx.subscriptionEvent.findFirst({
+      where: {
         entitlementId: entitlement.id,
-        eventType: 'RESTORED',
-        storeProductId: latestTx.store_product_id,
         transactionId: latestTx.transaction_id,
-        environment: latestTx.environment,
-        metadata: {
-          original_transaction_id: latestTx.original_transaction_id,
-          plan_code: planCode,
-          restored_transactions_count: transactions.length,
-        },
+        eventType: "RESTORED",
       },
+      select: { id: true },
     });
+    if (!existingRestoreEvent) {
+      await tx.subscriptionEvent.create({
+        data: {
+          entitlementId: entitlement.id,
+          eventType: "RESTORED",
+          storeProductId: latestTx.store_product_id,
+          transactionId: latestTx.transaction_id,
+          environment: latestTx.environment,
+          metadata: {
+            original_transaction_id: latestTx.original_transaction_id,
+            plan_code: planCode,
+            restored_transactions_count: transactions.length,
+          },
+        },
+      });
+    }
 
     // Upgrade usage buckets to Pro limits
     await tx.usageBucket.upsert({
       where: {
         userId_companyId_metricCode_source: {
-          userId, companyId, metricCode: 'AI_GENERATION', source: 'PRO_SUBSCRIPTION',
+          userId,
+          companyId,
+          metricCode: "AI_GENERATION",
+          source: "PRO_SUBSCRIPTION",
         },
       },
       create: {
         userId,
         companyId,
-        metricCode: 'AI_GENERATION',
+        metricCode: "AI_GENERATION",
         includedQuantity: PRO_INCLUDED_QUANTITY,
         consumedQuantity: 0,
-        resetPolicy: 'MONTHLY',
-        source: 'PRO_SUBSCRIPTION',
+        resetPolicy: "MONTHLY",
+        source: "PRO_SUBSCRIPTION",
       },
       update: {
         includedQuantity: PRO_INCLUDED_QUANTITY,
@@ -388,17 +761,20 @@ export async function restorePurchases(
     await tx.usageBucket.upsert({
       where: {
         userId_companyId_metricCode_source: {
-          userId, companyId, metricCode: 'QUOTE_EXPORT', source: 'PRO_SUBSCRIPTION',
+          userId,
+          companyId,
+          metricCode: "QUOTE_EXPORT",
+          source: "PRO_SUBSCRIPTION",
         },
       },
       create: {
         userId,
         companyId,
-        metricCode: 'QUOTE_EXPORT',
+        metricCode: "QUOTE_EXPORT",
         includedQuantity: PRO_INCLUDED_QUANTITY,
         consumedQuantity: 0,
-        resetPolicy: 'MONTHLY',
-        source: 'PRO_SUBSCRIPTION',
+        resetPolicy: "MONTHLY",
+        source: "PRO_SUBSCRIPTION",
       },
       update: {
         includedQuantity: PRO_INCLUDED_QUANTITY,
@@ -419,12 +795,312 @@ export async function restorePurchases(
 
 // ─── App Store Webhook Handler ────────────────────────
 
+/**
+ * Provision a `UserEntitlement` from a webhook when iOS sync hasn't
+ * completed yet. Returns `true` when the entitlement was bootstrapped
+ * and the caller should consider the notification handled, `false`
+ * when the bootstrap declined (no matching PurchaseAttempt, attempt
+ * already used, identity gate refused, etc.) and the caller should
+ * fall through to the generic "no entitlement" log path.
+ *
+ * The bootstrap intentionally mirrors the relevant slice of
+ * `syncTransaction`: identity gate → release prior owner →
+ * mark attempt completed → upsert entitlement → record event →
+ * upgrade buckets — all atomic in a single $transaction. If
+ * `syncTransaction` later evolves (e.g. new bucket type, new
+ * entitlement field), keep this in sync.
+ */
+async function tryBootstrapEntitlementFromWebhook(args: {
+  decoded: DecodedAppleNotification;
+  appAccountToken: string;
+}): Promise<boolean> {
+  const { decoded, appAccountToken } = args;
+  const { transactionInfo, payload } = decoded;
+  const { notificationType, subtype, notificationUUID } = payload;
+
+  // Dedupe on Apple's canonical idempotency key first. If we've already
+  // recorded an event with this notificationUUID — whether through this
+  // bootstrap path, the normal webhook path, or a prior retry — Apple
+  // is replaying and we have nothing to do.
+  const alreadyProcessed = await prisma.subscriptionEvent.findUnique({
+    where: { notificationUUID },
+    select: { id: true },
+  });
+  if (alreadyProcessed) {
+    logger.info(
+      { notificationUUID, notificationType },
+      "Webhook bootstrap skipped — notificationUUID already processed",
+    );
+    return true;
+  }
+
+  const attempt = await prisma.purchaseAttempt.findUnique({
+    where: { appAccountToken },
+  });
+
+  if (!attempt) {
+    return false;
+  }
+
+  // The attempt token is unique, so a COMPLETED/FAILED/ABANDONED row
+  // here means the binding has already been resolved (or invalidated)
+  // through some other path. Don't second-guess it.
+  if (attempt.status !== "PENDING") {
+    return false;
+  }
+
+  // Defense-in-depth identity gate. Apple's JWS already authenticated
+  // the payload upstream in verifyAndDecodeNotification, but we still
+  // refuse to bind a subscription that is already actively claimed by
+  // a different ProEstimate user.
+  try {
+    await assertOriginalTransactionOwnership(
+      attempt.userId,
+      transactionInfo.originalTransactionId,
+    );
+  } catch (err) {
+    if (err instanceof SubscriptionOwnedByOtherUserError) {
+      logger.warn(
+        {
+          originalTransactionId: transactionInfo.originalTransactionId,
+          attemptUserId: attempt.userId,
+          notificationType,
+        },
+        "Webhook bootstrap blocked — subscription owned by another user",
+      );
+      return false;
+    }
+    throw err;
+  }
+
+  // Resolve the product so we can derive plan + dates. The attempt's
+  // productId is our internal cuid; the webhook gives us Apple's
+  // store-level product identifier — both should resolve to the same
+  // SubscriptionProduct row.
+  const product = await prisma.subscriptionProduct.findUnique({
+    where: { id: attempt.productId },
+    include: { plan: true },
+  });
+  if (!product) {
+    logger.error(
+      { attemptId: attempt.id, productId: attempt.productId },
+      "Webhook bootstrap aborted — SubscriptionProduct not found",
+    );
+    return false;
+  }
+
+  const isInitialBuy = subtype === AppleNotificationSubtype.INITIAL_BUY;
+  const now = new Date();
+
+  // Status + key dates — prefer Apple's signed `expiresDate` over our
+  // local arithmetic when available.
+  let newStatus: "TRIAL_ACTIVE" | "PRO_ACTIVE";
+  let trialEndsAt: Date | null = null;
+  let renewalDate: Date;
+
+  if (product.hasIntroOffer && isInitialBuy) {
+    newStatus = "TRIAL_ACTIVE";
+    trialEndsAt = transactionInfo.expiresDate
+      ? new Date(transactionInfo.expiresDate)
+      : new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    renewalDate = trialEndsAt;
+  } else {
+    newStatus = "PRO_ACTIVE";
+    if (transactionInfo.expiresDate) {
+      renewalDate = new Date(transactionInfo.expiresDate);
+    } else {
+      renewalDate = new Date(now);
+      if (product.billingPeriodLabel === "month") {
+        renewalDate.setMonth(renewalDate.getMonth() + 1);
+      } else {
+        renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+      }
+    }
+  }
+
+  const PRO_INCLUDED_QUANTITY = 999999;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.purchaseAttempt.update({
+      where: { id: attempt.id },
+      data: {
+        status: "COMPLETED",
+        transactionId: transactionInfo.transactionId,
+        completedAt: now,
+      },
+    });
+
+    await tx.userEntitlement.updateMany({
+      where: {
+        originalTransactionId: transactionInfo.originalTransactionId,
+        userId: { not: attempt.userId },
+      },
+      data: { originalTransactionId: null },
+    });
+
+    const entitlement = await tx.userEntitlement.upsert({
+      where: { userId: attempt.userId },
+      create: {
+        userId: attempt.userId,
+        companyId: attempt.companyId,
+        planId: product.planId,
+        status: newStatus,
+        storeProductId: transactionInfo.productId,
+        originalTransactionId: transactionInfo.originalTransactionId,
+        latestTransactionId: transactionInfo.transactionId,
+        renewalDate,
+        trialEndsAt,
+        gracePeriodEndsAt: null,
+        isAutoRenewEnabled: true,
+        environment: transactionInfo.environment,
+      },
+      update: {
+        planId: product.planId,
+        status: newStatus,
+        storeProductId: transactionInfo.productId,
+        originalTransactionId: transactionInfo.originalTransactionId,
+        latestTransactionId: transactionInfo.transactionId,
+        renewalDate,
+        trialEndsAt,
+        gracePeriodEndsAt: null,
+        isAutoRenewEnabled: true,
+        environment: transactionInfo.environment,
+      },
+    });
+
+    const eventType =
+      product.hasIntroOffer && isInitialBuy
+        ? "TRIAL_STARTED"
+        : isInitialBuy
+          ? "INITIAL_PURCHASE"
+          : "PURCHASED";
+
+    // notificationUUID is the unique key now — we already short-circuited
+    // duplicate notifications above, but the create can still race with a
+    // concurrent webhook delivery. Letting Prisma surface the unique-index
+    // collision is fine; retries on the same UUID become idempotent.
+    await tx.subscriptionEvent.create({
+      data: {
+        entitlementId: entitlement.id,
+        userId: attempt.userId,
+        companyId: attempt.companyId,
+        eventType,
+        storeProductId: transactionInfo.productId,
+        transactionId: transactionInfo.transactionId,
+        environment: transactionInfo.environment,
+        platform: "ios",
+        appAccountToken,
+        notificationUUID,
+        effectiveAt: now,
+        payloadJson: {
+          notificationType,
+          subtype: subtype ?? null,
+          notificationUUID,
+          bootstrapped_from_webhook: true,
+        },
+        metadata: {
+          original_transaction_id: transactionInfo.originalTransactionId,
+          plan_code: product.plan.code,
+          purchase_attempt_id: attempt.id,
+        },
+      },
+    });
+
+    await tx.usageBucket.upsert({
+      where: {
+        userId_companyId_metricCode_source: {
+          userId: attempt.userId,
+          companyId: attempt.companyId,
+          metricCode: "AI_GENERATION",
+          source: "PRO_SUBSCRIPTION",
+        },
+      },
+      create: {
+        userId: attempt.userId,
+        companyId: attempt.companyId,
+        metricCode: "AI_GENERATION",
+        includedQuantity: PRO_INCLUDED_QUANTITY,
+        consumedQuantity: 0,
+        resetPolicy: "MONTHLY",
+        source: "PRO_SUBSCRIPTION",
+      },
+      update: {
+        includedQuantity: PRO_INCLUDED_QUANTITY,
+      },
+    });
+
+    await tx.usageBucket.upsert({
+      where: {
+        userId_companyId_metricCode_source: {
+          userId: attempt.userId,
+          companyId: attempt.companyId,
+          metricCode: "QUOTE_EXPORT",
+          source: "PRO_SUBSCRIPTION",
+        },
+      },
+      create: {
+        userId: attempt.userId,
+        companyId: attempt.companyId,
+        metricCode: "QUOTE_EXPORT",
+        includedQuantity: PRO_INCLUDED_QUANTITY,
+        consumedQuantity: 0,
+        resetPolicy: "MONTHLY",
+        source: "PRO_SUBSCRIPTION",
+      },
+      update: {
+        includedQuantity: PRO_INCLUDED_QUANTITY,
+      },
+    });
+  });
+
+  await invalidateCache(CacheKeys.entitlement(attempt.userId));
+
+  logger.info(
+    {
+      attemptId: attempt.id,
+      userId: attempt.userId,
+      originalTransactionId: transactionInfo.originalTransactionId,
+      transactionId: transactionInfo.transactionId,
+      status: newStatus,
+      notificationUUID,
+    },
+    "Webhook bootstrapped UserEntitlement — iOS sync had not run",
+  );
+
+  return true;
+}
+
 export async function handleAppStoreWebhook(
   decoded: DecodedAppleNotification,
 ): Promise<void> {
   const { payload, transactionInfo, renewalInfo } = decoded;
-  const { notificationType, subtype } = payload;
-  const { originalTransactionId, transactionId, productId, appAccountToken, environment } = transactionInfo;
+  const { notificationType, subtype, notificationUUID } = payload;
+  const {
+    originalTransactionId,
+    transactionId,
+    productId,
+    appAccountToken,
+    environment,
+  } = transactionInfo;
+
+  // Apple's notificationUUID is the canonical idempotency key for App
+  // Store Server Notifications V2. Apple retries failed deliveries with
+  // the same UUID, and a single semantic event (e.g. "subscription
+  // renewed") always carries one. Checking it first lets us short-circuit
+  // duplicates at O(1) without loading the entitlement, before any of
+  // the per-event branching below — including the bootstrap path, where
+  // a duplicate INITIAL_BUY shouldn't re-run the upsert.
+  const alreadyProcessed = await prisma.subscriptionEvent.findUnique({
+    where: { notificationUUID },
+    select: { id: true },
+  });
+  if (alreadyProcessed) {
+    logger.info(
+      { notificationUUID, notificationType, transactionId },
+      "Duplicate App Store notification — notificationUUID already processed",
+    );
+    return;
+  }
 
   const entitlement = await prisma.userEntitlement.findFirst({
     where: { originalTransactionId },
@@ -432,33 +1108,38 @@ export async function handleAppStoreWebhook(
   });
 
   if (!entitlement) {
-    if (appAccountToken) {
-      const attempt = await prisma.purchaseAttempt.findFirst({
-        where: { appAccountToken },
+    // Bootstrap path: the iOS sync round-trip never reached us (network
+    // blip, app killed mid-purchase, etc.) but Apple has still notified
+    // us with a fully-signed transaction. If the originating
+    // PurchaseAttempt is still PENDING, complete the binding ourselves
+    // — the user paid and we have everything we need to honor it.
+    // Restricted to SUBSCRIBED so we don't accidentally bootstrap
+    // mid-renewal events (which imply the initial bind was lost
+    // somewhere upstream and warrant a louder warning instead).
+    if (
+      appAccountToken &&
+      notificationType === AppleNotificationType.SUBSCRIBED
+    ) {
+      const bootstrapped = await tryBootstrapEntitlementFromWebhook({
+        decoded,
+        appAccountToken,
       });
-      if (attempt) {
-        logger.warn(
-          { originalTransactionId, appAccountToken, notificationType },
-          'Found purchase attempt but no entitlement — notification arrived before sync',
-        );
-      }
+      if (bootstrapped) return;
     }
-    logger.warn({ originalTransactionId, notificationType }, 'No entitlement for App Store notification — skipping');
+    logger.warn(
+      { originalTransactionId, notificationType, appAccountToken },
+      "No entitlement for App Store notification — skipping",
+    );
     return;
   }
 
   const eventType = mapNotificationToEventType(notificationType, subtype);
 
-  // Idempotency: skip if we already processed this transactionId + eventType
-  const existingEvent = await prisma.subscriptionEvent.findFirst({
-    where: { entitlementId: entitlement.id, transactionId, eventType },
-  });
-  if (existingEvent) {
-    logger.info({ transactionId, notificationType }, 'Duplicate App Store notification — already processed');
-    return;
-  }
-
-  const statusUpdate = mapNotificationToStatus(notificationType, subtype, renewalInfo);
+  const statusUpdate = mapNotificationToStatus(
+    notificationType,
+    subtype,
+    renewalInfo,
+  );
 
   await prisma.$transaction(async (tx) => {
     if (statusUpdate.status) {
@@ -467,12 +1148,46 @@ export async function handleAppStoreWebhook(
         latestTransactionId: transactionId,
         environment,
       };
-      if (statusUpdate.renewalDate) updateData.renewalDate = statusUpdate.renewalDate;
-      if (statusUpdate.gracePeriodEndsAt !== undefined) updateData.gracePeriodEndsAt = statusUpdate.gracePeriodEndsAt;
-      if (statusUpdate.isAutoRenewEnabled !== undefined) updateData.isAutoRenewEnabled = statusUpdate.isAutoRenewEnabled;
+      if (statusUpdate.renewalDate)
+        updateData.renewalDate = statusUpdate.renewalDate;
+      if (statusUpdate.gracePeriodEndsAt !== undefined)
+        updateData.gracePeriodEndsAt = statusUpdate.gracePeriodEndsAt;
+      if (statusUpdate.isAutoRenewEnabled !== undefined)
+        updateData.isAutoRenewEnabled = statusUpdate.isAutoRenewEnabled;
       if (statusUpdate.endsAt) updateData.endsAt = statusUpdate.endsAt;
 
-      await tx.userEntitlement.update({ where: { id: entitlement.id }, data: updateData });
+      await tx.userEntitlement.update({
+        where: { id: entitlement.id },
+        data: updateData,
+      });
+
+      // Subscription terminated — downgrade Pro usage buckets so the
+      // user reverts to their STARTER quota. Setting includedQuantity=0
+      // (rather than deleting the row) preserves consumed-history audit
+      // and keeps the row idempotent: a future re-subscribe upserts
+      // PRO_INCLUDED_QUANTITY back into includedQuantity.
+      if (
+        (TERMINAL_ENTITLEMENT_STATUSES as readonly string[]).includes(
+          statusUpdate.status,
+        )
+      ) {
+        await tx.usageBucket.updateMany({
+          where: {
+            userId: entitlement.userId,
+            companyId: entitlement.companyId,
+            source: "PRO_SUBSCRIPTION",
+          },
+          data: { includedQuantity: 0 },
+        });
+        logger.info(
+          {
+            entitlementId: entitlement.id,
+            userId: entitlement.userId,
+            terminalStatus: statusUpdate.status,
+          },
+          "Subscription terminated — Pro usage buckets downgraded to 0",
+        );
+      }
     }
 
     await tx.subscriptionEvent.create({
@@ -484,11 +1199,20 @@ export async function handleAppStoreWebhook(
         storeProductId: productId,
         transactionId,
         environment,
-        platform: 'ios',
+        platform: "ios",
         appAccountToken: appAccountToken ?? null,
+        notificationUUID,
         effectiveAt: new Date(),
-        payloadJson: { notificationType, subtype: subtype ?? null, notificationUUID: payload.notificationUUID },
-        metadata: { originalTransactionId, auto_renew_status: renewalInfo?.autoRenewStatus, expiration_intent: renewalInfo?.expirationIntent },
+        payloadJson: {
+          notificationType,
+          subtype: subtype ?? null,
+          notificationUUID,
+        },
+        metadata: {
+          originalTransactionId,
+          auto_renew_status: renewalInfo?.autoRenewStatus,
+          expiration_intent: renewalInfo?.expirationIntent,
+        },
       },
     });
   });
@@ -496,33 +1220,67 @@ export async function handleAppStoreWebhook(
   await invalidateCache(CacheKeys.entitlement(entitlement.userId));
 
   logger.info(
-    { entitlementId: entitlement.id, userId: entitlement.userId, notificationType, subtype, newStatus: statusUpdate.status, eventType },
-    'App Store webhook processed — entitlement updated',
+    {
+      entitlementId: entitlement.id,
+      userId: entitlement.userId,
+      notificationType,
+      subtype,
+      newStatus: statusUpdate.status,
+      eventType,
+    },
+    "App Store webhook processed — entitlement updated",
   );
 }
 
-type WebhookEventType = 'PURCHASED' | 'INITIAL_PURCHASE' | 'RENEWED' | 'TRIAL_STARTED' | 'TRIAL_CONVERTED' | 'CANCELED' | 'EXPIRED' | 'GRACE_PERIOD_ENTERED' | 'GRACE_PERIOD_RECOVERED' | 'BILLING_RETRY_ENTERED' | 'REVOKED' | 'RESTORED' | 'AUTO_RENEW_DISABLED' | 'AUTO_RENEW_ENABLED' | 'REFUNDED' | 'PRODUCT_CHANGED';
+type WebhookEventType =
+  | "PURCHASED"
+  | "INITIAL_PURCHASE"
+  | "RENEWED"
+  | "TRIAL_STARTED"
+  | "TRIAL_CONVERTED"
+  | "CANCELED"
+  | "EXPIRED"
+  | "GRACE_PERIOD_ENTERED"
+  | "GRACE_PERIOD_RECOVERED"
+  | "BILLING_RETRY_ENTERED"
+  | "REVOKED"
+  | "RESTORED"
+  | "AUTO_RENEW_DISABLED"
+  | "AUTO_RENEW_ENABLED"
+  | "REFUNDED"
+  | "PRODUCT_CHANGED";
 
-function mapNotificationToEventType(notificationType: string, subtype?: string): WebhookEventType {
+function mapNotificationToEventType(
+  notificationType: string,
+  subtype?: string,
+): WebhookEventType {
   switch (notificationType) {
     case AppleNotificationType.SUBSCRIBED:
-      return subtype === AppleNotificationSubtype.INITIAL_BUY ? 'INITIAL_PURCHASE' : 'PURCHASED';
+      return subtype === AppleNotificationSubtype.INITIAL_BUY
+        ? "INITIAL_PURCHASE"
+        : "PURCHASED";
     case AppleNotificationType.DID_RENEW:
-      return subtype === AppleNotificationSubtype.BILLING_RECOVERY ? 'GRACE_PERIOD_RECOVERED' : 'RENEWED';
+      return subtype === AppleNotificationSubtype.BILLING_RECOVERY
+        ? "GRACE_PERIOD_RECOVERED"
+        : "RENEWED";
     case AppleNotificationType.DID_FAIL_TO_RENEW:
-      return subtype === AppleNotificationSubtype.GRACE_PERIOD ? 'GRACE_PERIOD_ENTERED' : 'BILLING_RETRY_ENTERED';
+      return subtype === AppleNotificationSubtype.GRACE_PERIOD
+        ? "GRACE_PERIOD_ENTERED"
+        : "BILLING_RETRY_ENTERED";
     case AppleNotificationType.EXPIRED:
-      return 'EXPIRED';
+      return "EXPIRED";
     case AppleNotificationType.REVOKE:
-      return 'REVOKED';
+      return "REVOKED";
     case AppleNotificationType.REFUND:
-      return 'REFUNDED';
+      return "REFUNDED";
     case AppleNotificationType.DID_CHANGE_RENEWAL_STATUS:
-      return subtype === AppleNotificationSubtype.AUTO_RENEW_DISABLED ? 'AUTO_RENEW_DISABLED' : 'AUTO_RENEW_ENABLED';
+      return subtype === AppleNotificationSubtype.AUTO_RENEW_DISABLED
+        ? "AUTO_RENEW_DISABLED"
+        : "AUTO_RENEW_ENABLED";
     case AppleNotificationType.DID_CHANGE_RENEWAL_PREF:
-      return 'PRODUCT_CHANGED';
+      return "PRODUCT_CHANGED";
     default:
-      return 'PURCHASED';
+      return "PURCHASED";
   }
 }
 
@@ -537,31 +1295,44 @@ interface StatusUpdate {
 function mapNotificationToStatus(
   notificationType: string,
   subtype?: string,
-  renewalInfo?: { autoRenewStatus: number; renewalDate?: number; gracePeriodExpiresDate?: number } | null,
+  renewalInfo?: {
+    autoRenewStatus: number;
+    renewalDate?: number;
+    gracePeriodExpiresDate?: number;
+  } | null,
 ): StatusUpdate {
   switch (notificationType) {
     case AppleNotificationType.SUBSCRIBED:
-      return { status: 'PRO_ACTIVE', gracePeriodEndsAt: null };
+      return { status: "PRO_ACTIVE", gracePeriodEndsAt: null };
     case AppleNotificationType.DID_RENEW:
       return {
-        status: 'PRO_ACTIVE',
-        renewalDate: renewalInfo?.renewalDate ? new Date(renewalInfo.renewalDate) : undefined,
-        gracePeriodEndsAt: null, isAutoRenewEnabled: true,
+        status: "PRO_ACTIVE",
+        renewalDate: renewalInfo?.renewalDate
+          ? new Date(renewalInfo.renewalDate)
+          : undefined,
+        gracePeriodEndsAt: null,
+        isAutoRenewEnabled: true,
       };
     case AppleNotificationType.DID_FAIL_TO_RENEW:
       if (subtype === AppleNotificationSubtype.GRACE_PERIOD) {
-        return { status: 'GRACE_PERIOD', gracePeriodEndsAt: renewalInfo?.gracePeriodExpiresDate ? new Date(renewalInfo.gracePeriodExpiresDate) : null };
+        return {
+          status: "GRACE_PERIOD",
+          gracePeriodEndsAt: renewalInfo?.gracePeriodExpiresDate
+            ? new Date(renewalInfo.gracePeriodExpiresDate)
+            : null,
+        };
       }
-      return { status: 'BILLING_RETRY' };
+      return { status: "BILLING_RETRY" };
     case AppleNotificationType.EXPIRED:
     case AppleNotificationType.GRACE_PERIOD_EXPIRED:
-      return { status: 'EXPIRED', endsAt: new Date(), gracePeriodEndsAt: null };
+      return { status: "EXPIRED", endsAt: new Date(), gracePeriodEndsAt: null };
     case AppleNotificationType.REVOKE:
     case AppleNotificationType.REFUND:
-      return { status: 'REVOKED', endsAt: new Date() };
+      return { status: "REVOKED", endsAt: new Date() };
     case AppleNotificationType.DID_CHANGE_RENEWAL_STATUS:
-      if (subtype === AppleNotificationSubtype.AUTO_RENEW_DISABLED) return { status: 'CANCELED_ACTIVE', isAutoRenewEnabled: false };
-      return { status: 'PRO_ACTIVE', isAutoRenewEnabled: true };
+      if (subtype === AppleNotificationSubtype.AUTO_RENEW_DISABLED)
+        return { status: "CANCELED_ACTIVE", isAutoRenewEnabled: false };
+      return { status: "PRO_ACTIVE", isAutoRenewEnabled: true };
     default:
       return { status: null };
   }

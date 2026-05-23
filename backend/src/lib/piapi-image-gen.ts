@@ -6,7 +6,7 @@ import type {
   ReferencePhoto,
 } from "./image-gen";
 import { toPromptContext } from "./image-gen";
-import { getImagePrompt } from "./prompts";
+import { getImageEditPrompt, getImagePrompt } from "./prompts";
 
 const PIAPI_BASE_URL = "https://api.piapi.ai/api/v1";
 const POLL_INTERVAL_MS = 3000;
@@ -323,7 +323,10 @@ async function attemptGeneration(
 // PiAPI used to maintain its own slim system prompt for nano-banana. We've
 // moved that to the per-ProjectType prompt library so the same trade-aware
 // language drives both Google GenAI and PiAPI generations. Reference-photo
-// edits append a tight preservation directive on top.
+// edits use the camera-locked `getImageEditPrompt` and deliberately do NOT
+// splice in `getImagePrompt` — per-type modules carry framing language
+// ("16:9 from the curb at golden hour") that overrode the soft "keep
+// angle" hint and produced reframed afters.
 
 function buildPiAPIPrompt(
   userPrompt: string,
@@ -331,23 +334,29 @@ function buildPiAPIPrompt(
   hasReferencePhoto: boolean,
 ): string {
   const promptCtx = toPromptContext(context);
-  const systemPrompt = getImagePrompt(promptCtx);
 
   if (hasReferencePhoto) {
-    return `${systemPrompt}
+    const editFrame = getImageEditPrompt(promptCtx);
+    return `${editFrame}
 
-EDIT INSTRUCTION
-The provided photo is the actual property/room. Edit it in place: keep
-the same camera angle, same vantage point, same structural elements
-(walls, windows, roofline, lot boundaries, plant beds present). Only
-change the finishes, plants, materials, and surfaces to show the
-COMPLETED project as described below.
+CONTRACTOR'S REQUEST (this is what to build/change in the existing scene)
+"${userPrompt}"
 
-Contractor's request: "${userPrompt}"
-
-Photorealistic only. No text, no labels, no watermarks.`;
+Reinforcement — read before generating:
+- The output is the SAME photograph with the renovation completed in
+  place. It is NOT a new shot.
+- Preserve the input's camera position, focal length, height, and tilt
+  pixel-for-pixel. The before/after slider must blend the two on top of
+  each other.
+- Match the input's exposure, white balance, time of day, and shadow
+  direction.
+- Touch ONLY the surfaces, materials, plantings, and built additions
+  called out above. Leave everything else exactly as it appears in the
+  source photo.
+- Photorealistic. No text, labels, watermarks, or imagined neighbors.`;
   }
 
+  const systemPrompt = getImagePrompt(promptCtx);
   return `${systemPrompt}
 
 CONTRACTOR'S REQUEST

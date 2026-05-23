@@ -1,43 +1,56 @@
 import SwiftUI
 
-/// Projects tab home — the screen the screenshot calls "Dashboard".
-/// Sections (top to bottom):
-///   1. Toolbar: avatar (leading), brand (principal), bell (trailing)
-///   2. Greeting "Welcome back, / Hello, {firstName}"
-///   3. "Ready to build?" hero card with Start New Vision CTA
-///   4. Recent Visions horizontal carousel (Project thumbnails)
-///   5. Active Quotes inline list (Draft / Sent / Approved estimates)
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     @Environment(EntitlementStore.self) private var entitlementStore
-    @Environment(UsageMeterStore.self) private var usageMeterStore
     @Environment(PaywallPresenter.self) private var paywallPresenter
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @State private var eventBus = AppEventBus.shared
     @State private var viewModel = DashboardViewModel()
     @State private var showProjectCreation = false
-    @State private var showQuickGenerate = false
+    @State private var showClientForm = false
+    @State private var showSettings = false
     @State private var navigateToProjectId: String?
     @State private var navigateAutoGenerate: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         @Bindable var router = router
-        NavigationStack(path: $router.projectsPath) {
+        NavigationStack(path: $router.dashboardPath) {
             Group {
                 if viewModel.isLoading && viewModel.summary == nil {
-                    LoadingStateView(message: "Loading...")
+                    LoadingStateView(message: "Loading dashboard...")
                 } else if let errorMessage = viewModel.errorMessage, viewModel.summary == nil {
                     RetryStateView(message: errorMessage) {
                         Task { await viewModel.loadDashboard() }
                     }
                 } else {
-                    homeContent
+                    dashboardContent
                 }
             }
-            .background(ColorTokens.background.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { homeToolbar }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    SubscriptionBadge()
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    profileToolbarButton
+                }
+            }
+            .sheet(isPresented: $showSettings) {
+                NavigationStack {
+                    SettingsView()
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button("Done") {
+                                    showSettings = false
+                                }
+                                .foregroundStyle(ColorTokens.primaryOrange)
+                            }
+                        }
+                }
+            }
             .task {
                 if viewModel.summary == nil {
                     await viewModel.loadDashboard()
@@ -52,32 +65,21 @@ struct DashboardView: View {
                     navigateAutoGenerate = autoGenerate
                 }
             }
-            .fullScreenCover(isPresented: $showQuickGenerate) {
-                QuickGenerateView { projectId in
-                    navigateToProjectId = projectId
-                    navigateAutoGenerate = false
-                }
-            }
             .onChange(of: showProjectCreation) { wasPresented, isPresented in
                 if wasPresented && !isPresented {
                     Task { await viewModel.loadDashboard() }
                     navigateToCreatedProject()
                 }
             }
-            .onChange(of: showQuickGenerate) { wasPresented, isPresented in
-                if wasPresented && !isPresented {
-                    Task { await viewModel.loadDashboard() }
-                    navigateToCreatedProject()
+            .sheet(isPresented: $showClientForm) {
+                NavigationStack {
+                    ClientFormView()
                 }
             }
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {
                 case let .projectDetail(id, autoGenerate):
                     ProjectDetailView(projectId: id, autoGenerateOnOpen: autoGenerate)
-                case .projectsList:
-                    ProjectListView()
-                case let .clientDetail(id):
-                    ClientDetailView(clientId: id)
                 default:
                     EmptyView()
                 }
@@ -85,67 +87,60 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - Toolbar
+    // MARK: - Profile / Settings Trigger
 
-    @ToolbarContentBuilder
-    private var homeToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button {
-                appState.selectedTab = .account
-            } label: {
-                AvatarView(
-                    name: appState.currentUser?.fullName ?? "P",
-                    imageURL: appState.currentUser?.avatarURL,
-                    size: 32
-                )
-            }
-            .accessibilityLabel("Account")
+    private var profileToolbarButton: some View {
+        Button {
+            showSettings = true
+        } label: {
+            AvatarView(
+                name: appState.currentUser?.fullName ?? "",
+                imageURL: appState.currentUser?.avatarURL,
+                size: 32
+            )
+            .overlay(
+                Circle().strokeBorder(ColorTokens.primaryOrange.opacity(0.35), lineWidth: 1)
+            )
         }
-
-        ToolbarItem(placement: .principal) {
-            Text("ProEstimate AI")
-                .font(TypographyTokens.cardTitle)
-                .foregroundStyle(ColorTokens.textPrimary)
-        }
-
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                appState.selectedTab = .account
-            } label: {
-                Image(systemName: "bell")
-                    .foregroundStyle(ColorTokens.textPrimary)
-            }
-            .accessibilityLabel("Notifications")
-        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open settings")
+        .accessibilityHint("Includes profile, branding, billing and app preferences")
+        .accessibilityAddTraits(.isButton)
     }
 
-    // MARK: - Home Content
+    // MARK: - Dashboard Content
 
-    private var homeContent: some View {
+    private var dashboardContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: SpacingTokens.xl) {
+            VStack(alignment: .leading, spacing: SpacingTokens.lg) {
+                // Billing-issue banner takes precedence — it's a blocking
+                // signal the user needs to act on before anything else.
                 if entitlementStore.hasBillingIssue {
                     BillingIssueBanner()
                         .padding(.horizontal, SpacingTokens.md)
                 }
 
+                DashboardHeroVideoCard()
+                    .padding(.horizontal, SpacingTokens.md)
+
                 greetingSection
                     .padding(.horizontal, SpacingTokens.md)
 
-                ProjectsHomeHeroCard(onStartVision: handleStartVision)
+                // Primary CTA — directly under the greeting so the
+                // first scannable action on every dashboard load is
+                // "start something new".
+                newProjectBanner
                     .padding(.horizontal, SpacingTokens.md)
 
                 DashboardRecentProjectsSection(
                     projects: viewModel.recentProjects,
                     thumbnails: viewModel.projectThumbnails,
                     onSeeAll: {
-                        router.projectsPath.append(AppDestination.projectsList)
+                        appState.selectedTab = .projects
+                    },
+                    onCreateProject: {
+                        handleCreateProject()
                     }
-                )
-
-                ActiveQuotesSection(
-                    quotes: viewModel.activeQuotes,
-                    onSelect: openQuote
                 )
                 .padding(.bottom, SpacingTokens.xxl)
             }
@@ -156,39 +151,89 @@ struct DashboardView: View {
         }
     }
 
-    private var greetingSection: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Welcome back,")
-                .font(TypographyTokens.subheadline)
-                .foregroundStyle(ColorTokens.textSecondary)
+    // MARK: - New Project Banner
 
-            Text("Hello, \(viewModel.firstName(from: appState.currentUser?.fullName ?? ""))")
-                .font(TypographyTokens.largeTitle)
-                .foregroundStyle(ColorTokens.textPrimary)
+    private var newProjectBanner: some View {
+        Button {
+            handleCreateProject()
+        } label: {
+            HStack(spacing: SpacingTokens.md) {
+                ZStack {
+                    Circle()
+                        .fill(.white.opacity(0.18))
+                        .frame(width: 52, height: 52)
+
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(colorScheme == .light ? Color.black : Color.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("New Project")
+                        .font(TypographyTokens.title3)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(colorScheme == .light ? Color.black : Color.white)
+
+                    Text("Start a new renovation, estimate or invoice")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(colorScheme == .light ? Color.black.opacity(0.7) : Color.white.opacity(0.92))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: SpacingTokens.xs)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(colorScheme == .light ? Color.black.opacity(0.7) : Color.white.opacity(0.85))
+            }
+            .padding(.vertical, SpacingTokens.md)
+            .padding(.horizontal, SpacingTokens.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                ColorTokens.primaryOrange,
+                in: RoundedRectangle(cornerRadius: RadiusTokens.card)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.card)
+                    .strokeBorder(
+                        colorScheme == .light ? Color.black : Color.clear,
+                        lineWidth: colorScheme == .light ? 2 : 0
+                    )
+            )
+            .shadow(color: ColorTokens.primaryOrange.opacity(0.32), radius: 16, x: 0, y: 8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("New Project")
+        .accessibilityHint("Starts a new renovation, estimate or invoice")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    // MARK: - Greeting
+
+    private var greetingSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+            Text(viewModel.greeting(for: appState.currentUser?.fullName ?? ""))
+                .font(TypographyTokens.title2)
+
+            if let companyName = appState.currentCompany?.name {
+                Text(companyName)
+                    .font(TypographyTokens.subheadline)
+                    .foregroundStyle(ColorTokens.secondaryText)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Actions
+    // MARK: - Feature-Gated Actions
 
-    /// Hero CTA → AI Remodel Studio. Free users get gated through the
-    /// usual paywall coordinator before the QuickGenerate cover opens.
-    private func handleStartVision() {
-        switch featureGateCoordinator.guardGeneratePreview() {
+    private func handleCreateProject() {
+        switch featureGateCoordinator.guardCreateProject() {
         case .allowed:
-            showQuickGenerate = true
+            showProjectCreation = true
         case let .blocked(decision):
             paywallPresenter.present(decision)
-        }
-    }
-
-    /// Selecting a quote row jumps to the Quotes tab and pushes the
-    /// editor onto its NavigationStack so deep navigation lands in the
-    /// right place rather than nested in this tab.
-    private func openQuote(_ summary: EstimateSummary) {
-        appState.selectedTab = .quotes
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            router.quotesPath.append(AppDestination.estimateEditor(id: summary.id))
         }
     }
 
@@ -200,10 +245,11 @@ struct DashboardView: View {
         navigateToProjectId = nil
         navigateAutoGenerate = false
         // Brief delay lets the fullScreenCover dismiss animation finish
-        // before pushing onto the NavigationStack — avoids SwiftUI race.
+        // before pushing onto the NavigationStack — avoids a SwiftUI race
+        // where the push gets eaten mid-dismiss.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            router.projectsPath = NavigationPath()
-            router.projectsPath.append(
+            router.dashboardPath = NavigationPath()
+            router.dashboardPath.append(
                 AppDestination.projectDetail(id: projectId, autoGenerate: autoGenerate)
             )
         }

@@ -5,8 +5,30 @@ import {
   materialJsonContract,
   projectFactsBlock,
   supplierGuidance,
+  tierBoundsBlock,
   tierLanguage,
 } from "./shared";
+
+const CUSTOM_CATEGORIES = [
+  "cabinets",
+  "countertops",
+  "tile",
+  "flooring",
+  "appliances",
+  "plumbing",
+  "fixtures",
+  "lighting",
+  "electrical",
+  "hardware",
+  "paint",
+  "drywall",
+  "trim",
+  "roofing",
+  "siding",
+  "fasteners",
+  "disposal",
+  "other",
+];
 
 /**
  * CUSTOM is the registry's fallback. It runs when:
@@ -55,6 +77,8 @@ Materials, Lumber, Drywall, Paint, Hardware, Plumbing, Electrical,
 Lighting, Flooring, Tile, Trim, Insulation, Roofing, Siding, Windows,
 Doors, Concrete, Plants, Sod, Mulch, Hardscape, Other
 
+${tierBoundsBlock(ctx.qualityTier, CUSTOM_CATEGORIES)}
+
 GUIDANCE
 - Read the project description carefully and infer the dominant trade
   before producing the list.
@@ -80,7 +104,8 @@ General Labor, Demolition, Carpentry, Plumbing, Electrical, Tile,
 Drywall, Painting, Flooring, Roofing, Siding, Landscaping, Cleanup,
 Final Punch, Supervision
 
-TIER RATE MULTIPLIER: ${tier.pricingMultiplier}.
+TIER LABOR RATES: ${tier.pricingMultiplier}. The orchestrator clamps every
+ratePerHour to the tier's band — quoting outside will be silently adjusted.
 
 ${laborJsonContract()}
 `.trim();

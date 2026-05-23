@@ -1,34 +1,39 @@
 import SwiftUI
 
-/// Step 0: Name the project and pick a category.
-/// The name field is optional — if left blank we auto-generate a title
-/// from the selected type and client. The 3-column grid below is the
-/// required choice.
+/// Step 0 of the simplified creation flow. Single decision: pick the
+/// project category. The project name moved to the details step so this
+/// page stays scannable and decisive.
+///
+/// The grid renders 13 photographic tiles in a 3-column layout — every
+/// `Project.ProjectType` case. The trailing single tile on the final row
+/// is acceptable inside this `ScrollView`; the grid scrolls anyway, so a
+/// short last row reads as natural pagination instead of a layout bug.
+/// Tile design and selection cues live in `ProjectTypeCard`.
 struct ProjectTypeSelectionStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
 
+    /// Wider than 2 × (shadow blur + |y offset|) so adjacent tiles'
+    /// shadows fully clear each other in the gutter. ProjectTypeCard's
+    /// selected-state shadow is radius 7 / y 4 → ~11pt visible spread
+    /// on the selected side, plus the 1.02× scale pushes its edge
+    /// another ~1pt outward; the unselected neighbor adds ~6pt of its
+    /// own shadow reach. 24pt clears that combined ~18pt with a small
+    /// margin, mirroring the same fix DashboardRecentProjectsSection
+    /// applied to its carousel.
+    private let gridSpacing: CGFloat = 24
+
     private let columns = [
-        GridItem(.flexible(), spacing: SpacingTokens.sm),
-        GridItem(.flexible(), spacing: SpacingTokens.sm),
-        GridItem(.flexible(), spacing: SpacingTokens.sm),
+        GridItem(.flexible(), spacing: 24),
+        GridItem(.flexible(), spacing: 24),
+        GridItem(.flexible(), spacing: 24),
     ]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.md) {
-                titleSection
+                header
 
-                Divider()
-                    .padding(.vertical, SpacingTokens.xxs)
-
-                Text("What type of project is this?")
-                    .font(TypographyTokens.title3)
-
-                Text("Select the category that best describes the work.")
-                    .font(TypographyTokens.subheadline)
-                    .foregroundStyle(.secondary)
-
-                LazyVGrid(columns: columns, spacing: SpacingTokens.sm) {
+                LazyVGrid(columns: columns, spacing: gridSpacing) {
                     ForEach(Project.ProjectType.allCases, id: \.self) { type in
                         ProjectTypeCard(
                             projectType: type,
@@ -45,46 +50,17 @@ struct ProjectTypeSelectionStep: View {
         }
     }
 
-    // MARK: - Title
+    private var header: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+            Text("What type of project is this?")
+                .font(TypographyTokens.title2)
 
-    private var titleSection: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            HStack(spacing: SpacingTokens.xxs) {
-                Image(systemName: "pencil.line")
-                    .font(.caption)
-                    .foregroundStyle(ColorTokens.primaryOrange)
-                Text("Project Name")
-                    .font(TypographyTokens.subheadline)
-                    .fontWeight(.semibold)
-                Text("Optional")
-                    .font(TypographyTokens.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, SpacingTokens.xs)
-                    .padding(.vertical, 1)
-                    .background(ColorTokens.inputBackground, in: Capsule())
-            }
-
-            TextField(
-                "e.g. Kitchen remodel for Anderson residence",
-                text: $viewModel.customTitle,
-                axis: .vertical
-            )
-            .lineLimit(1...2)
-            .padding(SpacingTokens.sm)
-            .background(
-                ColorTokens.inputBackground,
-                in: RoundedRectangle(cornerRadius: RadiusTokens.small)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: RadiusTokens.small)
-                    .strokeBorder(ColorTokens.subtleBorder, lineWidth: 1)
-            )
-            .submitLabel(.done)
-
-            Text("Leave blank and we'll auto-name this from the project type and the client.")
-                .font(TypographyTokens.caption)
+            Text("Pick the category that best describes the work. We'll tailor the next step's design suggestions to your choice.")
+                .font(TypographyTokens.subheadline)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.top, SpacingTokens.xs)
     }
 }
 

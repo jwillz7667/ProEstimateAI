@@ -30,7 +30,12 @@ struct OnboardingOfferPage: View {
             Spacer()
 
             ctaStack
-                .padding(.bottom, SpacingTokens.xxl)
+                // Match the lifted CTA position on every other
+                // onboarding page so the bottom anchor is consistent.
+                // The page-indicator pill is suppressed on this page
+                // (see OnboardingFlowView), so the secondary CTA no
+                // longer needs extra clearance.
+                .padding(.bottom, SpacingTokens.huge)
         }
         .padding(.horizontal, SpacingTokens.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -43,11 +48,6 @@ struct OnboardingOfferPage: View {
             // Gilded "crown" hero badge.
             ZStack {
                 Circle()
-                    .fill(ColorTokens.primaryOrange.opacity(0.22))
-                    .frame(width: 180, height: 180)
-                    .blur(radius: 28)
-
-                Circle()
                     .fill(
                         LinearGradient(
                             colors: [
@@ -59,7 +59,6 @@ struct OnboardingOfferPage: View {
                         )
                     )
                     .frame(width: 104, height: 104)
-                    .shadow(color: ColorTokens.primaryOrange.opacity(0.55), radius: 24, x: 0, y: 12)
 
                 Image(systemName: "crown.fill")
                     .resizable()

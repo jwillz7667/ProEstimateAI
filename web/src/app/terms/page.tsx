@@ -1,16 +1,55 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+const PAGE_URL = "https://proestimateai.com/terms";
+const PAGE_DESCRIPTION =
+  "ProEstimate AI Terms of Service — the rules and conditions that govern your use of our AI-powered estimating platform, subscriptions, and AI-generated content.";
+
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description:
-    "ProEstimate AI Terms of Service — rules and conditions for using our platform.",
-  alternates: { canonical: "https://proestimateai.com/terms" },
+  description: PAGE_DESCRIPTION,
+  alternates: { canonical: PAGE_URL },
+  openGraph: {
+    type: "article",
+    url: PAGE_URL,
+    title: "Terms of Service | ProEstimate AI",
+    description: PAGE_DESCRIPTION,
+    siteName: "ProEstimate AI",
+  },
+  twitter: {
+    card: "summary",
+    title: "Terms of Service | ProEstimate AI",
+    description: PAGE_DESCRIPTION,
+  },
+  robots: { index: true, follow: true },
+};
+
+const breadcrumbLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://proestimateai.com",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Terms of Service",
+      item: PAGE_URL,
+    },
+  ],
 };
 
 export default function TermsOfService() {
   return (
     <main className="min-h-screen bg-surface">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+      />
       {/* Header */}
       <header className="border-b border-gray-100">
         <div className="mx-auto max-w-4xl px-6 py-6 flex items-center justify-between">

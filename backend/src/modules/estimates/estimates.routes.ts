@@ -14,6 +14,7 @@ import {
   updateEstimateSchema,
 } from './estimates.validators';
 import estimateLineItemNestedRoutes from '../estimate-line-items/estimate-line-items.nested.routes';
+import estimateExportsNestedRoutes from '../estimate-exports/estimate-exports.nested.routes';
 
 const router = Router();
 
@@ -32,5 +33,8 @@ router.delete('/:id', asyncHandler(deleteHandler));
 
 // Nested line items: /v1/estimates/:estimateId/line-items
 router.use('/:estimateId/line-items', estimateLineItemNestedRoutes);
+
+// Nested PDF exports: /v1/estimates/:estimateId/exports
+router.use('/:estimateId/exports', estimateExportsNestedRoutes);
 
 export default router;

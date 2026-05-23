@@ -1,16 +1,55 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+const PAGE_URL = "https://proestimateai.com/privacy";
+const PAGE_DESCRIPTION =
+  "ProEstimate AI Privacy Policy — how we collect, use, and protect your personal information, project photos, and account data.";
+
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description:
-    "ProEstimate AI Privacy Policy — how we collect, use, and protect your personal information.",
-  alternates: { canonical: "https://proestimateai.com/privacy" },
+  description: PAGE_DESCRIPTION,
+  alternates: { canonical: PAGE_URL },
+  openGraph: {
+    type: "article",
+    url: PAGE_URL,
+    title: "Privacy Policy | ProEstimate AI",
+    description: PAGE_DESCRIPTION,
+    siteName: "ProEstimate AI",
+  },
+  twitter: {
+    card: "summary",
+    title: "Privacy Policy | ProEstimate AI",
+    description: PAGE_DESCRIPTION,
+  },
+  robots: { index: true, follow: true },
+};
+
+const breadcrumbLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://proestimateai.com",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Privacy Policy",
+      item: PAGE_URL,
+    },
+  ],
 };
 
 export default function PrivacyPolicy() {
   return (
     <main className="min-h-screen bg-surface">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+      />
       {/* Header */}
       <header className="border-b border-gray-100">
         <div className="mx-auto max-w-4xl px-6 py-6 flex items-center justify-between">

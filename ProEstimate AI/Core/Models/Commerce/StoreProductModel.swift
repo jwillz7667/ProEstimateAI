@@ -72,6 +72,91 @@ extension StoreProductModel {
     }
 }
 
+// MARK: - Canonical fallbacks
+
+extension StoreProductModel {
+    /// Tier- and period-correct display fallback used when the live
+    /// catalog hasn't returned a matching SKU yet — e.g. Premium hasn't
+    /// shipped in App Store Connect, StoreKit is still resolving, or
+    /// the backend catalog request failed and the device is offline.
+    ///
+    /// Without this, the paywall would silently fall through to the
+    /// previously-selected (different tier) product so the price and
+    /// description on screen would lie about which tier the toggle has
+    /// highlighted. This helper guarantees the rendered card always
+    /// matches the user's stated intent.
+    ///
+    /// The pricing strings here MUST mirror what's in App Store Connect.
+    /// The purchase flow gates separately on the real StoreKit product
+    /// being available, so a fallback never short-circuits a checkout
+    /// against a price the user can't actually transact at.
+    static func canonicalFallback(tier: PlanTier, isAnnual: Bool) -> StoreProductModel {
+        switch (tier, isAnnual) {
+        case (.pro, false):
+            return StoreProductModel(
+                productId: AppConstants.proMonthlyProductID,
+                planCode: .proMonthly,
+                displayName: "Pro Monthly",
+                description: "Solo contractor essentials. 2 projects, 20 AI previews, and 20 estimates per month.",
+                priceDisplay: "$29.99/mo",
+                billingPeriodLabel: "per month",
+                hasIntroOffer: true,
+                introOfferDisplayText: "7-day free trial",
+                isEligibleForIntroOffer: nil,
+                isFeatured: false,
+                savingsText: nil
+            )
+        case (.pro, true):
+            return StoreProductModel(
+                productId: AppConstants.proAnnualProductID,
+                planCode: .proAnnual,
+                displayName: "Pro Annual",
+                description: "Solo contractor essentials, billed yearly. Same caps as Pro Monthly.",
+                priceDisplay: "$249.99/yr",
+                billingPeriodLabel: "per year",
+                hasIntroOffer: false,
+                introOfferDisplayText: nil,
+                isEligibleForIntroOffer: nil,
+                isFeatured: false,
+                savingsText: "Save 17%"
+            )
+        case (.premium, false):
+            return StoreProductModel(
+                productId: AppConstants.premiumMonthlyProductID,
+                planCode: .premiumMonthly,
+                displayName: "Premium Monthly",
+                description: "Unlimited projects, AI previews, and estimates — plus priority generation.",
+                priceDisplay: "$49.99/mo",
+                billingPeriodLabel: "per month",
+                hasIntroOffer: false,
+                introOfferDisplayText: nil,
+                isEligibleForIntroOffer: nil,
+                isFeatured: true,
+                savingsText: nil
+            )
+        case (.premium, true):
+            return StoreProductModel(
+                productId: AppConstants.premiumAnnualProductID,
+                planCode: .premiumAnnual,
+                displayName: "Premium Annual",
+                description: "Unlimited Premium, billed yearly — best value for growing crews.",
+                priceDisplay: "$499.99/yr",
+                billingPeriodLabel: "per year",
+                hasIntroOffer: false,
+                introOfferDisplayText: nil,
+                isEligibleForIntroOffer: nil,
+                isFeatured: false,
+                savingsText: "Save 17%"
+            )
+        case (.free, _):
+            // Defensive: the paywall never surfaces Free as a paid tier,
+            // but a future caller mis-using the helper shouldn't render
+            // an empty card. Fall through to the headline Premium SKU.
+            return canonicalFallback(tier: .premium, isAnnual: isAnnual)
+        }
+    }
+}
+
 // MARK: - Sample Data
 
 extension StoreProductModel {

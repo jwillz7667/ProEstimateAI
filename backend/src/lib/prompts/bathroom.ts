@@ -5,8 +5,24 @@ import {
   materialJsonContract,
   projectFactsBlock,
   supplierGuidance,
+  tierBoundsBlock,
   tierLanguage,
 } from "./shared";
+
+const BATHROOM_CATEGORIES = [
+  "vanity",
+  "countertops",
+  "tile",
+  "flooring",
+  "plumbing",
+  "fixtures",
+  "lighting",
+  "electrical",
+  "hardware",
+  "paint",
+  "drywall",
+  "glass",
+];
 
 export function imagePrompt(ctx: PromptContext): string {
   return `
@@ -49,19 +65,15 @@ ALLOWED CATEGORIES
 Vanity, Countertops, Tile, Flooring, Plumbing, Fixtures, Lighting,
 Electrical, Hardware, Paint, Drywall, Glass, Other
 
-PRICING ANCHORS (US, current market)
-- Stock 30–36" vanity (HD/Lowe's): $300–$700 STANDARD; $1,200–$2,200 PREMIUM
-  (custom or solid wood); $3,000+ LUXURY.
-- Quartz vanity top: $35–$80/sf for typical small tops.
-- Toilet: $180 (Glacier Bay/Project Source) STANDARD; $450 (Toto Drake)
-  PREMIUM; $900+ LUXURY.
-- Shower valve trim kit + rough valve: $150 STANDARD; $400 PREMIUM (Delta);
-  $900+ LUXURY (Kohler Components, Brizo).
-- Glass shower door: $400 framed STANDARD; $900–$1,400 frameless PREMIUM.
-- Tile floor (12x24 porcelain): $3–$7/sf STANDARD; $7–$14/sf PREMIUM.
-- Wet-wall tile (subway, large format porcelain): $5–$15/sf typical.
-- Vanity faucet: $90 STANDARD; $250 PREMIUM; $600+ LUXURY.
-- Exhaust fan + light: $80 STANDARD (Broan); $300+ PREMIUM (Panasonic).
+${tierBoundsBlock(ctx.qualityTier, BATHROOM_CATEGORIES)}
+
+NARRATIVE EXAMPLES (informative — use the enforced ranges above as the source of truth)
+- Stock 30–36" vanity, $300–$700, is STANDARD; custom solid wood $1,200–$2,200
+  is PREMIUM; designer/built-in $3,000+ is LUXURY.
+- Toilet examples: Glacier Bay (~$180), Toto Drake (~$450), Toto Neorest ($900+).
+- Vanity faucet examples: Glacier Bay (~$90), Delta/Moen (~$250),
+  Kohler Components / Brizo ($600+).
+- Shower glass: framed (~$400), frameless ($900–$1,400+).
 
 QUANTITY GUIDANCE
 - A typical 5x8 bathroom: ~40 sf floor tile, ~80 sf wet wall tile (tub
@@ -94,7 +106,8 @@ LABOR GUIDANCE
 - Vanity + toilet set: 4–6 hr.
 - Glass enclosure: subbed; 2 hr coordination + measure.
 
-TIER RATE MULTIPLIER: ${tier.pricingMultiplier}.
+TIER LABOR RATES: ${tier.pricingMultiplier}. The orchestrator clamps every
+ratePerHour to the tier's band — quoting outside will be silently adjusted.
 
 ${laborJsonContract()}
 `.trim();

@@ -5,8 +5,18 @@ import {
   materialJsonContract,
   projectFactsBlock,
   supplierGuidance,
+  tierBoundsBlock,
   tierLanguage,
 } from "./shared";
+
+const LANDSCAPING_CATEGORIES = [
+  "lighting",
+  "fertilizer",
+  "seed",
+  "fuel",
+  "disposal",
+  "other",
+];
 
 /**
  * LANDSCAPING — sold as a ONE-TIME install contract: planting design,
@@ -113,6 +123,8 @@ Plants, Trees, Sod, Seed, Mulch, Soil & Amendments, Hardscape Pavers,
 Edging, Stone & Boulders, Irrigation, Lighting, Drainage, Fabric,
 Disposal, Other
 
+${tierBoundsBlock(ctx.qualityTier, LANDSCAPING_CATEGORIES)}
+
 PLANT MATERIAL ANCHORS (per container, retail wholesale via SiteOne)
 - 1 gal perennial (daylily, hosta, Stella d'Oro): $7–$12 STANDARD;
   $12–$18 PREMIUM (named cultivar); $18–$30 LUXURY (designer cultivar).
@@ -211,9 +223,10 @@ EQUIPMENT
 - Plate compactor day: $80–$120.
 - Sod cutter day: $90–$130.
 
-TIER RATE MULTIPLIER: ${tier.pricingMultiplier}. Landscape laborers
-typically $40–$55/hr STANDARD, $55–$75/hr PREMIUM, $75–$110/hr LUXURY
-(certified hardscape installer, ICPI / NCMA cert).
+TIER LABOR RATES: ${tier.pricingMultiplier}. The orchestrator clamps every
+ratePerHour to the tier's band — quoting outside will be silently adjusted.
+Landscape laborers typically sit in the lower half of each band; certified
+hardscape installers (ICPI / NCMA) push toward the top.
 
 ${laborJsonContract()}
 `.trim();

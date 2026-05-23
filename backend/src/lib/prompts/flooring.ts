@@ -5,8 +5,17 @@ import {
   materialJsonContract,
   projectFactsBlock,
   supplierGuidance,
+  tierBoundsBlock,
   tierLanguage,
 } from "./shared";
+
+const FLOORING_CATEGORIES = [
+  "flooring",
+  "underlayment",
+  "trim",
+  "hardware",
+  "other",
+];
 
 export function imagePrompt(ctx: PromptContext): string {
   return `
@@ -45,15 +54,16 @@ ${projectFactsBlock(ctx)}
 ALLOWED CATEGORIES
 Flooring, Underlayment, Trim, Adhesive, Transition, Hardware, Other
 
-PRICING ANCHORS
-- LVP (luxury vinyl plank): $1.80–$3.50/sf STANDARD; $3.50–$5.50/sf
-  PREMIUM (CoreTec, Karndean budget); $5.50–$8/sf LUXURY (LVT designer).
-- Engineered hardwood: $4–$8/sf STANDARD; $8–$14/sf PREMIUM; $14–$22/sf
-  LUXURY (wide-plank European oak).
-- Solid 3/4" oak: $5–$9/sf raw; install separately.
-- Porcelain tile 12x24: $2.50–$6/sf STANDARD; $6–$12/sf PREMIUM.
-- Carpet (residential cut pile): $1.50–$4/sf with pad STANDARD; $4–$7/sf
-  PREMIUM.
+${tierBoundsBlock(ctx.qualityTier, FLOORING_CATEGORIES)}
+
+NARRATIVE EXAMPLES (informative — use the enforced ranges above as the source of truth)
+- LVP (luxury vinyl plank): big-box budget → STANDARD; CoreTec / Karndean →
+  PREMIUM; LVT designer → LUXURY.
+- Engineered hardwood: domestic 3-ply → STANDARD; European multi-ply →
+  PREMIUM; wide-plank rift/quartered oak → LUXURY.
+- Porcelain tile 12x24 → STANDARD; large-format imported → PREMIUM.
+- Carpet (residential cut pile) with pad → STANDARD/PREMIUM only; LUXURY
+  rarely uses broadloom carpet.
 
 QUANTITY GUIDANCE
 - Add 7–10% waste for LVP/engineered, 10–15% for tile, 15% for diagonal
@@ -86,7 +96,8 @@ LABOR GUIDANCE
 - Tile install (12x24 straight): 0.30 hr/sf.
 - Trim re-install: 0.10 hr/lf.
 
-TIER RATE MULTIPLIER: ${tier.pricingMultiplier}.
+TIER LABOR RATES: ${tier.pricingMultiplier}. The orchestrator clamps every
+ratePerHour to the tier's band — quoting outside will be silently adjusted.
 
 ${laborJsonContract()}
 `.trim();

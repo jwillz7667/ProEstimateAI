@@ -16,6 +16,7 @@ enum SettingsSaveStatus: Equatable {
 }
 
 @Observable
+@MainActor
 final class SettingsViewModel {
     // MARK: - Dependencies
 
@@ -222,6 +223,14 @@ final class SettingsViewModel {
     // MARK: - Commit (executed after debounce)
 
     private func commitBranding() async {
+        // Skip saves the backend validator would reject. Without this, every
+        // mid-typed email ("j") or bare website ("acme.com") fires a doomed
+        // PATCH that surfaces as a "Retry" status pill — making it look like
+        // the app errors continuously while the user is just typing.
+        guard isBrandingFormValid else {
+            saveStatus = .pending
+            return
+        }
         saveStatus = .saving
         do {
             let update = CompanyBrandingUpdate(
@@ -232,7 +241,7 @@ final class SettingsViewModel {
                 city: companyCity.isEmpty ? nil : companyCity,
                 state: companyState.isEmpty ? nil : companyState,
                 zip: companyZip.isEmpty ? nil : companyZip,
-                websiteUrl: companyWebsite.isEmpty ? nil : companyWebsite,
+                websiteUrl: normalizedWebsiteForSave,
                 primaryColor: primaryColorHex,
                 secondaryColor: secondaryColorHex
             )
@@ -240,8 +249,10 @@ final class SettingsViewModel {
             apply(updated: updated)
             markSaved()
         } catch {
+            // Surface failure on the toolbar pill only — the modal alert in
+            // CompanyBrandingView is for explicit user actions (logo upload),
+            // not for transient autosave failures.
             saveStatus = .failed(message: error.localizedDescription)
-            errorMessage = error.localizedDescription
         }
     }
 
@@ -262,7 +273,6 @@ final class SettingsViewModel {
             markSaved()
         } catch {
             saveStatus = .failed(message: error.localizedDescription)
-            errorMessage = error.localizedDescription
         }
     }
 
@@ -280,8 +290,45 @@ final class SettingsViewModel {
             markSaved()
         } catch {
             saveStatus = .failed(message: error.localizedDescription)
-            errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - Local Validation (keep autosave from firing doomed PATCHes)
+
+    /// True when the branding form passes the same checks the backend
+    /// validator enforces. We mirror only the contract-shaping rules
+    /// (presence of name, email format, URL structure) so partial edits
+    /// don't trigger 400s while the user is still typing.
+    private var isBrandingFormValid: Bool {
+        let trimmedName = companyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return false }
+        if !companyEmail.isEmpty, !looksLikeEmail(companyEmail) { return false }
+        if !companyWebsite.isEmpty, !looksLikeWebsite(companyWebsite) { return false }
+        return true
+    }
+
+    /// Normalize the website for transit: empty stays empty (omitted), bare
+    /// domains get an `https://` scheme so Zod's `.url()` validator accepts
+    /// them. Mirrors what most users intuit: typing "acme.com" should save.
+    private var normalizedWebsiteForSave: String? {
+        let trimmed = companyWebsite.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let lower = trimmed.lowercased()
+        if lower.hasPrefix("http://") || lower.hasPrefix("https://") { return trimmed }
+        return "https://\(trimmed)"
+    }
+
+    private func looksLikeEmail(_ s: String) -> Bool {
+        let pattern = #"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$"#
+        return s.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    private func looksLikeWebsite(_ s: String) -> Bool {
+        // Accept "https://example.com" or a bare "example.com" with a TLD.
+        // Stricter checks are the backend's job; we just want to gate
+        // obviously-invalid input from being PATCH'd while the user types.
+        let domainPattern = #"^([a-z][a-z0-9+\-.]*://)?[A-Z0-9.-]+\.[A-Z]{2,}([:/].*)?$"#
+        return s.range(of: domainPattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     // MARK: - Logo Operations (kept explicit — file I/O is naturally event-driven)
@@ -373,11 +420,18 @@ final class SettingsViewModel {
         // without re-triggering autosave.
         isHydrating = true
         defer { isHydrating = false }
-        if let mode = updated.appearanceMode, let parsed = AppearanceMode(stringValue: mode) {
-            appearanceStore?.applyRemote(mode: parsed)
-        }
+        // Appearance mode is intentionally device-local and is NOT synced
+        // back from server responses here. Pulling the server's value into
+        // the local AppearanceStore on every save / Settings load could
+        // silently flip the user's chosen color scheme if the server's
+        // value diverged (e.g. a failed PATCH on another device left the
+        // record stale). Local UserDefaults remains authoritative; the
+        // PATCH on user pick still pushes outward.
         if let lang = updated.defaultLanguage, let parsed = AppLanguage(rawValue: lang) {
             selectedLanguage = parsed
+            // Mirror to the AppearanceStore so the SwiftUI \.locale is in
+            // sync with the saved preference on returning sessions.
+            appearanceStore?.applyRemote(language: parsed)
         }
     }
 
@@ -419,10 +473,12 @@ final class SettingsViewModel {
 
         if let lang = company.defaultLanguage, let parsed = AppLanguage(rawValue: lang) {
             selectedLanguage = parsed
+            appearanceStore?.applyRemote(language: parsed)
         }
-        if let mode = company.appearanceMode, let parsed = AppearanceMode(stringValue: mode) {
-            appearanceStore?.applyRemote(mode: parsed)
-        }
+        // See `apply(updated:)`: appearance mode is device-local. Pulling
+        // it from the server on Settings load was the cause of users seeing
+        // the screen flip light↔dark when entering Settings if the server
+        // value diverged from the local choice.
     }
 }
 

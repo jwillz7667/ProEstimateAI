@@ -9,6 +9,11 @@ struct MaterialSuggestion: Codable, Identifiable, Hashable, Sendable {
     let projectId: String
     let name: String
     let category: String
+    /// Per-unit price in USD, where the unit is `unit` below. The line
+    /// total is `quantity * estimatedCost`; treating this as a total and
+    /// then multiplying by quantity again produces N× inflated estimates.
+    /// Backend enforces the same invariant in the DeepSeek prompt
+    /// contract (`materialJsonContract` in lib/prompts/shared.ts).
     let estimatedCost: Decimal
     let unit: String
     let quantity: Decimal
@@ -173,6 +178,31 @@ enum MaterialSupplier: String, CaseIterable, Identifiable, Sendable {
             return .floorAndDecor
         }
         return nil
+    }
+
+    // MARK: - User Preference
+
+    /// UserDefaults key for the contractor's preferred default retailer.
+    /// Local-only — no backend persistence — because the deep-link picker
+    /// is purely a UI helper.
+    static let preferredDefaultsKey = "preferredMaterialSupplier"
+
+    /// The retailer the contractor wants to verify pricing against by
+    /// default. `nil` means "no preference set", in which case the
+    /// AI-suggested supplier (if any) wins in the picker. Setting `nil`
+    /// removes the stored preference.
+    static var preferred: MaterialSupplier? {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: preferredDefaultsKey) else { return nil }
+            return MaterialSupplier(rawValue: raw)
+        }
+        set {
+            if let newValue {
+                UserDefaults.standard.set(newValue.rawValue, forKey: preferredDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: preferredDefaultsKey)
+            }
+        }
     }
 }
 

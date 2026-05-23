@@ -118,34 +118,28 @@ final class UsageMeterStore {
         logger.info("Usage refreshed. Generations: \(self.generationsRemaining)/\(self.generationsTotal), Quotes: \(self.quotesRemaining)/\(self.quotesTotal)")
     }
 
-    /// Consume one AI generation credit.
-    /// Decrements locally first (optimistic), then confirms with the backend.
-    /// If the backend rejects, the local count is corrected.
-    @discardableResult
-    func consumeGeneration() async throws -> UsageBucket {
-        guard let commerceAPI else {
-            throw APIError.unknown("UsageMeterStore not configured")
-        }
-
-        isConsuming = true
-        defer { isConsuming = false }
-
-        // Optimistic local decrement.
-        if generationsRemaining > 0 && generationsRemaining != Int.max {
+    /// Record that a generation was successfully started.
+    ///
+    /// Call this AFTER the backend has accepted the generation request —
+    /// the backend's entitlement gate consumes one bucket credit
+    /// atomically inside the generation transaction, so the iOS side
+    /// only needs to mirror that consumption locally.
+    ///
+    /// We optimistically decrement immediately so the paywall fires
+    /// instantly when the user spends their last credit (instead of
+    /// waiting on a refresh round-trip), then kick off an entitlement
+    /// refresh in the background to reconcile against the canonical
+    /// server state. Pro users (with `Int.max`) are no-ops here.
+    func recordGenerationConsumed() {
+        guard generationsTotal != Int.max else { return }
+        if generationsRemaining > 0 {
             generationsRemaining -= 1
         }
-
-        do {
-            let updatedBucket = try await commerceAPI.consumeUsage(metric: .aiGeneration)
-            generationsRemaining = updatedBucket.remainingQuantity
-            generationsTotal = updatedBucket.includedQuantity
-            logger.info("Generation consumed. Remaining: \(updatedBucket.remainingQuantity)")
-            return updatedBucket
-        } catch {
-            // Revert optimistic decrement on failure.
-            await refresh()
-            logger.error("Failed to consume generation: \(error.localizedDescription)")
-            throw error
+        // Reconcile with the backend's canonical bucket state. We don't
+        // await — the local decrement is enough for the next gate check.
+        Task { [weak self] in
+            await self?.entitlementStore?.refresh()
+            await self?.refresh()
         }
     }
 
@@ -194,10 +188,10 @@ final class UsageMeterStore {
 extension UsageMeterStore {
     /// Create a store pre-loaded with usage values for SwiftUI previews.
     static func preview(
-        generationsRemaining: Int = 2,
-        generationsTotal: Int = 3,
-        quotesRemaining: Int = 3,
-        quotesTotal: Int = 3
+        generationsRemaining: Int = 3,
+        generationsTotal: Int = 5,
+        quotesRemaining: Int = 0,
+        quotesTotal: Int = 0
     ) -> UsageMeterStore {
         let store = UsageMeterStore()
         store.generationsRemaining = generationsRemaining

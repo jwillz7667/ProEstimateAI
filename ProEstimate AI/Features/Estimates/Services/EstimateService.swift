@@ -3,8 +3,8 @@ import Foundation
 // MARK: - Protocol
 
 protocol EstimateServiceProtocol: Sendable {
-    func listEstimates() async throws -> [EstimateSummary]
     func listByProject(projectId: String) async throws -> [Estimate]
+    func listByClient(clientId: String) async throws -> [Estimate]
     func getEstimate(id: String) async throws -> Estimate
     func getLineItems(estimateId: String) async throws -> [EstimateLineItem]
     func createEstimate(_ estimate: Estimate) async throws -> Estimate
@@ -18,14 +18,16 @@ protocol EstimateServiceProtocol: Sendable {
 final class MockEstimateService: EstimateServiceProtocol {
     private let simulatedDelay: UInt64 = 500_000_000 // 0.5s
 
-    func listEstimates() async throws -> [EstimateSummary] {
-        try await Task.sleep(nanoseconds: simulatedDelay)
-        return Self.sampleSummaries
-    }
-
     func listByProject(projectId: String) async throws -> [Estimate] {
         try await Task.sleep(nanoseconds: simulatedDelay)
         return Self.sampleEstimates.filter { $0.projectId == projectId }
+    }
+
+    func listByClient(clientId _: String) async throws -> [Estimate] {
+        try await Task.sleep(nanoseconds: simulatedDelay)
+        // Mock has no client-project mapping; return a representative slice
+        // so previews always show data.
+        return Array(Self.sampleEstimates.prefix(2))
     }
 
     func getEstimate(id: String) async throws -> Estimate {
@@ -51,11 +53,11 @@ final class MockEstimateService: EstimateServiceProtocol {
         return estimate
     }
 
-    func deleteEstimate(id: String) async throws {
+    func deleteEstimate(id _: String) async throws {
         try await Task.sleep(nanoseconds: simulatedDelay)
     }
 
-    func saveLineItems(_ items: [EstimateLineItem], estimateId: String) async throws -> [EstimateLineItem] {
+    func saveLineItems(_ items: [EstimateLineItem], estimateId _: String) async throws -> [EstimateLineItem] {
         try await Task.sleep(nanoseconds: simulatedDelay)
         return items
     }
@@ -315,18 +317,4 @@ extension MockEstimateService {
         ),
     ]
 
-    static let sampleSummaries: [EstimateSummary] = [
-        EstimateSummary(
-            estimate: sampleEstimates[0],
-            projectTitle: "Kitchen Remodel – Mitchell Residence"
-        ),
-        EstimateSummary(
-            estimate: sampleEstimates[1],
-            projectTitle: "Master Bath – Johnson Home"
-        ),
-        EstimateSummary(
-            estimate: sampleEstimates[2],
-            projectTitle: "Full Flooring – Garcia Property"
-        ),
-    ]
 }

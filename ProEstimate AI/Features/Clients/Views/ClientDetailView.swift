@@ -3,14 +3,22 @@ import SwiftUI
 struct ClientDetailView: View {
     let clientId: String
     var onClientUpdated: ((Client) -> Void)?
+    var onClientDeleted: ((String) -> Void)?
 
     @Environment(AppRouter.self) private var router
+    @Environment(\.dismiss) private var dismiss
     @State private var client: Client?
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var showingEditSheet = false
+    @State private var showingDeleteConfirmation = false
+    @State private var isDeleting = false
+    @State private var estimates: [Estimate] = []
+    @State private var isLoadingEstimates = false
+    @State private var estimatesError: String?
 
     private let clientService: ClientServiceProtocol = LiveClientService()
+    private let estimateService: EstimateServiceProtocol = LiveEstimateService()
 
     var body: some View {
         Group {
@@ -28,14 +36,32 @@ struct ClientDetailView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Edit") {
-                    showingEditSheet = true
+                Menu {
+                    Button {
+                        showingEditSheet = true
+                    } label: {
+                        Label("Edit Client", systemImage: "pencil")
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
+                    } label: {
+                        Label("Delete Client", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
                 .tint(ColorTokens.primaryOrange)
+                .accessibilityLabel("More options")
+                .accessibilityHint("Edit or delete this client")
+                .disabled(client == nil || isDeleting)
             }
         }
         .task {
             await loadClient()
+            await loadEstimates()
         }
         .sheet(isPresented: $showingEditSheet) {
             if let client {
@@ -45,6 +71,40 @@ struct ClientDetailView: View {
                 }
             }
         }
+        .confirmationDialog(
+            "Delete Client",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Permanently", role: .destructive) {
+                Task { await performDeletion() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Projects and invoices linked to this client will still exist, but their client information will be removed. This can't be undone.")
+        }
+        .overlay {
+            if isDeleting {
+                Color.black.opacity(0.1)
+                    .ignoresSafeArea()
+                    .overlay {
+                        ProgressView("Deleting...")
+                            .padding(SpacingTokens.xl)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
+                    }
+            }
+        }
+        .alert(
+            "Couldn't Delete Client",
+            isPresented: Binding(
+                get: { client != nil && errorMessage != nil && !isLoading },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
     // MARK: - Content
@@ -52,27 +112,21 @@ struct ClientDetailView: View {
     private func clientContent(_ client: Client) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
-                // MARK: - Header
                 clientHeader(client)
                     .padding(.horizontal, SpacingTokens.md)
 
-                // MARK: - Contact Info
                 contactInfoSection(client)
 
-                // MARK: - Address
                 if client.formattedAddress != nil {
                     addressSection(client)
                 }
 
-                // MARK: - Notes
                 if let notes = client.notes, !notes.isEmpty {
                     notesSection(notes)
                 }
 
-                // MARK: - Projects
                 projectsSection
 
-                // MARK: - Estimates & Invoices
                 estimatesSection
             }
             .padding(.top, SpacingTokens.sm)
@@ -223,23 +277,99 @@ struct ClientDetailView: View {
         }
     }
 
-    // MARK: - Estimates Section (Placeholder)
+    // MARK: - Estimates Section
 
     private var estimatesSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            SectionHeaderView(title: "Estimates & Invoices")
+            SectionHeaderView(title: "Past Estimates")
 
-            GlassCard {
-                HStack {
-                    Image(systemName: "doc.text")
-                        .foregroundStyle(.secondary)
-                    Text("Estimates and invoices will appear here")
-                        .font(TypographyTokens.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+            Group {
+                if isLoadingEstimates && estimates.isEmpty {
+                    GlassCard {
+                        HStack {
+                            ProgressView().controlSize(.small)
+                            Text("Loading estimates…")
+                                .font(TypographyTokens.subheadline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                    }
+                } else if let estimatesError, estimates.isEmpty {
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+                            HStack {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .foregroundStyle(ColorTokens.error)
+                                Text(estimatesError)
+                                    .font(TypographyTokens.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            Button("Retry") {
+                                Task { await loadEstimates() }
+                            }
+                            .buttonStyle(.borderless)
+                            .tint(ColorTokens.primaryOrange)
+                        }
+                    }
+                } else if estimates.isEmpty {
+                    GlassCard {
+                        HStack {
+                            Image(systemName: "doc.text")
+                                .foregroundStyle(.secondary)
+                            Text("No estimates created for this client yet.")
+                                .font(TypographyTokens.subheadline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                    }
+                } else {
+                    VStack(spacing: SpacingTokens.xs) {
+                        ForEach(estimates) { estimate in
+                            estimateRow(estimate)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, SpacingTokens.md)
+        }
+    }
+
+    private func estimateRow(_ estimate: Estimate) -> some View {
+        GlassCard {
+            HStack(spacing: SpacingTokens.sm) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(ColorTokens.primaryOrange)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(estimate.estimateNumber)
+                        .font(TypographyTokens.headline)
+
+                    if let title = estimate.title, !title.isEmpty {
+                        Text(title)
+                            .font(TypographyTokens.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Text("Created \(estimate.createdAt.formatted(as: .medium))")
+                        .font(TypographyTokens.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    CurrencyText(amount: estimate.totalAmount, font: TypographyTokens.moneyMedium)
+                    if let validUntil = estimate.validUntil {
+                        Text("Valid \(validUntil.formatted(as: .short))")
+                            .font(TypographyTokens.caption2)
+                            .foregroundStyle(estimate.isExpired ? ColorTokens.error : .secondary)
+                    }
+                }
+            }
         }
     }
 
@@ -257,4 +387,36 @@ struct ClientDetailView: View {
 
         isLoading = false
     }
+
+    private func loadEstimates() async {
+        isLoadingEstimates = true
+        estimatesError = nil
+
+        do {
+            estimates = try await estimateService.listByClient(clientId: clientId)
+        } catch {
+            estimatesError = error.localizedDescription
+        }
+
+        isLoadingEstimates = false
+    }
+
+    // MARK: - Delete
+
+    private func performDeletion() async {
+        guard !isDeleting else { return }
+        isDeleting = true
+        errorMessage = nil
+
+        do {
+            try await clientService.deleteClient(id: clientId)
+            onClientDeleted?(clientId)
+            isDeleting = false
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            isDeleting = false
+        }
+    }
+
 }

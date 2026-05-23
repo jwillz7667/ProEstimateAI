@@ -88,10 +88,6 @@ final class MockAPIClient: APIClientProtocol {
             return EstimateLineItem.sample as? T
         case is [EstimateLineItem].Type:
             return [EstimateLineItem.sample] as? T
-        case is Proposal.Type:
-            return Proposal.sample as? T
-        case is [Proposal].Type:
-            return [Proposal.sample] as? T
         case is PricingProfile.Type:
             return PricingProfile.sample as? T
         case is [PricingProfile].Type:

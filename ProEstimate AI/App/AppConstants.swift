@@ -33,11 +33,16 @@ enum AppConstants {
 
     // MARK: - Free Tier
 
-    /// Free users get zero pre-paid actions. Every paid feature flips to
-    /// the paywall on first tap. The previous "3 free AI previews"
-    /// concept is retired — these constants stay only so any leftover
-    /// references compile until they're refactored away.
-    static let freeGenerationCredits = 0
+    /// Number of AI preview generations a brand-new free account gets
+    /// before the paywall fires. Must match the backend's
+    /// `FREE_TIER_AI_GENERATION_CREDITS` (`backend/src/lib/limits.ts`) —
+    /// the backend is the source of truth for actual consumption; this
+    /// constant only drives local fallback when an entitlement snapshot
+    /// arrives without an `AI_GENERATION` bucket.
+    static let freeGenerationCredits = 5
+
+    /// Quote / proposal exports remain Pro-gated. Free users hit the
+    /// paywall on the first export attempt — no starter pack here.
     static let freeQuoteExportCredits = 0
 
     // MARK: - Web & Legal URLs

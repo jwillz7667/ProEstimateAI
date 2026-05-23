@@ -6,106 +6,90 @@ struct SettingsView: View {
     @Environment(EntitlementStore.self) private var entitlementStore
     @Environment(UsageMeterStore.self) private var usageMeterStore
     @Environment(PaywallPresenter.self) private var paywallPresenter
-    @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
-    @Environment(AppRouter.self) private var router
     @Environment(AppearanceStore.self) private var appearanceStore
     @State private var showingSignOutConfirmation = false
     @State private var showingDeleteAccountConfirmation = false
     @State private var isDeletingAccount = false
+    @State private var preferredSupplier: MaterialSupplier? = MaterialSupplier.preferred
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Group {
-            if viewModel.isLoading && viewModel.company == nil {
-                LoadingStateView(message: "Loading settings...")
-            } else {
-                settingsList
+        NavigationStack {
+            Group {
+                if viewModel.isLoading && viewModel.company == nil {
+                    LoadingStateView(message: "Loading settings...")
+                } else {
+                    settingsList
+                }
             }
-        }
-        .navigationTitle("Account")
-        .navigationDestination(for: AppDestination.self) { destination in
-            switch destination {
-            case .companyBranding:
-                CompanyBrandingView(viewModel: viewModel)
-            case .taxSettings:
-                TaxSettingsView(viewModel: viewModel)
-            case .numberingSettings:
-                NumberingSettingsView(viewModel: viewModel)
-            case .pricingProfiles:
-                PricingProfilesView(viewModel: viewModel)
-            case .languageSettings:
-                LanguageSettingsView(viewModel: viewModel)
-            case .analytics:
-                AnalyticsView()
-            case .clientsList:
-                ClientListView()
-            case let .clientDetail(id):
-                ClientDetailView(clientId: id)
-            default:
-                EmptyView()
+            .navigationTitle("Settings")
+            .navigationDestination(for: AppDestination.self) { destination in
+                switch destination {
+                case .companyBranding:
+                    CompanyBrandingView(viewModel: viewModel)
+                case .taxSettings:
+                    TaxSettingsView(viewModel: viewModel)
+                case .numberingSettings:
+                    NumberingSettingsView(viewModel: viewModel)
+                case .languageSettings:
+                    LanguageSettingsView(viewModel: viewModel)
+                default:
+                    EmptyView()
+                }
             }
-        }
-        .task {
-            viewModel.appState = appState
-            viewModel.appearanceStore = appearanceStore
-            await viewModel.loadSettings()
-        }
-        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
-            Button("OK") { viewModel.errorMessage = nil }
-        } message: {
-            if let error = viewModel.errorMessage {
-                Text(error)
+            .task {
+                viewModel.appState = appState
+                viewModel.appearanceStore = appearanceStore
+                await viewModel.loadSettings()
             }
-        }
-        .confirmationDialog(
-            "Sign Out",
-            isPresented: $showingSignOutConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Sign Out", role: .destructive) {
-                appState.signOut(
-                    entitlementStore: entitlementStore,
-                    usageMeterStore: usageMeterStore
-                )
+            .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+                Button("OK") { viewModel.errorMessage = nil }
+            } message: {
+                if let error = viewModel.errorMessage {
+                    Text(error)
+                }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Are you sure you want to sign out?")
-        }
-        .confirmationDialog(
-            "Delete Account",
-            isPresented: $showingDeleteAccountConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Delete Account Permanently", role: .destructive) {
-                Task { await performAccountDeletion() }
+            .confirmationDialog(
+                "Sign Out",
+                isPresented: $showingSignOutConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Sign Out", role: .destructive) {
+                    appState.signOut(
+                        entitlementStore: entitlementStore,
+                        usageMeterStore: usageMeterStore
+                    )
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Are you sure you want to sign out?")
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This permanently deletes your account, company, and all related projects, estimates, and invoices. This cannot be undone. Any active subscription must be canceled separately in your Apple ID settings.")
+            .confirmationDialog(
+                "Delete Account",
+                isPresented: $showingDeleteAccountConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Account Permanently", role: .destructive) {
+                    Task { await performAccountDeletion() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently deletes your account, company, and all related projects, estimates, and invoices. This cannot be undone. Any active subscription must be canceled separately in your Apple ID settings.")
+            }
         }
     }
 
-    // MARK: - Pro Badge
+    // MARK: - Version
 
-    private var proBadge: some View {
-        Text("PRO")
-            .font(TypographyTokens.caption2.weight(.bold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, SpacingTokens.xs)
-            .padding(.vertical, 2)
-            .background(ColorTokens.primaryOrange, in: Capsule())
-    }
-
-    // MARK: - Feature Gates
-
-    private func handleAnalyticsTap() {
-        let result = featureGateCoordinator.guardAccessAnalytics()
-        switch result {
-        case .allowed:
-            router.accountPath.append(AppDestination.analytics)
-        case let .blocked(decision):
-            paywallPresenter.present(decision)
-        }
+    /// "1.0.1 (4)" — read live from the app bundle so the About row
+    /// always reflects the actual marketing version + build number
+    /// instead of drifting from a hard-coded literal. Falls back to a
+    /// readable placeholder if either Info.plist key is missing.
+    private var appVersionString: String {
+        let info = Bundle.main.infoDictionary
+        let marketing = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? "—"
+        return "\(marketing) (\(build))"
     }
 
     // MARK: - Account Deletion
@@ -136,45 +120,23 @@ struct SettingsView: View {
                 }
             }
 
-            // Account Section — avatar header + clients link + sign out controls.
-            Section {
+            // Account Section
+            Section("Account") {
                 if let user = appState.currentUser {
-                    HStack(spacing: SpacingTokens.md) {
-                        AvatarView(
-                            name: user.fullName,
-                            imageURL: user.avatarURL,
-                            size: 56
-                        )
+                    HStack(spacing: SpacingTokens.sm) {
+                        Image(systemName: "person.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(ColorTokens.primaryOrange.opacity(0.5))
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
                             Text(user.fullName)
-                                .font(TypographyTokens.cardTitle)
-                                .foregroundStyle(ColorTokens.textPrimary)
+                                .font(TypographyTokens.headline)
                             Text(user.email)
                                 .font(TypographyTokens.caption)
-                                .foregroundStyle(ColorTokens.textSecondary)
-
-                            HStack(spacing: SpacingTokens.xs) {
-                                StatusBadge(
-                                    text: entitlementStore.hasProAccess ? "PRO" : "FREE",
-                                    style: entitlementStore.hasProAccess ? .accent : .info
-                                )
-                            }
-                            .padding(.top, 2)
+                                .foregroundStyle(.secondary)
                         }
-
-                        Spacer()
                     }
-                    .padding(.vertical, SpacingTokens.xs)
-                }
-
-                NavigationLink(value: AppDestination.clientsList) {
-                    Label {
-                        Text("Clients")
-                    } icon: {
-                        Image(systemName: "person.2")
-                            .foregroundStyle(ColorTokens.accentBlue)
-                    }
+                    .padding(.vertical, SpacingTokens.xxs)
                 }
 
                 Button(role: .destructive) {
@@ -241,47 +203,25 @@ struct SettingsView: View {
                     }
                 }
 
-                Button {
-                    handleAnalyticsTap()
-                } label: {
-                    Label {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Analytics")
-                                    .foregroundStyle(ColorTokens.primaryText)
-                                Text("Projects, revenue & estimates")
-                                    .font(TypographyTokens.caption)
-                                    .foregroundStyle(.secondary)
+                Label {
+                    Picker(
+                        "Material Price Source",
+                        selection: Binding(
+                            get: { preferredSupplier },
+                            set: { newValue in
+                                preferredSupplier = newValue
+                                MaterialSupplier.preferred = newValue
                             }
-                            Spacer()
-                            if !entitlementStore.hasProAccess {
-                                proBadge
-                            } else {
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
+                        )
+                    ) {
+                        Text("No preference").tag(MaterialSupplier?.none)
+                        ForEach(MaterialSupplier.allCases) { supplier in
+                            Text(supplier.displayName).tag(MaterialSupplier?.some(supplier))
                         }
-                    } icon: {
-                        Image(systemName: "chart.bar.xaxis")
-                            .foregroundStyle(ColorTokens.primaryOrange)
                     }
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-
-                NavigationLink(value: AppDestination.pricingProfiles) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Pricing Profiles")
-                            Text("\(viewModel.pricingProfiles.count) profile\(viewModel.pricingProfiles.count == 1 ? "" : "s")")
-                                .font(TypographyTokens.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "dollarsign.gauge.chart.lefthalf.righthalf")
-                            .foregroundStyle(ColorTokens.accentGreen)
-                    }
+                } icon: {
+                    Image(systemName: "cart")
+                        .foregroundStyle(ColorTokens.accentGreen)
                 }
             }
 
@@ -345,10 +285,17 @@ struct SettingsView: View {
                         }
                         .font(TypographyTokens.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(colorScheme == .light ? Color.black : Color.white)
                         .padding(.horizontal, SpacingTokens.sm)
                         .padding(.vertical, SpacingTokens.xxs)
                         .background(ColorTokens.primaryOrange, in: Capsule())
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(
+                                    colorScheme == .light ? Color.black : Color.clear,
+                                    lineWidth: colorScheme == .light ? 2 : 0
+                                )
+                        )
                     }
                 }
             }
@@ -358,8 +305,9 @@ struct SettingsView: View {
                 HStack {
                     Text("Version")
                     Spacer()
-                    Text("1.0.0 (1)")
+                    Text(appVersionString)
                         .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
 
                 Link(destination: AppConstants.termsOfServiceURL) {
@@ -377,11 +325,22 @@ struct SettingsView: View {
                 Text("About")
             } footer: {
                 VStack(spacing: SpacingTokens.xs) {
+                    // White circular plate in dark mode keeps the brand mark
+                    // legible — `housd-icon-light` is drawn for light
+                    // backgrounds (gray-fill house with black outline), so
+                    // dropping it directly on a dark page reads as a dark
+                    // blob. Light mode page is already light, no plate
+                    // needed.
                     Image("housd-icon-light")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(height: 32)
-                        .opacity(0.6)
+                        .frame(width: 32, height: 32)
+                        .padding(6)
+                        .background(
+                            colorScheme == .dark ? Color.white : Color.clear,
+                            in: Circle()
+                        )
+                        .opacity(0.85)
 
                     Text("ProEstimate AI")
                         .font(TypographyTokens.caption)
