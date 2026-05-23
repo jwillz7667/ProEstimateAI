@@ -9,23 +9,24 @@ struct EstimateListView: View {
 
     var body: some View {
         @Bindable var router = router
-        NavigationStack(path: $router.estimatesPath) {
+        NavigationStack(path: $router.quotesPath) {
             Group {
                 if viewModel.isLoading && viewModel.estimates.isEmpty {
-                    LoadingStateView(message: "Loading estimates...")
+                    LoadingStateView(message: "Loading quotes...")
                 } else if viewModel.estimates.isEmpty {
                     emptyState
                 } else {
                     content
                 }
             }
-            .navigationTitle("Estimates")
-            .searchable(text: $viewModel.searchText, prompt: "Search estimates...")
+            .background(ColorTokens.background.ignoresSafeArea())
+            .navigationTitle("Quotes")
+            .searchable(text: $viewModel.searchText, prompt: "Search quotes...")
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {
-                case .estimateEditor(let id):
+                case let .estimateEditor(id):
                     EstimateEditorView(estimateId: id)
-                case .proposalPreview(let id):
+                case let .proposalPreview(id):
                     ProposalPreviewView(proposalId: id)
                 default:
                     EmptyView()
@@ -48,7 +49,7 @@ struct EstimateListView: View {
                 }
             }
             .confirmationDialog(
-                "Delete Estimate",
+                "Delete Quote",
                 isPresented: $showingDeleteConfirmation,
                 titleVisibility: .visible
             ) {
@@ -136,10 +137,10 @@ struct EstimateListView: View {
         VStack(spacing: SpacingTokens.sm) {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.system(size: 36))
-                .foregroundStyle(ColorTokens.secondaryText)
-            Text(viewModel.searchText.isEmpty ? "No estimates in \(viewModel.selectedFilter.title.lowercased())" : "No matches")
+                .foregroundStyle(ColorTokens.textTertiary)
+            Text(viewModel.searchText.isEmpty ? "No quotes in \(viewModel.selectedFilter.title.lowercased())" : "No matches")
                 .font(TypographyTokens.subheadline)
-                .foregroundStyle(ColorTokens.secondaryText)
+                .foregroundStyle(ColorTokens.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, SpacingTokens.xxl)
@@ -150,10 +151,13 @@ struct EstimateListView: View {
     private var emptyState: some View {
         EmptyStateView(
             icon: "doc.text",
-            title: "No Estimates",
-            subtitle: "Estimates are created inside a project. Open any project and tap Generate with AI or Blank Estimate.",
+            title: "No Quotes Yet",
+            subtitle: "Quotes are created from a project. Generate a vision, pick the materials you want, and we'll draft a quote.",
             ctaTitle: "Go to Projects",
-            ctaAction: { appState.selectedTab = .projects }
+            ctaAction: {
+                appState.selectedTab = .projects
+                router.projectsPath = NavigationPath()
+            }
         )
         .padding(.horizontal, SpacingTokens.md)
     }

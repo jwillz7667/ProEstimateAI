@@ -1,9 +1,9 @@
 import CoreLocation
 import SwiftUI
 
-/// Main project list screen displayed under the Projects tab.
-/// Provides search, status filtering, pull-to-refresh, and a creation
-/// entry point via the toolbar "+" button.
+/// Full project list — pushed onto the Projects tab via `AppDestination.projectsList`.
+/// Replaces the previous tab-root layout. The parent NavigationStack
+/// (owned by `ProjectsHomeView`) handles destination dispatch.
 struct ProjectListView: View {
     @State private var viewModel = ProjectListViewModel()
     @State private var showCreation = false
@@ -13,64 +13,18 @@ struct ProjectListView: View {
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
 
-    // Client names are loaded from the API by the view model.
-
     var body: some View {
         @Bindable var router = router
-        // NavigationSplitView auto-collapses to a single stack on compact
-        // size classes (iPhone) and shows side-by-side on regular (iPad).
-        NavigationSplitView {
-            sidebar(router: router)
-        } detail: {
-            NavigationStack(path: $router.projectsPath) {
-                emptyDetailPlaceholder
-                    .navigationDestination(for: AppDestination.self) { destination in
-                        switch destination {
-                        case let .projectDetail(id, autoGenerate):
-                            ProjectDetailView(projectId: id, autoGenerateOnOpen: autoGenerate)
-                        case let .clientDetail(id):
-                            ClientDetailView(clientId: id)
-                        case let .lawnMeasurement(projectId, lat, lng):
-                            LawnMeasurementView(
-                                viewModel: LawnMeasurementViewModel(
-                                    projectId: projectId,
-                                    initialCenter: (lat != nil && lng != nil)
-                                        ? CLLocationCoordinate2D(latitude: lat!, longitude: lng!)
-                                        : nil
-                                )
-                            )
-                        case let .roofScouting(projectId, address, lat, lng):
-                            RoofScoutingView(
-                                viewModel: RoofScoutingViewModel(
-                                    projectId: projectId,
-                                    initialAddress: address,
-                                    initialCoordinate: (lat != nil && lng != nil)
-                                        ? CLLocationCoordinate2D(latitude: lat!, longitude: lng!)
-                                        : nil
-                                )
-                            )
-                        default:
-                            EmptyView()
-                        }
-                    }
-            }
-        }
-        .navigationSplitViewStyle(.balanced)
-    }
-
-    // MARK: - Sidebar
-
-    private func sidebar(router: AppRouter) -> some View {
         VStack(spacing: 0) {
-            // Status filter
             filterBar
                 .padding(.horizontal, SpacingTokens.md)
                 .padding(.vertical, SpacingTokens.xs)
 
-            // Content
             contentView
         }
-        .navigationTitle("Projects")
+        .background(ColorTokens.background.ignoresSafeArea())
+        .navigationTitle("All Projects")
+        .navigationBarTitleDisplayMode(.large)
         .searchable(text: $viewModel.searchText, prompt: "Search projects")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -106,7 +60,6 @@ struct ProjectListView: View {
                     navigateToProjectId = nil
                     navigateAutoGenerate = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        router.projectsPath = NavigationPath()
                         router.projectsPath.append(
                             AppDestination.projectDetail(id: projectId, autoGenerate: autoGenerate)
                         )
@@ -114,29 +67,6 @@ struct ProjectListView: View {
                 }
             }
         }
-    }
-
-    // MARK: - iPad Empty Detail
-
-    private var emptyDetailPlaceholder: some View {
-        VStack(spacing: SpacingTokens.md) {
-            Image(systemName: "folder.badge.plus")
-                .font(.system(size: 56, weight: .regular))
-                .foregroundStyle(ColorTokens.primaryOrange.opacity(0.55))
-                .accessibilityHidden(true)
-
-            Text("Select a Project")
-                .font(TypographyTokens.title3)
-                .foregroundStyle(ColorTokens.primaryText)
-
-            Text("Pick a project from the list to see its photos, AI previews, and estimates.")
-                .font(TypographyTokens.subheadline)
-                .foregroundStyle(ColorTokens.secondaryText)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
-        }
-        .padding(SpacingTokens.xxl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Subviews
@@ -233,6 +163,8 @@ struct ProjectListView: View {
 // MARK: - Preview
 
 #Preview {
-    ProjectListView()
-        .environment(AppRouter())
+    NavigationStack {
+        ProjectListView()
+            .environment(AppRouter())
+    }
 }

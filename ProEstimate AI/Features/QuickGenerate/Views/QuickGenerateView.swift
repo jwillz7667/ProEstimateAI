@@ -1,9 +1,10 @@
 import PhotosUI
 import SwiftUI
 
-/// Streamlined AI remodel preview flow accessible from the dashboard.
-/// Pick a photo → describe the remodel → select room type → generate.
-/// Creates a project behind the scenes and kicks off AI generation.
+/// AI Remodel Studio — the Studio tab's primary screen.
+/// Pick a photo → choose a Style Vision and optional Material Focus →
+/// generate. Creates a project under the hood and kicks off AI generation
+/// against the same backend pipeline used by the full project wizard.
 struct QuickGenerateView: View {
     var onProjectCreated: ((String) -> Void)?
 
@@ -20,37 +21,36 @@ struct QuickGenerateView: View {
         NavigationStack {
             Group {
                 switch viewModel.phase {
-                case .input:
-                    inputPhase
-                case .generating:
-                    generatingPhase
-                case .result:
-                    resultPhase
-                case .error:
-                    errorPhase
+                case .input: inputPhase
+                case .generating: generatingPhase
+                case .result: resultPhase
+                case .error: errorPhase
                 }
             }
-            .navigationTitle(navigationTitle)
+            .background(ColorTokens.background.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(viewModel.phase == .result ? "Done" : "Cancel") {
-                        if let projectId = viewModel.createdProjectId {
-                            onProjectCreated?(projectId)
-                        }
-                        dismiss()
-                    }
-                }
-            }
+            .toolbar { toolbarContent }
         }
     }
 
-    private var navigationTitle: String {
-        switch viewModel.phase {
-        case .input: "AI Remodel Preview"
-        case .generating: "Generating..."
-        case .result: "Preview Ready"
-        case .error: "Generation Failed"
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            Text("ProEstimate AI")
+                .font(TypographyTokens.cardTitle)
+                .foregroundStyle(ColorTokens.textPrimary)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                appearedDismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(ColorTokens.textSecondary)
+            }
+            .accessibilityLabel(viewModel.phase == .result ? "Done" : "Close")
         }
     }
 
@@ -58,37 +58,47 @@ struct QuickGenerateView: View {
 
     private var inputPhase: some View {
         ScrollView {
-            VStack(spacing: SpacingTokens.lg) {
-                // Photo section
-                photoSection
+            VStack(alignment: .leading, spacing: SpacingTokens.xl) {
+                headerSection
+                photoCard
+                styleVisionSection
+                materialFocusSection
+                roomTypeFooter
 
-                // Room type selection
-                roomTypeSection
-
-                // Prompt
-                promptSection
-
-                // Generate button
                 PrimaryCTAButton(
-                    title: "Generate AI Preview",
-                    icon: "wand.and.stars",
+                    title: "Generate Vision",
+                    icon: "sparkles",
                     isLoading: viewModel.isSubmitting,
-                    isDisabled: !viewModel.canGenerate
+                    isDisabled: !viewModel.canGenerate,
+                    style: .dark
                 ) {
                     handleGenerate()
                 }
-                .padding(.horizontal, SpacingTokens.md)
+                .padding(.top, SpacingTokens.xs)
             }
+            .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.md)
         }
     }
 
-    private var photoSection: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.sm) {
-            Text("Photo of Your Space")
-                .font(TypographyTokens.headline)
-                .padding(.horizontal, SpacingTokens.md)
+    // MARK: - Header
 
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            Text("AI Remodel Studio")
+                .font(TypographyTokens.title)
+                .foregroundStyle(ColorTokens.textPrimary)
+
+            Text("Upload a photo to generate a high-fidelity vision of your finished space.")
+                .font(TypographyTokens.subheadline)
+                .foregroundStyle(ColorTokens.textSecondary)
+        }
+    }
+
+    // MARK: - Photo Card
+
+    private var photoCard: some View {
+        Group {
             if let imageData = viewModel.selectedImageData,
                let uiImage = UIImage(data: imageData)
             {
@@ -96,68 +106,33 @@ struct QuickGenerateView: View {
                     Image(uiImage: uiImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity)
                         .frame(height: 220)
                         .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
-                        .padding(.horizontal, SpacingTokens.md)
 
-                    Button {
-                        viewModel.clearPhoto()
+                    Menu {
+                        Button("Replace Photo", systemImage: "photo.on.rectangle") {}
+                            .disabled(true)
+                        if isCameraAvailable {
+                            Button("Take New Photo", systemImage: "camera") {
+                                isCameraPresented = true
+                            }
+                        }
+                        Button("Remove", systemImage: "trash", role: .destructive) {
+                            viewModel.clearPhoto()
+                        }
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.white)
-                            .shadow(radius: 2)
+                            .frame(width: 32, height: 32)
+                            .background(.black.opacity(0.55), in: Circle())
                     }
-                    .padding(.trailing, SpacingTokens.lg)
-                    .padding(.top, SpacingTokens.sm)
-                    .accessibilityLabel("Remove photo")
+                    .padding(SpacingTokens.sm)
+                    .accessibilityLabel("Photo options")
                 }
             } else {
-                VStack(spacing: SpacingTokens.sm) {
-                    if isCameraAvailable {
-                        Button {
-                            isCameraPresented = true
-                        } label: {
-                            HStack(spacing: SpacingTokens.sm) {
-                                Image(systemName: "camera.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(ColorTokens.primaryOrange)
-                                Text("Take Photo")
-                                    .font(TypographyTokens.subheadline)
-                                    .fontWeight(.medium)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(SpacingTokens.md)
-                            .glassCard()
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    PhotosPicker(
-                        selection: $viewModel.photosPickerItem,
-                        matching: .images
-                    ) {
-                        HStack(spacing: SpacingTokens.sm) {
-                            Image(systemName: "photo.on.rectangle.angled")
-                                .font(.title3)
-                                .foregroundStyle(ColorTokens.primaryOrange)
-                            Text("Choose from Library")
-                                .font(TypographyTokens.subheadline)
-                                .fontWeight(.medium)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .padding(SpacingTokens.md)
-                        .glassCard()
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, SpacingTokens.md)
+                photoUploadPlaceholder
             }
         }
         .onChange(of: viewModel.photosPickerItem) { _, _ in
@@ -179,6 +154,55 @@ struct QuickGenerateView: View {
         }
     }
 
+    private var photoUploadPlaceholder: some View {
+        PhotosPicker(selection: $viewModel.photosPickerItem, matching: .images) {
+            VStack(spacing: SpacingTokens.sm) {
+                Image(systemName: "photo.badge.plus")
+                    .font(.system(size: 38, weight: .light))
+                    .foregroundStyle(ColorTokens.primaryOrange)
+
+                Text("Tap to upload a photo")
+                    .font(TypographyTokens.cardTitle)
+                    .foregroundStyle(ColorTokens.textPrimary)
+
+                Text("Use a well-lit photo of the room you want to remodel.")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, SpacingTokens.md)
+
+                if isCameraAvailable {
+                    Button {
+                        isCameraPresented = true
+                    } label: {
+                        Label("Take Photo", systemImage: "camera")
+                            .font(TypographyTokens.buttonSecondary)
+                            .padding(.horizontal, SpacingTokens.lg)
+                            .padding(.vertical, 10)
+                            .background(ColorTokens.primaryOrange.opacity(0.12), in: Capsule())
+                            .foregroundStyle(ColorTokens.primaryOrange)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, SpacingTokens.xs)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, SpacingTokens.xxl)
+            .background(
+                RoundedRectangle(cornerRadius: RadiusTokens.card)
+                    .fill(ColorTokens.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: RadiusTokens.card)
+                            .strokeBorder(
+                                ColorTokens.primaryOrange.opacity(0.55),
+                                style: StrokeStyle(lineWidth: 1.4, lineCap: .round, dash: [6, 6])
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     /// Identifiable trigger for the QuickGenerate full-screen viewer. The
     /// "before" is local UIImage data (the photo the contractor just picked
     /// or shot) so we capture it as `Data` rather than a URL.
@@ -189,48 +213,98 @@ struct QuickGenerateView: View {
         let caption: String?
     }
 
-    private var roomTypeSection: some View {
+    // MARK: - Style Vision
+
+    private var styleVisionSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.sm) {
-            Text("Room Type")
-                .font(TypographyTokens.headline)
-                .padding(.horizontal, SpacingTokens.md)
+            sectionLabel("STYLE VISION")
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: SpacingTokens.sm) {
-                    ForEach(Project.ProjectType.allCases, id: \.rawValue) { type in
-                        roomTypeChip(type)
+                    ForEach(VisionStyle.allCases) { style in
+                        styleCard(style)
                     }
                 }
-                .padding(.horizontal, SpacingTokens.md)
+            }
+            .scrollClipDisabled()
+        }
+    }
+
+    private func styleCard(_ style: VisionStyle) -> some View {
+        let isSelected = viewModel.selectedStyle == style
+        return Button {
+            viewModel.selectedStyle = style
+        } label: {
+            VStack(spacing: SpacingTokens.xs) {
+                ZStack(alignment: .topTrailing) {
+                    RoundedRectangle(cornerRadius: RadiusTokens.card)
+                        .fill(ColorTokens.background)
+                        .overlay(
+                            Image(systemName: style.iconName)
+                                .font(.system(size: 28, weight: .light))
+                                .foregroundStyle(ColorTokens.textSecondary)
+                        )
+                        .frame(width: 96, height: 70)
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(ColorTokens.primaryOrange)
+                            .padding(6)
+                    }
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: RadiusTokens.card)
+                        .strokeBorder(
+                            isSelected ? ColorTokens.primaryOrange : ColorTokens.cardStroke,
+                            lineWidth: isSelected ? 2 : 1
+                        )
+                )
+
+                Text(style.label)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isSelected ? ColorTokens.textPrimary : ColorTokens.textSecondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(style.label) style")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    // MARK: - Material Focus
+
+    private var materialFocusSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.sm) {
+            sectionLabel("MATERIAL FOCUS")
+
+            FlowingChips(items: MaterialFocus.allCases) { focus in
+                materialChip(focus)
             }
         }
     }
 
-    private func roomTypeChip(_ type: Project.ProjectType) -> some View {
-        let isSelected = viewModel.selectedProjectType == type
+    private func materialChip(_ focus: MaterialFocus) -> some View {
+        let isSelected = viewModel.selectedMaterials.contains(focus)
         return Button {
-            viewModel.selectedProjectType = type
+            viewModel.toggleMaterial(focus)
         } label: {
-            HStack(spacing: SpacingTokens.xxs) {
-                Image(systemName: iconForType(type))
+            HStack(spacing: 6) {
+                Image(systemName: focus.iconName)
                     .font(.caption)
-                Text(labelForType(type))
-                    .font(TypographyTokens.caption)
-                    .fontWeight(.medium)
+                Text(focus.label)
+                    .font(TypographyTokens.buttonSecondary)
             }
-            .padding(.horizontal, SpacingTokens.sm)
-            .padding(.vertical, SpacingTokens.xs)
+            .padding(.horizontal, SpacingTokens.md)
+            .padding(.vertical, 10)
             .background(
-                isSelected
-                    ? ColorTokens.primaryOrange
-                    : ColorTokens.surface,
+                isSelected ? ColorTokens.primaryOrange : ColorTokens.surface,
                 in: Capsule()
             )
-            .foregroundStyle(isSelected ? .white : ColorTokens.primaryText)
+            .foregroundStyle(isSelected ? .white : ColorTokens.textPrimary)
             .overlay(
                 Capsule()
                     .strokeBorder(
-                        isSelected ? Color.clear : Color(.separator).opacity(0.3),
+                        isSelected ? Color.clear : ColorTokens.cardStroke,
                         lineWidth: 1
                     )
             )
@@ -238,36 +312,45 @@ struct QuickGenerateView: View {
         .buttonStyle(.plain)
     }
 
-    private var promptSection: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.sm) {
-            Text("Describe Your Remodel")
-                .font(TypographyTokens.headline)
-                .padding(.horizontal, SpacingTokens.md)
+    // MARK: - Room Type Footer (compact picker)
 
-            ZStack(alignment: .topLeading) {
-                if viewModel.prompt.isEmpty {
-                    Text("e.g., Modern kitchen with white shaker cabinets, quartz countertops, and a large island...")
-                        .font(TypographyTokens.body)
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, SpacingTokens.md + 4)
-                        .padding(.top, SpacingTokens.sm + 8)
+    private var roomTypeFooter: some View {
+        HStack(spacing: SpacingTokens.xs) {
+            Text("Room")
+                .font(TypographyTokens.caption)
+                .foregroundStyle(ColorTokens.textSecondary)
+
+            Menu {
+                ForEach(Project.ProjectType.allCases, id: \.rawValue) { type in
+                    Button(type.displayName) {
+                        viewModel.selectedProjectType = type
+                    }
                 }
-
-                TextEditor(text: $viewModel.prompt)
-                    .font(TypographyTokens.body)
-                    .frame(minHeight: 100)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, SpacingTokens.xs)
-                    .padding(.vertical, SpacingTokens.xs)
+            } label: {
+                HStack(spacing: 4) {
+                    Text(viewModel.selectedProjectType?.displayName ?? "Select")
+                        .font(TypographyTokens.caption.weight(.semibold))
+                        .foregroundStyle(ColorTokens.textPrimary)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(ColorTokens.textSecondary)
+                }
+                .padding(.horizontal, SpacingTokens.sm)
+                .padding(.vertical, 6)
+                .background(ColorTokens.surface, in: Capsule())
+                .overlay(Capsule().strokeBorder(ColorTokens.cardStroke, lineWidth: 1))
             }
-            .glassCard()
-            .padding(.horizontal, SpacingTokens.md)
-
-            Text("\(viewModel.prompt.count)/500")
-                .font(TypographyTokens.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, SpacingTokens.md)
+            Spacer()
         }
+    }
+
+    // MARK: - Section Label
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.weight(.bold))
+            .tracking(1.0)
+            .foregroundStyle(ColorTokens.textSecondary)
     }
 
     // MARK: - Generating Phase
@@ -281,7 +364,7 @@ struct QuickGenerateView: View {
 
             Text("This usually takes 15–35 seconds")
                 .font(TypographyTokens.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ColorTokens.textSecondary)
 
             Spacer()
         }
@@ -291,8 +374,9 @@ struct QuickGenerateView: View {
 
     private var resultPhase: some View {
         ScrollView {
-            VStack(spacing: SpacingTokens.lg) {
-                // Before/After
+            VStack(alignment: .leading, spacing: SpacingTokens.lg) {
+                resultHeader
+
                 if let beforeData = viewModel.selectedImageData,
                    let _ = UIImage(data: beforeData),
                    let gen = viewModel.completedGeneration
@@ -303,6 +387,8 @@ struct QuickGenerateView: View {
                             afterImageURL: gen.previewURL,
                             beforeImageData: beforeData
                         )
+                        .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
+
                         Button {
                             fullScreenViewer = QuickFullScreenViewerRequest(
                                 id: "\(gen.id)-quick-fullscreen",
@@ -316,52 +402,58 @@ struct QuickGenerateView: View {
                                 .foregroundStyle(.white)
                                 .padding(SpacingTokens.xs)
                                 .background(.black.opacity(0.55), in: Circle())
-                                .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
                         }
                         .buttonStyle(.plain)
                         .padding(SpacingTokens.sm)
-                        .accessibilityLabel("Enlarge before/after comparison")
                     }
-                    .padding(.horizontal, SpacingTokens.md)
                 }
 
-                // Generation info
-                if let gen = viewModel.completedGeneration {
-                    HStack {
-                        if let duration = gen.durationDisplay {
-                            HStack(spacing: SpacingTokens.xxs) {
-                                Image(systemName: "clock")
-                                    .font(.caption2)
-                                Text(duration)
-                                    .font(TypographyTokens.caption)
-                            }
-                            .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal, SpacingTokens.md)
-                }
-
-                // Actions
                 VStack(spacing: SpacingTokens.sm) {
+                    SecondaryButton(title: "Save to Project", icon: "bookmark.fill") {
+                        if let projectId = viewModel.createdProjectId {
+                            onProjectCreated?(projectId)
+                        }
+                        dismiss()
+                    }
+
                     PrimaryCTAButton(
-                        title: "View Full Project",
-                        icon: "folder.fill"
+                        title: "Generate Quote",
+                        icon: "doc.text.fill",
+                        style: .dark
                     ) {
                         if let projectId = viewModel.createdProjectId {
                             onProjectCreated?(projectId)
                         }
                         dismiss()
                     }
-                    .padding(.horizontal, SpacingTokens.md)
 
-                    SecondaryButton(title: "Generate Another", icon: "wand.and.stars") {
+                    Button("Generate Another") {
                         viewModel.reset()
                     }
-                    .padding(.horizontal, SpacingTokens.md)
+                    .font(TypographyTokens.subheadline)
+                    .foregroundStyle(ColorTokens.textSecondary)
+                    .padding(.top, SpacingTokens.xs)
+                }
+                .padding(.top, SpacingTokens.sm)
+            }
+            .padding(.horizontal, SpacingTokens.md)
+            .padding(.vertical, SpacingTokens.md)
+        }
+    }
+
+    private var resultHeader: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            HStack(spacing: SpacingTokens.xs) {
+                StatusBadge(text: "VIRTUAL REMODEL", style: .info)
+                if let gen = viewModel.completedGeneration {
+                    Text("Generated \(gen.createdAt.formatted(as: .dateTime))")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(ColorTokens.textSecondary)
                 }
             }
-            .padding(.vertical, SpacingTokens.md)
+            Text(viewModel.selectedStyle.label + " " + (viewModel.selectedProjectType?.displayName ?? "Vision"))
+                .font(TypographyTokens.title)
+                .foregroundStyle(ColorTokens.textPrimary)
         }
     }
 
@@ -381,7 +473,7 @@ struct QuickGenerateView: View {
             if let error = viewModel.errorMessage {
                 Text(error)
                     .font(TypographyTokens.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ColorTokens.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, SpacingTokens.xl)
             }
@@ -389,13 +481,21 @@ struct QuickGenerateView: View {
             PrimaryCTAButton(title: "Try Again", icon: "arrow.clockwise") {
                 viewModel.phase = .input
             }
-            .frame(maxWidth: 200)
+            .frame(maxWidth: 220)
 
             Spacer()
         }
+        .padding(SpacingTokens.md)
     }
 
-    // MARK: - Feature Gate
+    // MARK: - Actions
+
+    private func appearedDismiss() {
+        if let projectId = viewModel.createdProjectId {
+            onProjectCreated?(projectId)
+        }
+        dismiss()
+    }
 
     private func handleGenerate() {
         let result = featureGateCoordinator.guardGeneratePreview()
@@ -403,7 +503,6 @@ struct QuickGenerateView: View {
         case .allowed:
             Task {
                 await viewModel.generate()
-                // After successful generation, check for soft upgrade prompt
                 if viewModel.phase == .result,
                    let softGate = featureGateCoordinator.shouldShowSoftUpgradeAfterGeneration()
                 {
@@ -414,15 +513,82 @@ struct QuickGenerateView: View {
             paywallPresenter.present(decision)
         }
     }
+}
 
-    // MARK: - Helpers
+// MARK: - FlowingChips
 
-    private func iconForType(_ type: Project.ProjectType) -> String {
-        type.iconName
+/// Wrap-around chip layout. Wraps onto multiple rows as space requires —
+/// avoids the awkward horizontal-scroll-only behaviour for tappable chips.
+struct FlowingChips<Item: Identifiable, Content: View>: View {
+    let items: [Item]
+    let spacing: CGFloat
+    let runSpacing: CGFloat
+    @ViewBuilder let content: (Item) -> Content
+
+    init(
+        items: [Item],
+        spacing: CGFloat = SpacingTokens.xs,
+        runSpacing: CGFloat = SpacingTokens.xs,
+        @ViewBuilder content: @escaping (Item) -> Content
+    ) {
+        self.items = items
+        self.spacing = spacing
+        self.runSpacing = runSpacing
+        self.content = content
     }
 
-    private func labelForType(_ type: Project.ProjectType) -> String {
-        type.displayName
+    var body: some View {
+        FlowLayout(spacing: spacing, runSpacing: runSpacing) {
+            ForEach(items) { item in
+                content(item)
+            }
+        }
+    }
+}
+
+/// Custom Layout that arranges children in horizontal runs and wraps to
+/// the next line when the available width is exhausted. Used by
+/// `FlowingChips` for the Material Focus pill cluster.
+private struct FlowLayout: Layout {
+    var spacing: CGFloat
+    var runSpacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var rowWidth: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if rowWidth + size.width > maxWidth, rowWidth > 0 {
+                totalHeight += rowHeight + runSpacing
+                rowWidth = 0
+                rowHeight = 0
+            }
+            rowWidth += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        totalHeight += rowHeight
+        return CGSize(width: maxWidth, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
+        var x: CGFloat = bounds.minX
+        var y: CGFloat = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX, x > bounds.minX {
+                x = bounds.minX
+                y += rowHeight + runSpacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
 

@@ -8,6 +8,9 @@ final class DashboardViewModel {
     var summary: DashboardSummary?
     var recentProjects: [Project] = []
     var projectThumbnails: [String: URL] = [:]
+    /// Estimates that are still in flight — Draft / Sent / Approved.
+    /// Drives the "Active Quotes" section on the Projects home tab.
+    var activeQuotes: [EstimateSummary] = []
     var isLoading: Bool = false
     var errorMessage: String?
 
@@ -18,14 +21,21 @@ final class DashboardViewModel {
         let hour = Calendar.current.component(.hour, from: Date())
         let timeGreeting: String
         switch hour {
-        case 0..<12:
+        case 0 ..< 12:
             timeGreeting = "Good morning"
-        case 12..<17:
+        case 12 ..< 17:
             timeGreeting = "Good afternoon"
         default:
             timeGreeting = "Good evening"
         }
         return "\(timeGreeting), \(name.components(separatedBy: " ").first ?? name)"
+    }
+
+    /// First name used in the screenshot's "Hello, Alex" line.
+    func firstName(from fullName: String) -> String {
+        let trimmed = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "there" }
+        return trimmed.components(separatedBy: " ").first ?? trimmed
     }
 
     /// Formatted revenue string for the metric card.
@@ -40,9 +50,14 @@ final class DashboardViewModel {
     // MARK: - Dependencies
 
     private let apiClient: APIClientProtocol
+    private let estimateService: EstimateServiceProtocol
 
-    init(apiClient: APIClientProtocol = APIClient.shared) {
+    init(
+        apiClient: APIClientProtocol = APIClient.shared,
+        estimateService: EstimateServiceProtocol = LiveEstimateService()
+    ) {
         self.apiClient = apiClient
+        self.estimateService = estimateService
     }
 
     // MARK: - Actions
@@ -55,9 +70,12 @@ final class DashboardViewModel {
         do {
             async let summaryTask: DashboardSummary = apiClient.request(.getDashboardSummary)
             async let projectsTask: [Project] = apiClient.request(.listProjects(cursor: nil))
+            async let estimatesTask: [EstimateSummary] = estimateService.listEstimates()
 
             summary = try await summaryTask
             recentProjects = try await projectsTask
+            let allEstimates = (try? await estimatesTask) ?? []
+            activeQuotes = pickActive(allEstimates, projects: recentProjects)
             await loadThumbnails(for: recentProjects)
         } catch {
             errorMessage = error.localizedDescription
@@ -70,11 +88,28 @@ final class DashboardViewModel {
         await loadDashboard()
     }
 
+    // MARK: - Quote Filtering
+
+    /// Active = Draft + Sent + Approved. Sorted newest first, capped at 5.
+    /// Project titles are spliced in from the freshly loaded project list so
+    /// quote cards don't show raw IDs.
+    private func pickActive(_ summaries: [EstimateSummary], projects: [Project]) -> [EstimateSummary] {
+        let titlesById = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0.title) })
+        return summaries
+            .filter { [Estimate.Status.draft, .sent, .approved].contains($0.estimate.status) }
+            .sorted { $0.estimate.updatedAt > $1.estimate.updatedAt }
+            .prefix(5)
+            .map { summary in
+                guard let title = titlesById[summary.estimate.projectId] else { return summary }
+                return EstimateSummary(estimate: summary.estimate, projectTitle: title)
+            }
+    }
+
     // MARK: - Thumbnail Loading
 
     private func loadThumbnails(for projects: [Project]) async {
         await withTaskGroup(of: (String, URL?).self) { group in
-            for project in projects.prefix(5) {
+            for project in projects.prefix(8) {
                 group.addTask { [apiClient] in
                     do {
                         let generations: [AIGeneration] = try await apiClient.request(

@@ -23,6 +23,11 @@ final class QuickGenerateViewModel {
     var selectedImageData: Data?
     var selectedProjectType: Project.ProjectType? = .kitchen
     var prompt: String = ""
+    /// "Style Vision" picker on the Studio tab. Defaults to Modern.
+    var selectedStyle: VisionStyle = .modern
+    /// "Material Focus" multi-select chips. Empty by default — the AI
+    /// gets a balanced render unless the user opts in.
+    var selectedMaterials: Set<MaterialFocus> = []
 
     // MARK: - Generation State
 
@@ -50,9 +55,23 @@ final class QuickGenerateViewModel {
     // MARK: - Computed
 
     var canGenerate: Bool {
-        selectedImageData != nil &&
-            selectedProjectType != nil &&
-            !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        selectedImageData != nil && selectedProjectType != nil
+    }
+
+    /// Builds the final prompt sent to the backend by gluing the user's free
+    /// text to the selected Style Vision + Material Focus hints. If the user
+    /// leaves the prompt blank we still get a coherent description because
+    /// the style + room type carry enough signal.
+    var composedPrompt: String {
+        var parts: [String] = []
+        let userText = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !userText.isEmpty { parts.append(userText) }
+        parts.append(selectedStyle.promptHint)
+        let materialHints = selectedMaterials
+            .sorted { $0.rawValue < $1.rawValue }
+            .map(\.promptHint)
+        parts.append(contentsOf: materialHints)
+        return parts.joined(separator: " ")
     }
 
     // MARK: - Photo Loading
@@ -90,11 +109,12 @@ final class QuickGenerateViewModel {
         do {
             // 1. Create a project behind the scenes
             let typeName = titleForType(projectType)
+            let finalPrompt = composedPrompt
             let request = ProjectCreationRequest(
                 title: typeName,
                 projectType: projectType,
                 clientId: nil,
-                description: prompt,
+                description: finalPrompt,
                 budgetMin: nil,
                 budgetMax: nil,
                 qualityTier: .standard,
@@ -126,7 +146,7 @@ final class QuickGenerateViewModel {
             // 3. Start generation
             let generation = try await generationService.startGeneration(
                 projectId: project.id,
-                prompt: prompt,
+                prompt: finalPrompt,
                 materials: nil
             )
 
@@ -164,10 +184,20 @@ final class QuickGenerateViewModel {
         selectedImageData = nil
         selectedProjectType = .kitchen
         prompt = ""
+        selectedStyle = .modern
+        selectedMaterials = []
         completedGeneration = nil
         createdProjectId = nil
         errorMessage = nil
         currentStage = 0
+    }
+
+    func toggleMaterial(_ focus: MaterialFocus) {
+        if selectedMaterials.contains(focus) {
+            selectedMaterials.remove(focus)
+        } else {
+            selectedMaterials.insert(focus)
+        }
     }
 
     // MARK: - Progress Simulation

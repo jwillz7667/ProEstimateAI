@@ -14,72 +14,74 @@ struct SettingsView: View {
     @State private var isDeletingAccount = false
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if viewModel.isLoading && viewModel.company == nil {
-                    LoadingStateView(message: "Loading settings...")
-                } else {
-                    settingsList
-                }
+        Group {
+            if viewModel.isLoading && viewModel.company == nil {
+                LoadingStateView(message: "Loading settings...")
+            } else {
+                settingsList
             }
-            .navigationTitle("Settings")
-            .navigationDestination(for: AppDestination.self) { destination in
-                switch destination {
-                case .companyBranding:
-                    CompanyBrandingView(viewModel: viewModel)
-                case .taxSettings:
-                    TaxSettingsView(viewModel: viewModel)
-                case .numberingSettings:
-                    NumberingSettingsView(viewModel: viewModel)
-                case .pricingProfiles:
-                    PricingProfilesView(viewModel: viewModel)
-                case .languageSettings:
-                    LanguageSettingsView(viewModel: viewModel)
-                case .analytics:
-                    AnalyticsView()
-                default:
-                    EmptyView()
-                }
+        }
+        .navigationTitle("Account")
+        .navigationDestination(for: AppDestination.self) { destination in
+            switch destination {
+            case .companyBranding:
+                CompanyBrandingView(viewModel: viewModel)
+            case .taxSettings:
+                TaxSettingsView(viewModel: viewModel)
+            case .numberingSettings:
+                NumberingSettingsView(viewModel: viewModel)
+            case .pricingProfiles:
+                PricingProfilesView(viewModel: viewModel)
+            case .languageSettings:
+                LanguageSettingsView(viewModel: viewModel)
+            case .analytics:
+                AnalyticsView()
+            case .clientsList:
+                ClientListView()
+            case let .clientDetail(id):
+                ClientDetailView(clientId: id)
+            default:
+                EmptyView()
             }
-            .task {
-                viewModel.appState = appState
-                viewModel.appearanceStore = appearanceStore
-                await viewModel.loadSettings()
+        }
+        .task {
+            viewModel.appState = appState
+            viewModel.appearanceStore = appearanceStore
+            await viewModel.loadSettings()
+        }
+        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+            Button("OK") { viewModel.errorMessage = nil }
+        } message: {
+            if let error = viewModel.errorMessage {
+                Text(error)
             }
-            .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
-                Button("OK") { viewModel.errorMessage = nil }
-            } message: {
-                if let error = viewModel.errorMessage {
-                    Text(error)
-                }
+        }
+        .confirmationDialog(
+            "Sign Out",
+            isPresented: $showingSignOutConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Sign Out", role: .destructive) {
+                appState.signOut(
+                    entitlementStore: entitlementStore,
+                    usageMeterStore: usageMeterStore
+                )
             }
-            .confirmationDialog(
-                "Sign Out",
-                isPresented: $showingSignOutConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Sign Out", role: .destructive) {
-                    appState.signOut(
-                        entitlementStore: entitlementStore,
-                        usageMeterStore: usageMeterStore
-                    )
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Are you sure you want to sign out?")
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to sign out?")
+        }
+        .confirmationDialog(
+            "Delete Account",
+            isPresented: $showingDeleteAccountConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Account Permanently", role: .destructive) {
+                Task { await performAccountDeletion() }
             }
-            .confirmationDialog(
-                "Delete Account",
-                isPresented: $showingDeleteAccountConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Delete Account Permanently", role: .destructive) {
-                    Task { await performAccountDeletion() }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This permanently deletes your account, company, and all related projects, estimates, and invoices. This cannot be undone. Any active subscription must be canceled separately in your Apple ID settings.")
-            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes your account, company, and all related projects, estimates, and invoices. This cannot be undone. Any active subscription must be canceled separately in your Apple ID settings.")
         }
     }
 
@@ -100,7 +102,7 @@ struct SettingsView: View {
         let result = featureGateCoordinator.guardAccessAnalytics()
         switch result {
         case .allowed:
-            router.settingsPath.append(AppDestination.analytics)
+            router.accountPath.append(AppDestination.analytics)
         case let .blocked(decision):
             paywallPresenter.present(decision)
         }
@@ -134,23 +136,45 @@ struct SettingsView: View {
                 }
             }
 
-            // Account Section
-            Section("Account") {
+            // Account Section — avatar header + clients link + sign out controls.
+            Section {
                 if let user = appState.currentUser {
-                    HStack(spacing: SpacingTokens.sm) {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 40))
-                            .foregroundStyle(ColorTokens.primaryOrange.opacity(0.5))
+                    HStack(spacing: SpacingTokens.md) {
+                        AvatarView(
+                            name: user.fullName,
+                            imageURL: user.avatarURL,
+                            size: 56
+                        )
 
-                        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                        VStack(alignment: .leading, spacing: 2) {
                             Text(user.fullName)
-                                .font(TypographyTokens.headline)
+                                .font(TypographyTokens.cardTitle)
+                                .foregroundStyle(ColorTokens.textPrimary)
                             Text(user.email)
                                 .font(TypographyTokens.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(ColorTokens.textSecondary)
+
+                            HStack(spacing: SpacingTokens.xs) {
+                                StatusBadge(
+                                    text: entitlementStore.hasProAccess ? "PRO" : "FREE",
+                                    style: entitlementStore.hasProAccess ? .accent : .info
+                                )
+                            }
+                            .padding(.top, 2)
                         }
+
+                        Spacer()
                     }
-                    .padding(.vertical, SpacingTokens.xxs)
+                    .padding(.vertical, SpacingTokens.xs)
+                }
+
+                NavigationLink(value: AppDestination.clientsList) {
+                    Label {
+                        Text("Clients")
+                    } icon: {
+                        Image(systemName: "person.2")
+                            .foregroundStyle(ColorTokens.accentBlue)
+                    }
                 }
 
                 Button(role: .destructive) {

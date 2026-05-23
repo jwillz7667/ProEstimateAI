@@ -32,65 +32,57 @@ struct PaywallHostView: View {
 
     var body: some View {
         ZStack {
-            // Dark gradient background.
-            backgroundGradient
+            // Soft canvas — the dark hero strip sits at the top of the
+            // scrolling content rather than the whole sheet, matching the
+            // overhaul's three-tier card layout.
+            ColorTokens.background.ignoresSafeArea()
 
             ScrollView {
-                VStack(spacing: 0) {
-                    // Hero section with headline and subheadline.
-                    PaywallHeroSection(decision: viewModel.decision)
+                VStack(spacing: SpacingTokens.xl) {
+                    heroStrip
+                        .padding(.top, SpacingTokens.huge)
 
-                    VStack(spacing: SpacingTokens.xl) {
-                        // Tier + period picker.
-                        if !viewModel.products.isEmpty {
-                            PlanSelectorView(
-                                products: viewModel.products,
-                                selectedProduct: viewModel.selectedProduct,
-                                selectedTier: $viewModel.selectedTier,
-                                isAnnualSelected: $viewModel.isAnnualSelected,
-                                onSelect: { viewModel.selectProduct($0) }
-                            )
-                        }
-
-                        // Feature comparison — Free vs Pro vs Premium.
-                        FeatureComparisonListView()
-
-                        // Error message with inline retry.
-                        if let errorMessage = viewModel.errorMessage {
-                            errorBanner(errorMessage) {
-                                Task { await viewModel.purchase() }
-                            }
-                        }
-
-                        // Purchase CTA and secondary actions.
-                        PurchaseButtonSection(
-                            primaryTitle: viewModel.primaryCtaTitle,
-                            isPurchasing: viewModel.isPurchasing,
-                            isRestoring: viewModel.isRestoring,
-                            showContinueFree: viewModel.showContinueFree,
-                            showRestorePurchases: viewModel.showRestorePurchases,
-                            secondaryCtaTitle: viewModel.decision.secondaryCtaTitle,
+                    if !viewModel.products.isEmpty {
+                        PlanSelectorView(
+                            products: viewModel.products,
                             selectedProduct: viewModel.selectedProduct,
-                            onPurchase: {
+                            selectedTier: $viewModel.selectedTier,
+                            isAnnualSelected: $viewModel.isAnnualSelected,
+                            onSelect: { product in
+                                viewModel.selectProduct(product)
                                 Task { await viewModel.purchase() }
-                            },
-                            onContinueFree: {
-                                dismiss()
-                            },
-                            onRestore: {
-                                Task { await viewModel.restorePurchases() }
                             }
                         )
-
-                        // Legal disclosure.
-                        LegalDisclosureSection(selectedProduct: viewModel.selectedProduct)
                     }
-                    .padding(.horizontal, SpacingTokens.lg)
-                    .padding(.bottom, SpacingTokens.xxxl)
+
+                    if let errorMessage = viewModel.errorMessage {
+                        errorBanner(errorMessage) {
+                            Task { await viewModel.purchase() }
+                        }
+                    }
+
+                    if viewModel.showRestorePurchases {
+                        Button {
+                            Task { await viewModel.restorePurchases() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                if viewModel.isRestoring {
+                                    ProgressView().controlSize(.small)
+                                }
+                                Text("Restore Purchases")
+                                    .font(TypographyTokens.subheadline.weight(.semibold))
+                            }
+                            .foregroundStyle(ColorTokens.textSecondary)
+                        }
+                        .disabled(viewModel.isRestoring)
+                    }
+
+                    LegalDisclosureSection(selectedProduct: viewModel.selectedProduct)
                 }
+                .padding(.horizontal, SpacingTokens.lg)
+                .padding(.bottom, SpacingTokens.xxxl)
             }
 
-            // Dismiss button — always shown so user can back out
             dismissButton
         }
         .task {
@@ -103,6 +95,40 @@ struct PaywallHostView: View {
             }
         }
         .interactiveDismissDisabled(false)
+    }
+
+    // MARK: - Hero Strip
+
+    private var heroStrip: some View {
+        VStack(alignment: .center, spacing: SpacingTokens.xs) {
+            Text("PROESTIMATE AI")
+                .font(.caption.weight(.bold))
+                .tracking(1.2)
+                .foregroundStyle(ColorTokens.heroForeground.opacity(0.65))
+
+            Text(viewModel.decision.headline.isEmpty ? "Unlock Your Professional Potential" : viewModel.decision.headline)
+                .font(.system(.largeTitle, design: .default, weight: .bold))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(ColorTokens.heroForeground)
+
+            Text(viewModel.decision.subheadline.isEmpty
+                ? "Scale your remodeling business with precision tools, unlimited rendering capabilities, and seamless client management. Choose the tier that matches your ambition."
+                : viewModel.decision.subheadline)
+                .font(TypographyTokens.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(ColorTokens.heroForeground.opacity(0.78))
+                .padding(.top, SpacingTokens.xxs)
+        }
+        .padding(SpacingTokens.lg)
+        .frame(maxWidth: .infinity)
+        .background(
+            LinearGradient(
+                colors: [ColorTokens.overlayAccent, ColorTokens.heroBackground],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: RadiusTokens.hero)
+        )
     }
 
     // MARK: - Background
@@ -131,9 +157,10 @@ struct PaywallHostView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(ColorTokens.onDarkSecondary)
-                        .frame(width: 30, height: 30)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .foregroundStyle(ColorTokens.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .background(ColorTokens.surface, in: Circle())
+                        .overlay(Circle().strokeBorder(ColorTokens.cardStroke, lineWidth: 1))
                 }
                 .padding(.trailing, SpacingTokens.md)
                 .padding(.top, SpacingTokens.md)
@@ -153,7 +180,7 @@ struct PaywallHostView: View {
 
             Text(message)
                 .font(TypographyTokens.footnote)
-                .foregroundStyle(ColorTokens.onDarkPrimary)
+                .foregroundStyle(ColorTokens.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button("Try Again", action: onRetry)

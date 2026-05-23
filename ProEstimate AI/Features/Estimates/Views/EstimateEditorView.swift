@@ -590,28 +590,67 @@ struct EstimateEditorView: View {
         dismiss()
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 250_000_000)
-            appState.selectedTab = .settings
-            router.settingsPath.append(AppDestination.companyBranding)
+            appState.selectedTab = .account
+            router.accountPath.append(AppDestination.companyBranding)
         }
     }
 
+    /// Quote Center header — matches the overhaul screenshot's reference
+    /// number / title / prepared-for / status pill stack at the top of the
+    /// quote. Renders as a borderless List section.
     private var headerSection: some View {
         Section {
-            HStack(spacing: SpacingTokens.md) {
-                MetricCard(label: "Items", value: "\(viewModel.totalItemCount)")
-                    .frame(maxWidth: .infinity)
-
+            VStack(alignment: .leading, spacing: SpacingTokens.sm) {
                 if let estimate = viewModel.estimate {
-                    MetricCard(
-                        label: "Status",
-                        value: estimate.status.rawValue.capitalized
-                    )
-                    .frame(maxWidth: .infinity)
+                    Text("QUOTE REFERENCE: \(estimate.estimateNumber)")
+                        .font(.caption.weight(.bold))
+                        .tracking(0.8)
+                        .foregroundStyle(ColorTokens.textTertiary)
+
+                    Text((estimate.title?.isEmpty == false ? estimate.title! : "Untitled Quote"))
+                        .font(TypographyTokens.title)
+                        .foregroundStyle(ColorTokens.textPrimary)
+                        .lineLimit(2)
+
+                    HStack(spacing: SpacingTokens.xs) {
+                        statusPill(for: estimate.status)
+                        if let validUntil = estimate.validUntil {
+                            Text("Valid until \(validUntil.formatted(as: .invoiceDate))")
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(ColorTokens.textSecondary)
+                        }
+                    }
                 }
             }
-            .listRowInsets(EdgeInsets())
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(SpacingTokens.md)
+            .glassCard()
+            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: SpacingTokens.sm, trailing: 0))
             .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         }
+    }
+
+    private func statusPill(for status: Estimate.Status) -> some View {
+        let style: StatusBadge.Style = {
+            switch status {
+            case .draft: .info
+            case .sent: .accent
+            case .approved: .success
+            case .declined: .error
+            case .expired: .warning
+            }
+        }()
+        let label: String = {
+            switch status {
+            case .draft: "Draft"
+            case .sent: "Pending Approval"
+            case .approved: "Accepted"
+            case .declined: "Declined"
+            case .expired: "Expired"
+            }
+        }()
+        return StatusBadge(text: label, style: style)
     }
 
     private var notesSection: some View {
