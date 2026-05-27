@@ -19,6 +19,7 @@ const ASSET_TYPE_MAP: Record<string, 'ORIGINAL' | 'AI_GENERATED' | 'DOCUMENT'> =
 async function verifyProjectOwnership(projectId: string, companyId: string) {
   const project = await prisma.project.findFirst({
     where: { id: projectId, companyId },
+    select: { id: true },
   });
 
   if (!project) {

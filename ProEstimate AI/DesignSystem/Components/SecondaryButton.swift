@@ -1,33 +1,55 @@
 import SwiftUI
 
+/// Bordered secondary action — neutral by default, orange when `emphasis: .accent`.
 struct SecondaryButton: View {
     let title: String
     var icon: String? = nil
     var isLoading: Bool = false
+    var emphasis: Emphasis = .neutral
     let action: () -> Void
+
+    enum Emphasis {
+        case neutral
+        case accent
+
+        var foreground: Color {
+            switch self {
+            case .neutral: ColorTokens.textPrimary
+            case .accent: ColorTokens.primaryOrange
+            }
+        }
+
+        var stroke: Color {
+            switch self {
+            case .neutral: ColorTokens.cardStroke
+            case .accent: ColorTokens.primaryOrange
+            }
+        }
+    }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: SpacingTokens.xs) {
                 if isLoading {
                     ProgressView()
-                        .tint(ColorTokens.primaryOrange)
+                        .tint(emphasis.foreground)
                 } else {
                     if let icon {
                         Image(systemName: icon)
+                            .font(.subheadline.weight(.semibold))
                     }
                     Text(title)
-                        .font(TypographyTokens.headline)
+                        .font(TypographyTokens.buttonSecondary)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, SpacingTokens.sm)
+            .frame(maxWidth: .infinity, minHeight: 50)
             .padding(.horizontal, SpacingTokens.md)
-            .background(
+            .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
+            .overlay(
                 RoundedRectangle(cornerRadius: RadiusTokens.button)
-                    .strokeBorder(ColorTokens.primaryOrange, lineWidth: 1.5)
+                    .strokeBorder(emphasis.stroke, lineWidth: 1)
             )
-            .foregroundStyle(ColorTokens.primaryOrange)
+            .foregroundStyle(emphasis.foreground)
         }
         .disabled(isLoading)
     }

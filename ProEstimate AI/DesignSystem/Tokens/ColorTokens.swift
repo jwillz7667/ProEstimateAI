@@ -3,6 +3,7 @@ import SwiftUI
 enum ColorTokens {
     // MARK: - Primary
     static let primaryOrange = Color(hex: 0xFF9230)
+    static let accentSoft = Color("AccentSoft", bundle: nil)
 
     // MARK: - Brand Neutrals (from logo)
     static let brandDark = Color(hex: 0x1C1C1E)
@@ -50,6 +51,11 @@ enum ColorTokens {
     static let lightSecondaryText = Color(.secondaryLabel)
     static let tertiaryText = Color(.tertiaryLabel)
 
+    // MARK: - Semantic Text Aliases
+    static let textPrimary = primaryText
+    static let textSecondary = secondaryText
+    static let textTertiary = tertiaryText
+
     // MARK: - Semantic
     static let success = Color(hex: 0x22C55E)
     static let warning = Color(hex: 0xF59E0B)
@@ -65,6 +71,14 @@ enum ColorTokens {
     // MARK: - Surfaces for inputs/cards
     static let inputBackground = Color("InputBackground", bundle: nil)
     static let progressTrack = Color("ProgressTrack", bundle: nil)
+
+    // MARK: - Overhaul Surface Aliases
+    static let cardStroke = subtleBorder
+    static let pillBackground = Color("PillBackground", bundle: nil)
+    static let pillForeground = Color("PillForeground", bundle: nil)
+    static let heroBackground = Color("HeroBackground", bundle: nil)
+    static let heroForeground = Color("HeroForeground", bundle: nil)
+    static let brandLogoTint = Color("BrandLogoTint", bundle: nil)
 
     // MARK: - Form Inputs
     static let formFieldBackground = Color("InputBackground", bundle: nil)

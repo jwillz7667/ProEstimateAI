@@ -26,6 +26,9 @@ export const globalRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: buildStore(),
+  // Railway Redis can transiently close or fail DNS resolution. Do not turn a
+  // rate-limit store outage into a production-wide 500, especially before auth.
+  passOnStoreError: true,
   message: { ok: false, error: { code: 'RATE_LIMIT', message: 'Too many requests', retryable: true } },
 });
 
@@ -35,5 +38,8 @@ export const authRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: buildStore(),
+  // Availability beats strict brute-force throttling during Redis incidents;
+  // auth still validates credentials and keeps generic failure messages.
+  passOnStoreError: true,
   message: { ok: false, error: { code: 'RATE_LIMIT', message: 'Too many auth requests', retryable: true } },
 });

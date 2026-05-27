@@ -1,5 +1,6 @@
 # Local docs, specs, and notes (not part of the shipping app)
 /CLAUDE.md
+/.claude/
 /project-specs/
 /docs/
 
@@ -37,6 +38,7 @@ fastlane/Preview.html
 fastlane/test_output/
 
 # Xcode archives and signing artifacts
+/build/
 *.ipa
 *.xcarchive
 *.dSYM.zip

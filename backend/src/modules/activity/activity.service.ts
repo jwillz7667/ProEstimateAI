@@ -10,6 +10,7 @@ export async function list(projectId: string, companyId: string, pagination: Pag
   // Verify the project belongs to the company
   const project = await prisma.project.findFirst({
     where: { id: projectId, companyId },
+    select: { id: true },
   });
 
   if (!project) {

@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// AI preview section on the project detail screen.
-/// States: no generation (CTA), generating (progress card),
-/// completed (before/after slider with carousel of multiple generations).
+/// Layout matches the overhaul "Generation Results" screenshot: pill +
+/// timestamp header, project title, before/after slider, optional version
+/// pager, and a "Generate Another" secondary button.
 struct AIPreviewSection: View {
     let generations: [AIGeneration]
     let isGenerating: Bool
@@ -10,22 +11,16 @@ struct AIPreviewSection: View {
     let onGenerate: (String) -> Void
     /// Default prompt text shown when no previous generation exists (typically the project description).
     var defaultPrompt: String = ""
+    /// Project title rendered above the comparison slider.
+    var projectTitle: String = ""
     var assets: [Asset] = []
 
     @State private var selectedGenerationIndex: Int = 0
     @State private var activePromptEditor: PromptEditorRequest?
-    /// When non-nil, presents the full-screen before/after viewer. Identifiable
-    /// so we can rebuild the sheet content if the contractor opens, dismisses,
-    /// then re-opens for a different generation in the same session.
     @State private var fullScreenViewer: FullScreenViewerRequest?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            SectionHeaderView(
-                title: "AI Preview",
-                actionTitle: generations.isEmpty ? nil : "\(generations.count) generation\(generations.count == 1 ? "" : "s")"
-            )
-
+        VStack(alignment: .leading, spacing: SpacingTokens.md) {
             if isGenerating {
                 generatingView
             } else if completedGenerations.isEmpty {
@@ -51,10 +46,6 @@ struct AIPreviewSection: View {
         }
     }
 
-    /// Identifiable trigger for the full-screen before/after viewer. Captures
-    /// the URLs + caption at tap-time so the presentation is stable even if
-    /// the contractor scrolls a new generation into selection while the
-    /// viewer is open.
     private struct FullScreenViewerRequest: Identifiable, Hashable {
         let id: String
         let beforeURL: URL?
@@ -62,9 +53,6 @@ struct AIPreviewSection: View {
         let caption: String?
     }
 
-    /// Identifiable trigger used to drive the prompt editor sheet through
-    /// `.sheet(item:)`. The id embeds the initial prompt so presenting with
-    /// a different prefill always re-creates the sheet content.
     private struct PromptEditorRequest: Identifiable, Hashable {
         let id: String
         let initialPrompt: String
@@ -81,7 +69,6 @@ struct AIPreviewSection: View {
         generations.filter { $0.status == .completed }
     }
 
-    /// Best available pre-fill: most recent generation's prompt, or the project-level default.
     private var bestPromptSuggestion: String {
         completedGenerations.first?.prompt ?? defaultPrompt
     }
@@ -90,25 +77,27 @@ struct AIPreviewSection: View {
 
     private var noGenerationView: some View {
         VStack(spacing: SpacingTokens.md) {
-            Image(systemName: "wand.and.stars")
-                .font(.system(size: 40))
-                .foregroundStyle(ColorTokens.primaryOrange.opacity(0.6))
+            Image(systemName: "sparkles.rectangle.stack")
+                .font(.system(size: 36, weight: .light))
+                .foregroundStyle(ColorTokens.primaryOrange)
 
-            Text("No AI Preview Yet")
-                .font(TypographyTokens.headline)
+            Text("No Vision Yet")
+                .font(TypographyTokens.cardTitle)
+                .foregroundStyle(ColorTokens.textPrimary)
 
             Text("Generate an AI-powered remodel preview based on your photos and description.")
                 .font(TypographyTokens.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ColorTokens.textSecondary)
                 .multilineTextAlignment(.center)
 
             PrimaryCTAButton(
-                title: "Generate Preview",
-                icon: "wand.and.stars"
+                title: "Generate Vision",
+                icon: "sparkles",
+                style: .dark
             ) {
                 activePromptEditor = PromptEditorRequest(initialPrompt: bestPromptSuggestion)
             }
-            .frame(maxWidth: 280)
+            .frame(maxWidth: 320)
         }
         .padding(SpacingTokens.xl)
         .frame(maxWidth: .infinity)
@@ -122,22 +111,21 @@ struct AIPreviewSection: View {
     }
 
     private var completedView: some View {
-        VStack(spacing: SpacingTokens.sm) {
-            // Before/After slider for the selected generation
+        VStack(alignment: .leading, spacing: SpacingTokens.md) {
             if selectedGenerationIndex < completedGenerations.count {
                 let gen = completedGenerations[selectedGenerationIndex]
-
                 let beforeURL = assets.first(where: { $0.assetType == .original })?.url
                 let afterURL = gen.previewURL
+
+                resultHeader(for: gen)
+
                 ZStack(alignment: .topTrailing) {
                     BeforeAfterSlider(
                         beforeImageURL: beforeURL,
                         afterImageURL: afterURL
                     )
-                    // Expand button — corner placement keeps it out of the
-                    // slider's horizontal drag path so taps on the body of
-                    // the slider still move the divider, while a tap on the
-                    // chip opens the full-screen viewer.
+                    .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
+
                     Button {
                         fullScreenViewer = FullScreenViewerRequest(
                             id: "\(gen.id)-fullscreen",
@@ -151,52 +139,41 @@ struct AIPreviewSection: View {
                             .foregroundStyle(.white)
                             .padding(SpacingTokens.xs)
                             .background(.black.opacity(0.55), in: Circle())
-                            .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                     .padding(SpacingTokens.sm)
                     .accessibilityLabel("Enlarge before/after comparison")
                 }
-                .padding(.horizontal, SpacingTokens.md)
-
-                // Generation info
-                HStack(spacing: SpacingTokens.sm) {
-                    if let duration = gen.durationDisplay {
-                        HStack(spacing: SpacingTokens.xxs) {
-                            Image(systemName: "clock")
-                                .font(.caption2)
-                            Text(duration)
-                                .font(TypographyTokens.caption)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Text(gen.createdAt.formatted(as: .relative))
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, SpacingTokens.md)
-
-                // Prompt used
-                Text(gen.prompt)
-                    .font(TypographyTokens.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .padding(.horizontal, SpacingTokens.md)
             }
 
-            // Generation carousel pagination
             if completedGenerations.count > 1 {
                 generationPagination
             }
 
-            // Generate another button
-            SecondaryButton(title: "Generate Another", icon: "wand.and.stars") {
+            SecondaryButton(title: "Generate Another", icon: "sparkles") {
                 activePromptEditor = PromptEditorRequest(initialPrompt: bestPromptSuggestion)
             }
-            .padding(.horizontal, SpacingTokens.md)
+        }
+        .padding(.horizontal, SpacingTokens.md)
+    }
+
+    // MARK: - Result Header
+
+    private func resultHeader(for gen: AIGeneration) -> some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            HStack(spacing: SpacingTokens.xs) {
+                StatusBadge(text: "VIRTUAL REMODEL", style: .info)
+                Text("Generated \(gen.createdAt.formatted(as: .dateTime))")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.textSecondary)
+            }
+
+            if !projectTitle.isEmpty {
+                Text(projectTitle)
+                    .font(TypographyTokens.title)
+                    .foregroundStyle(ColorTokens.textPrimary)
+                    .lineLimit(2)
+            }
         }
     }
 
@@ -209,16 +186,14 @@ struct AIPreviewSection: View {
                     } label: {
                         VStack(spacing: SpacingTokens.xxs) {
                             AsyncImage(url: gen.thumbnailURL) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
+                                image.resizable().scaledToFill()
                             } placeholder: {
                                 Rectangle()
-                                    .fill(.quaternary)
+                                    .fill(ColorTokens.background)
                                     .overlay {
-                                        Image(systemName: "wand.and.stars")
+                                        Image(systemName: "sparkles")
                                             .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(ColorTokens.textTertiary)
                                     }
                             }
                             .frame(width: 64, height: 48)
@@ -227,7 +202,7 @@ struct AIPreviewSection: View {
                                 RoundedRectangle(cornerRadius: RadiusTokens.small)
                                     .strokeBorder(
                                         selectedGenerationIndex == index
-                                            ? ColorTokens.primaryOrange : .clear,
+                                            ? ColorTokens.primaryOrange : Color.clear,
                                         lineWidth: 2
                                     )
                             )
@@ -236,25 +211,19 @@ struct AIPreviewSection: View {
                                 .font(TypographyTokens.caption2)
                                 .foregroundStyle(
                                     selectedGenerationIndex == index
-                                        ? ColorTokens.primaryOrange : .secondary
+                                        ? ColorTokens.primaryOrange : ColorTokens.textSecondary
                                 )
                         }
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, SpacingTokens.md)
         }
     }
 }
 
 // MARK: - Generate Prompt Sheet
 
-/// Sheet that lets the user confirm or edit the AI prompt before kicking off
-/// a generation. The `initialPrompt` (usually the project's description or
-/// the most recent generation's prompt) is wired directly into the internal
-/// `@State` via an init-based initializer, so it is always present and
-/// submit-ready when the sheet appears — no "tap to activate" step.
 private struct GeneratePromptSheet: View {
     @State private var prompt: String
     let onSubmit: (String) -> Void
@@ -283,40 +252,40 @@ private struct GeneratePromptSheet: View {
             VStack(alignment: .leading, spacing: SpacingTokens.md) {
                 Text("Describe how you want the remodel to look. Be specific about materials, colors, and style.")
                     .font(TypographyTokens.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ColorTokens.textSecondary)
 
                 TextEditor(text: $prompt)
                     .font(TypographyTokens.body)
                     .scrollContentBackground(.hidden)
                     .padding(SpacingTokens.sm)
-                    .background(ColorTokens.darkSurface.opacity(0.6))
-                    .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.small))
+                    .background(ColorTokens.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: RadiusTokens.input)
+                            .strokeBorder(ColorTokens.cardStroke, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.input))
                     .frame(minHeight: 140, maxHeight: 220)
 
                 HStack {
-                    Text("Tap the text to edit")
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(.tertiary)
-
                     Spacer()
-
                     Text("\(prompt.count)/2000")
                         .font(TypographyTokens.caption)
-                        .foregroundStyle(prompt.count > 2000 ? ColorTokens.error : .secondary)
+                        .foregroundStyle(prompt.count > 2000 ? ColorTokens.error : ColorTokens.textTertiary)
                 }
 
                 Spacer(minLength: SpacingTokens.sm)
 
                 PrimaryCTAButton(
-                    title: "Generate",
-                    icon: "wand.and.stars",
-                    isDisabled: !isValid
+                    title: "Generate Vision",
+                    icon: "sparkles",
+                    isDisabled: !isValid,
+                    style: .dark
                 ) {
                     onSubmit(trimmedPrompt)
                 }
             }
             .padding(SpacingTokens.lg)
-            .navigationTitle("AI Prompt")
+            .navigationTitle("Describe Your Vision")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -337,7 +306,8 @@ private struct GeneratePromptSheet: View {
         isGenerating: false,
         currentGenerationStage: 0,
         onGenerate: { _ in },
-        defaultPrompt: "Modern kitchen with white shaker cabinets"
+        defaultPrompt: "Modern kitchen with white shaker cabinets",
+        projectTitle: "Modern Coastal Kitchen"
     )
 }
 
@@ -355,6 +325,7 @@ private struct GeneratePromptSheet: View {
         generations: MockGenerationService.sampleGenerations,
         isGenerating: false,
         currentGenerationStage: 0,
-        onGenerate: { _ in }
+        onGenerate: { _ in },
+        projectTitle: "Modern Coastal Kitchen"
     )
 }

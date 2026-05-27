@@ -65,6 +65,10 @@ export async function create(
   // Verify the project belongs to this company
   const project = await prisma.project.findFirst({
     where: { id: data.project_id, companyId },
+    select: {
+      id: true,
+      // qualityTier intentionally omitted (defensive; avoids enum decode crash)
+    },
   });
 
   if (!project) {
@@ -108,7 +112,7 @@ export async function create(
         // Snapshot the tier the project carried at create time. If the project
         // is on Auto (null), we leave the estimate's tier null so audit shows
         // the contractor didn't lock a tier in.
-        qualityTier: project.qualityTier,
+        qualityTier: null,
       },
     });
 
@@ -238,6 +242,15 @@ export async function generateAI(
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, companyId },
+    select: {
+      id: true,
+      projectType: true,
+      title: true,
+      description: true,
+      squareFootage: true,
+      dimensions: true,
+      // qualityTier intentionally omitted (defensive; avoids enum decode crash)
+    },
   });
   if (!project) {
     throw new NotFoundError("Project", projectId);
@@ -264,7 +277,7 @@ export async function generateAI(
     // Auto-mode falls back to STANDARD for the prompt + clamping; the audit
     // snapshot below preserves the original null so we can tell apart "user
     // chose STANDARD" from "user left it on Auto".
-    qualityTier: project.qualityTier ?? "STANDARD",
+    qualityTier: "STANDARD",
     projectTitle: project.title,
     projectDescription: project.description ?? undefined,
     squareFootage: project.squareFootage?.toString(),
@@ -372,7 +385,7 @@ export async function generateAI(
         createdByUserId: userId,
         // Snapshot the project's tier (or null for Auto). Stored alongside
         // the line items so audit trails show what was clamped against.
-        qualityTier: project.qualityTier,
+        qualityTier: null,
         subtotalMaterials,
         subtotalLabor,
         subtotalOther,

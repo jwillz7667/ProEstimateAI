@@ -36,6 +36,13 @@ export interface ProjectDto {
   thumbnail_url?: string | null;
 }
 
+export type ProjectListRow = Omit<Project, "qualityTier"> & {
+  // We intentionally omit `qualityTier` from some list queries as a
+  // defensive measure when DB/schema/client enum nullability is out of sync.
+  // In those cases, `quality_tier` is treated as unknown/auto (null).
+  qualityTier?: never;
+};
+
 export function toProjectDto(
   project: Project,
   thumbnailUrl?: string | null,
@@ -51,6 +58,49 @@ export function toProjectDto(
     budget_min: project.budgetMin ? Number(project.budgetMin) : null,
     budget_max: project.budgetMax ? Number(project.budgetMax) : null,
     quality_tier: project.qualityTier?.toLowerCase() ?? null,
+    square_footage: project.squareFootage
+      ? Number(project.squareFootage)
+      : null,
+    dimensions: project.dimensions,
+    language: project.language,
+    lawn_area_sq_ft: project.lawnAreaSqFt ? Number(project.lawnAreaSqFt) : null,
+    roof_area_sq_ft: project.roofAreaSqFt ? Number(project.roofAreaSqFt) : null,
+    property_latitude: project.propertyLatitude
+      ? Number(project.propertyLatitude)
+      : null,
+    property_longitude: project.propertyLongitude
+      ? Number(project.propertyLongitude)
+      : null,
+    is_recurring: project.isRecurring,
+    recurrence_frequency: project.recurrenceFrequency ?? null,
+    visits_per_month: project.visitsPerMonth
+      ? Number(project.visitsPerMonth)
+      : null,
+    contract_months: project.contractMonths ?? null,
+    recurrence_start_date: project.recurrenceStartDate
+      ? project.recurrenceStartDate.toISOString()
+      : null,
+    created_at: project.createdAt.toISOString(),
+    updated_at: project.updatedAt.toISOString(),
+    thumbnail_url: thumbnailUrl ?? null,
+  };
+}
+
+export function toProjectListDto(
+  project: ProjectListRow,
+  thumbnailUrl?: string | null,
+): ProjectDto {
+  return {
+    id: project.id,
+    company_id: project.companyId,
+    client_id: project.clientId,
+    title: project.title,
+    description: project.description,
+    project_type: project.projectType.toLowerCase(),
+    status: project.status.toLowerCase(),
+    budget_min: project.budgetMin ? Number(project.budgetMin) : null,
+    budget_max: project.budgetMax ? Number(project.budgetMax) : null,
+    quality_tier: null,
     square_footage: project.squareFootage
       ? Number(project.squareFootage)
       : null,
