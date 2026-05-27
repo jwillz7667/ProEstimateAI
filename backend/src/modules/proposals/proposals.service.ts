@@ -56,6 +56,7 @@ export async function create(companyId: string, data: CreateProposalInput) {
   // Verify the project belongs to this company
   const project = await prisma.project.findFirst({
     where: { id: projectId, companyId },
+    select: { id: true },
   });
 
   if (!project) {
@@ -119,7 +120,11 @@ export async function send(proposalId: string, companyId: string, userId: string
   if (updated.shareToken) {
     const project = await prisma.project.findUnique({
       where: { id: proposal.projectId },
-      include: { client: true, company: true },
+      select: {
+        id: true,
+        client: true,
+        company: true,
+      },
     });
     if (project?.client?.email && project.company) {
       const { sendProposalEmail } = await import('../../lib/email');
@@ -167,10 +172,12 @@ export async function getByShareToken(shareToken: string) {
       include: {
         company: true,
         project: {
-          include: {
-            assets: {
-              orderBy: { sortOrder: 'asc' },
-            },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            projectType: true,
+            assets: { orderBy: { sortOrder: "asc" } },
           },
         },
         estimate: {
@@ -223,10 +230,12 @@ export async function respondToProposal(shareToken: string, data: RespondToPropo
     include: {
       company: true,
       project: {
-        include: {
-          assets: {
-            orderBy: { sortOrder: 'asc' },
-          },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          projectType: true,
+          assets: { orderBy: { sortOrder: "asc" } },
         },
       },
       estimate: {
@@ -266,10 +275,12 @@ export async function respondToProposal(shareToken: string, data: RespondToPropo
     include: {
       company: true,
       project: {
-        include: {
-          assets: {
-            orderBy: { sortOrder: 'asc' },
-          },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          projectType: true,
+          assets: { orderBy: { sortOrder: "asc" } },
         },
       },
       estimate: {

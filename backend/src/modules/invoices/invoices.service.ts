@@ -90,6 +90,7 @@ export async function create(companyId: string, userId: string, data: CreateInvo
   // Verify project belongs to company
   const project = await prisma.project.findFirst({
     where: { id: data.project_id, companyId },
+    select: { id: true },
   });
 
   if (!project) {

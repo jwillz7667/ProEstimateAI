@@ -16,6 +16,33 @@ export async function list(companyId: string, pagination: PaginationParams) {
 
   const projects = await prisma.project.findMany({
     where: { companyId },
+    // Defensive select: avoids decoding `qualityTier` when an environment has
+    // DB/client enum nullability mismatch (which can crash Prisma on read).
+    select: {
+      id: true,
+      companyId: true,
+      clientId: true,
+      title: true,
+      description: true,
+      projectType: true,
+      status: true,
+      budgetMin: true,
+      budgetMax: true,
+      squareFootage: true,
+      dimensions: true,
+      language: true,
+      lawnAreaSqFt: true,
+      roofAreaSqFt: true,
+      propertyLatitude: true,
+      propertyLongitude: true,
+      isRecurring: true,
+      recurrenceFrequency: true,
+      visitsPerMonth: true,
+      contractMonths: true,
+      recurrenceStartDate: true,
+      createdAt: true,
+      updatedAt: true,
+    },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: pageSize + 1,
     ...buildCursorWhere(cursor),
@@ -80,6 +107,33 @@ export async function buildThumbnailMap(
 export async function getById(id: string, companyId: string) {
   const project = await prisma.project.findFirst({
     where: { id, companyId },
+    // Defensive select: avoids decoding `qualityTier` when an environment has
+    // DB/client enum nullability mismatch (which can crash Prisma on read).
+    select: {
+      id: true,
+      companyId: true,
+      clientId: true,
+      title: true,
+      description: true,
+      projectType: true,
+      status: true,
+      budgetMin: true,
+      budgetMax: true,
+      squareFootage: true,
+      dimensions: true,
+      language: true,
+      lawnAreaSqFt: true,
+      roofAreaSqFt: true,
+      propertyLatitude: true,
+      propertyLongitude: true,
+      isRecurring: true,
+      recurrenceFrequency: true,
+      visitsPerMonth: true,
+      contractMonths: true,
+      recurrenceStartDate: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
   if (!project) {

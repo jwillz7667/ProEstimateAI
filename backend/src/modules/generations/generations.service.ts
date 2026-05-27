@@ -29,6 +29,23 @@ import { CreateEstimateLineItemInput } from "../estimate-line-items/estimate-lin
 async function verifyProjectOwnership(projectId: string, companyId: string) {
   const project = await prisma.project.findFirst({
     where: { id: projectId, companyId },
+    // Defensive select: only read fields needed for prompt/context building,
+    // omitting `qualityTier` to avoid enum decode crashes when DB/client are
+    // out of sync in some deployments.
+    select: {
+      projectType: true,
+      title: true,
+      description: true,
+      squareFootage: true,
+      dimensions: true,
+      lawnAreaSqFt: true,
+      roofAreaSqFt: true,
+      isRecurring: true,
+      recurrenceFrequency: true,
+      visitsPerMonth: true,
+      contractMonths: true,
+      // qualityTier intentionally omitted; treated as Auto (null) downstream.
+    },
   });
 
   if (!project) {
@@ -98,7 +115,7 @@ function mapRecurrenceFrequency(
 function buildImageContext(
   project: {
     projectType: string;
-    qualityTier: string | null;
+    qualityTier?: string | null;
     title: string;
     description: string | null;
     squareFootage: unknown;

@@ -1,7 +1,6 @@
 import {
   Proposal,
   Company,
-  Project,
   Estimate,
   EstimateLineItem,
   Asset,
@@ -9,7 +8,11 @@ import {
 
 interface ProposalWithRelations extends Proposal {
   company: Company;
-  project: Project & {
+  project: {
+    id: string;
+    title: string;
+    description: string | null;
+    projectType: string;
     assets: Asset[];
   };
   estimate: Estimate & {

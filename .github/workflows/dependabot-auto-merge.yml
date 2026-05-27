@@ -1,0 +1,50 @@
+name: Dependabot auto-merge
+
+on:
+  # Merge Dependabot PRs once CI workflows complete successfully.
+  workflow_run:
+    workflows: ["Backend", "Web", "iOS"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  merge-dependabot:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge Dependabot PRs (squash)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          repo="${{ github.repository }}"
+          prs='${{ toJson(github.event.workflow_run.pull_requests) }}'
+
+          if [ "$prs" = "[]" ]; then
+            echo "No PR associated with this workflow run."
+            exit 0
+          fi
+
+          # For each PR attached to the workflow run, merge if it's from Dependabot
+          # and all checks are green.
+          echo "$prs" | jq -r '.[].number' | while read -r pr_number; do
+            echo "Evaluating PR #$pr_number"
+
+            author="$(gh pr view "$pr_number" --repo "$repo" --json author --jq '.author.login')"
+            if [ "$author" != "dependabot[bot]" ]; then
+              echo "Skipping PR #$pr_number (author=$author)"
+              continue
+            fi
+
+            # Ensure required checks are passing before merging.
+            if ! gh pr checks "$pr_number" --repo "$repo" --required; then
+              echo "PR #$pr_number still has pending/failing required checks; skipping."
+              continue
+            fi
+
+            gh pr merge "$pr_number" --repo "$repo" --squash --delete-branch
+          done
+
