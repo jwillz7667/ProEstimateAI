@@ -281,11 +281,27 @@ export async function update(
 export async function remove(id: string, companyId: string) {
   const existing = await prisma.project.findFirst({
     where: { id, companyId },
+    select: { id: true },
   });
 
   if (!existing) {
     throw new NotFoundError("Project", id);
   }
 
-  await prisma.project.delete({ where: { id } });
+  // A project must delete with its full subtree, but the FK constraints on
+  // Estimate, Proposal, and Invoice are RESTRICT (not CASCADE) — so a bare
+  // `project.delete` throws a foreign-key violation for any project that
+  // reached the estimate stage, which is every project in the normal product
+  // flow (generation auto-creates an estimate). Delete the RESTRICT-blocked
+  // children explicitly in FK-safe order inside one transaction; the final
+  // `project.delete` then cascades everything that already has ON DELETE
+  // CASCADE (Asset, AIGeneration → MaterialSuggestion, ActivityLogEntry,
+  // EstimateExport, *LineItem). Order matters: Proposal FK-references Estimate
+  // (also RESTRICT), so proposals must be removed before estimates.
+  await prisma.$transaction([
+    prisma.invoice.deleteMany({ where: { projectId: id } }),
+    prisma.proposal.deleteMany({ where: { projectId: id } }),
+    prisma.estimate.deleteMany({ where: { projectId: id } }),
+    prisma.project.delete({ where: { id } }),
+  ]);
 }
