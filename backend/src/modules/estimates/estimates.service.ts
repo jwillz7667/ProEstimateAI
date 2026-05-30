@@ -214,13 +214,22 @@ export async function update(
 export async function remove(id: string, companyId: string) {
   const existing = await prisma.estimate.findFirst({
     where: { id, companyId },
+    select: { id: true },
   });
 
   if (!existing) {
     throw new NotFoundError("Estimate", id);
   }
 
-  await prisma.estimate.delete({ where: { id } });
+  // Proposal FK-references Estimate with ON DELETE RESTRICT, so a bare
+  // `estimate.delete` throws a foreign-key violation (surfaced as a 500) for
+  // any estimate that already has a proposal. Remove dependent proposals
+  // first inside one transaction; the estimate delete then cascades its line
+  // items and exports (both ON DELETE CASCADE).
+  await prisma.$transaction([
+    prisma.proposal.deleteMany({ where: { estimateId: id } }),
+    prisma.estimate.delete({ where: { id } }),
+  ]);
 }
 
 /**
