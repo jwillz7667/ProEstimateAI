@@ -84,7 +84,15 @@ export async function getProducts(): Promise<StoreProductDto[]> {
     CacheKeys.commerceProducts(),
     CacheTTL.COMMERCE_PRODUCTS,
     async () => {
+      // The Premium subscription tier is retired. Even if Premium
+      // SubscriptionProduct rows still linger in a deployed DB, never
+      // surface them to the client — only FREE and PRO are sellable.
       const products = await prisma.subscriptionProduct.findMany({
+        where: {
+          plan: {
+            code: { notIn: ["PREMIUM_MONTHLY", "PREMIUM_ANNUAL"] },
+          },
+        },
         include: { plan: true },
         orderBy: { sortOrder: "asc" },
       });

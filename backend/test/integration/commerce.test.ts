@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "../../src/config/database";
+import { CacheKeys, invalidateCache } from "../../src/config/redis";
 import {
   createPurchaseAttempt,
+  getProducts,
   syncTransaction,
   restorePurchases,
   handleAppStoreWebhook,
@@ -101,6 +103,48 @@ describe("commerce service — integration", () => {
 
       expect(refreshedOld.status).toBe("ABANDONED");
       expect(refreshedRecent.status).toBe("PENDING");
+    });
+  });
+
+  // ─── getProducts ──────────────────────────────────────
+
+  describe("getProducts", () => {
+    it("excludes retired Premium products even when their rows still exist in the DB", async () => {
+      // The standard fixture seeds only FREE/PRO. Inject a lingering
+      // Premium plan + product to simulate a deployed DB that was seeded
+      // before Premium was retired.
+      const premiumMonthlyPlan = await prisma.plan.create({
+        data: {
+          code: "PREMIUM_MONTHLY",
+          displayName: "Premium Monthly",
+          description: "Legacy premium plan",
+          featuresJson: {},
+        },
+      });
+      await prisma.subscriptionProduct.create({
+        data: {
+          planId: premiumMonthlyPlan.id,
+          storeProductId: "proestimate.premium.monthly",
+          displayName: "Premium Monthly",
+          description: "Legacy premium product",
+          priceDisplay: "$49.99/mo",
+          billingPeriodLabel: "month",
+          hasIntroOffer: false,
+          isFeatured: true,
+          sortOrder: 3,
+        },
+      });
+
+      // getProducts() caches under a fixed key; clear it so this test
+      // reads fresh from the DB regardless of prior cases or CI Redis.
+      await invalidateCache(CacheKeys.commerceProducts());
+
+      const products = await getProducts();
+
+      const planCodes = products.map((p) => p.plan_code);
+      expect(planCodes).not.toContain("PREMIUM_MONTHLY");
+      expect(planCodes).not.toContain("PREMIUM_ANNUAL");
+      expect(planCodes.sort()).toEqual(["PRO_ANNUAL", "PRO_MONTHLY"]);
     });
   });
 

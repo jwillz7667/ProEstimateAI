@@ -73,18 +73,21 @@ export interface FeatureFlagsDto {
 /**
  * Derive feature flags from the plan code and current usage buckets.
  *
- * All paid plans (Pro and Premium) unlock everything unconditionally.
- * FREE_STARTER gates CAN_GENERATE_PREVIEW and CAN_EXPORT_QUOTE behind
- * remaining starter credits; all other paid-only flags stay false.
+ * All paid plans (Pro and grandfathered Premium) unlock everything
+ * unconditionally. FREE_STARTER gates CAN_GENERATE_PREVIEW and
+ * CAN_EXPORT_QUOTE behind remaining starter credits; all other paid-only
+ * flags stay false.
  */
 export function deriveFeatureFlags(
   planCode: PlanCode,
   buckets: UsageBucket[],
 ): FeatureFlagsDto {
-  // Every paid plan (Pro and Premium, monthly or annual) unlocks all features;
-  // Premium is the top tier and must never resolve to fewer features than Pro.
-  // Explicit allow-list rather than `!== 'FREE_STARTER'` so an unexpected or
-  // corrupt plan code denies by default instead of over-granting paid access.
+  // Premium is retired and is no longer offered or served (the products
+  // endpoint filters it out), but any legacy/sandbox Premium entitlement
+  // stays grandfathered with full Pro access here — Premium must never
+  // resolve to fewer features than Pro. Explicit allow-list rather than
+  // `!== 'FREE_STARTER'` so an unexpected or corrupt plan code denies by
+  // default instead of over-granting paid access.
   const isPaid =
     planCode === 'PRO_MONTHLY' ||
     planCode === 'PRO_ANNUAL' ||

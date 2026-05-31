@@ -52,26 +52,16 @@ async function main() {
   console.log("  Plans & products...");
 
   // Pro tier (monthly + annual): tightened to 2 project gens, 20 image
-  // gens, and 20 generated estimates per month. Premium ($49.99/mo, or
-  // $499.99/yr) lifts every cap. Stored under featuresJson.LIMITS and
-  // enforced by backend/src/modules/commerce/entitlement-gate.ts via
-  // rolling-window checks.
+  // gens, and 20 generated estimates per month. Stored under
+  // featuresJson.LIMITS and enforced by
+  // backend/src/modules/commerce/entitlement-gate.ts via rolling-window
+  // checks. The Premium subscription tier has been retired — FREE and PRO
+  // are the only sellable tiers.
   const proLimits = {
     AI_GENERATION: { daily: 5, weekly: 12, monthly: 20 },
     QUOTE_EXPORT: { daily: 10, weekly: 25, monthly: 50 },
     PROJECT_CREATED: { daily: 1, weekly: 2, monthly: 2 },
     ESTIMATE_GENERATED: { daily: 5, weekly: 12, monthly: 20 },
-  };
-
-  // Premium gets a generous fair-use cap (well beyond what any contractor
-  // hits in a month). Setting these to large numbers rather than removing
-  // the cap entirely keeps a single rate-limit code path and protects the
-  // backend from runaway loops.
-  const premiumLimits = {
-    AI_GENERATION: { daily: 200, weekly: 800, monthly: 2_000 },
-    QUOTE_EXPORT: { daily: 200, weekly: 800, monthly: 2_000 },
-    PROJECT_CREATED: { daily: 50, weekly: 200, monthly: 500 },
-    ESTIMATE_GENERATED: { daily: 100, weekly: 400, monthly: 1_000 },
   };
 
   const freePlanFeatures = {
@@ -95,19 +85,6 @@ async function main() {
     CAN_EXPORT_MATERIAL_LINKS: true,
     CAN_USE_HIGH_RES_PREVIEW: true,
     LIMITS: proLimits,
-  };
-
-  const premiumPlanFeatures = {
-    CAN_GENERATE_PREVIEW: true,
-    CAN_EXPORT_QUOTE: true,
-    CAN_REMOVE_WATERMARK: true,
-    CAN_USE_BRANDING: true,
-    CAN_CREATE_INVOICE: true,
-    CAN_SHARE_APPROVAL_LINK: true,
-    CAN_EXPORT_MATERIAL_LINKS: true,
-    CAN_USE_HIGH_RES_PREVIEW: true,
-    CAN_USE_PRIORITY_GENERATION: true,
-    LIMITS: premiumLimits,
   };
 
   const freePlan = await prisma.plan.upsert({
@@ -178,67 +155,10 @@ async function main() {
     },
   });
 
-  // ── Premium tier — unlimited generations, projects, and estimates ───────
-
-  const premiumMonthlyPlan = await prisma.plan.upsert({
-    where: { code: PlanCode.PREMIUM_MONTHLY },
-    update: { featuresJson: premiumPlanFeatures },
-    create: {
-      code: PlanCode.PREMIUM_MONTHLY,
-      displayName: "Premium Monthly",
-      description:
-        "Unlimited projects, image generations, and estimates. Priority generation queue.",
-      featuresJson: premiumPlanFeatures,
-    },
-  });
-
-  const premiumAnnualPlan = await prisma.plan.upsert({
-    where: { code: PlanCode.PREMIUM_ANNUAL },
-    update: { featuresJson: premiumPlanFeatures },
-    create: {
-      code: PlanCode.PREMIUM_ANNUAL,
-      displayName: "Premium Annual",
-      description: "Everything in Premium — save 17%",
-      featuresJson: premiumPlanFeatures,
-    },
-  });
-
-  await prisma.subscriptionProduct.upsert({
-    where: { storeProductId: "proestimate.premium.monthly" },
-    update: {},
-    create: {
-      planId: premiumMonthlyPlan.id,
-      storeProductId: "proestimate.premium.monthly",
-      displayName: "Premium Monthly",
-      description:
-        "Unlimited projects, image gens, and estimates. Priority queue.",
-      priceDisplay: "$49.99/mo",
-      billingPeriodLabel: "month",
-      hasIntroOffer: false,
-      // Featured tier — paywall UI promotes this card.
-      isFeatured: true,
-      sortOrder: 3,
-    },
-  });
-
-  await prisma.subscriptionProduct.upsert({
-    where: { storeProductId: "proestimate.premium.annual" },
-    update: {},
-    create: {
-      planId: premiumAnnualPlan.id,
-      storeProductId: "proestimate.premium.annual",
-      displayName: "Premium Annual",
-      description: "Everything in Premium — save 17% over monthly",
-      priceDisplay: "$499.99/yr",
-      billingPeriodLabel: "year",
-      hasIntroOffer: false,
-      isFeatured: false,
-      savingsText: "Save 17%",
-      sortOrder: 4,
-    },
-  });
-  void premiumMonthlyPlan;
-  void premiumAnnualPlan;
+  // Premium subscription tier retired — only FREE and PRO are sellable.
+  // The PREMIUM_MONTHLY/PREMIUM_ANNUAL PlanCode enum values remain in the
+  // Prisma schema for safe decoding of any legacy/sandbox entitlements,
+  // but no Premium Plan or SubscriptionProduct rows are seeded.
 
   // =========================================================================
   // 2. COMPANIES
