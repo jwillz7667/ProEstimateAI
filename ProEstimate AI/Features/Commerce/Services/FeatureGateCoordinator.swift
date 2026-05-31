@@ -215,6 +215,23 @@ final class FeatureGateCoordinator {
         )
     }
 
+    /// Check whether the user can create an invoice. Invoicing is the
+    /// final step of the get-paid loop and is Pro-only — the backend
+    /// also enforces this and returns a 402 PaywallError, so this local
+    /// gate is the fast path that keeps a free user from ever reaching
+    /// the network call.
+    func guardCreateInvoice() -> FeatureGateResult {
+        guard let entitlementStore else { return .allowed }
+        if entitlementStore.hasFeature(.canCreateInvoice) { return .allowed }
+        logger.info("Invoice creation blocked — subscription required.")
+        return blockWithTrialOffer(
+            placement: .invoiceLocked,
+            triggerReason: "Invoicing requires a subscription",
+            headline: "Send Invoices & Get Paid",
+            subheadline: "Turn approved estimates into branded invoices, send them to clients, and track payments. Start a 7-day free trial."
+        )
+    }
+
     /// Check whether the user can remove watermarks from exports.
     func guardRemoveWatermark() -> FeatureGateResult {
         guard let entitlementStore else { return .allowed }

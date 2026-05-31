@@ -23,6 +23,15 @@ struct ProjectDetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
 
+    /// Get-paid loop sheet state. `presentedProposal` / `presentedInvoice`
+    /// drive the proposal-preview and invoice-detail sheets. The `isCreating*`
+    /// flags surface the progress overlay while the backend mints the document
+    /// (and, for invoices, seeds its line items from the estimate).
+    @State private var presentedProposal: Proposal?
+    @State private var presentedInvoice: Invoice?
+    @State private var isCreatingProposal = false
+    @State private var isCreatingInvoice = false
+
     /// Estimate export state. `exportingEstimateId` shows the inline
     /// progress on the estimate row; `exportProgressMessage` drives the
     /// full-screen overlay; `exportedPDF` triggers the share sheet once
@@ -138,6 +147,16 @@ struct ProjectDetailView: View {
         }
         .sheet(item: $exportedPDF) { pdf in
             ActivityViewRepresentable(activityItems: [pdf.url])
+        }
+        .sheet(item: $presentedProposal, onDismiss: {
+            Task { await viewModel.reloadBilling() }
+        }) { proposal in
+            ProposalPreviewView(proposal: proposal)
+        }
+        .sheet(item: $presentedInvoice, onDismiss: {
+            Task { await viewModel.reloadBilling() }
+        }) { invoice in
+            InvoiceDetailView(invoice: invoice, clientName: viewModel.clientName)
         }
         .fullScreenCover(isPresented: $showLawnMeasurement, onDismiss: {
             // Project may have a fresh lawn_area / lat-lng after the user
@@ -275,7 +294,21 @@ struct ProjectDetailView: View {
                     },
                     onTapSavedExport: { export in
                         handleTapSavedExport(export)
+                    },
+                    onCreateProposal: { estimateId in
+                        handleCreateProposal(estimateId: estimateId)
+                    },
+                    onCreateInvoice: { estimateId in
+                        handleCreateInvoice(estimateId: estimateId)
                     }
+                )
+
+                // Proposals & Invoices — the get-paid loop's back half
+                ProjectBillingSection(
+                    proposals: viewModel.proposals,
+                    invoices: viewModel.invoices,
+                    onTapProposal: { presentedProposal = $0 },
+                    onTapInvoice: { presentedInvoice = $0 }
                 )
 
                 // Activity
@@ -287,7 +320,7 @@ struct ProjectDetailView: View {
             .padding(.vertical, SpacingTokens.sm)
         }
         .overlay {
-            if isCreatingEstimate || isGeneratingAIEstimate || exportProgressMessage != nil {
+            if isCreatingEstimate || isGeneratingAIEstimate || isCreatingProposal || isCreatingInvoice || exportProgressMessage != nil {
                 Color.black.opacity(0.2)
                     .ignoresSafeArea()
                     .overlay {
@@ -469,6 +502,58 @@ struct ProjectDetailView: View {
         }
     }
 
+    /// Create a client-facing proposal from an estimate. Proposals carry the
+    /// shareable approval link, which is a Pro feature — gate on
+    /// `guardShareApprovalLink()` up front, and also catch a backend 402 in
+    /// case server-side entitlement disagrees with the cached snapshot.
+    private func handleCreateProposal(estimateId: String) {
+        let result = featureGateCoordinator.guardShareApprovalLink()
+        switch result {
+        case .allowed:
+            guard !isCreatingProposal else { return }
+            isCreatingProposal = true
+            Task {
+                defer { isCreatingProposal = false }
+                do {
+                    let proposal = try await viewModel.createProposal(fromEstimateId: estimateId)
+                    presentedProposal = proposal
+                } catch let APIError.paywall(decision) {
+                    paywallPresenter.present(decision)
+                } catch {
+                    viewModel.errorMessage = error.localizedDescription
+                }
+            }
+        case let .blocked(decision):
+            paywallPresenter.present(decision)
+        }
+    }
+
+    /// Convert an estimate directly into an invoice. Invoicing is Pro-only —
+    /// gate on `guardCreateInvoice()`, require the project to have a client,
+    /// and catch a backend 402 as a fallback. On success, open the invoice so
+    /// the contractor can send it and later mark it paid.
+    private func handleCreateInvoice(estimateId: String) {
+        let result = featureGateCoordinator.guardCreateInvoice()
+        switch result {
+        case .allowed:
+            guard !isCreatingInvoice else { return }
+            isCreatingInvoice = true
+            Task {
+                defer { isCreatingInvoice = false }
+                do {
+                    let invoice = try await viewModel.createInvoice(fromEstimateId: estimateId)
+                    presentedInvoice = invoice
+                } catch let APIError.paywall(decision) {
+                    paywallPresenter.present(decision)
+                } catch {
+                    viewModel.errorMessage = error.localizedDescription
+                }
+            }
+        case let .blocked(decision):
+            paywallPresenter.present(decision)
+        }
+    }
+
     /// If the project was opened with `autoGenerateOnOpen == true` — the
     /// creation-flow toggle is on — kick off a preview generation using the
     /// project description as the prompt. Runs only once per view lifetime
@@ -492,6 +577,8 @@ struct ProjectDetailView: View {
     private var progressOverlayLabel: String {
         if let exportProgressMessage { return exportProgressMessage }
         if isGeneratingAIEstimate { return "Generating estimate with AI..." }
+        if isCreatingProposal { return "Creating proposal..." }
+        if isCreatingInvoice { return "Creating invoice..." }
         return "Creating estimate..."
     }
 

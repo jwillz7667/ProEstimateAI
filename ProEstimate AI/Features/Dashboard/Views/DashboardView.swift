@@ -76,14 +76,7 @@ struct DashboardView: View {
                     ClientFormView()
                 }
             }
-            .navigationDestination(for: AppDestination.self) { destination in
-                switch destination {
-                case let .projectDetail(id, autoGenerate):
-                    ProjectDetailView(projectId: id, autoGenerateOnOpen: autoGenerate)
-                default:
-                    EmptyView()
-                }
-            }
+            .appNavigationDestinations()
         }
     }
 
@@ -125,6 +118,17 @@ struct DashboardView: View {
 
                 greetingSection
                     .padding(.horizontal, SpacingTokens.md)
+
+                // Business snapshot — revenue, invoices due, active projects,
+                // pending estimates. Reflects the get-paid loop's outcome and
+                // reloads on every payment event (see `paymentEventToken`).
+                if let summary = viewModel.summary {
+                    DashboardMetricsSection(
+                        summary: summary,
+                        formattedRevenue: viewModel.formattedRevenue
+                    )
+                    .padding(.horizontal, SpacingTokens.md)
+                }
 
                 // Primary CTA — directly under the greeting so the
                 // first scannable action on every dashboard load is

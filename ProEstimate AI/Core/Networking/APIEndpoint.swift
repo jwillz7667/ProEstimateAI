@@ -87,6 +87,34 @@ enum APIEndpoint: Sendable {
     case updateEstimateLineItem(id: String, body: Encodable & Sendable)
     case deleteEstimateLineItem(id: String)
 
+    // MARK: - Proposals
+
+    case listProposals(projectId: String?)
+    case getProposal(id: String)
+    case createProposal(body: Encodable & Sendable)
+    case updateProposal(id: String, body: Encodable & Sendable)
+    /// Send the proposal to the client (status → sent, emails client). Body
+    /// optionally carries a `client_message` override.
+    case sendProposal(id: String, body: Encodable & Sendable)
+    case deleteProposal(id: String)
+
+    // MARK: - Invoices
+
+    case listInvoices(projectId: String?)
+    case getInvoice(id: String)
+    case createInvoice(body: Encodable & Sendable)
+    case updateInvoice(id: String, body: Encodable & Sendable)
+    /// Send the invoice to the client (status → sent, emails client). Takes no body.
+    case sendInvoice(id: String)
+    case deleteInvoice(id: String)
+
+    // MARK: - Invoice Line Items
+
+    case listInvoiceLineItems(invoiceId: String)
+    case createInvoiceLineItem(invoiceId: String, body: Encodable & Sendable)
+    case updateInvoiceLineItem(id: String, body: Encodable & Sendable)
+    case deleteInvoiceLineItem(id: String)
+
     // MARK: - Estimate Exports (saved PDFs)
 
     case listEstimateExports(estimateId: String)
@@ -207,6 +235,25 @@ extension APIEndpoint {
         case let .createEstimateLineItem(estimateId, _): return "/estimates/\(estimateId)/line-items"
         case let .updateEstimateLineItem(id, _): return "/estimate-line-items/\(id)"
         case let .deleteEstimateLineItem(id): return "/estimate-line-items/\(id)"
+        // Proposals
+        case .listProposals: return "/proposals"
+        case let .getProposal(id): return "/proposals/\(id)"
+        case .createProposal: return "/proposals"
+        case let .updateProposal(id, _): return "/proposals/\(id)"
+        case let .sendProposal(id, _): return "/proposals/\(id)/send"
+        case let .deleteProposal(id): return "/proposals/\(id)"
+        // Invoices
+        case .listInvoices: return "/invoices"
+        case let .getInvoice(id): return "/invoices/\(id)"
+        case .createInvoice: return "/invoices"
+        case let .updateInvoice(id, _): return "/invoices/\(id)"
+        case let .sendInvoice(id): return "/invoices/\(id)/send"
+        case let .deleteInvoice(id): return "/invoices/\(id)"
+        // Invoice Line Items
+        case let .listInvoiceLineItems(invoiceId): return "/invoices/\(invoiceId)/line-items"
+        case let .createInvoiceLineItem(invoiceId, _): return "/invoices/\(invoiceId)/line-items"
+        case let .updateInvoiceLineItem(id, _): return "/invoice-line-items/\(id)"
+        case let .deleteInvoiceLineItem(id): return "/invoice-line-items/\(id)"
         // Estimate Exports
         case let .listEstimateExports(estimateId): return "/estimates/\(estimateId)/exports"
         case let .listProjectEstimateExports(projectId): return "/projects/\(projectId)/estimate-exports"
@@ -258,6 +305,8 @@ extension APIEndpoint {
              .createClient, .createProject, .uploadAsset, .createGeneration,
              .createEstimate, .generateAIEstimate, .createEstimateLineItem,
              .createEstimateExport,
+             .createProposal, .sendProposal,
+             .createInvoice, .sendInvoice, .createInvoiceLineItem,
              .createPricingProfile, .createLaborRateRule,
              .createPurchaseAttempt, .syncTransaction, .restorePurchases,
              .checkUsage,
@@ -266,6 +315,7 @@ extension APIEndpoint {
 
         case .updateCompany, .updateClient, .updateProject,
              .updateMaterialSelection, .updateEstimate, .updateEstimateLineItem,
+             .updateProposal, .updateInvoice, .updateInvoiceLineItem,
              .updatePricingProfile, .updateLaborRateRule:
             return .patch
 
@@ -274,6 +324,7 @@ extension APIEndpoint {
              .deregisterApnsToken,
              .deleteClient, .deleteProject, .deleteAsset,
              .deleteEstimate, .deleteEstimateLineItem,
+             .deleteProposal, .deleteInvoice, .deleteInvoiceLineItem,
              .deleteEstimateExport,
              .deletePricingProfile, .deleteLaborRateRule:
             return .delete
@@ -306,6 +357,10 @@ extension APIEndpoint {
             if let projectId { items.append(URLQueryItem(name: "project_id", value: projectId)) }
             if let clientId { items.append(URLQueryItem(name: "client_id", value: clientId)) }
             return items.isEmpty ? nil : items
+        case let .listProposals(projectId):
+            return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
+        case let .listInvoices(projectId):
+            return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
         case let .listActivityLog(_, cursor):
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
         case let .searchMaterialsPricing(query, zipCode, sort, maxResults):
@@ -348,6 +403,10 @@ extension APIEndpoint {
              let .updateEstimate(_, body),
              let .createEstimateLineItem(_, body), let .updateEstimateLineItem(_, body),
              let .createEstimateExport(_, body),
+             let .createProposal(body), let .updateProposal(_, body),
+             let .sendProposal(_, body),
+             let .createInvoice(body), let .updateInvoice(_, body),
+             let .createInvoiceLineItem(_, body), let .updateInvoiceLineItem(_, body),
              let .createPricingProfile(body), let .updatePricingProfile(_, body),
              let .createLaborRateRule(_, body), let .updateLaborRateRule(_, body),
              let .createPurchaseAttempt(body), let .syncTransaction(body),

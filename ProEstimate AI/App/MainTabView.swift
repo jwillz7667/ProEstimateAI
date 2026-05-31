@@ -2,8 +2,10 @@ import SwiftUI
 
 struct MainTabView: View {
     @Bindable var appState: AppState
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
+        @Bindable var router = router
         ZStack(alignment: .top) {
             TabView(selection: $appState.selectedTab) {
                 Tab("Dashboard", systemImage: AppTab.dashboard.systemImage, value: AppTab.dashboard) {
@@ -11,7 +13,10 @@ struct MainTabView: View {
                 }
 
                 Tab("Projects", systemImage: AppTab.projects.systemImage, value: AppTab.projects) {
-                    ProjectListView()
+                    NavigationStack(path: $router.projectsPath) {
+                        ProjectListView()
+                            .appNavigationDestinations()
+                    }
                 }
 
                 Tab("Clients", systemImage: AppTab.clients.systemImage, value: AppTab.clients) {

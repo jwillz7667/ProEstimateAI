@@ -15,6 +15,8 @@ struct ProjectEstimatesSection: View {
     var onCreateEstimate: (() -> Void)?
     var onExportEstimate: ((String) -> Void)?
     var onTapSavedExport: ((EstimateExport) -> Void)?
+    var onCreateProposal: ((String) -> Void)?
+    var onCreateInvoice: ((String) -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -74,9 +76,25 @@ struct ProjectEstimatesSection: View {
                             } label: {
                                 Label("Export Branded PDF", systemImage: "arrow.down.doc")
                             }
+                            if onCreateProposal != nil {
+                                Button {
+                                    onCreateProposal?(estimate.id)
+                                } label: {
+                                    Label("Create Proposal", systemImage: "doc.richtext")
+                                }
+                            }
+                            if onCreateInvoice != nil {
+                                Button {
+                                    onCreateInvoice?(estimate.id)
+                                } label: {
+                                    Label("Create Invoice", systemImage: "dollarsign.circle")
+                                }
+                            }
                         }
 
                     exportCTA(for: estimate)
+
+                    billingActions(for: estimate)
 
                     if let saved = exports[estimate.id], !saved.isEmpty {
                         savedExportsList(saved)
@@ -157,6 +175,52 @@ struct ProjectEstimatesSection: View {
         .disabled(exportingEstimateId != nil)
         .accessibilityLabel("Export branded PDF")
         .accessibilityHint("Render and save a branded PDF copy of this estimate")
+    }
+
+    /// Secondary "Proposal" + "Invoice" actions beneath the export CTA. These
+    /// drive the get-paid loop: wrap the estimate in a client-facing proposal,
+    /// or convert it directly into an invoice. Only rendered when the host
+    /// wires the callbacks.
+    @ViewBuilder
+    private func billingActions(for estimate: Estimate) -> some View {
+        if onCreateProposal != nil || onCreateInvoice != nil {
+            HStack(spacing: SpacingTokens.sm) {
+                if onCreateProposal != nil {
+                    billingActionButton(title: "Proposal", icon: "doc.richtext") {
+                        onCreateProposal?(estimate.id)
+                    }
+                }
+                if onCreateInvoice != nil {
+                    billingActionButton(title: "Invoice", icon: "dollarsign.circle.fill") {
+                        onCreateInvoice?(estimate.id)
+                    }
+                }
+            }
+        }
+    }
+
+    private func billingActionButton(
+        title: String,
+        icon: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: SpacingTokens.xxs) {
+                Image(systemName: icon)
+                    .font(.callout.weight(.semibold))
+                Text(title)
+                    .font(TypographyTokens.subheadline.weight(.semibold))
+            }
+            .foregroundStyle(ColorTokens.primaryText)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, SpacingTokens.sm)
+            .background(ColorTokens.inputBackground, in: RoundedRectangle(cornerRadius: RadiusTokens.button))
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusTokens.button)
+                    .strokeBorder(ColorTokens.primaryOrange.opacity(0.5), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func savedExportsList(_ savedExports: [EstimateExport]) -> some View {
