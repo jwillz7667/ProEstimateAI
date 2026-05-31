@@ -85,9 +85,7 @@ final class FeatureGateCoordinator {
         subheadline: String
     ) -> FeatureGateResult {
         let primaryTitle = isTrialEligible ? "Start 7-Day Free Trial" : "Upgrade to Continue"
-        let recommendedId = isTrialEligible
-            ? AppConstants.proMonthlyProductID
-            : AppConstants.premiumMonthlyProductID
+        let recommendedId = AppConstants.proMonthlyProductID
 
         return .blocked(PaywallDecision(
             placement: placement,

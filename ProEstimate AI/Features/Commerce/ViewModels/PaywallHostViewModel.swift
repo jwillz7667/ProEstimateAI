@@ -21,28 +21,28 @@ final class PaywallHostViewModel {
     /// so the existing UI bindings keep working.
     var selectedProduct: StoreProductModel?
 
-    /// Currently-highlighted tier (Pro vs Premium). Premium is the
-    /// default since it's the recommended tier; the trial only kicks
-    /// in if the user toggles to Pro Monthly.
-    var selectedTier: PlanTier = .premium {
+    /// Currently-highlighted tier. Pro is the only paid tier; the
+    /// property is retained so the period picker can resolve the matching
+    /// SKU and so any future tiering doesn't require re-plumbing the view.
+    var selectedTier: PlanTier = .pro {
         didSet { resyncSelectedProduct() }
     }
 
-    /// Whether the annual period toggle is selected. Defaults off so
-    /// the cheapest entry-point ($49.99 Premium Monthly) is the visible
-    /// price first.
+    /// Whether the annual period toggle is selected. Defaults off so the
+    /// Pro Monthly entry-point (where the 7-day trial lives) is the
+    /// visible price first.
     var isAnnualSelected: Bool = false {
         didSet { resyncSelectedProduct() }
     }
 
     /// Resolve the (tier, period) intersection from the current product
     /// catalog and assign it to `selectedProduct`. When the catalog
-    /// hasn't shipped the exact match yet (e.g. Premium not yet in App
-    /// Store Connect, or StoreKit still resolving), substitute the
-    /// canonical fallback so the rendered price + description always
-    /// match the user's stated tier/period. The purchase flow validates
-    /// against the real StoreKit catalog separately, so a fallback never
-    /// silently completes a checkout against a price that isn't live.
+    /// hasn't shipped the exact match yet (e.g. StoreKit still resolving),
+    /// substitute the canonical fallback so the rendered price +
+    /// description always match the user's stated period. The purchase
+    /// flow validates against the real StoreKit catalog separately, so a
+    /// fallback never silently completes a checkout against a price that
+    /// isn't live.
     private func resyncSelectedProduct() {
         let exact = products.first {
             $0.tier == selectedTier && $0.isAnnual == isAnnualSelected
@@ -118,10 +118,9 @@ final class PaywallHostViewModel {
             )
         }
 
-        // Default selection: Premium Monthly. The contractor sees the
-        // recommended tier with the lowest entry-point price first; the
-        // toggle is one tap from Pro or Annual.
-        selectedTier = .premium
+        // Default selection: Pro Monthly — the entry-point where the
+        // 7-day trial lives. The period toggle is one tap from Annual.
+        selectedTier = .pro
         isAnnualSelected = false
     }
 
@@ -148,17 +147,15 @@ final class PaywallHostViewModel {
                 isEligibleForTrial = isEligibleForIntro
 
                 // Map StoreKit products and merge with backend data.
-                // Premium Monthly is the featured tile (paywall headline);
-                // Annual products surface a savings tag pulled from the
-                // backend catalog when present.
+                // Pro Monthly is the featured tile (paywall headline, where
+                // the 7-day trial lives); the Annual product surfaces a
+                // savings tag.
                 let storeModels = storeProducts.map { product in
                     StoreKitCatalogService.mapToStoreProductModel(
                         product,
                         isEligibleForIntro: isEligibleForIntro,
-                        isFeatured: product.id == AppConstants.premiumMonthlyProductID,
+                        isFeatured: product.id == AppConstants.proMonthlyProductID,
                         savingsText: product.id == AppConstants.proAnnualProductID
-                            ? "Save 17%"
-                            : product.id == AppConstants.premiumAnnualProductID
                             ? "Save 17%"
                             : nil
                     )
@@ -208,18 +205,13 @@ final class PaywallHostViewModel {
     /// Pick the initial product after products load. Order of preference:
     ///   1. The decision's `recommendedProductId` (e.g. backend hinting at
     ///      Pro Monthly for a trial offer).
-    ///   2. Premium Monthly — the headline tier we want most contractors on.
-    ///   3. Pro Monthly — fallback for legacy catalogs missing Premium.
-    ///   4. Whatever the catalog's first entry is.
+    ///   2. Pro Monthly — the headline tile where the 7-day trial lives.
+    ///   3. Whatever the catalog's first entry is.
     private func applyInitialSelection() {
         if let recommendedId = decision.recommendedProductId,
            let recommended = products.first(where: { $0.productId == recommendedId })
         {
             selectProduct(recommended)
-            return
-        }
-        if let premiumMonthly = products.first(where: { $0.isPremium && $0.isMonthly }) {
-            selectProduct(premiumMonthly)
             return
         }
         if let proMonthly = products.first(where: { $0.isPro && $0.isMonthly }) {
@@ -420,9 +412,9 @@ final class PaywallHostViewModel {
 
 extension PaywallHostViewModel {
     /// Create a view model for SwiftUI previews with mock data.
-    /// Loads the full sample catalog (Pro + Premium × Monthly + Annual)
-    /// and lets the tier/period bindings drive `selectedProduct` so the
-    /// preview surfaces the same selection logic used in production.
+    /// Loads the sample catalog (Pro Monthly + Annual) and lets the
+    /// period binding drive `selectedProduct` so the preview surfaces the
+    /// same selection logic used in production.
     static func preview(
         decision: PaywallDecision = .sampleSoftGate
     ) -> PaywallHostViewModel {
@@ -432,7 +424,7 @@ extension PaywallHostViewModel {
             entitlementStore: .preview()
         )
         vm.products = StoreProductModel.sampleAll
-        vm.selectedTier = .premium
+        vm.selectedTier = .pro
         vm.isAnnualSelected = false
         return vm
     }

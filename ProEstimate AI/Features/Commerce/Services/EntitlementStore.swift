@@ -48,11 +48,6 @@ final class EntitlementStore {
         snapshot?.subscriptionState.hasProAccess ?? false
     }
 
-    /// Whether the user is a paying Pro subscriber (not trial).
-    var isPremium: Bool {
-        snapshot?.subscriptionState == .proActive
-    }
-
     /// Whether the user is in an active free trial.
     var isTrial: Bool {
         snapshot?.subscriptionState == .trialActive

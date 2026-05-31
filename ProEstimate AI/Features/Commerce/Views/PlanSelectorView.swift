@@ -1,15 +1,12 @@
 import SwiftUI
 
-/// Tier + period subscription picker.
+/// Period subscription picker for the single Pro tier.
 ///
-/// Two segmented controls drive the selection:
-///   1. Tier (Pro vs Premium) — the headline product family.
-///   2. Period (Monthly vs Annual) — billing cadence.
-///
-/// The view picks the right product from `products` for whatever
-/// combination is selected and forwards it through `onSelect`. Pro
-/// Monthly is the default since that's where the 7-day trial lives;
-/// Premium gets a "Most Popular" tag and the trailing 12-mo savings.
+/// A Monthly / Annual segmented control drives the selection; the view
+/// picks the matching product from `products` and the host view model's
+/// `selectedTier` / `isAnnualSelected` bindings re-resolve
+/// `selectedProduct`. Pro Monthly is the default since that's where the
+/// 7-day trial lives.
 struct PlanSelectorView: View {
     let products: [StoreProductModel]
     let selectedProduct: StoreProductModel?
@@ -20,88 +17,18 @@ struct PlanSelectorView: View {
 
     var body: some View {
         VStack(spacing: SpacingTokens.md) {
-            tierToggle
             periodToggle
             currentProductCard
         }
-    }
-
-    // MARK: - Tier toggle (Pro vs Premium)
-
-    private var tierToggle: some View {
-        HStack(spacing: 0) {
-            tierButton(.pro)
-            tierButton(.premium)
-        }
-        .padding(2)
-        // System tertiary fill is automatically light-on-light vs
-        // dark-on-dark, so the pill stays visible against either
-        // paywall backdrop without us hardcoding a translucent white.
-        .background(Color(.tertiarySystemFill), in: Capsule())
-    }
-
-    private func tierButton(_ tier: PlanTier) -> some View {
-        let isSelected = selectedTier == tier
-        // Premium-selected = orange fill, gets the black border + black text
-        // treatment in light mode to match the PrimaryCTA. Pro-selected = blue
-        // fill, keeps white text untouched.
-        let isOrangeFilled = isSelected && tier == .premium
-        let selectedTextColor: Color = isOrangeFilled
-            ? (colorScheme == .light ? Color.black : Color.white)
-            : .white
-        return Button {
-            // Update only the binding. The host view model's didSet
-            // observer on `selectedTier` re-resolves `selectedProduct`
-            // against the catalog and keeps the user's tier choice
-            // intact even when no matching SKU is loaded yet (which
-            // used to silently revert via the now-removed
-            // `applySelection()` -> `selectProduct(_:)` round-trip).
-            selectedTier = tier
-        } label: {
-            HStack(spacing: SpacingTokens.xxs) {
-                if tier == .premium && !isSelected {
-                    Image(systemName: "crown.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(ColorTokens.primaryOrange)
-                }
-                Text(tier.displayName.uppercased())
-                    .font(TypographyTokens.caption.weight(.bold))
-                    .tracking(0.5)
-                    .foregroundStyle(isSelected ? selectedTextColor : ColorTokens.secondaryText)
-                if tier == .premium && isSelected {
-                    Text("MOST POPULAR")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.white.opacity(0.18), in: Capsule())
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, SpacingTokens.xs)
-            .background(
-                isSelected
-                    ? Capsule().fill(tier == .premium ? ColorTokens.primaryOrange : ColorTokens.accentBlue)
-                    : Capsule().fill(Color.clear)
-            )
-            .overlay(
-                Capsule()
-                    .strokeBorder(
-                        (isOrangeFilled && colorScheme == .light) ? Color.black : Color.clear,
-                        lineWidth: (isOrangeFilled && colorScheme == .light) ? 2 : 0
-                    )
-            )
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Period toggle (Monthly vs Annual)
 
     private var periodToggle: some View {
         HStack(spacing: 0) {
-            // Same pattern as the tier toggle — let the binding's didSet
-            // observer in the host VM re-resolve `selectedProduct` so we
-            // can't override the user's period choice on fallback.
+            // Let the binding's didSet observer in the host VM re-resolve
+            // `selectedProduct` so we can't override the user's period
+            // choice on fallback.
             periodButton(title: "Monthly", isSelected: !isAnnualSelected) {
                 isAnnualSelected = false
             }
@@ -230,9 +157,9 @@ struct PlanSelectorView: View {
 
     /// Resolve the product matching the current (tier, period) selection.
     /// Falls back to the existing `selectedProduct` when no match found
-    /// (e.g. backend hasn't shipped Premium yet) so the rendered card
-    /// shows *something* while the host VM continues holding the user's
-    /// stated tier/period preference.
+    /// (e.g. StoreKit hasn't resolved the catalog yet) so the rendered
+    /// card shows *something* while the host VM continues holding the
+    /// user's stated period preference.
     private var currentProduct: StoreProductModel? {
         let match = products.first { $0.tier == selectedTier && $0.isAnnual == isAnnualSelected }
         return match ?? selectedProduct
@@ -266,8 +193,8 @@ struct PlanSelectorView: View {
         ColorTokens.overlayBackground.ignoresSafeArea()
         PlanSelectorView(
             products: StoreProductModel.sampleAll,
-            selectedProduct: .samplePremiumAnnual,
-            selectedTier: .constant(.premium),
+            selectedProduct: .sampleAnnual,
+            selectedTier: .constant(.pro),
             isAnnualSelected: .constant(true)
         )
         .padding()

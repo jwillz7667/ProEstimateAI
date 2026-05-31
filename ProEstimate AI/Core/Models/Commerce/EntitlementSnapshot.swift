@@ -32,12 +32,22 @@ struct EntitlementSnapshot: Codable, Equatable, Sendable {
 // MARK: - Plan Code
 
 /// Identifies which plan a user is on. Matches the backend `PlanCode` enum.
+///
+/// The retired `PREMIUM_*` SKUs are intentionally absent. Decoding is
+/// resilient: an unrecognized code (e.g. a grandfathered Premium
+/// entitlement still on the server) maps to `proMonthly` instead of
+/// failing the whole snapshot decode. Feature access is driven by
+/// `subscription_state` + `feature_flags`, never by this code, so a
+/// legacy Premium account keeps full access and simply presents as Pro.
 enum PlanCode: String, Codable, CaseIterable, Sendable {
     case freeStarter = "FREE_STARTER"
     case proMonthly = "PRO_MONTHLY"
     case proAnnual = "PRO_ANNUAL"
-    case premiumMonthly = "PREMIUM_MONTHLY"
-    case premiumAnnual = "PREMIUM_ANNUAL"
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = PlanCode(rawValue: raw) ?? .proMonthly
+    }
 }
 
 extension PlanCode {
@@ -46,19 +56,15 @@ extension PlanCode {
         case .freeStarter: "Free"
         case .proMonthly: "Pro Monthly"
         case .proAnnual: "Pro Annual"
-        case .premiumMonthly: "Premium Monthly"
-        case .premiumAnnual: "Premium Annual"
         }
     }
 
     /// Which tier this plan belongs to. Drives the tier badge on the
-    /// dashboard, paywall picker segmentation, and feature comparison
-    /// rendering.
+    /// dashboard and the feature comparison rendering.
     var tier: PlanTier {
         switch self {
         case .freeStarter: .free
         case .proMonthly, .proAnnual: .pro
-        case .premiumMonthly, .premiumAnnual: .premium
         }
     }
 
@@ -66,8 +72,8 @@ extension PlanCode {
     var period: BillingPeriod? {
         switch self {
         case .freeStarter: nil
-        case .proMonthly, .premiumMonthly: .monthly
-        case .proAnnual, .premiumAnnual: .annual
+        case .proMonthly: .monthly
+        case .proAnnual: .annual
         }
     }
 }
@@ -76,13 +82,11 @@ extension PlanCode {
 enum PlanTier: String, CaseIterable, Sendable {
     case free
     case pro
-    case premium
 
     var displayName: String {
         switch self {
         case .free: "Free"
         case .pro: "Pro"
-        case .premium: "Premium"
         }
     }
 }

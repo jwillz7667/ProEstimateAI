@@ -45,68 +45,47 @@ extension StoreProductModel {
         hasIntroOffer && (isEligibleForIntroOffer ?? false)
     }
 
-    /// Tier (Pro vs Premium). Derived from the plan code so the UI
+    /// Tier (Free vs Pro). Derived from the plan code so the UI
     /// stays in sync with the backend's authoritative classification.
     var tier: PlanTier {
         planCode.tier
     }
 
-    /// True for any monthly subscription (Pro Monthly OR Premium Monthly).
+    /// True for any monthly subscription.
     var isMonthly: Bool {
         planCode.period == .monthly
     }
 
-    /// True for any annual subscription (Pro Annual OR Premium Annual).
+    /// True for any annual subscription.
     var isAnnual: Bool {
         planCode.period == .annual
     }
 
-    /// True specifically for the two Pro tier products.
+    /// True for the Pro tier products.
     var isPro: Bool {
         tier == .pro
-    }
-
-    /// True specifically for the two Premium tier products.
-    var isPremium: Bool {
-        tier == .premium
     }
 }
 
 // MARK: - Canonical fallbacks
 
 extension StoreProductModel {
-    /// Tier- and period-correct display fallback used when the live
-    /// catalog hasn't returned a matching SKU yet — e.g. Premium hasn't
-    /// shipped in App Store Connect, StoreKit is still resolving, or
+    /// Period-correct display fallback used when the live catalog hasn't
+    /// returned a matching SKU yet — e.g. StoreKit is still resolving, or
     /// the backend catalog request failed and the device is offline.
     ///
     /// Without this, the paywall would silently fall through to the
-    /// previously-selected (different tier) product so the price and
-    /// description on screen would lie about which tier the toggle has
-    /// highlighted. This helper guarantees the rendered card always
-    /// matches the user's stated intent.
+    /// previously-selected product so the price and description on screen
+    /// would lie about which period the toggle has highlighted. This
+    /// helper guarantees the rendered card always matches the user's
+    /// stated intent.
     ///
     /// The pricing strings here MUST mirror what's in App Store Connect.
     /// The purchase flow gates separately on the real StoreKit product
     /// being available, so a fallback never short-circuits a checkout
     /// against a price the user can't actually transact at.
     static func canonicalFallback(tier: PlanTier, isAnnual: Bool) -> StoreProductModel {
-        switch (tier, isAnnual) {
-        case (.pro, false):
-            return StoreProductModel(
-                productId: AppConstants.proMonthlyProductID,
-                planCode: .proMonthly,
-                displayName: "Pro Monthly",
-                description: "Solo contractor essentials. 2 projects, 20 AI previews, and 20 estimates per month.",
-                priceDisplay: "$29.99/mo",
-                billingPeriodLabel: "per month",
-                hasIntroOffer: true,
-                introOfferDisplayText: "7-day free trial",
-                isEligibleForIntroOffer: nil,
-                isFeatured: false,
-                savingsText: nil
-            )
-        case (.pro, true):
+        if isAnnual {
             return StoreProductModel(
                 productId: AppConstants.proAnnualProductID,
                 planCode: .proAnnual,
@@ -120,40 +99,20 @@ extension StoreProductModel {
                 isFeatured: false,
                 savingsText: "Save 17%"
             )
-        case (.premium, false):
-            return StoreProductModel(
-                productId: AppConstants.premiumMonthlyProductID,
-                planCode: .premiumMonthly,
-                displayName: "Premium Monthly",
-                description: "Unlimited projects, AI previews, and estimates — plus priority generation.",
-                priceDisplay: "$49.99/mo",
-                billingPeriodLabel: "per month",
-                hasIntroOffer: false,
-                introOfferDisplayText: nil,
-                isEligibleForIntroOffer: nil,
-                isFeatured: true,
-                savingsText: nil
-            )
-        case (.premium, true):
-            return StoreProductModel(
-                productId: AppConstants.premiumAnnualProductID,
-                planCode: .premiumAnnual,
-                displayName: "Premium Annual",
-                description: "Unlimited Premium, billed yearly — best value for growing crews.",
-                priceDisplay: "$499.99/yr",
-                billingPeriodLabel: "per year",
-                hasIntroOffer: false,
-                introOfferDisplayText: nil,
-                isEligibleForIntroOffer: nil,
-                isFeatured: false,
-                savingsText: "Save 17%"
-            )
-        case (.free, _):
-            // Defensive: the paywall never surfaces Free as a paid tier,
-            // but a future caller mis-using the helper shouldn't render
-            // an empty card. Fall through to the headline Premium SKU.
-            return canonicalFallback(tier: .premium, isAnnual: isAnnual)
         }
+        return StoreProductModel(
+            productId: AppConstants.proMonthlyProductID,
+            planCode: .proMonthly,
+            displayName: "Pro Monthly",
+            description: "Solo contractor essentials. 2 projects, 20 AI previews, and 20 estimates per month.",
+            priceDisplay: "$29.99/mo",
+            billingPeriodLabel: "per month",
+            hasIntroOffer: true,
+            introOfferDisplayText: "7-day free trial",
+            isEligibleForIntroOffer: nil,
+            isFeatured: true,
+            savingsText: nil
+        )
     }
 }
 
@@ -188,39 +147,9 @@ extension StoreProductModel {
         savingsText: "Save 30%"
     )
 
-    static let samplePremiumMonthly = StoreProductModel(
-        productId: AppConstants.premiumMonthlyProductID,
-        planCode: .premiumMonthly,
-        displayName: "Premium Monthly",
-        description: "Unlimited projects, image gens, and estimates",
-        priceDisplay: "$49.99/mo",
-        billingPeriodLabel: "per month",
-        hasIntroOffer: false,
-        introOfferDisplayText: nil,
-        isEligibleForIntroOffer: nil,
-        isFeatured: true,
-        savingsText: nil
-    )
-
-    static let samplePremiumAnnual = StoreProductModel(
-        productId: AppConstants.premiumAnnualProductID,
-        planCode: .premiumAnnual,
-        displayName: "Premium Annual",
-        description: "Everything in Premium — save 17% over monthly",
-        priceDisplay: "$499.99/yr",
-        billingPeriodLabel: "per year",
-        hasIntroOffer: false,
-        introOfferDisplayText: nil,
-        isEligibleForIntroOffer: nil,
-        isFeatured: false,
-        savingsText: "Save 17%"
-    )
-
     /// Convenience array for previews / mocks.
     static let sampleAll: [StoreProductModel] = [
         .sampleMonthly,
         .sampleAnnual,
-        .samplePremiumMonthly,
-        .samplePremiumAnnual,
     ]
 }

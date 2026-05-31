@@ -1,12 +1,11 @@
 import SwiftUI
 
-/// Three-column comparison: Free vs Pro vs Premium.
+/// Two-column comparison: Free vs Pro.
 ///
 /// Free is everything blocked. Pro carries the monthly caps (2 projects /
-/// 20 image gens / 20 estimates). Premium lifts every cap and adds
-/// priority generation. Each row pulls its values from a single
-/// `ComparisonFeature` so the table stays tidy and editing copy is a
-/// one-line change.
+/// 20 image gens / 20 estimates) and unlocks every Pro feature. Each row
+/// pulls its values from a single `ComparisonFeature` so the table stays
+/// tidy and editing copy is a one-line change.
 struct FeatureComparisonListView: View {
     var body: some View {
         VStack(spacing: 0) {
@@ -58,21 +57,9 @@ struct FeatureComparisonListView: View {
                 // White on dark slate (the surface stays slate in both
                 // color schemes) — accentBlue text was nearly the same
                 // value as the slate surface and washed out in light
-                // mode. Premium keeps its orange identity for tier
-                // distinction; Pro reads as the neutral white anchor.
+                // mode. Pro reads as the neutral white anchor.
                 .foregroundStyle(.white)
                 .frame(width: tierColumnWidth)
-
-            VStack(spacing: 1) {
-                Text("Premium")
-                    .font(TypographyTokens.caption)
-                    .fontWeight(.bold)
-                    .foregroundStyle(ColorTokens.primaryOrange)
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(ColorTokens.primaryOrange)
-            }
-            .frame(width: tierColumnWidth)
         }
         .padding(.horizontal, SpacingTokens.md)
         .padding(.vertical, SpacingTokens.sm)
@@ -96,8 +83,6 @@ struct FeatureComparisonListView: View {
             valueCell(feature.freeValue, tier: .free)
                 .frame(width: tierColumnWidth)
             valueCell(feature.proValue, tier: .pro)
-                .frame(width: tierColumnWidth)
-            valueCell(feature.premiumValue, tier: .premium)
                 .frame(width: tierColumnWidth)
         }
         .padding(.horizontal, SpacingTokens.md)
@@ -139,10 +124,8 @@ struct FeatureComparisonListView: View {
         case .free: ColorTokens.success.opacity(0.6)
         // White for Pro check / infinity glyphs — same reason as the
         // header text: blue on slate surface fades into the
-        // background, especially in light mode. Premium stays orange
-        // so the headline tier is visually unmistakable.
+        // background, especially in light mode.
         case .pro: .white
-        case .premium: ColorTokens.primaryOrange
         }
     }
 
@@ -154,71 +137,55 @@ struct FeatureComparisonListView: View {
                 name: "Projects",
                 icon: "folder",
                 freeValue: .cross,
-                proValue: .limited("2/mo"),
-                premiumValue: .unlimited
+                proValue: .limited("2/mo")
             ),
             ComparisonFeature(
                 name: "AI Image Previews",
                 icon: "sparkles",
                 freeValue: .cross,
-                proValue: .limited("20/mo"),
-                premiumValue: .unlimited
+                proValue: .limited("20/mo")
             ),
             ComparisonFeature(
                 name: "AI Estimates",
                 icon: "doc.text.magnifyingglass",
                 freeValue: .cross,
-                proValue: .limited("20/mo"),
-                premiumValue: .unlimited
+                proValue: .limited("20/mo")
             ),
             ComparisonFeature(
                 name: "Branded PDFs",
                 icon: "doc.text",
                 freeValue: .cross,
-                proValue: .check,
-                premiumValue: .check
+                proValue: .check
             ),
             ComparisonFeature(
                 name: "Custom Branding",
                 icon: "paintbrush",
                 freeValue: .cross,
-                proValue: .check,
-                premiumValue: .check
+                proValue: .check
             ),
             ComparisonFeature(
                 name: "Invoicing",
                 icon: "dollarsign.circle",
                 freeValue: .cross,
-                proValue: .check,
-                premiumValue: .check
+                proValue: .check
             ),
             ComparisonFeature(
                 name: "Client Approvals",
                 icon: "checkmark.seal",
                 freeValue: .cross,
-                proValue: .check,
-                premiumValue: .check
+                proValue: .check
             ),
             ComparisonFeature(
                 name: "Lawn / Roof Scout",
                 icon: "scope",
                 freeValue: .cross,
-                proValue: .check,
-                premiumValue: .check
+                proValue: .check
             ),
             ComparisonFeature(
                 name: "Watermark-Free",
                 icon: "eye.slash",
                 freeValue: .cross,
-                proValue: .check,
-                premiumValue: .check
-            ),
-            ComparisonFeature(
-                name: "Priority Generation",
-                icon: "bolt.fill",
-                freeValue: .cross,
-                proValue: .cross,
-                premiumValue: .check
+                proValue: .check
             ),
         ]
     }
@@ -231,7 +198,6 @@ private struct ComparisonFeature: Identifiable {
     let icon: String
     let freeValue: FeatureValue
     let proValue: FeatureValue
-    let premiumValue: FeatureValue
 
     var id: String {
         name

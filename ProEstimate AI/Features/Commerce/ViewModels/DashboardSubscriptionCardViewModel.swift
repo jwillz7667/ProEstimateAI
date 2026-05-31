@@ -99,8 +99,7 @@ final class DashboardSubscriptionCardViewModel {
     }
 
     /// Human-readable plan label. Uses each PlanCode's own displayName
-    /// so adding tiers (e.g. Premium) doesn't require updating this
-    /// switch every time.
+    /// so adding plans doesn't require updating this switch every time.
     var planLabel: String {
         entitlementStore.currentPlanCode.displayName
     }

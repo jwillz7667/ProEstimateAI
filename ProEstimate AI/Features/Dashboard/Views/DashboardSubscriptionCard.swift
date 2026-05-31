@@ -3,10 +3,10 @@ import SwiftUI
 /// Dashboard card showing the user's current subscription posture.
 ///
 /// For free / expired / revoked users it surfaces the trial-offer CTA.
-/// For active subscribers it switches to a status block showing tier
-/// (Pro vs Premium), renewal / trial countdown, and grace-period warnings —
-/// no upgrade prompts. The card auto-reads from `EntitlementStore` so it
-/// re-renders the moment a purchase or restore mutates the snapshot.
+/// For active subscribers it switches to a status block showing the Pro
+/// plan, renewal / trial countdown, and grace-period warnings — no upgrade
+/// prompts. The card auto-reads from `EntitlementStore` so it re-renders
+/// the moment a purchase or restore mutates the snapshot.
 struct DashboardSubscriptionCard: View {
     @Environment(EntitlementStore.self) private var entitlementStore
 
@@ -62,7 +62,6 @@ struct DashboardSubscriptionCard: View {
     private var planTitle: String {
         let tier = entitlementStore.currentPlanCode.tier
         switch tier {
-        case .premium: return "ProEstimate Premium"
         case .pro: return "ProEstimate Pro"
         case .free: return "ProEstimate"
         }

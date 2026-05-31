@@ -83,11 +83,9 @@ final class StoreKitCatalogService: StoreKitCatalogProviding {
             switch product.id {
             case AppConstants.proMonthlyProductID: return .proMonthly
             case AppConstants.proAnnualProductID: return .proAnnual
-            case AppConstants.premiumMonthlyProductID: return .premiumMonthly
-            case AppConstants.premiumAnnualProductID: return .premiumAnnual
             default:
                 // Unknown product ID — fall back based on subscription period
-                // so tier toggles still work for unexpected catalog entries.
+                // so the period toggle still works for unexpected catalog entries.
                 let isAnnual = product.subscription?.subscriptionPeriod.unit == .year
                 return isAnnual ? .proAnnual : .proMonthly
             }

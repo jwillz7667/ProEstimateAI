@@ -59,7 +59,7 @@ struct PaywallHostView: View {
                             )
                         }
 
-                        // Feature comparison — Free vs Pro vs Premium.
+                        // Feature comparison — Free vs Pro.
                         FeatureComparisonListView()
 
                         // Inline catalog-load failure with retry. Purchase

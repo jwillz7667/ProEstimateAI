@@ -12,23 +12,17 @@ enum AppConstants {
     static let proMonthlyProductID = "proestimate.pro.monthly"
     /// Pro Annual — same caps as Pro Monthly, billed yearly.
     static let proAnnualProductID = "proestimate.pro.annual"
-    /// Premium Monthly — unlimited within fair-use caps. $49.99/mo.
-    static let premiumMonthlyProductID = "proestimate.premium.monthly"
-    /// Premium Annual — unlimited, billed yearly. $499.99/yr.
-    static let premiumAnnualProductID = "proestimate.premium.annual"
 
     /// Backwards-compatible aliases. Existing callsites still resolve;
     /// new code should use the tier-explicit identifiers above.
     static let monthlyProductID = proMonthlyProductID
     static let annualProductID = proAnnualProductID
 
-    /// Every tier+period the paywall renders. Order is the on-screen
-    /// ordering: Pro Monthly · Pro Annual · Premium Monthly · Premium Annual.
+    /// Every period the paywall renders. Order is the on-screen
+    /// ordering: Pro Monthly · Pro Annual.
     static let allSubscriptionProductIDs: [String] = [
         proMonthlyProductID,
         proAnnualProductID,
-        premiumMonthlyProductID,
-        premiumAnnualProductID,
     ]
 
     // MARK: - Free Tier

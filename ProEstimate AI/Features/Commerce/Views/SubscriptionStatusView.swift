@@ -1,17 +1,15 @@
 import SwiftUI
 
 /// Non-blocking subscription status sheet. Mirrors the dark-glass aesthetic
-/// of `PaywallHostView` but is purely informational — paying users can
-/// always dismiss. Pro members see a gentle Premium upsell with a "Stick
-/// with Pro" escape hatch; Premium members see a celebratory snapshot of
-/// what they have.
+/// of `PaywallHostView` but is purely informational — paying members can
+/// always dismiss. Shows a celebratory snapshot of the active Pro plan and
+/// everything it unlocks.
 ///
 /// Reads the live `EntitlementStore` snapshot, so it stays in sync with
 /// purchases / restores / `Transaction.updates` without explicit refresh.
 struct SubscriptionStatusView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(EntitlementStore.self) private var entitlementStore
-    @State private var showPremiumUpgrade = false
 
     var body: some View {
         ZStack {
@@ -31,16 +29,6 @@ struct SubscriptionStatusView: View {
             }
 
             dismissButton
-        }
-        .sheet(isPresented: $showPremiumUpgrade) {
-            // Bypass `PaywallPresenter` — its global suppression rule
-            // would no-op a paywall opened by a paying customer, and that
-            // suppression is exactly what we want to opt out of here.
-            PaywallHostView(decision: .settingsUpgrade) {
-                // After a successful Premium purchase, close the status
-                // sheet too so the user lands back on the dashboard.
-                dismiss()
-            }
         }
     }
 
@@ -84,62 +72,10 @@ struct SubscriptionStatusView: View {
 
     @ViewBuilder
     private var primaryActions: some View {
-        let tier = entitlementStore.currentPlanCode.tier
-
-        switch tier {
-        case .pro:
-            VStack(spacing: SpacingTokens.sm) {
-                upgradeToPremiumButton
-                stickWithProButton
-            }
-        case .premium:
-            doneButton
-        case .free:
-            // Free users wouldn't normally reach this view (the badge is
-            // hidden), but keep a safe fallback in case the snapshot is
-            // mid-flight or someone navigates here in a preview.
-            doneButton
-        }
-    }
-
-    private var upgradeToPremiumButton: some View {
-        Button {
-            showPremiumUpgrade = true
-        } label: {
-            HStack(spacing: SpacingTokens.xs) {
-                Image(systemName: "crown.fill")
-                Text("Upgrade to Premium")
-            }
-            .font(TypographyTokens.headline)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, SpacingTokens.md)
-            .background(
-                LinearGradient(
-                    colors: [Color(hex: 0xFCD34D), Color(hex: 0xD97706)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
-                in: RoundedRectangle(cornerRadius: RadiusTokens.button)
-            )
-            .shadow(color: Color(hex: 0xD97706).opacity(0.45), radius: 14, x: 0, y: 6)
-        }
-        .accessibilityHint("Opens the Premium upgrade flow")
-    }
-
-    private var stickWithProButton: some View {
-        Button {
-            dismiss()
-        } label: {
-            Text("Stick with Pro · Back to Dashboard")
-                .font(TypographyTokens.callout)
-                .foregroundStyle(ColorTokens.secondaryText)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, SpacingTokens.sm)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Closes this page and returns to the dashboard")
+        // Pro is the only subscriber tier; free users wouldn't normally
+        // reach this view (the badge is hidden) but the button is a safe
+        // fallback if the snapshot is mid-flight or this is a preview.
+        doneButton
     }
 
     private var doneButton: some View {
@@ -166,7 +102,6 @@ struct SubscriptionStatusView: View {
         switch tier {
         case .free: return "sparkles"
         case .pro: return "checkmark.seal.fill"
-        case .premium: return "crown.fill"
         }
     }
 
@@ -184,19 +119,12 @@ struct SubscriptionStatusView: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-        case .premium:
-            return LinearGradient(
-                colors: [Color(hex: 0xFCD34D), Color(hex: 0xD97706)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
         }
     }
 
     private func tierShadowColor(for tier: PlanTier) -> Color {
         switch tier {
         case .free, .pro: return ColorTokens.primaryOrange
-        case .premium: return Color(hex: 0xD97706)
         }
     }
 
@@ -206,7 +134,6 @@ struct SubscriptionStatusView: View {
         case .pro:
             if entitlementStore.isTrial { return "You're on a Pro Trial" }
             return "You're a Pro Member"
-        case .premium: return "Premium Membership"
         }
     }
 
@@ -219,16 +146,11 @@ struct SubscriptionStatusView: View {
                 return entitlementStore.isAutoRenewEnabled
                     ? "Subscription active · renews \(when)"
                     : "Subscription active · ends \(when)"
-            case .premium:
-                return entitlementStore.isAutoRenewEnabled
-                    ? "Top tier · renews \(when)"
-                    : "Top tier · ends \(when)"
             }
         }
         switch tier {
         case .free: return "Subscribe to unlock the full toolkit."
         case .pro: return "Your subscription is active."
-        case .premium: return "You have access to every feature."
         }
     }
 

@@ -4,12 +4,10 @@ import SwiftUI
 ///
 /// Renders nothing for free users (so the badge silently disappears the
 /// instant a user subscribes and the entitlement snapshot updates). For
-/// active subscribers it renders a tier-aware capsule: a flat orange
-/// "PRO" / trial badge, or a gold "PREMIUM" badge with a crown for the
-/// Premium tier. Tapping the badge opens a non-blocking subscription
-/// status sheet that shows the active tier, included features, and (for
-/// Pro) an unobtrusive Premium upsell. Billing-issue states still route
-/// straight to Settings so the user can fix payment quickly.
+/// active subscribers it renders a flat orange "PRO" / trial capsule.
+/// Tapping the badge opens a non-blocking subscription status sheet that
+/// shows the active plan and included features. Billing-issue states
+/// still route straight to Settings so the user can fix payment quickly.
 ///
 /// The badge reads directly from `EntitlementStore` via `@Environment`,
 /// so it re-renders automatically as soon as a purchase, restore, or
@@ -38,11 +36,9 @@ struct SubscriptionBadge: View {
     // MARK: - Badge Content
 
     /// Per-tier content. Pro is a flat "PRO" text capsule (no icon —
-    /// the word IS the brand); Premium collapses to a single crown
-    /// glyph (the symbol carries the meaning, no need to also write
-    /// "PREMIUM"); trial and billing-issue keep the icon + label combo
-    /// because their text carries time-sensitive context (days
-    /// remaining, "Action needed") that an icon alone can't convey.
+    /// the word IS the brand); trial and billing-issue keep the icon +
+    /// label combo because their text carries time-sensitive context
+    /// (days remaining, "Action needed") that an icon alone can't convey.
     @ViewBuilder
     private func badgeContent(style: BadgeStyle) -> some View {
         switch style {
@@ -55,17 +51,6 @@ struct SubscriptionBadge: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(style.background, in: Capsule())
-                .overlay(
-                    Capsule()
-                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
-                )
-                .shadow(color: style.shadowColor.opacity(0.45), radius: 6, x: 0, y: 2)
-        case .premium:
-            Image(systemName: "crown.fill")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 26, height: 22)
                 .background(style.background, in: Capsule())
                 .overlay(
                     Capsule()
@@ -113,7 +98,6 @@ struct SubscriptionBadge: View {
     /// is not a subscriber (in which case the body returns no view at all).
     private var badgeStyle: BadgeStyle? {
         let state = entitlementStore.subscriptionState
-        let tier = entitlementStore.currentPlanCode.tier
 
         switch state {
         case .gracePeriod, .billingRetry:
@@ -121,7 +105,7 @@ struct SubscriptionBadge: View {
         case .trialActive:
             return .trial(daysRemaining: entitlementStore.trialDaysRemaining)
         case .proActive, .canceledActive, .adminOverride:
-            return tier == .premium ? .premium : .pro
+            return .pro
         case .free, .expired, .revoked:
             return nil
         }
@@ -132,14 +116,12 @@ struct SubscriptionBadge: View {
 
 private enum BadgeStyle {
     case pro
-    case premium
     case trial(daysRemaining: Int?)
     case billingIssue
 
     var label: String {
         switch self {
         case .pro: return "PRO"
-        case .premium: return "PREMIUM"
         case let .trial(daysRemaining):
             if let days = daysRemaining, days > 0 {
                 return "TRIAL · \(days)D"
@@ -152,7 +134,6 @@ private enum BadgeStyle {
     var icon: String {
         switch self {
         case .pro: return "checkmark.seal.fill"
-        case .premium: return "crown.fill"
         case .trial: return "sparkles"
         case .billingIssue: return "exclamationmark.triangle.fill"
         }
@@ -166,19 +147,6 @@ private enum BadgeStyle {
                     colors: [
                         ColorTokens.primaryOrange,
                         Color(hex: 0xEA580C),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-        case .premium:
-            // Gold gradient (amber-300 → amber-600) signals "top tier"
-            // without competing with the orange brand accent.
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Color(hex: 0xFCD34D),
-                        Color(hex: 0xD97706),
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -212,7 +180,6 @@ private enum BadgeStyle {
     var shadowColor: Color {
         switch self {
         case .pro: return ColorTokens.primaryOrange
-        case .premium: return Color(hex: 0xD97706)
         case .trial: return ColorTokens.primaryOrange
         case .billingIssue: return Color(hex: 0xEF4444)
         }
@@ -220,8 +187,7 @@ private enum BadgeStyle {
 
     var accessibilityHint: String {
         switch self {
-        case .pro, .trial: return "Opens your subscription status with an option to upgrade to Premium"
-        case .premium: return "Opens your Premium subscription status"
+        case .pro, .trial: return "Opens your subscription status"
         case .billingIssue: return "Opens settings so you can fix your billing"
         }
     }
@@ -229,7 +195,6 @@ private enum BadgeStyle {
     var accessibilityLabel: String {
         switch self {
         case .pro: return "Pro subscription active"
-        case .premium: return "Premium subscription active"
         case let .trial(daysRemaining):
             if let days = daysRemaining {
                 return "Free trial active, \(days) day\(days == 1 ? "" : "s") remaining"
