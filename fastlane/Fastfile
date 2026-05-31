@@ -326,8 +326,14 @@ platform :ios do
 
   desc "Push localized metadata and screenshots to App Store Connect (no binary)"
   lane :metadata do
+    setup_spaceship_token
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+    ensure_editable_app_store_version(app)
+
     deliver(
       api_key:                           make_api_key,
+      app_version:                       project_marketing_version,
       skip_binary_upload:                true,
       skip_screenshots:                  false,
       skip_metadata:                     false,
@@ -338,8 +344,14 @@ platform :ios do
 
   desc "Push text metadata only (name/subtitle/keywords/description/promo/notes). Skips screenshots for fast ASO iteration."
   lane :metadata_copy do
+    setup_spaceship_token
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+    ensure_editable_app_store_version(app)
+
     deliver(
       api_key:                           make_api_key,
+      app_version:                       project_marketing_version,
       skip_binary_upload:                true,
       skip_screenshots:                  true,
       skip_metadata:                     false,

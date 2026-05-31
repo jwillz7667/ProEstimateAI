@@ -1,11 +1,20 @@
 app_identifier "Res.ProEstimate-AI"
 team_id        "487LC4H9U4"
 
-# Languages deliver should sync. Matches the app's localizations
-# (Localizable.xcstrings covers en + es-MX).
+# App Store listing locales deliver should sync. These are listing-level
+# localizations, independent of the binary's runtime localizations
+# (Localizable.xcstrings covers en + es-MX): Apple lets a listing be
+# localized into any storefront language regardless of in-app strings.
+# en-GB/en-AU widen English-storefront keyword coverage; es-ES serves the
+# Spain storefront with Spain-native copy. deliver only creates/updates
+# localizations named here, so any locale added under metadata/ must also
+# be listed here or it is silently skipped.
 languages [
   "en-US",
-  "es-MX"
+  "en-GB",
+  "en-AU",
+  "es-MX",
+  "es-ES"
 ]
 
 # Never auto-submit — let the `submit` lane do that explicitly so
