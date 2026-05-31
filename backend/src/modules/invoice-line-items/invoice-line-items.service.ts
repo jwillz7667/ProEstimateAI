@@ -3,10 +3,30 @@ import { NotFoundError } from '../../lib/errors';
 import { CreateInvoiceLineItemInput, UpdateInvoiceLineItemInput } from './invoice-line-items.validators';
 
 /**
- * Recalculates the aggregate totals on an Invoice by summing its line items.
- * Called after every line item create / update / delete.
+ * Pure derivation of an invoice's billable totals from its components.
+ * Tax is charged on the pre-discount subtotal, then the discount is
+ * subtracted from the taxed total — mirroring the estimate recalc in
+ * estimate-line-items.service.ts. Both results are floored at 0 so that a
+ * discount larger than the bill, or an overpayment, never yields a negative
+ * total or amount owed.
  */
-async function recalculateInvoiceTotals(invoiceId: string) {
+export function computeInvoiceTotals(input: {
+  subtotal: number;
+  taxAmount: number;
+  discountAmount: number;
+  amountPaid: number;
+}): { totalAmount: number; amountDue: number } {
+  const totalAmount = Math.max(0, input.subtotal + input.taxAmount - input.discountAmount);
+  const amountDue = Math.max(0, totalAmount - input.amountPaid);
+  return { totalAmount, amountDue };
+}
+
+/**
+ * Recalculates the aggregate totals on an Invoice by summing its line items.
+ * Called after every line item create / update / delete, and whenever the
+ * invoice's discount or recorded payment changes. Returns the updated invoice.
+ */
+export async function recalculateInvoiceTotals(invoiceId: string) {
   const lineItems = await prisma.invoiceLineItem.findMany({ where: { invoiceId } });
 
   const subtotal = lineItems.reduce((sum, item) => sum + Number(item.lineTotal), 0);
@@ -18,10 +38,14 @@ async function recalculateInvoiceTotals(invoiceId: string) {
 
   const defaultTaxRate = Number(invoice?.company?.defaultTaxRate ?? 0);
   const taxAmount = subtotal * (defaultTaxRate / 100);
-  const totalAmount = subtotal + taxAmount;
-  const amountDue = totalAmount - Number(invoice?.amountPaid ?? 0);
+  const { totalAmount, amountDue } = computeInvoiceTotals({
+    subtotal,
+    taxAmount,
+    discountAmount: Number(invoice?.discountAmount ?? 0),
+    amountPaid: Number(invoice?.amountPaid ?? 0),
+  });
 
-  await prisma.invoice.update({
+  return prisma.invoice.update({
     where: { id: invoiceId },
     data: { subtotal, taxAmount, totalAmount, amountDue },
   });

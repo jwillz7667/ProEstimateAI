@@ -3,6 +3,7 @@ import { NotFoundError, PaywallError } from '../../lib/errors';
 import { isAdminUser } from '../../lib/admin';
 import { PaginationParams, paginateResults, buildCursorWhere } from '../../lib/pagination';
 import { CreateInvoiceInput, UpdateInvoiceInput } from './invoices.validators';
+import { recalculateInvoiceTotals } from '../invoice-line-items/invoice-line-items.service';
 import { InvoiceStatus } from '@prisma/client';
 
 /**
@@ -207,8 +208,6 @@ export async function update(id: string, companyId: string, data: UpdateInvoiceI
   }
   if (data.amount_paid !== undefined) {
     updateData.amountPaid = data.amount_paid;
-    // Recalculate amountDue = totalAmount - amountPaid
-    updateData.amountDue = Number(existing.totalAmount) - data.amount_paid;
   }
 
   // Handle status transitions for payment
@@ -220,6 +219,14 @@ export async function update(id: string, companyId: string, data: UpdateInvoiceI
     where: { id },
     data: updateData,
   });
+
+  // Changing the discount or recorded payment alters the derived totals
+  // (totalAmount / amountDue). Recompute them from the canonical formula so
+  // they stay consistent with the line-item recalc path — otherwise the
+  // total would still reflect the pre-discount amount.
+  if (data.discount_amount !== undefined || data.amount_paid !== undefined) {
+    return recalculateInvoiceTotals(id);
+  }
 
   return invoice;
 }
