@@ -16,6 +16,10 @@ export const createGenerationSchema = z.object({
       })
     )
     .optional(),
+  // Per-request override of the project's image switch. When false the
+  // pipeline skips image generation and produces a text-only estimate.
+  // Absent → fall back to the project's aiPreviewEnabled flag.
+  generate_preview: z.boolean().optional(),
 });
 
 export type CreateGenerationInput = z.infer<typeof createGenerationSchema>;

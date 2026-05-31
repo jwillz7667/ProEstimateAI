@@ -15,6 +15,7 @@ export interface CompanyDto {
   default_tax_rate: number | null;
   default_markup_percent: number | null;
   tax_inclusive_pricing: boolean;
+  default_ai_preview_enabled: boolean;
   estimate_prefix: string | null;
   invoice_prefix: string | null;
   proposal_prefix: string | null;
@@ -50,6 +51,7 @@ export function toCompanyDto(company: Company): CompanyDto {
       ? Number(company.defaultMarkupPercent)
       : null,
     tax_inclusive_pricing: company.taxInclusivePricing,
+    default_ai_preview_enabled: company.defaultAiPreviewEnabled,
     estimate_prefix: company.estimatePrefix,
     invoice_prefix: company.invoicePrefix,
     proposal_prefix: company.proposalPrefix ?? null,

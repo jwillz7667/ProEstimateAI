@@ -44,6 +44,7 @@ async function verifyProjectOwnership(projectId: string, companyId: string) {
       recurrenceFrequency: true,
       visitsPerMonth: true,
       contractMonths: true,
+      aiPreviewEnabled: true,
       // qualityTier intentionally omitted; treated as Auto (null) downstream.
     },
   });
@@ -196,6 +197,7 @@ async function processGeneration(
   projectId: string,
   companyId: string,
   userId: string,
+  shouldGenerateImage: boolean,
 ) {
   try {
     // Mark as PROCESSING
@@ -203,6 +205,54 @@ async function processGeneration(
       where: { id: generationId },
       data: { status: "PROCESSING" },
     });
+
+    // Text-only path: skip image generation entirely (service trades, or the
+    // global "no images" setting). Mark COMPLETED with no preview, still fire
+    // the ready notification, and run the material/labor/estimate pipeline.
+    if (!shouldGenerateImage) {
+      await prisma.aIGeneration.update({
+        where: { id: generationId },
+        data: { status: "COMPLETED" },
+      });
+
+      logger.info(
+        { generationId },
+        "Generation completed (text-only — image generation skipped)",
+      );
+
+      sendGenerationReady(userId, {
+        generationId,
+        projectId,
+        projectTitle: context.projectTitle,
+      }).catch((err) =>
+        logger.warn(
+          { err, generationId },
+          "APNs send failed for text-only generation (non-critical)",
+        ),
+      );
+
+      // Fire-and-forget, mirroring the image path: the estimate output for a
+      // text-only generation is the COMPLETED record itself, so material/labor
+      // suggestion is non-critical. Awaiting it inside this try would let a
+      // transient Gemini failure flip an already-COMPLETED generation back to
+      // FAILED — a regression the client would surface as a hard error. The
+      // iOS wizard polls the materials endpoint separately and degrades
+      // gracefully if they never arrive.
+      generateAndStoreMaterials(
+        generationId,
+        projectId,
+        companyId,
+        userId,
+        prompt,
+        context,
+      ).catch((err) => {
+        logger.error(
+          { err, generationId },
+          "Material suggestion generation failed (non-critical, text-only)",
+        );
+      });
+      return;
+    }
 
     // Check that at least one image generation provider is configured
     if (!env.PIAPI_API_KEY && !env.GOOGLE_AI_API_KEY) {
@@ -470,6 +520,12 @@ const DEFAULT_LABOR_BY_PROJECT_TYPE: Record<
   SIDING: { hours: 18, rate: 42 },
   ROOM_REMODEL: { hours: 24, rate: 45 },
   EXTERIOR: { hours: 16, rate: 40 },
+  // OUTDOOR_LIVING (deck / patio / pergola builds) and GARAGE (build-out) are
+  // multi-day remodels. Without explicit entries they fell through to the
+  // CUSTOM fallback ($756), which badly under-bids a structural outdoor build.
+  // These conservative defaults only fire when the AI returns no labor rows.
+  OUTDOOR_LIVING: { hours: 40, rate: 50 },
+  GARAGE: { hours: 28, rate: 45 },
   // LANDSCAPING is a one-time install; a typical small front-yard refresh
   // (planting + mulch + edging) lands in the 20-30 hr crew range.
   LANDSCAPING: { hours: 24, rate: 45 },
@@ -478,6 +534,22 @@ const DEFAULT_LABOR_BY_PROJECT_TYPE: Record<
   // DeepSeek's per-visit labor estimate, but the fallback keeps the
   // auto-estimate path resilient.
   LAWN_CARE: { hours: 3, rate: 40 },
+  // Home-service trades are short service calls billed at a tradesperson
+  // rate, not multi-day remodels. These fallbacks only matter when DeepSeek
+  // returns no labor; the real per-visit estimate should always win.
+  PLUMBING: { hours: 2, rate: 95 },
+  ELECTRICAL: { hours: 2, rate: 95 },
+  HVAC: { hours: 3, rate: 90 },
+  APPLIANCE_REPAIR: { hours: 1.5, rate: 85 },
+  HANDYMAN: { hours: 3, rate: 65 },
+  PEST_CONTROL: { hours: 1, rate: 70 },
+  HOUSE_CLEANING: { hours: 3, rate: 45 },
+  JUNK_REMOVAL: { hours: 2, rate: 55 },
+  PRESSURE_WASHING: { hours: 3, rate: 55 },
+  GUTTER_SERVICES: { hours: 2.5, rate: 55 },
+  FENCING: { hours: 16, rate: 50 },
+  GARAGE_DOOR: { hours: 2, rate: 80 },
+  WINDOW_CLEANING: { hours: 2.5, rate: 45 },
   CUSTOM: { hours: 18, rate: 42 },
 };
 
@@ -758,6 +830,11 @@ export async function create(
   imageContext.materials = toMaterialSpecs(data.materials);
   const systemPrompt = getSystemPrompt(imageContext);
 
+  // Resolve the image switch: an explicit per-request override wins,
+  // otherwise honor the project's stored flag. When false the background
+  // job skips image generation and produces a text-only estimate.
+  const shouldGenerateImage = data.generate_preview ?? project.aiPreviewEnabled;
+
   // Throws PaywallError on block (admin, trial, or pro within caps → returns).
   await gateAIAction({ userId, companyId, metric: "AI_GENERATION" });
 
@@ -792,7 +869,8 @@ export async function create(
     kind: "image_preview",
   });
 
-  // Fire-and-forget background image generation.
+  // Fire-and-forget background processing. When shouldGenerateImage is
+  // false this produces a text-only estimate (no preview image).
   processGeneration(
     generation.id,
     data.prompt,
@@ -800,6 +878,7 @@ export async function create(
     projectId,
     companyId,
     userId,
+    shouldGenerateImage,
   ).catch(() => {});
 
   return generation;

@@ -53,6 +53,9 @@ export async function updateMe(companyId: string, data: UpdateCompanyInput) {
       ...(data.tax_inclusive_pricing !== undefined && {
         taxInclusivePricing: data.tax_inclusive_pricing,
       }),
+      ...(data.default_ai_preview_enabled !== undefined && {
+        defaultAiPreviewEnabled: data.default_ai_preview_enabled,
+      }),
       ...(data.estimate_prefix !== undefined && {
         estimatePrefix: data.estimate_prefix,
       }),

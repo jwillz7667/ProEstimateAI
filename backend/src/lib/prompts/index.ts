@@ -26,6 +26,7 @@ import * as roomRemodel from "./room-remodel";
 import * as exterior from "./exterior";
 import * as landscaping from "./landscaping";
 import * as lawnCare from "./lawn-care";
+import * as service from "./service";
 import * as customFallback from "./custom";
 
 const REGISTRY: Record<string, PromptModule> = {
@@ -39,6 +40,21 @@ const REGISTRY: Record<string, PromptModule> = {
   EXTERIOR: exterior,
   LANDSCAPING: landscaping,
   LAWN_CARE: lawnCare,
+  // Home-service trades — all share the service-call prompt module, which
+  // differentiates per trade internally.
+  PLUMBING: service,
+  ELECTRICAL: service,
+  HVAC: service,
+  APPLIANCE_REPAIR: service,
+  HANDYMAN: service,
+  PEST_CONTROL: service,
+  HOUSE_CLEANING: service,
+  JUNK_REMOVAL: service,
+  PRESSURE_WASHING: service,
+  GUTTER_SERVICES: service,
+  FENCING: service,
+  GARAGE_DOOR: service,
+  WINDOW_CLEANING: service,
   CUSTOM: customFallback,
 };
 

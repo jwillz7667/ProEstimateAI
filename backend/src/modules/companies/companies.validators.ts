@@ -16,6 +16,7 @@ export const updateCompanySchema = z.object({
   default_tax_rate: z.number().min(0).max(100).nullable().optional(),
   default_markup_percent: z.number().min(0).max(999).nullable().optional(),
   tax_inclusive_pricing: z.boolean().optional(),
+  default_ai_preview_enabled: z.boolean().optional(),
   estimate_prefix: z.string().max(10).nullable().optional(),
   invoice_prefix: z.string().max(10).nullable().optional(),
   proposal_prefix: z.string().max(10).nullable().optional(),

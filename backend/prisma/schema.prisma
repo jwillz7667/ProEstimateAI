@@ -29,6 +29,23 @@ enum ProjectType {
   LAWN_CARE
   OUTDOOR_LIVING
   GARAGE
+  // Home-service trades. Unlike remodel types these are not "before/after"
+  // visual jobs — they're service calls where the contractor bids labor +
+  // parts without redesigning anything, so they default to no reference
+  // photo and no AI design preview (see Project.aiPreviewEnabled).
+  PLUMBING
+  ELECTRICAL
+  HVAC
+  APPLIANCE_REPAIR
+  HANDYMAN
+  PEST_CONTROL
+  HOUSE_CLEANING
+  JUNK_REMOVAL
+  PRESSURE_WASHING
+  GUTTER_SERVICES
+  FENCING
+  GARAGE_DOOR
+  WINDOW_CLEANING
   CUSTOM
 }
 
@@ -243,6 +260,11 @@ model Company {
   websiteUrl           String?
   taxLabel             String?  @default("Tax")
   taxInclusivePricing  Boolean  @default(false)
+  // Company-wide default for whether new projects generate an AI design
+  // preview. Seeds Project.aiPreviewEnabled at creation; service trades
+  // can still override per-project. Contractors who never want renders
+  // flip this off once instead of per estimate.
+  defaultAiPreviewEnabled Boolean @default(true)
   appearanceMode       String?  @default("system")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -337,6 +359,12 @@ model Project {
   squareFootage Decimal?      @db.Decimal(10, 2)
   dimensions    String?
   language      String?       @default("en")
+
+  // When false the AI pipeline skips image generation entirely and produces
+  // a text-only estimate (materials + labor + auto-estimate). Seeded from
+  // Company.defaultAiPreviewEnabled and the project type at creation: service
+  // trades (PLUMBING, HVAC, …) default false, remodel types default true.
+  aiPreviewEnabled Boolean @default(true)
 
   // Property measurements — populated by maps integration (lawn polygon
   // measurement, roof segment analysis from Google Solar API). When present

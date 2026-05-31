@@ -14,6 +14,10 @@ export interface ProjectDto {
   square_footage: number | null;
   dimensions: string | null;
   language: string | null;
+  // When false the AI pipeline produced (or will produce) a text-only
+  // estimate with no image. Drives the iOS detail screen to hide the
+  // before/after preview section.
+  ai_preview_enabled: boolean;
   // Property measurements populated by maps integration. Optional and
   // nullable so older client builds that don't expect them keep working.
   lawn_area_sq_ft: number | null;
@@ -63,6 +67,7 @@ export function toProjectDto(
       : null,
     dimensions: project.dimensions,
     language: project.language,
+    ai_preview_enabled: project.aiPreviewEnabled,
     lawn_area_sq_ft: project.lawnAreaSqFt ? Number(project.lawnAreaSqFt) : null,
     roof_area_sq_ft: project.roofAreaSqFt ? Number(project.roofAreaSqFt) : null,
     property_latitude: project.propertyLatitude
@@ -106,6 +111,7 @@ export function toProjectListDto(
       : null,
     dimensions: project.dimensions,
     language: project.language,
+    ai_preview_enabled: project.aiPreviewEnabled,
     lawn_area_sq_ft: project.lawnAreaSqFt ? Number(project.lawnAreaSqFt) : null,
     roof_area_sq_ft: project.roofAreaSqFt ? Number(project.roofAreaSqFt) : null,
     property_latitude: project.propertyLatitude

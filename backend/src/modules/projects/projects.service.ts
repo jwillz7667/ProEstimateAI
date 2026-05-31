@@ -11,6 +11,26 @@ import {
 } from "../../lib/pagination";
 import { CreateProjectInput, UpdateProjectInput } from "./projects.validators";
 
+// Home-service trades bid labor + parts without redesigning anything, so an
+// AI "after" render adds nothing. When the client doesn't specify, these
+// default to no image regardless of the company default. Remodel/visual
+// types fall back to the company-wide default instead.
+const SERVICE_TRADE_TYPES: ReadonlySet<ProjectType> = new Set<ProjectType>([
+  "PLUMBING",
+  "ELECTRICAL",
+  "HVAC",
+  "APPLIANCE_REPAIR",
+  "HANDYMAN",
+  "PEST_CONTROL",
+  "HOUSE_CLEANING",
+  "JUNK_REMOVAL",
+  "PRESSURE_WASHING",
+  "GUTTER_SERVICES",
+  "FENCING",
+  "GARAGE_DOOR",
+  "WINDOW_CLEANING",
+]);
+
 export async function list(companyId: string, pagination: PaginationParams) {
   const { cursor, pageSize = 25 } = pagination;
 
@@ -31,6 +51,7 @@ export async function list(companyId: string, pagination: PaginationParams) {
       squareFootage: true,
       dimensions: true,
       language: true,
+      aiPreviewEnabled: true,
       lawnAreaSqFt: true,
       roofAreaSqFt: true,
       propertyLatitude: true,
@@ -122,6 +143,7 @@ export async function getById(id: string, companyId: string) {
       squareFootage: true,
       dimensions: true,
       language: true,
+      aiPreviewEnabled: true,
       lawnAreaSqFt: true,
       roofAreaSqFt: true,
       propertyLatitude: true,
@@ -154,12 +176,34 @@ export async function create(
   // renders as the upgrade sheet.
   await gateAIAction({ userId, companyId, metric: "PROJECT_CREATED" });
 
+  const resolvedType: ProjectType = data.project_type
+    ? (data.project_type.toUpperCase() as ProjectType)
+    : "CUSTOM";
+
+  // Resolve the image switch: explicit client value wins; otherwise service
+  // trades default off, and everything else follows the company-wide default
+  // (which itself defaults true). Only hit the company row when we actually
+  // need the fallback.
+  let aiPreviewEnabled: boolean;
+  if (data.ai_preview_enabled !== undefined) {
+    aiPreviewEnabled = data.ai_preview_enabled;
+  } else if (SERVICE_TRADE_TYPES.has(resolvedType)) {
+    aiPreviewEnabled = false;
+  } else {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { defaultAiPreviewEnabled: true },
+    });
+    aiPreviewEnabled = company?.defaultAiPreviewEnabled ?? true;
+  }
+
   const project = await prisma.project.create({
     data: {
       companyId,
       title: data.title,
       clientId: data.client_id ?? null,
       description: data.description ?? null,
+      aiPreviewEnabled,
       projectType: data.project_type
         ? (data.project_type.toUpperCase() as ProjectType)
         : undefined,
@@ -243,6 +287,9 @@ export async function update(
       }),
       ...(data.dimensions !== undefined && { dimensions: data.dimensions }),
       ...(data.language !== undefined && { language: data.language }),
+      ...(data.ai_preview_enabled !== undefined && {
+        aiPreviewEnabled: data.ai_preview_enabled,
+      }),
       ...(data.lawn_area_sq_ft !== undefined && {
         lawnAreaSqFt: data.lawn_area_sq_ft,
       }),

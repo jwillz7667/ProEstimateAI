@@ -15,6 +15,19 @@ export type ProjectType =
   | "LAWN_CARE"
   | "OUTDOOR_LIVING"
   | "GARAGE"
+  | "PLUMBING"
+  | "ELECTRICAL"
+  | "HVAC"
+  | "APPLIANCE_REPAIR"
+  | "HANDYMAN"
+  | "PEST_CONTROL"
+  | "HOUSE_CLEANING"
+  | "JUNK_REMOVAL"
+  | "PRESSURE_WASHING"
+  | "GUTTER_SERVICES"
+  | "FENCING"
+  | "GARAGE_DOOR"
+  | "WINDOW_CLEANING"
   | "CUSTOM";
 
 export type ProjectStatus =
