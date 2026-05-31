@@ -45,6 +45,9 @@ fastlane/test_output/
 *.mobileprovision
 *.p8
 *.p12
+*.cer
+*.certSigningRequest
+/fastlane/signing/
 .secrets-staging/
 
 /app-store-listing/
