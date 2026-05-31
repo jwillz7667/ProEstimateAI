@@ -32,6 +32,137 @@ def make_api_key
   )
 end
 
+# Build a Spaceship::ConnectAPI token from the same env vars `make_api_key`
+# uses. Idempotent — returns the already-active token on subsequent calls
+# so chained lanes (metadata_assets → metadata_screenshots + metadata_preview)
+# don't churn through key files. `deliver` does its own auth via api_key,
+# but the metadata_preview lane and the editable-version probe both need
+# direct Spaceship access.
+def setup_spaceship_token
+  require "spaceship"
+  require "base64"
+
+  return Spaceship::ConnectAPI.token if Spaceship::ConnectAPI.token
+
+  raw = ENV.fetch("APP_STORE_CONNECT_API_KEY_CONTENT").strip
+  is_pem = raw.include?("BEGIN PRIVATE KEY")
+  token = if is_pem
+            tmp_key = File.join(Dir.mktmpdir("asc_helper"), "AuthKey.p8")
+            File.write(tmp_key, raw)
+            Spaceship::ConnectAPI::Token.create(
+              key_id:    ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+              issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+              filepath:  tmp_key
+            )
+          else
+            Spaceship::ConnectAPI::Token.create(
+              key_id:    ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+              issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+              key:       Base64.decode64(raw)
+            )
+          end
+  Spaceship::ConnectAPI.token = token
+  token
+end
+
+# Read the current MARKETING_VERSION from the Xcode project file.
+# Used by every lane that needs to address a specific App Store version
+# (submit, metadata_*, etc.) — pinning to the project file rather than
+# "newest in ASC" prevents accidentally attaching metadata to a prior
+# train when ASC is still indexing a fresh upload.
+def project_marketing_version
+  pbx_path = File.expand_path("../#{XCODE_PROJECT}/project.pbxproj", __dir__)
+  match = File.read(pbx_path).match(/MARKETING_VERSION = ([0-9.]+);/)
+  UI.user_error!("Could not determine MARKETING_VERSION from #{pbx_path}") if match.nil? || match[1].to_s.empty?
+  match[1]
+end
+
+# Ensure an editable App Store version exists for the project's current
+# MARKETING_VERSION on the iOS platform. Idempotent.
+#
+# Why: bumping CFBundleShortVersionString uploads a build under a new
+# pre-release train but does NOT auto-create the corresponding App Store
+# version. Without an editable version (states: PREPARE_FOR_SUBMISSION,
+# DEVELOPER_REJECTED, REJECTED, METADATA_REJECTED, INVALID_BINARY,
+# WAITING_FOR_REVIEW), `deliver` and the AppPreviewSet API both fail
+# with "Could not find a version to edit". This helper creates one via
+# the createAppStoreVersion API when missing so metadata-only lanes can
+# run before (or without ever running) the full `submit` flow.
+#
+# `app` is a Spaceship::ConnectAPI::App. Returns the App Store version id.
+def ensure_editable_app_store_version(app)
+  require "net/http"
+  require "json"
+  require "uri"
+
+  setup_spaceship_token
+  target_version = project_marketing_version
+  UI.message("Ensuring editable App Store version #{target_version} exists...")
+
+  asc_request = lambda do |method, path, body = nil|
+    uri = URI.parse("https://api.appstoreconnect.apple.com/v1/#{path}")
+    req = case method
+          when :get  then Net::HTTP::Get.new(uri)
+          when :post then Net::HTTP::Post.new(uri)
+          else raise "Unsupported HTTP method #{method}"
+          end
+    req["Authorization"] = "Bearer #{Spaceship::ConnectAPI.token.text}"
+    req["Content-Type"]  = "application/json"
+    req.body = body.to_json if body
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    res = http.request(req)
+    parsed = res.body && !res.body.empty? ? JSON.parse(res.body) : {}
+    [res.code.to_i, parsed]
+  end
+
+  get_code, get_body = asc_request.call(
+    :get,
+    "apps/#{app.id}/appStoreVersions?filter[platform]=IOS&filter[versionString]=#{target_version}&limit=10"
+  )
+  UI.user_error!("ASC GET appStoreVersions failed (#{get_code}): #{get_body.inspect}") if get_code >= 400
+
+  matching = get_body["data"] || []
+  # WAITING_FOR_REVIEW is also editable for metadata purposes — Apple
+  # accepts updates until the build enters IN_REVIEW.
+  editable_states = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED REJECTED METADATA_REJECTED INVALID_BINARY WAITING_FOR_REVIEW]
+  editable = matching.find { |v| editable_states.include?(v.dig("attributes", "appStoreState")) }
+
+  if editable
+    UI.success("Editable App Store version #{target_version} already exists (#{editable['id']}, state: #{editable.dig('attributes', 'appStoreState')})")
+    return editable["id"]
+  end
+
+  unless matching.empty?
+    states = matching.map { |v| v.dig("attributes", "appStoreState") }.uniq
+    UI.user_error!("App Store version #{target_version} exists but is in non-editable state(s): #{states.join(', ')}. Bump MARKETING_VERSION or wait for the current train to clear.")
+  end
+
+  UI.message("Creating App Store version #{target_version} for IOS platform...")
+  create_code, create_body = asc_request.call(:post, "appStoreVersions", {
+    data: {
+      type: "appStoreVersions",
+      attributes: {
+        platform:      "IOS",
+        versionString: target_version,
+        releaseType:   "MANUAL"
+      },
+      relationships: {
+        app: { data: { type: "apps", id: app.id } }
+      }
+    }
+  })
+  if create_code >= 400
+    UI.user_error!("Failed to create App Store version #{target_version} (#{create_code}): #{(create_body.dig('errors') || []).map { |e| e['detail'] }.join('; ')}")
+  end
+  new_id = create_body.dig("data", "id")
+  UI.success("Created App Store version #{target_version} (#{new_id})")
+  # Give ASC a beat to propagate the new version + auto-create localizations
+  # before downstream calls (deliver, get_app_store_version_localizations) race it.
+  sleep 5
+  new_id
+end
+
 platform :ios do
   desc "Build the project from a clean checkout and push it to TestFlight"
   lane :beta do
@@ -219,8 +350,14 @@ platform :ios do
 
   desc "Push screenshots only (no metadata)."
   lane :metadata_screenshots do
+    setup_spaceship_token
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+    ensure_editable_app_store_version(app)
+
     deliver(
       api_key:                           make_api_key,
+      app_version:                       project_marketing_version,
       skip_binary_upload:                true,
       skip_screenshots:                  false,
       skip_metadata:                     true,
@@ -232,65 +369,41 @@ platform :ios do
   desc "Upload the iPhone 6.9 app preview video to ASC for the editable version. " \
        "deliver doesn't handle .mov files, so this lane drives the AppPreviewSet API directly."
   lane :metadata_preview do
-    require "spaceship"
-    require "base64"
-
-    # ----------------------------------------------------------------
-    # Build a Spaceship token. Mirrors the auth pattern in `submit` so
-    # the lane works with the same APP_STORE_CONNECT_API_KEY_* env that
-    # the rest of CI already provides.
-    # ----------------------------------------------------------------
-    key_content = ENV.fetch("APP_STORE_CONNECT_API_KEY_CONTENT").strip
-    key_is_pem  = key_content.include?("BEGIN PRIVATE KEY")
-    token = if key_is_pem
-              tmp_key = File.join(Dir.mktmpdir("asc_preview"), "AuthKey.p8")
-              File.write(tmp_key, key_content)
-              Spaceship::ConnectAPI::Token.create(
-                key_id:    ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
-                issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
-                filepath:  tmp_key
-              )
-            else
-              Spaceship::ConnectAPI::Token.create(
-                key_id:    ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
-                issuer_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
-                key:       Base64.decode64(key_content)
-              )
-            end
-    Spaceship::ConnectAPI.token = token
+    setup_spaceship_token
 
     app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
     UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+
+    # Create the editable App Store version up-front if it's missing —
+    # otherwise the get_app_store_versions filter below returns empty and
+    # the lane bails. The helper is idempotent, so re-running this lane
+    # for an already-prepared version is a no-op.
+    ensure_editable_app_store_version(app)
 
     preview_path = File.expand_path("../fastlane/app_previews/iPhone_6.9_preview.mov", __dir__)
     UI.user_error!("Preview not found at #{preview_path}") unless File.exist?(preview_path)
     UI.message("Preview file: #{preview_path} (#{File.size(preview_path) / 1024 / 1024} MB)")
 
-    # Pin the target version from the project's MARKETING_VERSION so we
-    # never accidentally attach a preview to a previously-released
-    # train. Same pattern the `submit` lane uses.
-    pbx_path = File.expand_path("../#{XCODE_PROJECT}/project.pbxproj", __dir__)
-    pbx_match = File.read(pbx_path).match(/MARKETING_VERSION = ([0-9.]+);/)
-    target_version = pbx_match && pbx_match[1]
-    UI.user_error!("Could not determine MARKETING_VERSION from #{pbx_path}") if target_version.nil? || target_version.empty?
+    target_version = project_marketing_version
     UI.success("Target marketing version: #{target_version}")
 
     versions = app.get_app_store_versions(
       filter: { versionString: target_version, platform: "IOS" }
     )
     version = versions.first
-    UI.user_error!("No App Store version #{target_version} found — run `fastlane submit` (or create the version in ASC) first.") unless version
+    UI.user_error!("No App Store version #{target_version} found after ensure step — investigate ASC state.") unless version
     UI.message("App Store version #{target_version} (id: #{version.id}, state: #{version.app_store_state || version.app_version_state})")
 
     # ASC stores app previews on each AppStoreVersionLocalization; we
     # mirror the screenshots set across en-US + es-MX so users in
     # either storefront see the preview.
     locales = ["en-US", "es-MX"]
-    preview_type = "IPHONE_69" # 1290x2796 — Apple's enum string. The
-                                # Spaceship constant doesn't include this
-                                # value yet (the gem ships only up through
-                                # IPHONE_67), but the API accepts the raw
-                                # string so we pass it through directly.
+    # Apple's previewType enum uses IPHONE_67 for the 6.9" iPhone class
+    # (1290x2796) — the device-size label was rebranded from 6.7" → 6.9"
+    # when the iPhone 16 Pro Max shipped, but the API enum kept the
+    # historical name. Spaceship 2.233.1 confirms this in
+    # connect_api/models/app_preview_set.rb (IPHONE_67 # 6.9").
+    preview_type = Spaceship::ConnectAPI::AppPreviewSet::PreviewType::IPHONE_67
 
     locales.each do |locale|
       UI.message("─── #{locale} ─────────────────────────────────────────")

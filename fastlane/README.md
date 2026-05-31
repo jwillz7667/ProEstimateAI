@@ -47,6 +47,22 @@ Push text metadata only (name/subtitle/keywords/description/promo/notes). Skips 
 
 Push screenshots only (no metadata).
 
+### ios metadata_preview
+
+```sh
+[bundle exec] fastlane ios metadata_preview
+```
+
+Upload the iPhone 6.9 app preview video to ASC for the editable version. deliver doesn't handle .mov files, so this lane drives the AppPreviewSet API directly.
+
+### ios metadata_assets
+
+```sh
+[bundle exec] fastlane ios metadata_assets
+```
+
+Push screenshots + app preview in one go (no metadata, no binary).
+
 ### ios submit
 
 ```sh
