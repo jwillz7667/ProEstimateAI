@@ -18,6 +18,10 @@ struct ProjectEditSheet: View {
     @State private var budgetMaxText: String
     @State private var squareFootageText: String
     @State private var dimensions: String
+    /// Whether the project generates an AI design preview. Service trades
+    /// seed this off at creation; the contractor can flip it here for any
+    /// project (e.g. turn a fencing job's before/after preview back on).
+    @State private var aiPreviewEnabled: Bool
 
     @State private var isSaving: Bool = false
     @State private var errorMessage: String?
@@ -42,6 +46,7 @@ struct ProjectEditSheet: View {
         _budgetMaxText = State(initialValue: project.budgetMax.map { "\($0)" } ?? "")
         _squareFootageText = State(initialValue: project.squareFootage.map { "\($0)" } ?? "")
         _dimensions = State(initialValue: project.dimensions ?? "")
+        _aiPreviewEnabled = State(initialValue: project.aiPreviewEnabled)
     }
 
     // MARK: - Computed
@@ -57,6 +62,7 @@ struct ProjectEditSheet: View {
                 descriptionSection
                 typeSection
                 qualitySection
+                aiPreviewSection
                 budgetSection
                 squareFootageSection
                 dimensionsSection
@@ -142,6 +148,18 @@ struct ProjectEditSheet: View {
         }
     }
 
+    private var aiPreviewSection: some View {
+        Section {
+            Toggle("Generate AI design preview", isOn: $aiPreviewEnabled)
+                .tint(ColorTokens.primaryOrange)
+        } header: {
+            Text("AI Preview")
+        } footer: {
+            Text("On generates a before/after design image alongside the estimate. Turn off for service calls (plumbing, cleaning, repairs) where there's nothing to redesign — you'll still get an itemized materials and labor estimate.")
+                .font(TypographyTokens.caption)
+        }
+    }
+
     private var budgetSection: some View {
         Section {
             HStack(spacing: SpacingTokens.sm) {
@@ -209,6 +227,7 @@ struct ProjectEditSheet: View {
                 ? nil
                 : dimensions.trimmingCharacters(in: .whitespacesAndNewlines),
             language: project.language,
+            aiPreviewEnabled: aiPreviewEnabled,
             // Project edit sheet doesn't expose recurrence today; preserve
             // whatever the project already has by passing the existing
             // values through unchanged.

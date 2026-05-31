@@ -132,6 +132,36 @@ extension LineItemDraft {
             return ("Outdoor Living Install Labor", 65, 40)
         case .garage:
             return ("Garage Build-Out Labor", 60, 28)
+        // Home-service trades price a service call: a diagnostic/labor line
+        // dominates and there's no large material take-off. Rates and hours
+        // mirror the backend's DEFAULT_LABOR_BY_PROJECT_TYPE so a manually
+        // added line matches what the AI estimate would seed.
+        case .plumbing:
+            return ("Plumbing Service Labor", 95, 2)
+        case .electrical:
+            return ("Electrical Service Labor", 95, 2)
+        case .hvac:
+            return ("HVAC Service Labor", 90, 3)
+        case .applianceRepair:
+            return ("Appliance Repair Labor", 85, 1.5)
+        case .handyman:
+            return ("Handyman Labor", 65, 3)
+        case .pestControl:
+            return ("Pest Control Service (per visit)", 70, 1)
+        case .houseCleaning:
+            return ("House Cleaning (per visit)", 45, 3)
+        case .junkRemoval:
+            return ("Junk Removal Labor", 55, 2)
+        case .pressureWashing:
+            return ("Pressure Washing Labor", 55, 3)
+        case .gutterServices:
+            return ("Gutter Service Labor", 55, 2.5)
+        case .fencing:
+            return ("Fence Installation Labor", 50, 16)
+        case .garageDoor:
+            return ("Garage Door Service Labor", 80, 2)
+        case .windowCleaning:
+            return ("Window Cleaning (per visit)", 45, 2.5)
         case .custom:
             return ("General Contractor Labor", 65, 20)
         }

@@ -262,6 +262,33 @@ struct SettingsView: View {
                 }
             }
 
+            // AI Previews Section — company-wide default for whether new
+            // estimates generate a before/after design image. Service trades
+            // (plumbing, cleaning, repairs) always skip the image regardless;
+            // this default governs the remodel-style trades.
+            Section {
+                Label {
+                    Toggle(isOn: Binding(
+                        get: { viewModel.defaultAiPreviewEnabled },
+                        set: { newValue in
+                            viewModel.defaultAiPreviewEnabled = newValue
+                            Task { await viewModel.saveDefaultAiPreviewImmediately() }
+                        }
+                    )) {
+                        Text("Generate AI design previews")
+                    }
+                    .tint(ColorTokens.primaryOrange)
+                } icon: {
+                    Image(systemName: "wand.and.stars")
+                        .foregroundStyle(ColorTokens.primaryOrange)
+                }
+            } header: {
+                Text("AI Previews")
+            } footer: {
+                Text("When on, new remodel estimates generate a before/after design image. Turn off to make every estimate text-only by default — you'll still get itemized materials and labor. Service jobs like plumbing, cleaning, and repairs always skip the image. You can override this per project.")
+                    .font(TypographyTokens.caption)
+            }
+
             // Subscription Section
             Section("Subscription") {
                 HStack {

@@ -104,6 +104,11 @@ final class LiveSettingsService: SettingsServiceProtocol, Sendable {
         let body = AppearanceBody(appearanceMode: mode.persistenceValue)
         return try await apiClient.request(.updateCompany(body: body))
     }
+
+    func saveDefaultAiPreview(_ enabled: Bool) async throws -> Company {
+        let body = DefaultAiPreviewBody(defaultAiPreviewEnabled: enabled)
+        return try await apiClient.request(.updateCompany(body: body))
+    }
 }
 
 // MARK: - Request Bodies
@@ -147,6 +152,11 @@ private struct LanguageBody: Encodable, Sendable {
 /// Partial company update body for the appearance preference.
 private struct AppearanceBody: Encodable, Sendable {
     let appearanceMode: String
+}
+
+/// Partial company update body for the company-wide AI-preview default.
+private struct DefaultAiPreviewBody: Encodable, Sendable {
+    let defaultAiPreviewEnabled: Bool
 }
 
 /// Logo upload body — base64-encoded payload + explicit MIME so the server

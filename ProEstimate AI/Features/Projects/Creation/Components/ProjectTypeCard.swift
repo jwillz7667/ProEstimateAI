@@ -66,9 +66,18 @@ struct ProjectTypeCard: View {
         Color.clear
             .aspectRatio(4 / 3, contentMode: .fit)
             .overlay {
-                Image(projectType.thumbnailAssetName)
-                    .resizable()
-                    .scaledToFill()
+                // Remodel categories ship a curated photo under
+                // `CategoryTiles/`. Home-service trades have none — there's
+                // no "after look" to photograph — so render a branded SF
+                // Symbol hero in their place. `hasPhotoTile` keys off
+                // `ProjectType.isServiceTrade`.
+                if projectType.hasPhotoTile {
+                    Image(projectType.thumbnailAssetName)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    iconHero
+                }
             }
             .clipped()
             .overlay {
@@ -83,6 +92,24 @@ struct ProjectTypeCard: View {
                 )
             }
             .accessibilityHidden(true)
+    }
+
+    /// Branded icon hero for service trades that lack a photographic tile.
+    private var iconHero: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    ColorTokens.primaryOrange.opacity(0.92),
+                    ColorTokens.primaryOrange.opacity(0.58),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            Image(systemName: projectType.iconName)
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.18), radius: 2, x: 0, y: 1)
+        }
     }
 
     // MARK: - Label Strip

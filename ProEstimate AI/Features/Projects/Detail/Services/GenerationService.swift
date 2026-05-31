@@ -33,7 +33,11 @@ struct MaterialSpec: Encodable, Sendable, Hashable {
 /// The mock implementation simulates asynchronous progress through
 /// the five generation stages.
 protocol GenerationServiceProtocol: Sendable {
-    func startGeneration(projectId: String, prompt: String, materials: [MaterialSpec]?) async throws -> AIGeneration
+    /// `generatePreview` controls whether the backend renders an AI design
+    /// image for this generation. `nil` lets the backend fall back to the
+    /// project's `aiPreviewEnabled` flag; an explicit value overrides it
+    /// (service trades pass `false` to produce a text-only estimate).
+    func startGeneration(projectId: String, prompt: String, materials: [MaterialSpec]?, generatePreview: Bool?) async throws -> AIGeneration
     func getGenerationStatus(id: String) async throws -> AIGeneration
     func listGenerations(projectId: String) async throws -> [AIGeneration]
 }
@@ -43,7 +47,7 @@ protocol GenerationServiceProtocol: Sendable {
 final class MockGenerationService: GenerationServiceProtocol {
     private let simulatedDelay: UInt64 = 600_000_000
 
-    func startGeneration(projectId: String, prompt: String, materials: [MaterialSpec]? = nil) async throws -> AIGeneration {
+    func startGeneration(projectId: String, prompt: String, materials: [MaterialSpec]? = nil, generatePreview: Bool? = nil) async throws -> AIGeneration {
         try await Task.sleep(nanoseconds: simulatedDelay)
 
         return AIGeneration(

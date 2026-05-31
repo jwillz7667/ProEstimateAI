@@ -29,6 +29,11 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
     let websiteUrl: String?
     let taxLabel: String?
     let appearanceMode: String?
+    /// Company-wide default for whether new projects generate an AI design
+    /// preview image. A contractor can switch this off so every estimate is
+    /// text-only by default; per-project and per-generation overrides still
+    /// win. Service-trade project types ignore this and always seed off.
+    let defaultAiPreviewEnabled: Bool
     let createdAt: Date
     let updatedAt: Date
 
@@ -58,6 +63,7 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
         case websiteUrl = "website_url"
         case taxLabel = "tax_label"
         case appearanceMode = "appearance_mode"
+        case defaultAiPreviewEnabled = "default_ai_preview_enabled"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -93,6 +99,7 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
         websiteUrl = try c.decodeIfPresent(String.self, forKey: .websiteUrl)
         taxLabel = try c.decodeIfPresent(String.self, forKey: .taxLabel)
         appearanceMode = try c.decodeIfPresent(String.self, forKey: .appearanceMode)
+        defaultAiPreviewEnabled = try c.decodeIfPresent(Bool.self, forKey: .defaultAiPreviewEnabled) ?? true
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
     }
@@ -123,6 +130,7 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
         websiteUrl: String?,
         taxLabel: String?,
         appearanceMode: String? = nil,
+        defaultAiPreviewEnabled: Bool = true,
         createdAt: Date,
         updatedAt: Date
     ) {
@@ -151,6 +159,7 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
         self.websiteUrl = websiteUrl
         self.taxLabel = taxLabel
         self.appearanceMode = appearanceMode
+        self.defaultAiPreviewEnabled = defaultAiPreviewEnabled
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

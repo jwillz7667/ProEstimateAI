@@ -27,6 +27,12 @@ final class AppState {
         let websiteUrl: String?
         let primaryColorHex: String?
         let logoURL: URL?
+        /// Company-wide default for whether new projects generate an AI design
+        /// preview. Seeds the creation wizard's per-project toggle so a
+        /// contractor who turned previews off company-wide starts every new
+        /// remodel estimate text-only. Service trades ignore this and seed off
+        /// regardless.
+        let defaultAiPreviewEnabled: Bool
 
         /// Single source of truth for mapping a full `Company` record into
         /// the lightweight snapshot. Composes the multi-line address from
@@ -46,7 +52,8 @@ final class AppState {
                 ),
                 websiteUrl: company.websiteUrl,
                 primaryColorHex: company.primaryColor,
-                logoURL: company.logoURL
+                logoURL: company.logoURL,
+                defaultAiPreviewEnabled: company.defaultAiPreviewEnabled
             )
         }
 

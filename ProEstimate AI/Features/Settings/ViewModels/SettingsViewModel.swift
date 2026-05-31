@@ -71,6 +71,13 @@ final class SettingsViewModel {
 
     var selectedLanguage: AppLanguage = .english
 
+    // MARK: - AI Preview Settings
+
+    /// Company-wide default for whether new projects generate an AI design
+    /// preview image. Seeds the creation wizard's per-project toggle; service
+    /// trades always seed off regardless of this value.
+    var defaultAiPreviewEnabled: Bool = true
+
     // MARK: - Computed
 
     /// Preview of the next estimate number.
@@ -215,6 +222,24 @@ final class SettingsViewModel {
             apply(updated: updated)
             markSaved()
         } catch {
+            saveStatus = .failed(message: error.localizedDescription)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Save the company-wide AI-preview default immediately on toggle. A
+    /// toggle is a single deliberate action — no debounce needed. On failure
+    /// we revert the local value so the switch reflects persisted truth.
+    func saveDefaultAiPreviewImmediately() async {
+        guard !isHydrating else { return }
+        let desired = defaultAiPreviewEnabled
+        saveStatus = .saving
+        do {
+            let updated = try await service.saveDefaultAiPreview(desired)
+            apply(updated: updated)
+            markSaved()
+        } catch {
+            defaultAiPreviewEnabled = !desired
             saveStatus = .failed(message: error.localizedDescription)
             errorMessage = error.localizedDescription
         }
@@ -433,6 +458,7 @@ final class SettingsViewModel {
             // sync with the saved preference on returning sessions.
             appearanceStore?.applyRemote(language: parsed)
         }
+        defaultAiPreviewEnabled = updated.defaultAiPreviewEnabled
     }
 
     private func markSaved() {
@@ -463,6 +489,7 @@ final class SettingsViewModel {
         invoicePrefix = company.invoicePrefix ?? "INV"
         nextEstimateNumber = company.nextEstimateNumber
         nextInvoiceNumber = company.nextInvoiceNumber
+        defaultAiPreviewEnabled = company.defaultAiPreviewEnabled
 
         if let hex = company.primaryColor {
             primaryColor = Color(hex: UInt(hex.dropFirst(), radix: 16) ?? 0xF97316)

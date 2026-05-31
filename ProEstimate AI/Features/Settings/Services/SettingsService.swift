@@ -19,6 +19,10 @@ protocol SettingsServiceProtocol: Sendable {
     /// Persist the user's preferred appearance mode (system/light/dark).
     /// Returns the updated Company so callers can sync local UI state.
     func saveAppearanceMode(_ mode: AppearanceMode) async throws -> Company
+    /// Persist the company-wide default for whether new projects generate an
+    /// AI design preview image. Returns the updated Company so callers can
+    /// re-seed the creation wizard's per-project toggle.
+    func saveDefaultAiPreview(_ enabled: Bool) async throws -> Company
 }
 
 // MARK: - Update DTOs
@@ -207,6 +211,11 @@ final class MockSettingsService: SettingsServiceProtocol {
     }
 
     func saveAppearanceMode(_: AppearanceMode) async throws -> Company {
+        try await Task.sleep(nanoseconds: simulatedDelay)
+        return Company.sample
+    }
+
+    func saveDefaultAiPreview(_: Bool) async throws -> Company {
         try await Task.sleep(nanoseconds: simulatedDelay)
         return Company.sample
     }

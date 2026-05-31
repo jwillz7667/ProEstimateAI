@@ -19,6 +19,11 @@ struct ProjectCreationRequest: Codable, Sendable {
     let squareFootage: Decimal?
     let dimensions: String?
     let language: String?
+    /// Whether the project generates an AI design preview. nil → omit the
+    /// key so the backend applies its default (service trades off, visual
+    /// types follow the company default). Sent explicitly from the wizard
+    /// and the edit sheet so the user's choice is honored.
+    let aiPreviewEnabled: Bool?
     // Recurring contract terms — only sent for projects the wizard
     // configured as recurring (LAWN_CARE today). All optional so a
     // standard install bid carries the keys as null and the backend
@@ -40,6 +45,7 @@ struct ProjectCreationRequest: Codable, Sendable {
         case squareFootage = "square_footage"
         case dimensions
         case language
+        case aiPreviewEnabled = "ai_preview_enabled"
         case isRecurring = "is_recurring"
         case recurrenceFrequency = "recurrence_frequency"
         case visitsPerMonth = "visits_per_month"
@@ -68,6 +74,7 @@ struct ProjectCreationRequest: Codable, Sendable {
         try c.encodeIfPresent(squareFootage, forKey: .squareFootage)
         try c.encodeIfPresent(dimensions, forKey: .dimensions)
         try c.encodeIfPresent(language, forKey: .language)
+        try c.encodeIfPresent(aiPreviewEnabled, forKey: .aiPreviewEnabled)
         try c.encodeIfPresent(isRecurring, forKey: .isRecurring)
         try c.encodeIfPresent(recurrenceFrequency, forKey: .recurrenceFrequency)
         try c.encodeIfPresent(visitsPerMonth, forKey: .visitsPerMonth)

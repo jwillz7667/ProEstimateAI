@@ -16,6 +16,7 @@ struct ProjectCreationFlowView: View {
 
     @State private var viewModel = ProjectCreationViewModel()
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         NavigationStack {
@@ -50,6 +51,16 @@ struct ProjectCreationFlowView: View {
                 }
             }
             .interactiveDismissDisabled(viewModel.isPipelineRunning)
+        }
+        .onAppear {
+            // Seed the wizard's per-project AI-preview toggle from the
+            // company-wide default. The VM reads this lazily for remodel
+            // trades; service trades ignore it and stay off. Setting it here
+            // (rather than in the VM init) keeps the VM free of environment
+            // coupling and lets the value follow a mid-session settings change.
+            if let company = appState.currentCompany {
+                viewModel.companyDefaultGeneratesImage = company.defaultAiPreviewEnabled
+            }
         }
     }
 

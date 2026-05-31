@@ -117,6 +117,34 @@ final class ProjectCreationViewModel {
     /// so the contractor sets quality intent before generation runs.
     var qualityTier: Project.QualityTier? = nil
 
+    // MARK: - AI Preview Toggle
+
+    /// User's explicit override of the AI-preview default. `nil` until the
+    /// user flips the toggle — `aiPreviewEnabled` then falls back to the
+    /// type/company-derived seed so picking a category re-derives the
+    /// default the moment the user hasn't overridden it.
+    private var aiPreviewEnabledOverride: Bool?
+
+    /// Company-wide default for AI design previews, injected by the wizard
+    /// host from the current company snapshot. Service trades ignore this
+    /// (they always seed OFF — there's nothing to redesign); visual trades
+    /// follow it so a contractor can disable previews for every estimate
+    /// from Settings.
+    var companyDefaultGeneratesImage: Bool = true
+
+    /// Whether this project generates an AI design preview image. Service
+    /// trades (plumbing, electrical, cleaning, …) seed OFF; visual remodel
+    /// types follow the company default. The user can flip it per-project
+    /// on the Photos & Vision step; once flipped, the override sticks.
+    var aiPreviewEnabled: Bool {
+        get {
+            if let override = aiPreviewEnabledOverride { return override }
+            guard let type = selectedProjectType else { return companyDefaultGeneratesImage }
+            return type.isServiceTrade ? false : companyDefaultGeneratesImage
+        }
+        set { aiPreviewEnabledOverride = newValue }
+    }
+
     var squareFootage: Decimal? {
         Decimal(string: squareFootageText)
     }
@@ -206,14 +234,15 @@ final class ProjectCreationViewModel {
         case .type:
             return selectedProjectType != nil
         case .photos:
-            // Lawn-care projects don't need an uploaded photo — the
-            // generation works from the lawn-care prompt + the
-            // measured polygon captured in the next step. Other types
-            // still need at least one before-photo so the AI has a
-            // surface to remodel against. A resolved prompt (either a
-            // suggestion card or custom instructions) is always
-            // required.
-            if isLawnCareFlow {
+            // Service trades (plumbing, HVAC, …) and recurring lawn care
+            // don't need an uploaded photo — service trades aren't
+            // redesigning anything, and lawn care generates from its prompt
+            // + the measured polygon captured in the next step. Visual
+            // remodel types still need at least one before-photo so the AI
+            // has a surface to remodel against. A resolved prompt (either a
+            // suggestion card or custom instructions) is always required.
+            let needsPhoto = selectedProjectType?.requiresReferencePhoto ?? true
+            if !needsPhoto {
                 return hasResolvedPrompt
             }
             return !selectedImageData.isEmpty && hasResolvedPrompt
@@ -286,6 +315,19 @@ final class ProjectCreationViewModel {
         case .lawnCare: return "Lawn Care Contract"
         case .outdoorLiving: return "Outdoor Living Build"
         case .garage: return "Garage Build-Out"
+        case .plumbing: return "Plumbing Service"
+        case .electrical: return "Electrical Service"
+        case .hvac: return "HVAC Service"
+        case .applianceRepair: return "Appliance Repair"
+        case .handyman: return "Handyman Service"
+        case .pestControl: return "Pest Control Service"
+        case .houseCleaning: return "House Cleaning"
+        case .junkRemoval: return "Junk Removal"
+        case .pressureWashing: return "Pressure Washing"
+        case .gutterServices: return "Gutter Service"
+        case .fencing: return "Fence Installation"
+        case .garageDoor: return "Garage Door Service"
+        case .windowCleaning: return "Window Cleaning"
         case .custom: return "Custom Project"
         }
     }
@@ -435,6 +477,7 @@ final class ProjectCreationViewModel {
             squareFootage: squareFootage,
             dimensions: composedDimensions,
             language: detectedLanguage == "Spanish" ? "es" : "en",
+            aiPreviewEnabled: aiPreviewEnabled,
             isRecurring: isLawnCare ? true : nil,
             recurrenceFrequency: isLawnCare ? "weekly" : nil,
             visitsPerMonth: nil,
@@ -480,7 +523,8 @@ final class ProjectCreationViewModel {
             generation = try await generationService.startGeneration(
                 projectId: project.id,
                 prompt: resolvedPrompt,
-                materials: nil
+                materials: nil,
+                generatePreview: aiPreviewEnabled
             )
             // One starter credit was consumed inside the backend gate.
             UsageMeterStore.shared.recordGenerationConsumed()
@@ -624,7 +668,8 @@ final class ProjectCreationViewModel {
             let generation = try await generationService.startGeneration(
                 projectId: project.id,
                 prompt: resolvedPrompt,
-                materials: nil
+                materials: nil,
+                generatePreview: aiPreviewEnabled
             )
             UsageMeterStore.shared.recordGenerationConsumed()
             pendingGeneration = generation

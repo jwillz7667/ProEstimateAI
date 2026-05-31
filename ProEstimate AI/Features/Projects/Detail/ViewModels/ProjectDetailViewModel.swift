@@ -250,7 +250,8 @@ final class ProjectDetailViewModel {
             let generation = try await generationService.startGeneration(
                 projectId: project.id,
                 prompt: effectivePrompt,
-                materials: effectiveMaterials
+                materials: effectiveMaterials,
+                generatePreview: project.aiPreviewEnabled
             )
             // Backend has consumed one starter credit inside the gate's
             // transaction; mirror that locally so the next tap reflects

@@ -11,8 +11,8 @@ final class LiveGenerationService: GenerationServiceProtocol, Sendable {
 
     // MARK: - GenerationServiceProtocol
 
-    func startGeneration(projectId: String, prompt: String, materials: [MaterialSpec]? = nil) async throws -> AIGeneration {
-        let body = GenerationRequestBody(prompt: prompt, materials: materials)
+    func startGeneration(projectId: String, prompt: String, materials: [MaterialSpec]? = nil, generatePreview: Bool? = nil) async throws -> AIGeneration {
+        let body = GenerationRequestBody(prompt: prompt, materials: materials, generatePreview: generatePreview)
         return try await apiClient.request(
             .createGeneration(projectId: projectId, body: body)
         )
@@ -30,8 +30,12 @@ final class LiveGenerationService: GenerationServiceProtocol, Sendable {
 // MARK: - Request Body
 
 /// Body for the POST /projects/:id/generations endpoint.
-/// The encoder uses `.convertToSnakeCase`, so `prompt` stays as `"prompt"`.
+/// The encoder uses `.convertToSnakeCase`, so `prompt` stays as `"prompt"`
+/// and `generatePreview` is emitted as `generate_preview`. A `nil`
+/// `generatePreview` is omitted (synthesized `encodeIfPresent`), letting the
+/// backend fall back to the project's `aiPreviewEnabled` flag.
 private struct GenerationRequestBody: Encodable, Sendable {
     let prompt: String
     let materials: [MaterialSpec]?
+    let generatePreview: Bool?
 }

@@ -635,6 +635,461 @@ extension PromptCard {
                     prompt: "Garage-to-home-gym conversion with rubber tile flooring, mirrored accent wall, mounted rack, mini-split HVAC, and bright LED panel lighting."
                 ),
             ]
+        case .plumbing:
+            return [
+                PromptCard(
+                    id: "plumbing.fixture",
+                    title: "Fixture Replacement",
+                    subtitle: "Faucet · valve · supply lines",
+                    icon: "drop.fill",
+                    imageAssetName: "ServiceCards/Plumbing/01_fixture_replacement",
+                    prompt: "Replace a kitchen or bathroom fixture (faucet, shutoff valve, or supply lines). Quote the fixture, supply connections, and on-site install labor."
+                ),
+                PromptCard(
+                    id: "plumbing.leak",
+                    title: "Leak Repair",
+                    subtitle: "Locate · cut out · repair",
+                    icon: "wrench.and.screwdriver.fill",
+                    imageAssetName: "ServiceCards/Plumbing/02_leak_repair",
+                    prompt: "Diagnose and repair a water leak under a sink or in a supply/drain line. Quote diagnostic, replacement fittings or pipe section, and repair labor."
+                ),
+                PromptCard(
+                    id: "plumbing.waterheater",
+                    title: "Water Heater",
+                    subtitle: "Remove · install · connect",
+                    icon: "flame.fill",
+                    imageAssetName: "ServiceCards/Plumbing/03_water_heater",
+                    prompt: "Replace a failed water heater: haul off the old unit, install the new tank, reconnect water and gas/electric, and test. Quote the unit, fittings, and install labor."
+                ),
+                PromptCard(
+                    id: "plumbing.toilet",
+                    title: "Toilet Install",
+                    subtitle: "Wax ring · bolts · seal",
+                    icon: "drop.circle.fill",
+                    imageAssetName: "ServiceCards/Plumbing/04_toilet_install",
+                    prompt: "Install or reset a toilet with a new wax ring, bolts, and supply line; seal and test for leaks. Quote the parts and install labor."
+                ),
+            ]
+        case .electrical:
+            return [
+                PromptCard(
+                    id: "electrical.outlet",
+                    title: "Outlet / Switch",
+                    subtitle: "GFCI · dimmer · cover plate",
+                    icon: "bolt.fill",
+                    imageAssetName: "ServiceCards/Electrical/01_outlet_switch",
+                    prompt: "Install or replace outlets and switches (including GFCI and dimmers). Quote the devices, cover plates, and install labor per device."
+                ),
+                PromptCard(
+                    id: "electrical.fixture",
+                    title: "Light Fixture",
+                    subtitle: "Mount · wire · test",
+                    icon: "lightbulb.fill",
+                    imageAssetName: "ServiceCards/Electrical/02_light_fixture",
+                    prompt: "Install a new light fixture or replace an existing one: mount, wire, and test. Quote mounting hardware, wire nuts, and install labor."
+                ),
+                PromptCard(
+                    id: "electrical.fan",
+                    title: "Ceiling Fan",
+                    subtitle: "Brace box · mount · balance",
+                    icon: "fan.fill",
+                    imageAssetName: "ServiceCards/Electrical/03_ceiling_fan",
+                    prompt: "Install a ceiling fan with a fan-rated brace box, mount, wire the switch/remote, and balance. Quote the brace box, hardware, and labor."
+                ),
+                PromptCard(
+                    id: "electrical.ev",
+                    title: "EV Charger",
+                    subtitle: "Level 2 · circuit · mount",
+                    icon: "bolt.car.fill",
+                    imageAssetName: "ServiceCards/Electrical/04_ev_charger",
+                    prompt: "Install a Level 2 EV charger: run a dedicated circuit, add the breaker, and mount the unit. Quote the breaker, wire by the foot, conduit, and install labor."
+                ),
+            ]
+        case .hvac:
+            return [
+                PromptCard(
+                    id: "hvac.acrepair",
+                    title: "AC Repair",
+                    subtitle: "Diagnose · capacitor · recharge",
+                    icon: "wind",
+                    imageAssetName: "ServiceCards/HVAC/01_ac_repair",
+                    prompt: "Diagnose and repair a central AC that isn't cooling (capacitor, contactor, or refrigerant). Quote the diagnostic, failed component, and repair labor."
+                ),
+                PromptCard(
+                    id: "hvac.furnace",
+                    title: "Furnace Repair",
+                    subtitle: "Igniter · sensor · blower",
+                    icon: "flame.fill",
+                    imageAssetName: "ServiceCards/HVAC/02_furnace_repair",
+                    prompt: "Diagnose and repair a furnace that won't heat (igniter, flame sensor, or blower motor). Quote the diagnostic, failed part, and repair labor."
+                ),
+                PromptCard(
+                    id: "hvac.tuneup",
+                    title: "System Tune-Up",
+                    subtitle: "Clean · inspect · filter",
+                    icon: "checkmark.seal.fill",
+                    imageAssetName: "ServiceCards/HVAC/03_tune_up",
+                    prompt: "Perform a seasonal HVAC tune-up: clean the coils, check refrigerant and electrical, and replace the filter. Quote consumables and the per-visit labor."
+                ),
+                PromptCard(
+                    id: "hvac.minisplit",
+                    title: "Mini-Split Install",
+                    subtitle: "Head · line set · charge",
+                    icon: "thermometer.snowflake",
+                    imageAssetName: "ServiceCards/HVAC/04_mini_split",
+                    prompt: "Install a ductless mini-split: mount the indoor head and outdoor condenser, run the line set, and charge the system. Quote the equipment, line set, and install labor."
+                ),
+            ]
+        case .applianceRepair:
+            return [
+                PromptCard(
+                    id: "appliance.fridge",
+                    title: "Refrigerator",
+                    subtitle: "Cooling · compressor · board",
+                    icon: "refrigerator.fill",
+                    imageAssetName: "ServiceCards/Appliance/01_refrigerator",
+                    prompt: "Diagnose and repair a refrigerator that isn't cooling (start relay, control board, or fan). Quote the diagnostic, the failed part, and repair labor."
+                ),
+                PromptCard(
+                    id: "appliance.laundry",
+                    title: "Washer / Dryer",
+                    subtitle: "Belt · pump · heating element",
+                    icon: "washer.fill",
+                    imageAssetName: "ServiceCards/Appliance/02_washer_dryer",
+                    prompt: "Repair a washer or dryer (drive belt, drain pump, or heating element). Quote the diagnostic, replacement part, and repair labor."
+                ),
+                PromptCard(
+                    id: "appliance.dishwasher",
+                    title: "Dishwasher",
+                    subtitle: "Pump · valve · seal",
+                    icon: "dishwasher.fill",
+                    imageAssetName: "ServiceCards/Appliance/03_dishwasher",
+                    prompt: "Repair a dishwasher that won't drain or fill (drain pump, inlet valve, or door seal). Quote the diagnostic, the part, and repair labor."
+                ),
+                PromptCard(
+                    id: "appliance.oven",
+                    title: "Oven / Range",
+                    subtitle: "Element · igniter · control",
+                    icon: "oven.fill",
+                    imageAssetName: "ServiceCards/Appliance/04_oven_range",
+                    prompt: "Repair an oven or range that won't heat (bake element, igniter, or control board). Quote the diagnostic, the failed part, and repair labor."
+                ),
+            ]
+        case .handyman:
+            return [
+                PromptCard(
+                    id: "handyman.tv",
+                    title: "TV Mounting",
+                    subtitle: "Bracket · anchors · conceal",
+                    icon: "tv.fill",
+                    imageAssetName: "ServiceCards/Handyman/01_tv_mounting",
+                    prompt: "Mount a TV on the wall: locate studs, install the bracket, hang the TV, and conceal cables. Quote the bracket, anchors, cable kit, and labor."
+                ),
+                PromptCard(
+                    id: "handyman.drywall",
+                    title: "Drywall Patch",
+                    subtitle: "Patch · sand · paint",
+                    icon: "square.split.bottomrightquarter.fill",
+                    imageAssetName: "ServiceCards/Handyman/02_drywall_patch",
+                    prompt: "Patch a hole in drywall: cut, patch, mud, sand, and touch up paint. Quote patch material, compound, primer/paint, and labor."
+                ),
+                PromptCard(
+                    id: "handyman.assembly",
+                    title: "Furniture Assembly",
+                    subtitle: "Unbox · build · secure",
+                    icon: "shippingbox.fill",
+                    imageAssetName: "ServiceCards/Handyman/03_furniture_assembly",
+                    prompt: "Assemble flat-pack furniture and anchor it to the wall for safety. Quote the anchor hardware and assembly labor per item."
+                ),
+                PromptCard(
+                    id: "handyman.punchlist",
+                    title: "Punch List",
+                    subtitle: "Multiple small fixes",
+                    icon: "hammer.fill",
+                    imageAssetName: "ServiceCards/Handyman/04_punch_list",
+                    prompt: "Complete a punch list of small repairs (re-caulk, tighten hardware, hang shelves, fix a sticking door). Quote one labor line per task plus miscellaneous materials."
+                ),
+            ]
+        case .pestControl:
+            return [
+                PromptCard(
+                    id: "pest.general",
+                    title: "General Treatment",
+                    subtitle: "Inspect · treat · barrier",
+                    icon: "ant.fill",
+                    imageAssetName: "ServiceCards/Pest/01_general_treatment",
+                    prompt: "Inspect and treat a home for general pests (ants, roaches, spiders) with an interior and perimeter barrier application. Quote treatment consumables and per-visit labor."
+                ),
+                PromptCard(
+                    id: "pest.rodent",
+                    title: "Rodent Exclusion",
+                    subtitle: "Seal · trap · monitor",
+                    icon: "pawprint.fill",
+                    imageAssetName: "ServiceCards/Pest/02_rodent_exclusion",
+                    prompt: "Perform rodent exclusion: seal entry points, set traps and bait stations, and monitor. Quote exclusion materials, stations, and labor."
+                ),
+                PromptCard(
+                    id: "pest.termite",
+                    title: "Termite Treatment",
+                    subtitle: "Inspect · trench · treat",
+                    icon: "magnifyingglass",
+                    imageAssetName: "ServiceCards/Pest/03_termite_treatment",
+                    prompt: "Inspect for termites and apply a liquid barrier or bait treatment around the foundation. Quote the termiticide by application and treatment labor."
+                ),
+                PromptCard(
+                    id: "pest.recurring",
+                    title: "Quarterly Plan",
+                    subtitle: "Recurring · per-visit pricing",
+                    icon: "arrow.3.trianglepath",
+                    imageAssetName: "ServiceCards/Pest/04_quarterly_plan",
+                    prompt: "Set up a recurring quarterly pest-control plan with perimeter treatment each visit. Quote per-visit consumables and labor; the contract repeats quarterly."
+                ),
+            ]
+        case .houseCleaning:
+            return [
+                PromptCard(
+                    id: "cleaning.standard",
+                    title: "Standard Clean",
+                    subtitle: "Dust · vacuum · surfaces",
+                    icon: "sparkles",
+                    imageAssetName: "ServiceCards/Cleaning/01_standard_clean",
+                    prompt: "Standard house cleaning: dust, vacuum, mop, wipe surfaces, and clean bathrooms and kitchen. Quote supplies and per-visit labor scaled to home size."
+                ),
+                PromptCard(
+                    id: "cleaning.deep",
+                    title: "Deep Clean",
+                    subtitle: "Baseboards · grout · detail",
+                    icon: "bubbles.and.sparkles.fill",
+                    imageAssetName: "ServiceCards/Cleaning/02_deep_clean",
+                    prompt: "Deep clean: everything in a standard clean plus baseboards, grout, inside appliances, and detailed scrubbing. Quote supplies and the longer per-visit labor."
+                ),
+                PromptCard(
+                    id: "cleaning.moveout",
+                    title: "Move-In / Out",
+                    subtitle: "Empty home · top to bottom",
+                    icon: "shippingbox.fill",
+                    imageAssetName: "ServiceCards/Cleaning/03_move_out",
+                    prompt: "Move-in / move-out clean of an empty home: inside cabinets and appliances, all surfaces, floors, and fixtures. Quote supplies and labor by square footage."
+                ),
+                PromptCard(
+                    id: "cleaning.recurring",
+                    title: "Recurring Plan",
+                    subtitle: "Weekly / biweekly · per visit",
+                    icon: "arrow.3.trianglepath",
+                    imageAssetName: "ServiceCards/Cleaning/04_recurring_plan",
+                    prompt: "Set up a recurring biweekly cleaning plan. Quote per-visit supplies and labor scaled to home size; the contract repeats on the chosen cadence."
+                ),
+            ]
+        case .junkRemoval:
+            return [
+                PromptCard(
+                    id: "junk.singleitem",
+                    title: "Single Item",
+                    subtitle: "One appliance or piece",
+                    icon: "trash.fill",
+                    imageAssetName: "ServiceCards/Junk/01_single_item",
+                    prompt: "Haul away a single bulky item (mattress, appliance, or furniture piece). Quote disposal/dump fees and load-out labor."
+                ),
+                PromptCard(
+                    id: "junk.garage",
+                    title: "Garage Cleanout",
+                    subtitle: "Sort · load · haul",
+                    icon: "shippingbox.fill",
+                    imageAssetName: "ServiceCards/Junk/02_garage_cleanout",
+                    prompt: "Clear out a garage of accumulated junk: sort, load, and haul away. Quote dump/recycling fees and load-out labor priced by truck volume."
+                ),
+                PromptCard(
+                    id: "junk.furniture",
+                    title: "Furniture & Appliance",
+                    subtitle: "Multiple heavy items",
+                    icon: "sofa.fill",
+                    imageAssetName: "ServiceCards/Junk/03_furniture_appliance",
+                    prompt: "Remove several pieces of furniture and appliances. Quote disposal fees (including any appliance recycling) and haul-away labor by volume."
+                ),
+                PromptCard(
+                    id: "junk.full",
+                    title: "Full Cleanout",
+                    subtitle: "Whole property · multi-truck",
+                    icon: "house.fill",
+                    imageAssetName: "ServiceCards/Junk/04_full_cleanout",
+                    prompt: "Full property or estate cleanout, potentially multiple truckloads. Quote landfill/recycling fees and crew labor by total volume."
+                ),
+            ]
+        case .pressureWashing:
+            return [
+                PromptCard(
+                    id: "pressure.driveway",
+                    title: "Driveway & Walkway",
+                    subtitle: "Surface clean · degrease",
+                    icon: "drop.fill",
+                    imageAssetName: "ServiceCards/Pressure/01_driveway",
+                    prompt: "Pressure wash a concrete driveway and walkways, including degreasing oil stains. Quote detergents and labor by surface area."
+                ),
+                PromptCard(
+                    id: "pressure.house",
+                    title: "House Soft Wash",
+                    subtitle: "Siding · low pressure · safe",
+                    icon: "house.fill",
+                    imageAssetName: "ServiceCards/Pressure/02_house_soft_wash",
+                    prompt: "Soft wash house siding to remove mildew and grime using a low-pressure detergent application. Quote surfactant/sodium hypochlorite and labor by area."
+                ),
+                PromptCard(
+                    id: "pressure.deck",
+                    title: "Deck & Patio",
+                    subtitle: "Clean · brighten · prep",
+                    icon: "square.grid.2x2.fill",
+                    imageAssetName: "ServiceCards/Pressure/03_deck_patio",
+                    prompt: "Clean and brighten a wood deck or paver patio, prepping for seal if requested. Quote cleaner/brightener and labor by surface area."
+                ),
+                PromptCard(
+                    id: "pressure.roof",
+                    title: "Roof Cleaning",
+                    subtitle: "Soft wash · algae · stains",
+                    icon: "wind",
+                    imageAssetName: "ServiceCards/Pressure/04_roof_cleaning",
+                    prompt: "Soft wash a roof to remove algae streaks and stains without high pressure. Quote treatment chemicals and labor by roof area."
+                ),
+            ]
+        case .gutterServices:
+            return [
+                PromptCard(
+                    id: "gutter.clean",
+                    title: "Gutter Cleaning",
+                    subtitle: "Clear · flush · check flow",
+                    icon: "water.waves",
+                    imageAssetName: "ServiceCards/Gutter/01_cleaning",
+                    prompt: "Clean out gutters and downspouts, flush them, and confirm proper drainage. Quote a miscellaneous supplies line and labor by linear footage and stories."
+                ),
+                PromptCard(
+                    id: "gutter.repair",
+                    title: "Gutter Repair",
+                    subtitle: "Reseal · re-pitch · brackets",
+                    icon: "wrench.and.screwdriver.fill",
+                    imageAssetName: "ServiceCards/Gutter/02_repair",
+                    prompt: "Repair sagging or leaking gutters: re-seal seams, re-pitch runs, and replace hangers. Quote sealant, brackets, and repair labor."
+                ),
+                PromptCard(
+                    id: "gutter.guards",
+                    title: "Gutter Guards",
+                    subtitle: "Install · per linear foot",
+                    icon: "line.3.horizontal",
+                    imageAssetName: "ServiceCards/Gutter/03_guards",
+                    prompt: "Install gutter guards over existing gutters. Quote the guard sections by linear foot and install labor."
+                ),
+                PromptCard(
+                    id: "gutter.replace",
+                    title: "Full Replacement",
+                    subtitle: "New K-style · downspouts",
+                    icon: "rectangle.split.3x1.fill",
+                    imageAssetName: "ServiceCards/Gutter/04_replacement",
+                    prompt: "Remove old gutters and install new seamless K-style gutters with downspouts. Quote gutter and downspout material by linear foot, hangers and end caps, and install labor."
+                ),
+            ]
+        case .fencing:
+            return [
+                PromptCard(
+                    id: "fence.wood",
+                    title: "Wood Privacy",
+                    subtitle: "Posts · pickets · concrete",
+                    icon: "rectangle.split.3x1.fill",
+                    imageAssetName: "ServiceCards/Fencing/01_wood_privacy",
+                    prompt: "Install a wood privacy fence: set posts in concrete, attach rails and pickets. Quote pickets, posts, rails, concrete, and hardware by the linear foot, plus install labor."
+                ),
+                PromptCard(
+                    id: "fence.chainlink",
+                    title: "Chain-Link",
+                    subtitle: "Posts · mesh · tension",
+                    icon: "circle.grid.cross.fill",
+                    imageAssetName: "ServiceCards/Fencing/02_chain_link",
+                    prompt: "Install a chain-link fence: set terminal and line posts, stretch mesh, and add tension bars. Quote posts, mesh, fittings by linear foot, plus install labor."
+                ),
+                PromptCard(
+                    id: "fence.vinyl",
+                    title: "Vinyl Fence",
+                    subtitle: "Panels · posts · caps",
+                    icon: "rectangle.portrait.fill",
+                    imageAssetName: "ServiceCards/Fencing/03_vinyl",
+                    prompt: "Install a vinyl panel fence with posts set in concrete and post caps. Quote panels, posts, caps, and concrete by linear foot, plus install labor."
+                ),
+                PromptCard(
+                    id: "fence.gate",
+                    title: "Gate & Repair",
+                    subtitle: "Hang gate · fix sections",
+                    icon: "door.left.hand.closed",
+                    imageAssetName: "ServiceCards/Fencing/04_gate_repair",
+                    prompt: "Build and hang a gate or repair a damaged fence section: reset posts, replace pickets, and adjust hardware. Quote the gate kit, hinges, latch, replacement parts, and labor."
+                ),
+            ]
+        case .garageDoor:
+            return [
+                PromptCard(
+                    id: "garagedoor.spring",
+                    title: "Spring Replacement",
+                    subtitle: "Torsion · wind · balance",
+                    icon: "arrow.triangle.2.circlepath",
+                    imageAssetName: "ServiceCards/GarageDoor/01_spring",
+                    prompt: "Replace broken garage door torsion springs, wind them to proper tension, and balance the door. Quote the springs and repair labor."
+                ),
+                PromptCard(
+                    id: "garagedoor.opener",
+                    title: "Opener Install",
+                    subtitle: "Motor · rail · safety eyes",
+                    icon: "gearshape.fill",
+                    imageAssetName: "ServiceCards/GarageDoor/02_opener",
+                    prompt: "Install a new garage door opener: mount the motor and rail, wire the wall control and safety sensors, and program remotes. Quote the opener unit, hardware, and labor."
+                ),
+                PromptCard(
+                    id: "garagedoor.rollers",
+                    title: "Roller & Cable",
+                    subtitle: "Replace · realign · lube",
+                    icon: "wrench.and.screwdriver.fill",
+                    imageAssetName: "ServiceCards/GarageDoor/03_rollers_cables",
+                    prompt: "Replace worn rollers and cables, realign the track, and lubricate. Quote the rollers, cables, and repair labor."
+                ),
+                PromptCard(
+                    id: "garagedoor.replace",
+                    title: "Full Door Install",
+                    subtitle: "New door · tracks · seal",
+                    icon: "door.garage.closed",
+                    imageAssetName: "ServiceCards/GarageDoor/04_full_door",
+                    prompt: "Remove the old garage door and install a new insulated door with tracks, springs, and weather seal. Quote the door, hardware, and install labor."
+                ),
+            ]
+        case .windowCleaning:
+            return [
+                PromptCard(
+                    id: "window.inout",
+                    title: "Interior & Exterior",
+                    subtitle: "Both sides · frames · sills",
+                    icon: "macwindow",
+                    imageAssetName: "ServiceCards/Window/01_interior_exterior",
+                    prompt: "Clean all windows inside and out, including frames and sills, streak-free. Quote cleaning supplies and labor by window count and stories."
+                ),
+                PromptCard(
+                    id: "window.exterior",
+                    title: "Exterior Only",
+                    subtitle: "Outside glass · ground or pole",
+                    icon: "sun.max.fill",
+                    imageAssetName: "ServiceCards/Window/02_exterior_only",
+                    prompt: "Clean exterior window glass using a pure-water pole system. Quote consumables and labor by window count and stories."
+                ),
+                PromptCard(
+                    id: "window.screens",
+                    title: "Screens & Tracks",
+                    subtitle: "Wash screens · clear tracks",
+                    icon: "square.grid.3x3.fill",
+                    imageAssetName: "ServiceCards/Window/03_screens_tracks",
+                    prompt: "Wash window screens and clear out the tracks alongside a glass cleaning. Quote supplies and the added per-window labor."
+                ),
+                PromptCard(
+                    id: "window.recurring",
+                    title: "Recurring Service",
+                    subtitle: "Monthly / quarterly · per visit",
+                    icon: "arrow.3.trianglepath",
+                    imageAssetName: "ServiceCards/Window/04_recurring",
+                    prompt: "Set up a recurring window cleaning plan. Quote per-visit supplies and labor by window count; the contract repeats on the chosen cadence."
+                ),
+            ]
         case .custom:
             return [
                 PromptCard(

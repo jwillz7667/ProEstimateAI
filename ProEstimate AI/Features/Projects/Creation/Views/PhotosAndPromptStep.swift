@@ -24,6 +24,7 @@ struct PhotosAndPromptStep: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
                 photosSection
+                aiPreviewSection
                 qualityTierSection
                 promptSuggestionsSection
                 customInstructionsSection
@@ -70,9 +71,7 @@ struct PhotosAndPromptStep: View {
             if viewModel.selectedImageData.isEmpty {
                 photoStatusRow(
                     icon: photosOptional ? "info.circle" : "exclamationmark.circle",
-                    text: photosOptional
-                        ? "Photos are optional — we'll measure the lawn on the next step."
-                        : "At least 1 photo required",
+                    text: photoEmptyStatusText,
                     tint: photosOptional ? ColorTokens.secondaryText : ColorTokens.warning
                 )
                 .padding(.horizontal, SpacingTokens.md)
@@ -110,12 +109,18 @@ struct PhotosAndPromptStep: View {
         return "\(count) photo\(count == 1 ? "" : "s") selected"
     }
 
-    /// Lawn-care projects don't gate on photo upload — the next step
-    /// captures the lawn polygon, which is the load-bearing input for
-    /// the per-sq-ft estimate. Other types still require at least one
-    /// before-photo for the AI remodel preview.
+    /// Whether photo upload is optional for the active flow. Lawn-care
+    /// captures the lawn polygon on the next step (the load-bearing input);
+    /// home-service trades (plumbing, cleaning, repairs) aren't redesigning
+    /// anything, so the before-photo is documentation, not a precondition.
+    /// Every visual remodel type still requires at least one before-photo
+    /// for the AI preview. Mirrors `ProjectType.requiresReferencePhoto`.
     private var photosOptional: Bool {
-        viewModel.isLawnCareFlow
+        !(viewModel.selectedProjectType?.requiresReferencePhoto ?? true)
+    }
+
+    private var isServiceTradeFlow: Bool {
+        viewModel.selectedProjectType?.isServiceTrade ?? false
     }
 
     private var photosHeaderTitle: String {
@@ -123,10 +128,23 @@ struct PhotosAndPromptStep: View {
     }
 
     private var photosHeaderSubtitle: String {
-        if photosOptional {
+        if viewModel.isLawnCareFlow {
             return "Drop a photo of the property if you have one — otherwise just pick a service style below and we'll measure the lawn next."
         }
+        if isServiceTradeFlow {
+            return "Photos are optional for service calls. Add one to document the job if it helps — otherwise just describe the work below."
+        }
         return "More photos produce better AI previews. At least one is required."
+    }
+
+    private var photoEmptyStatusText: String {
+        if viewModel.isLawnCareFlow {
+            return "Photos are optional — we'll measure the lawn on the next step."
+        }
+        if isServiceTradeFlow {
+            return "Photos are optional for this service."
+        }
+        return "At least 1 photo required"
     }
 
     private func photoSourceButton(
@@ -286,6 +304,39 @@ struct PhotosAndPromptStep: View {
         )
     }
 
+    // MARK: - AI Preview Toggle
+    //
+    // Controls whether the backend renders an AI design image alongside the
+    // estimate. Service trades seed this off (nothing to redesign); visual
+    // remodel types follow the company-wide default. Either way the
+    // itemized materials + labor estimate is still produced.
+
+    private var aiPreviewSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.sm) {
+            Toggle(isOn: $viewModel.aiPreviewEnabled) {
+                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                    Text("Generate AI design preview")
+                        .font(TypographyTokens.headline)
+                        .foregroundStyle(ColorTokens.primaryText)
+                    Text(aiPreviewToggleSubtitle)
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .tint(ColorTokens.primaryOrange)
+            .padding(SpacingTokens.md)
+            .glassCard(cornerRadius: RadiusTokens.card)
+            .padding(.horizontal, SpacingTokens.md)
+        }
+    }
+
+    private var aiPreviewToggleSubtitle: String {
+        viewModel.aiPreviewEnabled
+            ? "We'll generate a before/after design image with your estimate."
+            : "Skipped — you'll still get an itemized materials and labor estimate, just no design image. Best for repairs and service calls."
+    }
+
     // MARK: - Quality Tier
     //
     // Optional tier selection. `nil` = Auto (backend picks tier-neutral
@@ -386,12 +437,22 @@ struct PhotosAndPromptStep: View {
 
     // MARK: - Prompt Suggestions
 
+    private var promptSectionTitle: String {
+        isServiceTradeFlow ? "Pick a common job" : "Pick a style direction"
+    }
+
+    private var promptSectionSubtitle: String {
+        isServiceTradeFlow
+            ? "Tap a typical service to prefill the scope — or skip and describe the work below."
+            : "Tap a suggestion to set the design vibe — or skip and write your own below."
+    }
+
     private var promptSuggestionsSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.sm) {
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                Text("Pick a style direction")
+                Text(promptSectionTitle)
                     .font(TypographyTokens.title3)
-                Text("Tap a suggestion to set the design vibe — or skip and write your own below.")
+                Text(promptSectionSubtitle)
                     .font(TypographyTokens.subheadline)
                     .foregroundStyle(.secondary)
             }

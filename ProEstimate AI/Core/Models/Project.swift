@@ -47,6 +47,11 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     /// season growing window).
     let contractMonths: Int?
     let recurrenceStartDate: Date?
+    /// Whether this project generates an AI design preview image. False for
+    /// service trades and projects created while the company-wide image
+    /// default is off — those produce a text-only estimate. The detail
+    /// screen hides the before/after preview section when false.
+    let aiPreviewEnabled: Bool
     let createdAt: Date
     let updatedAt: Date
     /// Resolves to the project's most recent COMPLETED generation preview, or
@@ -75,6 +80,22 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         case lawnCare = "lawn_care"
         case outdoorLiving = "outdoor_living"
         case garage
+        // Home-service trades. These bid labor + parts without redesigning
+        // anything, so they default to no reference photo and no AI image
+        // (see `requiresReferencePhoto` / `defaultGeneratesImage`).
+        case plumbing
+        case electrical
+        case hvac
+        case applianceRepair = "appliance_repair"
+        case handyman
+        case pestControl = "pest_control"
+        case houseCleaning = "house_cleaning"
+        case junkRemoval = "junk_removal"
+        case pressureWashing = "pressure_washing"
+        case gutterServices = "gutter_services"
+        case fencing
+        case garageDoor = "garage_door"
+        case windowCleaning = "window_cleaning"
         case custom
 
         /// Display name for project type pickers and detail headers.
@@ -92,6 +113,19 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
             case .lawnCare: return "Lawn Care"
             case .outdoorLiving: return "Outdoor Living"
             case .garage: return "Garage"
+            case .plumbing: return "Plumbing"
+            case .electrical: return "Electrical"
+            case .hvac: return "HVAC"
+            case .applianceRepair: return "Appliance Repair"
+            case .handyman: return "Handyman"
+            case .pestControl: return "Pest Control"
+            case .houseCleaning: return "House Cleaning"
+            case .junkRemoval: return "Junk Removal"
+            case .pressureWashing: return "Pressure Washing"
+            case .gutterServices: return "Gutter Services"
+            case .fencing: return "Fencing"
+            case .garageDoor: return "Garage Door"
+            case .windowCleaning: return "Window Cleaning"
             case .custom: return "Custom"
             }
         }
@@ -113,6 +147,19 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
             case .lawnCare: return "scissors"
             case .outdoorLiving: return "sofa.fill"
             case .garage: return "car.fill"
+            case .plumbing: return "drop.fill"
+            case .electrical: return "bolt.fill"
+            case .hvac: return "wind"
+            case .applianceRepair: return "washer.fill"
+            case .handyman: return "hammer.fill"
+            case .pestControl: return "ant.fill"
+            case .houseCleaning: return "sparkles"
+            case .junkRemoval: return "trash.fill"
+            case .pressureWashing: return "shower.handheld.fill"
+            case .gutterServices: return "water.waves"
+            case .fencing: return "rectangle.split.3x1.fill"
+            case .garageDoor: return "door.garage.closed"
+            case .windowCleaning: return "macwindow"
             case .custom: return "wrench.and.screwdriver"
             }
         }
@@ -137,8 +184,51 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
             case .lawnCare: return "CategoryTiles/10_lawn_care"
             case .outdoorLiving: return "CategoryTiles/11_outdoor_living"
             case .garage: return "CategoryTiles/12_garage"
+            // Service trades have no bespoke photo tile; the picker renders an
+            // icon hero for them (see `hasPhotoTile`). This value is a never-
+            // rendered fallback that keeps the switch exhaustive.
+            case .plumbing, .electrical, .hvac, .applianceRepair, .handyman,
+                 .pestControl, .houseCleaning, .junkRemoval, .pressureWashing,
+                 .gutterServices, .fencing, .garageDoor, .windowCleaning:
+                return "CategoryTiles/13_custom"
             case .custom: return "CategoryTiles/13_custom"
             }
+        }
+
+        /// Whether a dedicated photographic hero tile exists for this type in
+        /// `Assets.xcassets/CategoryTiles/`. False for the home-service trades,
+        /// which the category picker renders as an SF Symbol hero instead.
+        var hasPhotoTile: Bool {
+            !isServiceTrade
+        }
+
+        /// Home-service trades (repair / install / maintenance calls) as
+        /// opposed to visual remodel work. These default to no reference
+        /// photo and no AI design preview.
+        var isServiceTrade: Bool {
+            switch self {
+            case .plumbing, .electrical, .hvac, .applianceRepair, .handyman,
+                 .pestControl, .houseCleaning, .junkRemoval, .pressureWashing,
+                 .gutterServices, .fencing, .garageDoor, .windowCleaning:
+                return true
+            default:
+                return false
+            }
+        }
+
+        /// Whether the creation wizard requires a reference photo before the
+        /// user can generate. Service trades and recurring lawn care skip the
+        /// requirement — the photo is optional context, not a precondition.
+        var requiresReferencePhoto: Bool {
+            !(isServiceTrade || self == .lawnCare)
+        }
+
+        /// Default for whether a new project of this type generates an AI
+        /// design preview image. Service trades default off (nothing is being
+        /// redesigned); every visual type defaults on. Seeds the per-project
+        /// toggle at creation, layered under the company-wide default.
+        var defaultGeneratesImage: Bool {
+            !isServiceTrade
         }
 
         /// Whether projects of this type are typically recurring service
@@ -248,6 +338,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         case visitsPerMonth = "visits_per_month"
         case contractMonths = "contract_months"
         case recurrenceStartDate = "recurrence_start_date"
+        case aiPreviewEnabled = "ai_preview_enabled"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case thumbnailURL = "thumbnail_url"
@@ -277,6 +368,9 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         visitsPerMonth = try c.decodeIfPresent(Decimal.self, forKey: .visitsPerMonth)
         contractMonths = try c.decodeIfPresent(Int.self, forKey: .contractMonths)
         recurrenceStartDate = try c.decodeIfPresent(Date.self, forKey: .recurrenceStartDate)
+        // Older backends omit this; default true so existing visual projects
+        // keep showing their preview.
+        aiPreviewEnabled = try c.decodeIfPresent(Bool.self, forKey: .aiPreviewEnabled) ?? true
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
         thumbnailURL = try c.decodeIfPresent(URL.self, forKey: .thumbnailURL)
@@ -305,6 +399,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         visitsPerMonth: Decimal? = nil,
         contractMonths: Int? = nil,
         recurrenceStartDate: Date? = nil,
+        aiPreviewEnabled: Bool = true,
         createdAt: Date,
         updatedAt: Date,
         thumbnailURL: URL? = nil
@@ -331,6 +426,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         self.visitsPerMonth = visitsPerMonth
         self.contractMonths = contractMonths
         self.recurrenceStartDate = recurrenceStartDate
+        self.aiPreviewEnabled = aiPreviewEnabled
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.thumbnailURL = thumbnailURL

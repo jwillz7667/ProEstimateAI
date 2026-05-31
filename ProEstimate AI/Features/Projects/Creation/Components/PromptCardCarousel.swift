@@ -110,14 +110,48 @@ struct PromptCardCarousel: View {
 
     // MARK: - Layers
 
+    @ViewBuilder
     private func heroImage(for card: PromptCard) -> some View {
-        Image(card.imageAssetName)
-            .resizable()
-            .scaledToFill()
-            .frame(maxWidth: .infinity)
-            .frame(height: cardHeight)
-            .clipped()
-            .accessibilityHidden(true)
+        // Remodel categories ship a bespoke photographic hero under
+        // `StyleCards/`. Service trades (plumbing, cleaning, …) describe a
+        // task rather than a look and have no style photo, so fall back to a
+        // branded icon hero. The asset-existence check upgrades any card
+        // automatically the moment a real image is added under its name.
+        if UIImage(named: card.imageAssetName) != nil {
+            Image(card.imageAssetName)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: cardHeight)
+                .clipped()
+                .accessibilityHidden(true)
+        } else {
+            iconHero(for: card)
+                .frame(maxWidth: .infinity)
+                .frame(height: cardHeight)
+                .clipped()
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func iconHero(for card: PromptCard) -> some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    ColorTokens.primaryOrange.opacity(0.95),
+                    ColorTokens.primaryOrange.opacity(0.62),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            Image(systemName: card.icon)
+                .font(.system(size: 46, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.95))
+                .shadow(color: .black.opacity(0.18), radius: 3, x: 0, y: 2)
+                // Lift the glyph into the cinematic upper band so the bottom
+                // darkening gradient + caption don't crowd it.
+                .offset(y: -18)
+        }
     }
 
     /// Top-to-bottom darkening gradient that gives the text overlay a
