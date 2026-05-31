@@ -1,0 +1,9 @@
+Dashboard renovado + creación de proyectos más ágil.
+
+Novedades
+• Dashboard: un nuevo video destacado en bucle ocupa la parte superior de la pantalla principal, con "Nuevo proyecto" como acción principal justo debajo.
+• Creación de proyectos: las miniaturas de categoría y las tarjetas de estilo ahora tienen el tamaño justo — con espacio entre ellas, sin imágenes desproporcionadas, y quitamos el icono genérico para que la fotografía sea la protagonista.
+• Insignia de suscripción: la insignia PRO arriba a la izquierda ya no se recorta a "P" en pantallas más estrechas.
+• Icono de la app renovado en modo oscuro.
+
+Gracias por tus comentarios — síguenos contando en support@proestimateai.com.

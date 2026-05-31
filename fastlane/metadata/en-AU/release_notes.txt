@@ -1,0 +1,9 @@
+Dashboard refresh + tighter project creation.
+
+What's new
+• Dashboard: a new looping hero video sits at the top of the home screen, with "New Project" promoted to the primary call-to-action right beneath it.
+• Project creation: category tiles and style direction cards are right-sized — gaps between them, no more oversized images, and the generic style icon is gone so the photography carries the visual weight.
+• Subscription badge: the top-left PRO badge no longer truncates to "P" on smaller layouts.
+• Refreshed dark-mode app icon.
+
+Thanks for the feedback — keep it coming at support@proestimateai.com.

@@ -10,7 +10,7 @@ Works for solo handymen winning their next bid, contractors scaling client appro
 
 — FOR PROS (the headline use case) —
 • Bid faster, win more
-• Look like a $5M company even from one truck
+• Look like a major outfit even from one truck
 • Branded proposals with public client approval links
 • One-tap invoicing from any approved estimate
 • Lawn area on a hybrid satellite map for per-sq-ft service work
@@ -19,7 +19,7 @@ Works for solo handymen winning their next bid, contractors scaling client appro
 
 — FOR HOMEOWNERS, FLIPPERS, AND DIYERS —
 • Plan kitchen, bath, flooring, paint, roofing, siding, exterior, lawn, landscaping, or any custom remodel
-• See exactly what each finish tier actually costs in 2026 dollars before you commit
+• See exactly what each finish tier actually costs in current 2026 prices before you commit
 • Generate a hardware-store shopping list from the AI material breakdown
 • Use the AI-priced baseline to keep contractor quotes honest
 
@@ -36,12 +36,12 @@ Kitchen · Bathroom · Flooring · Roofing · Painting · Siding · Room remodel
 — PRICING —
 Free to download. Pro and Premium subscriptions unlock unlimited AI previews, AI-generated estimates, invoicing, custom branding, watermark-free PDFs, client approval links, and material purchase links.
 
-• Pro Monthly — $19.99 / month (7-day free trial for new subscribers)
-• Pro Annual — $149.99 / year (save 37%)
-• Premium Monthly — $49.99 / month (unlimited projects + priority generation)
-• Premium Annual — $499.99 / year (save 17% vs. monthly)
+• Pro Monthly — 7-day free trial for new subscribers
+• Pro Annual — best value, save vs. monthly
+• Premium Monthly — unlimited projects + priority generation
+• Premium Annual — save vs. monthly
 
-Payment is charged to your Apple ID at confirmation of purchase. Subscriptions renew automatically unless auto-renew is turned off at least 24 hours before the end of the current period. Manage or cancel anytime in your Apple ID subscription settings.
+Pricing for your region is shown in the app before you subscribe. Payment is charged to your Apple ID at confirmation of purchase. Subscriptions renew automatically unless auto-renew is turned off at least 24 hours before the end of the current period. Manage or cancel anytime in your Apple ID subscription settings.
 
 Privacy Policy: https://proestimateai.com/privacy
 Terms of Use: https://proestimateai.com/terms
