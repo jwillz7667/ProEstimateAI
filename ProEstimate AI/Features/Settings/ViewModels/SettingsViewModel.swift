@@ -60,6 +60,19 @@ final class SettingsViewModel {
     var taxRateText: String = "8.25"
     var taxInclusivePricing: Bool = false
 
+    // MARK: - Labor Markup Settings Fields
+
+    /// Contractor's margin applied on top of raw labor cost, as a percent.
+    /// Mirrors `Company.laborMarkupPercent`; `nil` server-side maps to the
+    /// platform default surfaced here. Distinct from materials markup.
+    var laborMarkupPercent: Decimal = Decimal(SettingsViewModel.defaultLaborMarkupPercent)
+    var laborMarkupText: String = String(SettingsViewModel.defaultLaborMarkupPercent)
+
+    /// Platform default labor markup (percent) — kept in lockstep with the
+    /// backend's `DEFAULT_LABOR_MARKUP_PERCENT` so an unset company shows the
+    /// same number the server will apply.
+    static let defaultLaborMarkupPercent = 25
+
     // MARK: - Numbering Settings Fields
 
     var estimatePrefix: String = "EST"
@@ -88,6 +101,38 @@ final class SettingsViewModel {
     /// Preview of the next invoice number.
     var nextInvoiceDisplay: String {
         "\(invoicePrefix)-\(nextInvoiceNumber)"
+    }
+
+    /// The labor markup slider's value as a `Double`, bridged from the
+    /// canonical `Decimal`. Two-way binding writes back through `laborMarkupText`
+    /// so the text field and slider stay in lockstep.
+    var laborMarkupSliderValue: Double {
+        get { NSDecimalNumber(decimal: laborMarkupPercent).doubleValue }
+        set {
+            let clamped = clampMarkup(Decimal(newValue))
+            // The slider tops out at 100, but the text field accepts up to 999.
+            // When the canonical value was typed above the slider's ceiling,
+            // a stray drag would otherwise clip it back down to ≤100 and
+            // silently discard the contractor's input. Only honor the slider
+            // while we're within its range, or when it's genuinely raising the
+            // value — high values are edited through the text field.
+            guard laborMarkupPercent <= 100 || clamped > laborMarkupPercent else { return }
+            laborMarkupPercent = clamped
+            laborMarkupText = Self.formatMarkup(clamped)
+        }
+    }
+
+    /// Format a markup percent for display: whole numbers render without a
+    /// decimal point ("25"), fractional values keep up to two trimmed digits
+    /// ("27.5"). Keeps the field clean for the common whole-percent case.
+    static func formatMarkup(_ value: Decimal) -> String {
+        let number = NSDecimalNumber(decimal: value)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = false
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: number) ?? "\(number.intValue)"
     }
 
     /// Hex string from the primary color for persistence.
@@ -124,6 +169,7 @@ final class SettingsViewModel {
     /// stream of edits collapses into a single PATCH instead of N PATCHes.
     private var brandingSaveTask: Task<Void, Never>?
     private var taxSaveTask: Task<Void, Never>?
+    private var laborSaveTask: Task<Void, Never>?
     private var numberingSaveTask: Task<Void, Never>?
     /// Debounce window for text field edits. Long enough that typing doesn't
     /// fire a request per keystroke; short enough that the user perceives
@@ -181,6 +227,21 @@ final class SettingsViewModel {
             try? await Task.sleep(nanoseconds: self.debounceNanoseconds)
             if Task.isCancelled { return }
             await self.commitTax()
+        }
+    }
+
+    /// Debounce a labor-markup save. Called from the markup text field and
+    /// slider `.onChange` handlers so a drag or fast typing collapses into a
+    /// single PATCH.
+    func scheduleSaveLabor() {
+        guard !isHydrating else { return }
+        saveStatus = .pending
+        laborSaveTask?.cancel()
+        laborSaveTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: self.debounceNanoseconds)
+            if Task.isCancelled { return }
+            await self.commitLabor()
         }
     }
 
@@ -299,6 +360,32 @@ final class SettingsViewModel {
         } catch {
             saveStatus = .failed(message: error.localizedDescription)
         }
+    }
+
+    private func commitLabor() async {
+        // Sync the free-form text into the canonical decimal, clamped to the
+        // backend-accepted range (0...999). An unparseable string leaves the
+        // last good value in place rather than zeroing the user's margin.
+        if let parsed = Decimal(string: laborMarkupText.trimmingCharacters(in: .whitespaces)) {
+            laborMarkupPercent = clampMarkup(parsed)
+        }
+        saveStatus = .saving
+        do {
+            let update = LaborSettingsUpdate(laborMarkupPercent: laborMarkupPercent)
+            let updated = try await service.saveLaborSettings(update)
+            apply(updated: updated)
+            markSaved()
+        } catch {
+            saveStatus = .failed(message: error.localizedDescription)
+        }
+    }
+
+    /// Clamp labor markup into the backend validator's accepted band so a
+    /// stray edit can't fire a doomed PATCH. Mirrors `z.number().min(0).max(999)`.
+    private func clampMarkup(_ value: Decimal) -> Decimal {
+        if value < 0 { return 0 }
+        if value > 999 { return 999 }
+        return value
     }
 
     private func commitNumbering() async {
@@ -459,6 +546,9 @@ final class SettingsViewModel {
             appearanceStore?.applyRemote(language: parsed)
         }
         defaultAiPreviewEnabled = updated.defaultAiPreviewEnabled
+        let resolvedLaborMarkup = updated.laborMarkupPercent ?? Decimal(Self.defaultLaborMarkupPercent)
+        laborMarkupPercent = resolvedLaborMarkup
+        laborMarkupText = Self.formatMarkup(resolvedLaborMarkup)
     }
 
     private func markSaved() {
@@ -485,6 +575,9 @@ final class SettingsViewModel {
         defaultTaxRate = company.defaultTaxRate ?? 8.25
         taxRateText = String(format: "%.2f", NSDecimalNumber(decimal: company.defaultTaxRate ?? 8.25).doubleValue)
         taxInclusivePricing = company.taxInclusivePricing
+        let resolvedLaborMarkup = company.laborMarkupPercent ?? Decimal(Self.defaultLaborMarkupPercent)
+        laborMarkupPercent = resolvedLaborMarkup
+        laborMarkupText = Self.formatMarkup(resolvedLaborMarkup)
         estimatePrefix = company.estimatePrefix ?? "EST"
         invoicePrefix = company.invoicePrefix ?? "INV"
         nextEstimateNumber = company.nextEstimateNumber

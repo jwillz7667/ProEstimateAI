@@ -6,6 +6,9 @@ protocol SettingsServiceProtocol: Sendable {
     func loadCompanySettings() async throws -> Company
     func saveCompanyBranding(_ settings: CompanyBrandingUpdate) async throws -> Company
     func saveTaxSettings(_ settings: TaxSettingsUpdate) async throws -> Company
+    /// Persist the contractor's labor markup percentage. Returns the updated
+    /// Company so callers can reflect any server-side normalization.
+    func saveLaborSettings(_ settings: LaborSettingsUpdate) async throws -> Company
     func saveNumberingSettings(_ settings: NumberingSettingsUpdate) async throws -> Company
     func uploadLogo(imageData: Data, mimeType: String) async throws -> Company
     func deleteLogo() async throws -> Company
@@ -43,6 +46,10 @@ struct CompanyBrandingUpdate: Sendable {
 struct TaxSettingsUpdate: Sendable {
     let defaultTaxRate: Decimal
     let taxInclusivePricing: Bool
+}
+
+struct LaborSettingsUpdate: Sendable {
+    let laborMarkupPercent: Decimal
 }
 
 struct NumberingSettingsUpdate: Sendable {
@@ -145,6 +152,38 @@ final class MockSettingsService: SettingsServiceProtocol {
             defaultTaxRate: settings.defaultTaxRate,
             defaultMarkupPercent: 20,
             taxInclusivePricing: settings.taxInclusivePricing,
+            estimatePrefix: "EST",
+            invoicePrefix: "INV",
+            proposalPrefix: "PROP",
+            nextEstimateNumber: 1001,
+            nextInvoiceNumber: 2001,
+            nextProposalNumber: 3001,
+            defaultLanguage: "en",
+            timezone: "America/New_York",
+            websiteUrl: nil,
+            taxLabel: "Tax",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+
+    func saveLaborSettings(_ settings: LaborSettingsUpdate) async throws -> Company {
+        try await Task.sleep(nanoseconds: simulatedDelay)
+        return Company(
+            id: "c-001",
+            name: "Apex Remodeling Co.",
+            phone: "512-555-0199",
+            email: "info@apexremodeling.com",
+            address: "1200 Main St",
+            city: "Austin",
+            state: "TX",
+            zip: "78701",
+            logoURL: nil,
+            primaryColor: "#F97316",
+            secondaryColor: "#1E293B",
+            defaultTaxRate: 8.25,
+            defaultMarkupPercent: 20,
+            laborMarkupPercent: settings.laborMarkupPercent,
             estimatePrefix: "EST",
             invoicePrefix: "INV",
             proposalPrefix: "PROP",

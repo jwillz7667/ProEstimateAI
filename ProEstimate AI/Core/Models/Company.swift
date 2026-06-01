@@ -17,6 +17,9 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
     let secondaryColor: String?
     let defaultTaxRate: Decimal?
     let defaultMarkupPercent: Decimal?
+    /// Contractor's margin on labor (percent). `nil` means use the platform
+    /// default. Distinct from `defaultMarkupPercent`, which governs materials.
+    let laborMarkupPercent: Decimal?
     let taxInclusivePricing: Bool
     let estimatePrefix: String?
     let invoicePrefix: String?
@@ -51,6 +54,7 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
         case secondaryColor = "secondary_color"
         case defaultTaxRate = "default_tax_rate"
         case defaultMarkupPercent = "default_markup_percent"
+        case laborMarkupPercent = "labor_markup_percent"
         case taxInclusivePricing = "tax_inclusive_pricing"
         case estimatePrefix = "estimate_prefix"
         case invoicePrefix = "invoice_prefix"
@@ -87,6 +91,7 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
         secondaryColor = try c.decodeIfPresent(String.self, forKey: .secondaryColor)
         defaultTaxRate = try c.decodeIfPresent(Decimal.self, forKey: .defaultTaxRate)
         defaultMarkupPercent = try c.decodeIfPresent(Decimal.self, forKey: .defaultMarkupPercent)
+        laborMarkupPercent = try c.decodeIfPresent(Decimal.self, forKey: .laborMarkupPercent)
         taxInclusivePricing = try c.decodeIfPresent(Bool.self, forKey: .taxInclusivePricing) ?? false
         estimatePrefix = try c.decodeIfPresent(String.self, forKey: .estimatePrefix)
         invoicePrefix = try c.decodeIfPresent(String.self, forKey: .invoicePrefix)
@@ -118,6 +123,7 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
         secondaryColor: String?,
         defaultTaxRate: Decimal?,
         defaultMarkupPercent: Decimal?,
+        laborMarkupPercent: Decimal? = nil,
         taxInclusivePricing: Bool = false,
         estimatePrefix: String?,
         invoicePrefix: String?,
@@ -147,6 +153,7 @@ struct Company: Codable, Identifiable, Hashable, Sendable {
         self.secondaryColor = secondaryColor
         self.defaultTaxRate = defaultTaxRate
         self.defaultMarkupPercent = defaultMarkupPercent
+        self.laborMarkupPercent = laborMarkupPercent
         self.taxInclusivePricing = taxInclusivePricing
         self.estimatePrefix = estimatePrefix
         self.invoicePrefix = invoicePrefix
@@ -183,6 +190,7 @@ extension Company {
         secondaryColor: "#1E293B",
         defaultTaxRate: 8.25,
         defaultMarkupPercent: 20,
+        laborMarkupPercent: 25,
         estimatePrefix: "EST",
         invoicePrefix: "INV",
         proposalPrefix: "PROP",

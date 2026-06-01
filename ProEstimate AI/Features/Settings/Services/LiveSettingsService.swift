@@ -47,6 +47,11 @@ final class LiveSettingsService: SettingsServiceProtocol, Sendable {
         return try await apiClient.request(.updateCompany(body: body))
     }
 
+    func saveLaborSettings(_ settings: LaborSettingsUpdate) async throws -> Company {
+        let body = LaborSettingsBody(laborMarkupPercent: settings.laborMarkupPercent)
+        return try await apiClient.request(.updateCompany(body: body))
+    }
+
     func saveNumberingSettings(_ settings: NumberingSettingsUpdate) async throws -> Company {
         let body = NumberingSettingsBody(
             estimatePrefix: settings.estimatePrefix,
@@ -134,6 +139,11 @@ private struct CompanyBrandingBody: Encodable, Sendable {
 private struct TaxSettingsBody: Encodable, Sendable {
     let defaultTaxRate: Decimal
     let taxInclusivePricing: Bool
+}
+
+/// Partial company update body for the labor markup setting.
+private struct LaborSettingsBody: Encodable, Sendable {
+    let laborMarkupPercent: Decimal
 }
 
 /// Partial company update body for document numbering settings.

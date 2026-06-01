@@ -29,6 +29,8 @@ struct SettingsView: View {
                     CompanyBrandingView(viewModel: viewModel)
                 case .taxSettings:
                     TaxSettingsView(viewModel: viewModel)
+                case .laborSettings:
+                    LaborSettingsView(viewModel: viewModel)
                 case .numberingSettings:
                     NumberingSettingsView(viewModel: viewModel)
                 case .languageSettings:
@@ -185,6 +187,20 @@ struct SettingsView: View {
                         }
                     } icon: {
                         Image(systemName: "building.columns")
+                            .foregroundStyle(ColorTokens.accentBlue)
+                    }
+                }
+
+                NavigationLink(value: AppDestination.laborSettings) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Labor Markup")
+                            Text("\(SettingsViewModel.formatMarkup(viewModel.laborMarkupPercent))%")
+                                .font(TypographyTokens.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "hammer")
                             .foregroundStyle(ColorTokens.accentBlue)
                     }
                 }

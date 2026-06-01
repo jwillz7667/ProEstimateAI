@@ -12,6 +12,7 @@ enum AppDestination: Hashable {
     // Settings
     case companyBranding
     case taxSettings
+    case laborSettings
     case numberingSettings
     case languageSettings
     case subscriptionSettings
