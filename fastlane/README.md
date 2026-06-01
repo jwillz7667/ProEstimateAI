@@ -87,6 +87,22 @@ Register the bundle id in the Developer Portal (one-time). Enables Sign In with 
 
 Create the Pro subscription group + monthly / annual products via App Store Connect API
 
+### ios asc_check
+
+```sh
+[bundle exec] fastlane ios asc_check
+```
+
+Validate App Store Connect API auth and print the latest TestFlight build number
+
+### ios archive_only
+
+```sh
+[bundle exec] fastlane ios archive_only
+```
+
+Build a signed app-store IPA without uploading it. Uses the build number already set in the project; pair with `xcrun altool --upload-app` because `upload_to_testflight` deadlocks the headless Transporter in this environment.
+
 ----
 
 This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.

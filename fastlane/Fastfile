@@ -1167,6 +1167,91 @@ platform :ios do
     UI.important("Products are now 'Ready to Submit' — they'll be bundled with the next App Store submission.")
   end
 
+  desc "Validate App Store Connect API auth and print the latest TestFlight build number"
+  lane :asc_check do
+    api_key = make_api_key
+    latest = latest_testflight_build_number(
+      api_key:              api_key,
+      app_identifier:       BUNDLE_ID,
+      initial_build_number: 0
+    )
+    UI.success("ASC auth OK — latest TestFlight build for #{BUNDLE_ID}: #{latest}")
+  end
+
+  desc "Build a signed app-store IPA without uploading it. Uses the build number " \
+       "already set in the project; pair with `xcrun altool --upload-app` because " \
+       "`upload_to_testflight` deadlocks the headless Transporter in this environment."
+  lane :archive_only do
+    api_key = make_api_key
+
+    # Local signing: reuse the dev keychain's Apple Distribution cert if it's
+    # present (generate only if missing — Apple caps the team at three).
+    cert(
+      api_key:              api_key,
+      output_path:          "./fastlane/signing",
+      generate_apple_certs: true,
+      force:                false
+    )
+
+    # force:true regenerates the canonical App Store profile against the cert
+    # now in the keychain (mirrors the `beta` lane) instead of drifting into a
+    # timestamp-suffixed duplicate.
+    sigh(
+      api_key:         api_key,
+      app_identifier:  BUNDLE_ID,
+      platform:        "ios",
+      output_path:     "./fastlane/signing",
+      force:           true
+    )
+
+    require "plist"
+    profile_path = lane_context[SharedValues::SIGH_PROFILE_PATH]
+    profile_xml  = `security cms -D -i "#{profile_path}"`
+    UI.user_error!("Could not decode #{profile_path}") if profile_xml.empty?
+    profile_plist = Plist.parse_xml(profile_xml)
+    profile_name  = profile_plist["Name"]
+    profile_uuid  = profile_plist["UUID"]
+    UI.user_error!("Provisioning profile at #{profile_path} has no Name field") if profile_name.nil? || profile_name.empty?
+    UI.important("Using profile '#{profile_name}' (UUID #{profile_uuid}) at #{profile_path}")
+
+    key_id        = ENV.fetch("APP_STORE_CONNECT_API_KEY_ID")
+    key_issuer_id = ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID")
+    key_path      = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    signing_args = [
+      "-authenticationKeyID", key_id,
+      "-authenticationKeyIssuerID", key_issuer_id,
+    ]
+    signing_args += ["-authenticationKeyPath", key_path] if key_path && !key_path.empty?
+
+    build_ios_app(
+      project:                XCODE_PROJECT,
+      scheme:                 XCODE_SCHEME,
+      configuration:          "Release",
+      export_method:          "app-store",
+      clean:                  true,
+      include_bitcode:        false,
+      include_symbols:        true,
+      skip_profile_detection: true,
+      output_directory:       "./build",
+      output_name:            "ProEstimateAI.ipa",
+      export_options: {
+        method: "app-store",
+        signingStyle: "manual",
+        provisioningProfiles: {
+          BUNDLE_ID => profile_name
+        }
+      },
+      xcargs: [
+        signing_args.join(" "),
+        "CODE_SIGN_STYLE=Manual",
+        "PROVISIONING_PROFILE_SPECIFIER=\"#{profile_name}\"",
+        "CODE_SIGN_IDENTITY=\"Apple Distribution\""
+      ].join(" ")
+    )
+
+    UI.success("IPA built at #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
+  end
+
   error do |lane, exception|
     UI.error("Lane #{lane} failed: #{exception}")
   end
