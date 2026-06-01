@@ -15,6 +15,9 @@ export const updateCompanySchema = z.object({
   // to match real-world maxima while leaving room for unusual jurisdictions.
   default_tax_rate: z.number().min(0).max(100).nullable().optional(),
   default_markup_percent: z.number().min(0).max(999).nullable().optional(),
+  // Labor margin %, separate from materials markup. Same bounds as
+  // default_markup_percent; null clears it back to the platform default.
+  labor_markup_percent: z.number().min(0).max(999).nullable().optional(),
   tax_inclusive_pricing: z.boolean().optional(),
   default_ai_preview_enabled: z.boolean().optional(),
   estimate_prefix: z.string().max(10).nullable().optional(),

@@ -44,11 +44,20 @@ export interface CategoryBounds {
  * Per-tier labor rate bands, USD/hr, applied uniformly across all project
  * types. Per-type prompt modules can still suggest tighter bands inside
  * their narrative; this is the floor/ceiling the validator enforces.
+ *
+ * These are fully-burdened CHARGE-OUT rates (the number that appears on the
+ * client's estimate), not a tradesperson's take-home wage. They bundle wages,
+ * payroll burden, insurance, vehicle/tooling, and overhead — which is why the
+ * STANDARD floor is $65/hr, not minimum wage. The previous $35 floor let the
+ * model bill installed skilled labor at unskilled rates, producing the
+ * "$700 in materials / $20 in labor" estimates this calibration fixes.
+ * Anchors: 2026 US contractor charge-out data (HomeAdvisor, Angi, Thumbtack,
+ * RSMeans crew rates) for general remodel labor through master-trade work.
  */
 export const LABOR_RATE_BOUNDS: Record<QualityTier, TierRange> = {
-  STANDARD: { min: 35, max: 80 },
-  PREMIUM: { min: 55, max: 120 },
-  LUXURY: { min: 95, max: 200 },
+  STANDARD: { min: 65, max: 110 },
+  PREMIUM: { min: 95, max: 160 },
+  LUXURY: { min: 135, max: 250 },
 };
 
 /**

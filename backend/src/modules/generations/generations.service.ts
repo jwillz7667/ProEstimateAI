@@ -21,6 +21,16 @@ import { CreateGenerationInput } from "./generations.validators";
 import * as estimatesService from "../estimates/estimates.service";
 import * as estimateLineItemsService from "../estimate-line-items/estimate-line-items.service";
 import { CreateEstimateLineItemInput } from "../estimate-line-items/estimate-line-items.validators";
+import { LABOR_RATE_BOUNDS } from "../../lib/prompts/tier-bounds";
+import {
+  computeLaborFloor,
+  floorBillableHours,
+  resolveLaborMarkupPercent,
+  roundUpBillableHours,
+} from "../../lib/labor-pricing";
+
+/** Quality tiers as a value type, mirroring the Prisma enum's three members. */
+type RecordTier = "STANDARD" | "PREMIUM" | "LUXURY";
 
 /**
  * Verifies that a project exists and belongs to the given company.
@@ -430,10 +440,8 @@ async function generateAndStoreMaterials(
     return;
   }
 
-  const tierForRecords = (matContext.qualityTier?.toUpperCase() ?? "STANDARD") as
-    | "STANDARD"
-    | "PREMIUM"
-    | "LUXURY";
+  const tierForRecords = (matContext.qualityTier?.toUpperCase() ??
+    "STANDARD") as RecordTier;
 
   // Store material suggestions
   const materialRecords = materials.map((m) => ({
@@ -496,6 +504,7 @@ async function generateAndStoreMaterials(
       userId,
       storedMaterials.map((m) => m.id),
       context.projectType,
+      tierForRecords,
     );
   } catch (err) {
     logger.error(
@@ -566,12 +575,15 @@ async function autoCreateEstimate(
   userId: string,
   materialSuggestionIds: string[],
   projectType: string,
+  tier: RecordTier,
 ) {
-  // Fetch the stored material suggestions + company tax setting in parallel.
-  // Tax was previously hardcoded to 8.25%, which both ignored the contractor's
-  // saved default and over-charged for tax-free materials in states like OR,
-  // MT, NH, DE, AK. Reading defaultTaxRate keeps the auto-estimate consistent
-  // with what the estimate editor and the secondary AI-estimate path use.
+  // Fetch the stored material suggestions + company tax/markup settings in
+  // parallel. Tax was previously hardcoded to 8.25%, which both ignored the
+  // contractor's saved default and over-charged for tax-free materials in
+  // states like OR, MT, NH, DE, AK. Reading defaultTaxRate keeps the
+  // auto-estimate consistent with what the estimate editor and the secondary
+  // AI-estimate path use; laborMarkupPercent drives the contractor's labor
+  // margin on every labor line.
   const [materials, company] = await Promise.all([
     prisma.materialSuggestion.findMany({
       where: { id: { in: materialSuggestionIds } },
@@ -579,7 +591,7 @@ async function autoCreateEstimate(
     }),
     prisma.company.findUnique({
       where: { id: companyId },
-      select: { defaultTaxRate: true },
+      select: { defaultTaxRate: true, laborMarkupPercent: true },
     }),
   ]);
 
@@ -595,6 +607,16 @@ async function autoCreateEstimate(
   const companyTaxFraction = company?.defaultTaxRate
     ? Number(company.defaultTaxRate) / 100
     : 0;
+
+  // The contractor's margin on labor. Applied as markup_percent on every labor
+  // line so the estimate reflects loaded labor cost, not just the raw rate.
+  // Defaults to 25% when the company hasn't set its own.
+  const laborMarkupPercent = resolveLaborMarkupPercent(
+    company?.laborMarkupPercent,
+  );
+  // Tier floor rate — used to clamp the fallback labor rate up and to size any
+  // labor top-up line so installed skilled labor never bills at unskilled rates.
+  const tierFloorRate = LABOR_RATE_BOUNDS[tier].min;
 
   // Check if an estimate already exists for this project
   const existingEstimates = await prisma.estimate.findMany({
@@ -641,10 +663,14 @@ async function autoCreateEstimate(
       return {
         category: "labor" as const,
         name: m.name,
-        quantity: Number(m.quantity),
+        // Floor sub-hour tasks to the minimum billable window so a model that
+        // returned 0.25 hr doesn't produce a near-zero labor line.
+        quantity: floorBillableHours(Number(m.quantity)),
         unit: m.unit || "hour",
-        unit_cost: Number(m.estimatedCost),
-        markup_percent: 0,
+        // Keep the per-hour rate at/above the tier floor even if the stored
+        // suggestion predates the raised bounds.
+        unit_cost: Math.max(Number(m.estimatedCost), tierFloorRate),
+        markup_percent: laborMarkupPercent,
         tax_rate: 0,
         sort_order: index,
         source_material_suggestion_id: m.id,
@@ -704,13 +730,62 @@ async function autoCreateEstimate(
         .replace(/_/g, " ")
         .toLowerCase()
         .replace(/\b\w/g, (c) => c.toUpperCase())} Labor`,
-      quantity: labor.hours,
+      quantity: floorBillableHours(labor.hours),
       unit: "hour",
-      unit_cost: labor.rate,
-      markup_percent: 0,
+      // The default table predates the raised tier floors; clamp up so a
+      // fallback never bills below the tier's minimum charge-out rate.
+      unit_cost: Math.max(labor.rate, tierFloorRate),
+      markup_percent: laborMarkupPercent,
       tax_rate: 0,
       sort_order: materials.length,
     });
+  }
+
+  // Safety net for the "$700 in materials / $20 in labor" failure mode: if the
+  // assembled labor still falls below the floor for this trade and tier, add a
+  // single top-up line so total labor is proportionate to the work. Pre-tax
+  // comparison (labor is untaxed); materials markup is 0 in this path so their
+  // pre-tax total is quantity × unit_cost.
+  const preTax = (li: CreateEstimateLineItemInput) =>
+    li.quantity * li.unit_cost * (1 + (li.markup_percent ?? 0) / 100);
+  const materialsPreTax = lineItems
+    .filter((li) => li.category === "materials")
+    .reduce((sum, li) => sum + preTax(li), 0);
+  const laborPreTax = lineItems
+    .filter((li) => li.category === "labor")
+    .reduce((sum, li) => sum + preTax(li), 0);
+
+  const floor = computeLaborFloor({
+    projectType,
+    tier,
+    materialsPreTax,
+    laborPreTax,
+  });
+  if (floor.needed) {
+    const hours = roundUpBillableHours(floor.impliedHours);
+    lineItems.push({
+      category: "labor" as const,
+      name: "Additional skilled labor & installation",
+      quantity: hours,
+      unit: "hour",
+      unit_cost: floor.ratePerHour,
+      markup_percent: 0,
+      tax_rate: 0,
+      sort_order: lineItems.length,
+    });
+    logger.info(
+      {
+        projectId,
+        estimateId,
+        tier,
+        materialsPreTax: Math.round(materialsPreTax),
+        laborPreTax: Math.round(laborPreTax),
+        targetLabor: Math.round(floor.targetLabor),
+        addedHours: hours,
+        rate: floor.ratePerHour,
+      },
+      "Labor below floor — added top-up line",
+    );
   }
 
   // Batch create all line items and recalculate totals once

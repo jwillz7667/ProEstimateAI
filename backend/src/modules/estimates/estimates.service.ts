@@ -302,6 +302,10 @@ export async function generateAI(
     defaultMarkupPercent: company.defaultMarkupPercent
       ? Number(company.defaultMarkupPercent)
       : undefined,
+    laborMarkupPercent:
+      company.laborMarkupPercent != null
+        ? Number(company.laborMarkupPercent)
+        : undefined,
     defaultTaxRate: company.defaultTaxRate
       ? Number(company.defaultTaxRate)
       : undefined,

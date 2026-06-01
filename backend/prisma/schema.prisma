@@ -249,6 +249,10 @@ model Company {
   secondaryColor       String?
   defaultTaxRate       Decimal? @db.Decimal(6, 3)
   defaultMarkupPercent Decimal? @db.Decimal(5, 2)
+  // Contractor's margin on labor, applied as markup % on every auto-generated
+  // labor line. Null = use the platform default (25%). Distinct from
+  // defaultMarkupPercent, which governs materials.
+  laborMarkupPercent   Decimal? @db.Decimal(5, 2)
   estimatePrefix       String?  @default("EST")
   invoicePrefix        String?  @default("INV")
   proposalPrefix       String?  @default("PROP")

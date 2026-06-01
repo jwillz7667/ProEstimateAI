@@ -50,6 +50,9 @@ export async function updateMe(companyId: string, data: UpdateCompanyInput) {
       ...(data.default_markup_percent !== undefined && {
         defaultMarkupPercent: data.default_markup_percent,
       }),
+      ...(data.labor_markup_percent !== undefined && {
+        laborMarkupPercent: data.labor_markup_percent,
+      }),
       ...(data.tax_inclusive_pricing !== undefined && {
         taxInclusivePricing: data.tax_inclusive_pricing,
       }),

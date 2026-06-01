@@ -14,6 +14,7 @@ export interface CompanyDto {
   secondary_color: string | null;
   default_tax_rate: number | null;
   default_markup_percent: number | null;
+  labor_markup_percent: number | null;
   tax_inclusive_pricing: boolean;
   default_ai_preview_enabled: boolean;
   estimate_prefix: string | null;
@@ -44,12 +45,19 @@ export function toCompanyDto(company: Company): CompanyDto {
     logo_url: company.logoUrl,
     primary_color: company.primaryColor,
     secondary_color: company.secondaryColor,
-    default_tax_rate: company.defaultTaxRate
-      ? Number(company.defaultTaxRate)
-      : null,
-    default_markup_percent: company.defaultMarkupPercent
-      ? Number(company.defaultMarkupPercent)
-      : null,
+    // Use `!= null` (not a truthy test) so a deliberate 0 round-trips as 0
+    // rather than collapsing to null — a 0%-tax contractor (e.g. Oregon) must
+    // not have the client fall back to its default rate.
+    default_tax_rate:
+      company.defaultTaxRate != null ? Number(company.defaultTaxRate) : null,
+    default_markup_percent:
+      company.defaultMarkupPercent != null
+        ? Number(company.defaultMarkupPercent)
+        : null,
+    labor_markup_percent:
+      company.laborMarkupPercent != null
+        ? Number(company.laborMarkupPercent)
+        : null,
     tax_inclusive_pricing: company.taxInclusivePricing,
     default_ai_preview_enabled: company.defaultAiPreviewEnabled,
     estimate_prefix: company.estimatePrefix,

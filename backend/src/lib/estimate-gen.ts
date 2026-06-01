@@ -5,6 +5,12 @@ import {
   clampLaborRate,
   clampMaterialCost,
 } from './prompts/tier-bounds';
+import {
+  computeLaborFloor,
+  floorBillableHours,
+  resolveLaborMarkupPercent,
+  roundUpBillableHours,
+} from './labor-pricing';
 import type { QualityTier } from './prompts/types';
 
 // DeepSeek is OpenAI-compatible. `deepseek-chat` is the V3 alias and supports
@@ -82,6 +88,8 @@ export interface EstimateGenContext {
   companyAddress?: string;
   companyWebsite?: string;
   defaultMarkupPercent?: number;
+  /** Contractor's margin on labor; applied to every labor line. */
+  laborMarkupPercent?: number;
   defaultTaxRate?: number;
 
   // Materials the user has selected — must appear in the output
@@ -365,6 +373,8 @@ function normalizeGenerated(raw: unknown, context: EstimateGenContext): Generate
     reason: string;
   }> = [];
 
+  const laborMarkupPercent = resolveLaborMarkupPercent(context.laborMarkupPercent);
+
   const lineItems: EstimateGenLineItem[] = lineItemsRaw.map((li) => {
     const item = (li ?? {}) as Record<string, unknown>;
     const categoryRaw = typeof item.category === 'string' ? item.category : 'other';
@@ -374,11 +384,12 @@ function normalizeGenerated(raw: unknown, context: EstimateGenContext): Generate
     const name = String(item.name ?? 'Untitled line item');
     const unit = String(item.unit ?? 'each');
     const rawUnitCost = Number(item.unitCost) || 0;
+    const isLaborLine = category === 'labor' || isHourUnit(unit);
 
     let finalUnitCost = rawUnitCost;
     let inferredCategory: string | null = null;
 
-    if (category === 'labor' || isHourUnit(unit)) {
+    if (isLaborLine) {
       const result = clampLaborRate(rawUnitCost, tier);
       if (result.clamped) {
         clampLog.push({
@@ -413,10 +424,18 @@ function normalizeGenerated(raw: unknown, context: EstimateGenContext): Generate
       category,
       name,
       description: String(item.description ?? ''),
-      quantity: Number(item.quantity) || 1,
+      // Floor labor tasks to the minimum billable window; leave material /
+      // other quantities as the model reported them.
+      quantity: isLaborLine
+        ? floorBillableHours(Number(item.quantity) || 1)
+        : Number(item.quantity) || 1,
       unit,
       unitCost: finalUnitCost,
-      markupPercent: Number(item.markupPercent) || 0,
+      // Force the contractor's labor margin onto labor lines (the model
+      // typically returns 0); materials keep the markup the prompt set.
+      markupPercent: isLaborLine
+        ? laborMarkupPercent
+        : Number(item.markupPercent) || 0,
       taxRate: clampTaxFraction(Number(item.taxRate)),
     };
   });
@@ -425,6 +444,46 @@ function normalizeGenerated(raw: unknown, context: EstimateGenContext): Generate
     logger.info(
       { tier, clamped: clampLog },
       'Estimate line items clamped to tier bounds',
+    );
+  }
+
+  // Labor-to-materials floor: same safety net as the auto-estimate path. If
+  // assembled labor is disproportionately small for this trade and tier, add a
+  // single top-up line so the bid isn't material-only with token labor.
+  const preTax = (li: EstimateGenLineItem) =>
+    li.quantity * li.unitCost * (1 + li.markupPercent / 100);
+  const materialsPreTax = lineItems
+    .filter((li) => li.category === 'materials')
+    .reduce((sum, li) => sum + preTax(li), 0);
+  const laborPreTax = lineItems
+    .filter((li) => li.category === 'labor')
+    .reduce((sum, li) => sum + preTax(li), 0);
+  const floor = computeLaborFloor({
+    projectType: context.projectType,
+    tier,
+    materialsPreTax,
+    laborPreTax,
+  });
+  if (floor.needed) {
+    lineItems.push({
+      category: 'labor',
+      name: 'Additional skilled labor & installation',
+      description: 'Installation, fitting, and finish labor proportionate to the scope.',
+      quantity: roundUpBillableHours(floor.impliedHours),
+      unit: 'hour',
+      unitCost: floor.ratePerHour,
+      markupPercent: 0,
+      taxRate: 0,
+    });
+    logger.info(
+      {
+        projectType: context.projectType,
+        tier,
+        materialsPreTax: Math.round(materialsPreTax),
+        laborPreTax: Math.round(laborPreTax),
+        targetLabor: Math.round(floor.targetLabor),
+      },
+      'Labor below floor — added top-up line (estimate-gen)',
     );
   }
 
