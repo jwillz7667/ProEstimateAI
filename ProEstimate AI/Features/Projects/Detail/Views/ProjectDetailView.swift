@@ -628,18 +628,29 @@ struct ProjectDetailView: View {
             exportingEstimateId = estimateId
             exportProgressMessage = "Preparing estimate..."
             Task {
-                let url = await performBrandedExport(estimateId: estimateId)
-                if let url {
-                    await persistExportToProject(url: url, estimateId: estimateId)
-                }
-                await MainActor.run {
+                do {
+                    let url = try await performBrandedExport(estimateId: estimateId)
                     if let url {
-                        exportedPDF = ExportedPDF(url: url)
-                    } else {
-                        viewModel.errorMessage = "Couldn't build the PDF. Make sure the estimate has at least one line item and try again."
+                        await persistExportToProject(url: url, estimateId: estimateId)
                     }
-                    exportingEstimateId = nil
-                    exportProgressMessage = nil
+                    await MainActor.run {
+                        if let url {
+                            exportedPDF = ExportedPDF(url: url)
+                        } else {
+                            // Render returned nil: the PDF itself couldn't be
+                            // built (e.g. no line items) — the estimate loaded
+                            // fine, so this guidance is accurate here.
+                            viewModel.errorMessage = "Couldn't build the PDF. Make sure the estimate has at least one line item and try again."
+                        }
+                        exportingEstimateId = nil
+                        exportProgressMessage = nil
+                    }
+                } catch {
+                    await MainActor.run {
+                        viewModel.errorMessage = "Export failed: \(error.localizedDescription)"
+                        exportingEstimateId = nil
+                        exportProgressMessage = nil
+                    }
                 }
             }
         case let .blocked(decision):
@@ -689,11 +700,15 @@ struct ProjectDetailView: View {
     /// estimate + line items via the live service and hands them to
     /// `EstimatePDFRenderer`. Each ancillary fetch is independently optional
     /// so a missing logo or generation doesn't kill the export.
-    private func performBrandedExport(estimateId: String) async -> URL? {
+    private func performBrandedExport(estimateId: String) async throws -> URL? {
         await setExportProgress("Fetching estimate...")
 
         let estimateService = LiveEstimateService()
-        guard let estimate = try? await estimateService.getEstimate(id: estimateId) else { return nil }
+        // The estimate itself is load-bearing: if this fails we must surface
+        // the real reason (auth, network, 404) rather than swallow it to nil
+        // and show the misleading "needs a line item" message. Ancillary
+        // fetches below stay optional so a missing logo/asset never blocks.
+        let estimate = try await estimateService.getEstimate(id: estimateId)
         let lineItems = (try? await estimateService.getLineItems(estimateId: estimateId)) ?? []
         let projectId = estimate.projectId
         let isDIY = viewModel.isDIY

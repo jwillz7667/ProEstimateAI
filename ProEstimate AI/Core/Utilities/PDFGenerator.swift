@@ -441,9 +441,12 @@ enum PDFGenerator {
         ) {
             guard before != nil || after != nil else { return }
 
-            let sectionLabel = (projectTitle?.isEmpty == false)
-                ? "Project Visuals — \(projectTitle!)"
-                : "Project Visuals"
+            let sectionLabel: String
+            if let projectTitle, !projectTitle.isEmpty {
+                sectionLabel = "Project Visuals — \(projectTitle)"
+            } else {
+                sectionLabel = "Project Visuals"
+            }
 
             let imageAreaHeight: CGFloat = 170
             let captionHeight: CGFloat = 14
@@ -470,12 +473,18 @@ enum PDFGenerator {
         /// slot, a hairline border, and a caption chip below. Image origin is
         /// current `y`.
         private func drawImageSlot(
-            image: UIImage,
+            image rawImage: UIImage,
             caption: String,
             x: CGFloat,
             width: CGFloat,
             maxHeight: CGFloat
         ) {
+            // Downsample before drawing. `UIImage.draw(in:)` embeds the source
+            // bitmap at its native resolution regardless of the on-page rect,
+            // so a 12MP camera photo would balloon the PDF past the backend's
+            // 7MB upload cap and make the save fail. 2× the largest on-page
+            // dimension keeps print output crisp while shrinking embedded bytes.
+            let image = PDFGenerator.downsample(rawImage, maxDimension: max(width, maxHeight) * 2)
             let aspect = image.size.width / max(image.size.height, 1)
             var drawWidth = width
             var drawHeight = width / aspect
@@ -829,10 +838,43 @@ enum PDFGenerator {
         return renderer.pdfData { ctx in body(ctx) }
     }
 
+    /// Downsamples an image so the bytes embedded in the PDF scale with the
+    /// on-page draw size rather than the source photo's full resolution.
+    /// Returns the original untouched when it's already at or below the cap.
+    /// Renders at scale 1 (PDF points are 1:1 with the bitmap) so the result's
+    /// `size` equals its pixel dimensions and downstream aspect math is exact.
+    private static func downsample(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
+        let longest = max(image.size.width, image.size.height)
+        guard longest > maxDimension, longest > 0, maxDimension > 0 else { return image }
+
+        let scale = maxDimension / longest
+        let targetSize = CGSize(
+            width: max(1, image.size.width * scale),
+            height: max(1, image.size.height * scale)
+        )
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+    }
+
     private static func writeToTemp(data: Data, filename: String) -> URL? {
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        // Sanitize: a path separator or other illegal character in the
+        // estimate number (e.g. a contractor's prefix like "EST/2024") makes
+        // `appendingPathComponent` create a nested directory that doesn't
+        // exist, so the write throws and the export surfaces as a nil/opaque
+        // failure. Collapse any illegal characters to underscores first.
+        let illegal = CharacterSet(charactersIn: "/\\:?%*|\"<>").union(.newlines)
+        let sanitized = filename.components(separatedBy: illegal).joined(separator: "_")
+        let safeName = sanitized.isEmpty ? "estimate.pdf" : sanitized
+
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(safeName)
         do {
-            try data.write(to: tempURL)
+            try data.write(to: tempURL, options: .atomic)
             return tempURL
         } catch {
             return nil
