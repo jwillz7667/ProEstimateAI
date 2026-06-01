@@ -587,11 +587,17 @@ platform :ios do
     # ASC rejects `deliver(submit_for_review: true)` with
     # "A review submission is already in progress" whenever a prior
     # submission is still open — typically a READY_FOR_REVIEW that was
-    # never sent, or a submission sitting in UNRESOLVED_ISSUES after a
-    # rejection. We DELETE first (works for not-yet-submitted), fall
-    # back to PATCH state: CANCELING (for submissions Apple has touched),
-    # and abort cleanly if neither works.
-    # Submissions already IN_REVIEW cannot be cancelled via API.
+    # never sent, a WAITING_FOR_REVIEW awaiting Apple's queue, or a
+    # submission sitting in UNRESOLVED_ISSUES after a rejection.
+    #
+    # The ASC API does NOT permit DELETE on reviewSubmissions (403
+    # "does not allow 'DELETE'"), and `state` is read-only (PATCH with
+    # state:CANCELING → 409 "attribute 'state' can not be included in a
+    # 'UPDATE'"). The supported withdrawal is PATCH `canceled: true`,
+    # which transitions the submission through CANCELING to CANCELED.
+    # We then poll until it leaves the blocking states so deliver's
+    # pre-check sees a clean slate. Submissions already IN_REVIEW cannot
+    # be cancelled via API (handled separately below).
     # ------------------------------------------------------------------
     asc_raw = lambda do |method, path, body = nil|
       uri = URI.parse("https://api.appstoreconnect.apple.com/v1/#{path}")
@@ -623,31 +629,39 @@ platform :ios do
       UI.user_error!("A review submission is currently IN_REVIEW — wait for Apple to finish (or reject it in ASC UI) before re-dispatching.")
     end
 
+    blocking_states = %w[READY_FOR_REVIEW WAITING_FOR_REVIEW UNRESOLVED_ISSUES CANCELING]
     open_submissions.each do |sub|
       sub_id    = sub["id"]
       sub_state = sub.dig("attributes", "state")
-      UI.message("Clearing stale review submission #{sub_id} (state: #{sub_state})...")
+      UI.message("Cancelling stale review submission #{sub_id} (state: #{sub_state})...")
 
-      # Strategy 1: DELETE (works for READY_FOR_REVIEW, often also for
-      # UNRESOLVED_ISSUES since the developer still owns the record).
-      del_code, del_body = asc_raw.call(:delete, "reviewSubmissions/#{sub_id}")
-      if del_code < 400
-        UI.success("Deleted submission #{sub_id}")
-        next
-      end
-      UI.important("DELETE returned #{del_code}: #{(del_body.dig('errors') || []).map { |e| e['detail'] }.join('; ')}")
-
-      # Strategy 2: PATCH state → CANCELING (ASC flips it asynchronously).
-      patch_code, patch_body = asc_raw.call(:patch, "reviewSubmissions/#{sub_id}", {
-        data: { type: "reviewSubmissions", id: sub_id, attributes: { state: "CANCELING" } }
+      cancel_code, cancel_body = asc_raw.call(:patch, "reviewSubmissions/#{sub_id}", {
+        data: { type: "reviewSubmissions", id: sub_id, attributes: { canceled: true } }
       })
-      if patch_code < 400
-        UI.success("Patched submission #{sub_id} to CANCELING")
-        next
+      unless cancel_code < 400
+        details = (cancel_body.dig("errors") || []).map { |e| e["detail"] }.join("; ")
+        UI.user_error!("Could not cancel stale submission #{sub_id} (state: #{sub_state}) via API (HTTP #{cancel_code}: #{details}). Open App Store Connect → App Review and cancel it manually, then re-run this lane.")
       end
-      UI.important("PATCH state returned #{patch_code}: #{(patch_body.dig('errors') || []).map { |e| e['detail'] }.join('; ')}")
+      UI.success("Requested cancellation of submission #{sub_id} (canceled: true)")
 
-      UI.user_error!("Could not close stale submission #{sub_id} (state: #{sub_state}) via API. Open App Store Connect → App Review → Resolution Center and cancel/reply manually, then re-run this workflow.")
+      # deliver's submit pre-check fails if a submission is still open, so
+      # wait for ASC to actually clear it (CANCELING → CANCELED, or the
+      # record drops out of the blocking set entirely).
+      clear_deadline = Time.now + 180
+      loop do
+        check_code, check_body = asc_raw.call(:get, "reviewSubmissions/#{sub_id}")
+        cur_state = check_body.dig("data", "attributes", "state")
+        if check_code == 404 || cur_state.nil? || !blocking_states.include?(cur_state)
+          UI.success("Submission #{sub_id} cleared (state: #{cur_state.inspect})")
+          break
+        end
+        if Time.now > clear_deadline
+          UI.important("Submission #{sub_id} still #{cur_state} after 180s — proceeding; deliver will surface any conflict explicitly.")
+          break
+        end
+        UI.message("  waiting for #{sub_id} to clear (state: #{cur_state})...")
+        sleep 10
+      end
     end
 
     # Give ASC a beat to flip state before deliver's pre-check runs.
@@ -669,19 +683,41 @@ platform :ios do
     # attach metadata to a different version's record.
     # ------------------------------------------------------------------
     target_version = target_marketing_version
-
-    versions_resp = asc_get.call(
-      "apps/#{submit_app.id}/appStoreVersions?filter[platform]=IOS&filter[versionString]=#{target_version}&limit=10"
-    )
-    matching_versions = versions_resp["data"] || []
     editable_states = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED REJECTED METADATA_REJECTED INVALID_BINARY]
-    editable_match = matching_versions.find { |v| editable_states.include?(v.dig("attributes", "appStoreState")) }
 
-    if editable_match
-      UI.success("Editable App Store version #{target_version} already exists (#{editable_match['id']}, state: #{editable_match.dig('attributes', 'appStoreState')})")
-    elsif !matching_versions.empty?
-      states_seen = matching_versions.map { |v| v.dig("attributes", "appStoreState") }.uniq
-      UI.user_error!("App Store version #{target_version} exists but is in non-editable state(s): #{states_seen.join(', ')}. Bump CFBundleShortVersionString to a new value and re-run.")
+    # Apple permits only ONE in-flight (editable / pending) App Store version
+    # at a time, so query ALL recent iOS versions — not just our target string.
+    # A version we just cancelled (e.g. 1.0.6 → DEVELOPER_REJECTED) still
+    # occupies that single slot and blocks creating a new versionString with
+    # 409 "cannot create a new version in the current state". Reuse the slot by
+    # renaming that editable version to our target rather than creating a
+    # second in-flight version.
+    all_versions_resp = asc_get.call(
+      "apps/#{submit_app.id}/appStoreVersions?filter[platform]=IOS&limit=20"
+    )
+    all_versions   = all_versions_resp["data"] || []
+    target_match   = all_versions.find { |v| v.dig("attributes", "versionString") == target_version }
+    editable_other = all_versions.find do |v|
+      v.dig("attributes", "versionString") != target_version &&
+        editable_states.include?(v.dig("attributes", "appStoreState"))
+    end
+
+    if target_match && editable_states.include?(target_match.dig("attributes", "appStoreState"))
+      UI.success("Editable App Store version #{target_version} already exists (#{target_match['id']}, state: #{target_match.dig('attributes', 'appStoreState')})")
+    elsif target_match
+      UI.user_error!("App Store version #{target_version} exists but is in non-editable state #{target_match.dig('attributes', 'appStoreState')}. Bump CFBundleShortVersionString to a new value and re-run.")
+    elsif editable_other
+      other_version = editable_other.dig("attributes", "versionString")
+      other_state   = editable_other.dig("attributes", "appStoreState")
+      UI.message("Reusing in-flight version #{other_version} (#{editable_other['id']}, #{other_state}) → renaming to #{target_version}...")
+      rename_code, rename_body = asc_raw.call(:patch, "appStoreVersions/#{editable_other['id']}", {
+        data: { type: "appStoreVersions", id: editable_other["id"], attributes: { versionString: target_version } }
+      })
+      if rename_code >= 400
+        UI.user_error!("Failed to rename version #{other_version} → #{target_version} (#{rename_code}): #{(rename_body.dig('errors') || []).map { |e| e['detail'] }.join('; ')}")
+      end
+      UI.success("Renamed in-flight version #{other_version} → #{target_version}")
+      sleep 5
     else
       UI.message("Creating App Store version #{target_version} for IOS platform...")
       create_code, create_body = asc_raw.call(:post, "appStoreVersions", {
