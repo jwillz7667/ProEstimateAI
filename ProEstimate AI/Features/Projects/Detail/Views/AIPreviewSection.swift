@@ -14,8 +14,13 @@ struct AIPreviewSection: View {
     /// Project title rendered above the comparison slider.
     var projectTitle: String = ""
     var assets: [Asset] = []
+    /// When set (deep link from a "preview ready" notification), the pager
+    /// opens focused on this generation instead of the newest. Applied once,
+    /// after which the user is free to page normally.
+    var highlightGenerationId: String? = nil
 
     @State private var selectedGenerationIndex: Int = 0
+    @State private var hasAppliedHighlight = false
     @State private var activePromptEditor: PromptEditorRequest?
     @State private var fullScreenViewer: FullScreenViewerRequest?
 
@@ -44,6 +49,22 @@ struct AIPreviewSection: View {
                 caption: request.caption
             )
         }
+        // Focus the deep-linked generation once it's present. Generations
+        // load asynchronously, so try on appear and again whenever the set
+        // changes — `hasAppliedHighlight` makes it idempotent and keeps the
+        // user's manual paging from being overridden.
+        .onAppear { applyHighlightIfNeeded() }
+        .onChange(of: generations.map(\.id)) { _, _ in applyHighlightIfNeeded() }
+    }
+
+    /// If a deep-link target was provided and it maps to a completed
+    /// generation, select it. No-op once applied or if the target isn't
+    /// (yet) among the completed generations.
+    private func applyHighlightIfNeeded() {
+        guard !hasAppliedHighlight, let target = highlightGenerationId else { return }
+        guard let index = completedGenerations.firstIndex(where: { $0.id == target }) else { return }
+        selectedGenerationIndex = index
+        hasAppliedHighlight = true
     }
 
     private struct FullScreenViewerRequest: Identifiable, Hashable {

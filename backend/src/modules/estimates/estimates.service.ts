@@ -9,7 +9,7 @@ import {
   CreateEstimateInput,
   UpdateEstimateInput,
 } from "./estimates.validators";
-import { EstimateStatus, LineItemCategory } from "@prisma/client";
+import { EstimateStatus, LineItemCategory, Prisma } from "@prisma/client";
 import {
   generateEstimate,
   type EstimateGenContext,
@@ -77,23 +77,29 @@ export async function create(
 
   // Auto-increment estimate number inside a transaction
   const estimate = await prisma.$transaction(async (tx) => {
-    // Read the company's current numbering state
-    const company = await tx.company.findUnique({
-      where: { id: companyId },
-      select: { estimatePrefix: true, nextEstimateNumber: true },
-    });
+    // Atomically claim the next number. The increment row-locks the company
+    // row, serializing concurrent creates for the same company; under the
+    // default READ COMMITTED isolation a read-then-write would let two
+    // transactions read the same value and collide on the
+    // @@unique([companyId, estimateNumber]) constraint (spurious 500). The
+    // returned counter is post-increment, so the number we claimed is one less.
+    const company = await tx.company
+      .update({
+        where: { id: companyId },
+        data: { nextEstimateNumber: { increment: 1 } },
+        select: { estimatePrefix: true, nextEstimateNumber: true },
+      })
+      .catch((err: unknown) => {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === "P2025"
+        ) {
+          throw new NotFoundError("Company", companyId);
+        }
+        throw err;
+      });
 
-    if (!company) {
-      throw new NotFoundError("Company", companyId);
-    }
-
-    const estimateNumber = `${company.estimatePrefix || "EST"}-${company.nextEstimateNumber}`;
-
-    // Increment the company's next estimate number
-    await tx.company.update({
-      where: { id: companyId },
-      data: { nextEstimateNumber: company.nextEstimateNumber + 1 },
-    });
+    const estimateNumber = `${company.estimatePrefix || "EST"}-${company.nextEstimateNumber - 1}`;
 
     // Create the estimate
     const created = await tx.estimate.create({
@@ -373,20 +379,25 @@ export async function generateAI(
 
   // Compose Assumptions and Exclusions into the dedicated Estimate columns.
   const estimate = await prisma.$transaction(async (tx) => {
-    const co = await tx.company.findUnique({
-      where: { id: companyId },
-      select: { estimatePrefix: true, nextEstimateNumber: true },
-    });
-    if (!co) {
-      throw new NotFoundError("Company", companyId);
-    }
+    // Atomically claim the next number — see the manual-create path above
+    // for why the read-then-write is replaced by an increment-and-read.
+    const co = await tx.company
+      .update({
+        where: { id: companyId },
+        data: { nextEstimateNumber: { increment: 1 } },
+        select: { estimatePrefix: true, nextEstimateNumber: true },
+      })
+      .catch((err: unknown) => {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === "P2025"
+        ) {
+          throw new NotFoundError("Company", companyId);
+        }
+        throw err;
+      });
 
-    const estimateNumber = `${co.estimatePrefix || "EST"}-${co.nextEstimateNumber}`;
-
-    await tx.company.update({
-      where: { id: companyId },
-      data: { nextEstimateNumber: co.nextEstimateNumber + 1 },
-    });
+    const estimateNumber = `${co.estimatePrefix || "EST"}-${co.nextEstimateNumber - 1}`;
 
     const created = await tx.estimate.create({
       data: {
@@ -418,7 +429,13 @@ export async function generateAI(
       const lineBase = item.quantity * item.unitCost;
       const markup = lineBase * (item.markupPercent / 100);
       const preTax = lineBase + markup;
-      const lineTotal = preTax + preTax * item.taxRate;
+      // lineTotal is the PRE-TAX line subtotal. This must match the manual
+      // create path (estimate-line-items.service.ts) and recalculateEstimateTotals,
+      // which both treat lineTotal as pre-tax and add `lineTotal * taxRate`
+      // separately. Storing it tax-inclusive here caused tax to be applied
+      // twice (and subtotals to be inflated) the moment any line item on an
+      // AI-generated estimate was edited and totals were recalculated.
+      const lineTotal = preTax;
 
       const categoryEnum =
         item.category === "materials"

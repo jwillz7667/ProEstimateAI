@@ -11,6 +11,7 @@ import {
   clampMaterialCost,
   ClampResult,
 } from "./prompts/tier-bounds";
+import { parseModelJson } from "./llm-json";
 
 // DeepSeek is OpenAI-compatible. `deepseek-chat` supports JSON-mode output
 // via `response_format: { type: 'json_object' }`. We reuse the same transport
@@ -125,11 +126,10 @@ CONTRACTOR'S REQUEST
   );
 
   try {
-    const text = await callDeepSeekWithRetry(
+    const parsed = (await callDeepSeekJsonWithRetry(
       systemPrompt,
       "Produce the materials JSON now. Output the JSON object only.",
-    );
-    const parsed = JSON.parse(text) as { materials?: unknown };
+    )) as { materials?: unknown };
     const arr = Array.isArray(parsed?.materials) ? parsed.materials : [];
 
     const clampLog: Array<{
@@ -236,11 +236,10 @@ export async function generateLaborEstimates(
   );
 
   try {
-    const text = await callDeepSeekWithRetry(
+    const parsed = (await callDeepSeekJsonWithRetry(
       systemPrompt,
       "Produce the labor JSON now. Output the JSON object only.",
-    );
-    const parsed = JSON.parse(text) as {
+    )) as {
       labor?: unknown;
       laborItems?: unknown;
     };
@@ -316,10 +315,10 @@ function defaultSearchQuery(materialName: string): string {
 // DeepSeek transport with retry/backoff
 // ---------------------------------------------------------------------------
 
-async function callDeepSeekWithRetry(
+async function callDeepSeekJsonWithRetry(
   systemPrompt: string,
   userKickoff: string,
-): Promise<string> {
+): Promise<unknown> {
   let lastErr: unknown;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -328,14 +327,18 @@ async function callDeepSeekWithRetry(
       if (!text.trim()) {
         throw new Error("DeepSeek returned an empty response");
       }
-      return text;
+      // Parse inside the retry loop: even in JSON mode the model
+      // occasionally emits malformed output (unescaped quotes, fences).
+      // A parse failure is as retryable as an HTTP 500 — a fresh
+      // completion almost always parses.
+      return parseModelJson(text);
     } catch (err) {
       lastErr = err;
       const isLastAttempt = attempt === MAX_ATTEMPTS - 1;
       if (isLastAttempt) break;
       const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
       logger.warn(
-        { attempt: attempt + 1, delayMs: delay },
+        { attempt: attempt + 1, delayMs: delay, err: String(err) },
         "DeepSeek call failed — retrying",
       );
       await sleep(delay);

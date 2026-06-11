@@ -2,123 +2,71 @@ import Foundation
 
 // MARK: - Protocol
 
-/// Abstracts invoice CRUD + line-item seeding + send + payment reconciliation —
-/// the final step of the get-paid loop.
+/// Invoice domain operations. The product loop creates invoices by
+/// converting an approved estimate (`convertEstimate`) rather than building
+/// them from scratch, so there is no blank-create entry point here — the
+/// money and line items are always inherited from the source estimate.
 protocol InvoiceServiceProtocol: Sendable {
-    func listByProject(projectId: String) async throws -> [Invoice]
+    func listInvoices() async throws -> [Invoice]
     func getInvoice(id: String) async throws -> Invoice
     func getLineItems(invoiceId: String) async throws -> [InvoiceLineItem]
-    /// Create an invoice from an approved estimate, seeding its line items from
-    /// the estimate's line items, then re-fetching so the returned invoice
-    /// carries server-recomputed totals.
-    func createFromEstimate(estimate: Estimate, lineItems: [EstimateLineItem], clientId: String) async throws -> Invoice
-    /// Send the invoice to the client (status → sent, emails the client).
+    func updateInvoice(id: String, request: UpdateInvoiceRequest) async throws -> Invoice
     func sendInvoice(id: String) async throws -> Invoice
-    /// Mark the invoice fully paid for the given amount (typically the total).
-    func markPaid(id: String, amount: Decimal) async throws -> Invoice
     func deleteInvoice(id: String) async throws
+    func convertEstimate(estimateId: String, request: ConvertEstimateRequest) async throws -> Invoice
+    func exportPDF(id: String) async throws -> Data
 }
 
-// MARK: - Request Bodies
+// MARK: - Request DTOs
 
-/// Create-invoice body. `project_id` + `client_id` are required; `estimate_id`
-/// links the source estimate. Optional fields are omitted on create.
-struct CreateInvoiceBody: Encodable, Sendable {
-    let projectId: String
-    let clientId: String
-    let estimateId: String?
-
-    enum CodingKeys: String, CodingKey {
-        case projectId = "project_id"
-        case clientId = "client_id"
-        case estimateId = "estimate_id"
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(projectId, forKey: .projectId)
-        try c.encode(clientId, forKey: .clientId)
-        try c.encodeIfPresent(estimateId, forKey: .estimateId)
-    }
-}
-
-/// Create-invoice-line-item body. Maps a single estimate line item onto an
-/// invoice line. Each estimate line is billed as a single rolled-up unit
-/// (`quantity = 1`, `unit_cost = estimate lineTotal`) so the backend's
-/// `line_total = quantity * unit_cost` reproduces the approved amount to the
-/// cent with zero division/rounding drift. The original quantity/unit detail
-/// is preserved in the description for readability.
-struct CreateInvoiceLineItemBody: Encodable, Sendable {
-    let name: String
-    let description: String?
-    let quantity: Decimal
-    let unit: String
-    let unitCost: Decimal
-    let sortOrder: Int
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case description
-        case quantity
-        case unit
-        case unitCost = "unit_cost"
-        case sortOrder = "sort_order"
-    }
-
-    init(from line: EstimateLineItem, sortOrder: Int) {
-        self.name = line.name
-
-        // Preserve the estimate's quantity × unit context so the rolled-up
-        // invoice line stays human-readable.
-        let trimmedUnit = line.unit.trimmingCharacters(in: .whitespaces)
-        let qtyNote: String?
-        if line.quantity != 1, !trimmedUnit.isEmpty {
-            let qtyString = NSDecimalNumber(decimal: line.quantity).stringValue
-            qtyNote = "\(qtyString) \(trimmedUnit)"
-        } else {
-            qtyNote = nil
-        }
-
-        switch (qtyNote, line.description?.isEmpty == false ? line.description : nil) {
-        case let (.some(note), .some(desc)): self.description = "\(note) — \(desc)"
-        case let (.some(note), .none): self.description = note
-        case let (.none, .some(desc)): self.description = desc
-        case (.none, .none): self.description = nil
-        }
-
-        self.quantity = 1
-        self.unit = trimmedUnit.isEmpty ? "lot" : trimmedUnit
-        self.unitCost = line.lineTotal
-        self.sortOrder = sortOrder
-    }
-}
-
-/// Mark-paid body. Settles the invoice in full; the backend stamps `paid_at`
-/// and recomputes `amount_due = total_amount - amount_paid`.
-struct MarkInvoicePaidBody: Encodable, Sendable {
-    let status: String
-    let amountPaid: Decimal
+/// Partial update. Only set fields are sent; omitted keys are left
+/// unchanged by the backend. Used to mark an invoice sent, record a
+/// payment (`amountPaid` + `status`), or adjust terms.
+struct UpdateInvoiceRequest: Encodable, Sendable {
+    var status: Invoice.Status?
+    var amountPaid: Decimal?
+    var dueDate: Date?
+    var notes: String?
+    var paymentInstructions: String?
 
     enum CodingKeys: String, CodingKey {
         case status
         case amountPaid = "amount_paid"
+        case dueDate = "due_date"
+        case notes
+        case paymentInstructions = "payment_instructions"
     }
+}
+
+/// Overrides for `POST /v1/estimates/:id/convert-to-invoice`. Every field is
+/// optional — an all-nil request produces a faithful DRAFT invoice mirroring
+/// the estimate. Nil fields are omitted from the wire body (the backend
+/// schema is `.strict()` and accepts an empty object).
+struct ConvertEstimateRequest: Encodable, Sendable {
+    var dueDate: Date?
+    var notes: String?
+    var paymentInstructions: String?
+
+    enum CodingKeys: String, CodingKey {
+        case dueDate = "due_date"
+        case notes
+        case paymentInstructions = "payment_instructions"
+    }
+
+    /// An empty conversion — faithful copy of the estimate with no overrides.
+    static let faithful = ConvertEstimateRequest()
 }
 
 // MARK: - Errors
 
 enum InvoiceServiceError: LocalizedError {
     case notFound
-    case createFailed
-    case sendFailed
-    case missingClient
+    case exportFailed
 
     var errorDescription: String? {
         switch self {
         case .notFound: "Invoice not found."
-        case .createFailed: "Failed to create invoice. Please try again."
-        case .sendFailed: "Failed to send invoice. Please try again."
-        case .missingClient: "Add a client to this project before creating an invoice."
+        case .exportFailed: "Couldn't prepare the invoice PDF. Please try again."
         }
     }
 }
@@ -126,40 +74,166 @@ enum InvoiceServiceError: LocalizedError {
 // MARK: - Mock Implementation
 
 final class MockInvoiceService: InvoiceServiceProtocol {
-    private let simulatedDelay: UInt64 = 400_000_000 // 0.4s
+    private let simulatedDelay: UInt64 = 500_000_000 // 0.5s
 
-    func listByProject(projectId: String) async throws -> [Invoice] {
+    func listInvoices() async throws -> [Invoice] {
         try await Task.sleep(nanoseconds: simulatedDelay)
-        return [Invoice.sample].filter { $0.projectId == projectId }
+        return Self.sampleInvoices
     }
 
     func getInvoice(id: String) async throws -> Invoice {
         try await Task.sleep(nanoseconds: simulatedDelay)
-        guard Invoice.sample.id == id else { throw InvoiceServiceError.notFound }
-        return .sample
+        guard let invoice = Self.sampleInvoices.first(where: { $0.id == id }) else {
+            throw InvoiceServiceError.notFound
+        }
+        return invoice
     }
 
     func getLineItems(invoiceId: String) async throws -> [InvoiceLineItem] {
         try await Task.sleep(nanoseconds: simulatedDelay)
-        return [InvoiceLineItem.sample].filter { $0.invoiceId == invoiceId }
+        return Self.sampleLineItems.filter { $0.invoiceId == invoiceId }
     }
 
-    func createFromEstimate(estimate _: Estimate, lineItems _: [EstimateLineItem], clientId _: String) async throws -> Invoice {
+    func updateInvoice(id: String, request: UpdateInvoiceRequest) async throws -> Invoice {
         try await Task.sleep(nanoseconds: simulatedDelay)
-        return .sample
+        let invoice = try await getInvoice(id: id)
+        return invoice
     }
 
-    func sendInvoice(id _: String) async throws -> Invoice {
+    func sendInvoice(id: String) async throws -> Invoice {
         try await Task.sleep(nanoseconds: simulatedDelay)
-        return .sample
-    }
-
-    func markPaid(id _: String, amount _: Decimal) async throws -> Invoice {
-        try await Task.sleep(nanoseconds: simulatedDelay)
-        return .sample
+        return try await getInvoice(id: id)
     }
 
     func deleteInvoice(id _: String) async throws {
         try await Task.sleep(nanoseconds: simulatedDelay)
     }
+
+    func convertEstimate(estimateId _: String, request _: ConvertEstimateRequest) async throws -> Invoice {
+        try await Task.sleep(nanoseconds: simulatedDelay)
+        return Invoice.sample
+    }
+
+    func exportPDF(id _: String) async throws -> Data {
+        try await Task.sleep(nanoseconds: simulatedDelay)
+        return Data("%PDF-1.4\n%mock-invoice\n".utf8)
+    }
+}
+
+// MARK: - Sample Data
+
+extension MockInvoiceService {
+    static let sampleInvoices: [Invoice] = [
+        Invoice(
+            id: "inv-001",
+            estimateId: "e-001",
+            proposalId: nil,
+            projectId: "p-001",
+            companyId: "c-001",
+            clientId: "cl-001",
+            invoiceNumber: "INV-1001",
+            status: .sent,
+            subtotal: 21000,
+            taxAmount: 1732.50,
+            discountAmount: 0,
+            totalAmount: 22732.50,
+            amountPaid: 0,
+            amountDue: 22732.50,
+            issuedDate: Calendar.current.date(byAdding: .day, value: -4, to: Date()),
+            dueDate: Calendar.current.date(byAdding: .day, value: 26, to: Date()),
+            paidAt: nil,
+            sentAt: Calendar.current.date(byAdding: .day, value: -4, to: Date()),
+            notes: "Thank you for your business.",
+            paymentInstructions: "Net 30. Check or ACH accepted.",
+            currencyCode: "USD",
+            createdAt: Calendar.current.date(byAdding: .day, value: -4, to: Date())!,
+            updatedAt: Calendar.current.date(byAdding: .day, value: -4, to: Date())!
+        ),
+        Invoice(
+            id: "inv-002",
+            estimateId: "e-003",
+            proposalId: nil,
+            projectId: "p-003",
+            companyId: "c-001",
+            clientId: "cl-003",
+            invoiceNumber: "INV-1002",
+            status: .paid,
+            subtotal: 41200,
+            taxAmount: 3399,
+            discountAmount: 1000,
+            totalAmount: 43599,
+            amountPaid: 43599,
+            amountDue: 0,
+            issuedDate: Calendar.current.date(byAdding: .day, value: -20, to: Date()),
+            dueDate: Calendar.current.date(byAdding: .day, value: -5, to: Date()),
+            paidAt: Calendar.current.date(byAdding: .day, value: -6, to: Date()),
+            sentAt: Calendar.current.date(byAdding: .day, value: -20, to: Date()),
+            notes: nil,
+            paymentInstructions: "Net 15.",
+            currencyCode: "USD",
+            createdAt: Calendar.current.date(byAdding: .day, value: -20, to: Date())!,
+            updatedAt: Calendar.current.date(byAdding: .day, value: -6, to: Date())!
+        ),
+        Invoice(
+            id: "inv-003",
+            estimateId: "e-002",
+            proposalId: nil,
+            projectId: "p-002",
+            companyId: "c-001",
+            clientId: "cl-002",
+            invoiceNumber: "INV-1003",
+            status: .draft,
+            subtotal: 13800,
+            taxAmount: 1179.75,
+            discountAmount: 500,
+            totalAmount: 14479.75,
+            amountPaid: 0,
+            amountDue: 14479.75,
+            issuedDate: nil,
+            dueDate: nil,
+            paidAt: nil,
+            sentAt: nil,
+            notes: "Bathroom remodel — master bath.",
+            paymentInstructions: nil,
+            currencyCode: "USD",
+            createdAt: Calendar.current.date(byAdding: .day, value: -1, to: Date())!,
+            updatedAt: Calendar.current.date(byAdding: .hour, value: -3, to: Date())!
+        ),
+    ]
+
+    static let sampleLineItems: [InvoiceLineItem] = [
+        InvoiceLineItem(
+            id: "ili-001",
+            invoiceId: "inv-001",
+            name: "Quartz Countertop – Calacatta",
+            description: "Premium quartz slab, fabrication included",
+            quantity: 45,
+            unit: "sq ft",
+            unitCost: 75,
+            lineTotal: 3375,
+            sortOrder: 0
+        ),
+        InvoiceLineItem(
+            id: "ili-002",
+            invoiceId: "inv-001",
+            name: "Shaker Cabinets – White",
+            description: "Soft-close hinges, dovetail drawers",
+            quantity: 14,
+            unit: "each",
+            unitCost: 450,
+            lineTotal: 6300,
+            sortOrder: 1
+        ),
+        InvoiceLineItem(
+            id: "ili-003",
+            invoiceId: "inv-001",
+            name: "Cabinet & Countertop Installation",
+            description: "Demolition, install, and finishing labor",
+            quantity: 64,
+            unit: "hour",
+            unitCost: 72,
+            lineTotal: 4608,
+            sortOrder: 2
+        ),
+    ]
 }

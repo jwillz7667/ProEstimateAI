@@ -1,9 +1,10 @@
 import Foundation
 
-/// A billing document issued to a client for completed or in-progress work.
-/// Invoices are the final step of the get-paid loop: created from an estimate
-/// (optionally via a proposal), sent to the client, then reconciled against
-/// payments. All monetary totals are computed and persisted server-side.
+/// A billing document issued to a client, typically converted from an
+/// approved estimate. The invoice tracks money owed (`amountDue`) against
+/// money received (`amountPaid`) and moves through a payment lifecycle.
+/// Invoice creation is a Pro-only feature; the document itself is the final
+/// step of the project loop (estimate → proposal → invoice).
 struct Invoice: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let estimateId: String?
@@ -31,8 +32,8 @@ struct Invoice: Codable, Identifiable, Hashable, Sendable {
 
     // MARK: - Nested Enums
 
-    /// Tracks the invoice through its payment lifecycle. Raw values match the
-    /// lowercase strings the backend emits.
+    /// Payment lifecycle. Wire values are lowercase snake_case to match the
+    /// backend DTO (`status.toLowerCase()`).
     enum Status: String, Codable, CaseIterable, Sendable {
         case draft
         case sent
@@ -73,30 +74,57 @@ struct Invoice: Codable, Identifiable, Hashable, Sendable {
 // MARK: - Convenience
 
 extension Invoice {
-    /// Whether the invoice still has an outstanding balance.
-    var isOutstanding: Bool {
-        amountDue > 0 && status != .void
+    /// Whether the invoice can still be edited / its line items changed.
+    /// Only DRAFT invoices are mutable; once sent the document is locked.
+    var isEditable: Bool {
+        status == .draft
     }
 
-    /// Whether the invoice has been fully settled.
+    /// Whether the balance has been fully settled.
     var isPaid: Bool {
         status == .paid
     }
 
-    /// Whether the invoice can still be sent to the client (not already
-    /// delivered, paid, or voided).
-    var canSend: Bool {
-        status == .draft
+    /// Whether the invoice is past its due date with an outstanding balance.
+    /// Derives the flag locally (the backend also flips status to `.overdue`)
+    /// so the UI can warn even before the server-side sweep runs.
+    var isPastDue: Bool {
+        guard status != .paid, status != .void, amountDue > 0,
+              let dueDate else { return false }
+        return dueDate < Date()
     }
 
-    /// Whether a "mark as paid" action is meaningful for the current status.
-    var canMarkPaid: Bool {
-        status != .paid && status != .void
+    /// Whether the client has paid part — but not all — of the balance.
+    var isPartiallyPaid: Bool {
+        status == .partiallyPaid || (amountPaid > 0 && amountDue > 0)
     }
 
-    /// ISO-4217 currency code with a sensible default for formatting.
-    var resolvedCurrencyCode: String {
-        currencyCode ?? "USD"
+    /// Human-readable status label for badges and headers.
+    var statusLabel: String {
+        switch status {
+        case .draft: return "Draft"
+        case .sent: return "Sent"
+        case .viewed: return "Viewed"
+        case .partiallyPaid: return "Partially Paid"
+        case .paid: return "Paid"
+        case .overdue: return "Overdue"
+        case .void: return "Void"
+        }
+    }
+
+    /// Maps the payment status onto the design-system `StatusBadge.Style`.
+    /// Overdue invoices show as error, paid as success, in-flight as info,
+    /// and the terminal `void` as neutral.
+    var statusBadgeStyle: StatusBadge.Style {
+        if isPastDue { return .error }
+        switch status {
+        case .paid: return .success
+        case .overdue: return .error
+        case .partiallyPaid: return .warning
+        case .sent, .viewed: return .info
+        case .draft: return .neutral
+        case .void: return .neutral
+        }
     }
 }
 
@@ -122,8 +150,8 @@ extension Invoice {
         dueDate: Calendar.current.date(byAdding: .day, value: 30, to: Date()),
         paidAt: nil,
         sentAt: Date(),
-        notes: "Net 30. Thank you for your business.",
-        paymentInstructions: "Checks payable to ProEstimate Builders LLC.",
+        notes: "Thank you for your business.",
+        paymentInstructions: "Net 30. Check or ACH accepted.",
         currencyCode: "USD",
         createdAt: Date(),
         updatedAt: Date()

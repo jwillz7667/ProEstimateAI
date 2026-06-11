@@ -764,6 +764,10 @@ model UserEntitlement {
   events SubscriptionEvent[]
 
   @@index([companyId])
+  // Every App Store webhook resolves the entitlement by originalTransactionId
+  // (handleAppStoreWebhook + assertOriginalTransactionOwnership). Without
+  // this index each notification is a full-table scan.
+  @@index([originalTransactionId])
 }
 
 model SubscriptionEvent {

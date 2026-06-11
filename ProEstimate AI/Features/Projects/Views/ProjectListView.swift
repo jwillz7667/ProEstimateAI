@@ -1,9 +1,9 @@
 import CoreLocation
 import SwiftUI
 
-/// Full project list — pushed onto the Projects tab via `AppDestination.projectsList`.
-/// Replaces the previous tab-root layout. The parent NavigationStack
-/// (owned by `ProjectsHomeView`) handles destination dispatch.
+/// Full project list — the Projects tab root. The parent `NavigationStack`
+/// (owned by `MainTabView`) applies `.appNavigationDestinations()` to handle
+/// destination dispatch (e.g. `AppDestination.projectDetail`).
 struct ProjectListView: View {
     @State private var viewModel = ProjectListViewModel()
     @State private var showCreation = false

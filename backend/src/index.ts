@@ -5,7 +5,14 @@ import { prisma } from './config/database';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import { disconnectRedis, getRedis } from './config/redis';
-import { markStuckGenerationsFailed } from './lib/generation-cleanup';
+import {
+  markImagelessCompletedGenerationsFailed,
+  markStuckGenerationsFailed,
+} from './lib/generation-cleanup';
+
+// How often the background reaper re-sweeps generations orphaned by a crash
+// between deploys. Unref'd so it never holds the event loop open at shutdown.
+const REAPER_INTERVAL_MS = 5 * 60 * 1000;
 
 async function main() {
   try {
@@ -21,10 +28,28 @@ async function main() {
     // traffic so clients see a clean state on first reconnect.
     await markStuckGenerationsFailed();
 
-    // Warm up Redis connection (non-blocking — null if not configured)
+    // Reap generations that report COMPLETED but never stored image bytes
+    // (a pre-fix data defect). DRY-RUN ONLY on boot: this surfaces the count
+    // in logs without mutating production data. The actual flip-to-FAILED is
+    // an explicit, authenticated action via POST /v1/admin/generations/reap,
+    // never an automatic prod write on startup.
+    await markImagelessCompletedGenerationsFailed(undefined, true);
+
+    // Warm up Redis connection (non-blocking — null if not configured).
+    // In production a missing shared store is an operational defect, not a
+    // soft warning: rate limiting falls back to a per-process in-memory store
+    // (no true global cap across instances) and every cache read recomputes.
+    // Surface it at error level so it trips log-based alerting; we still boot
+    // (graceful degradation) rather than hard-failing a deploy on it.
     const redis = getRedis();
     if (!redis) {
-      logger.warn('REDIS_URL not configured — running without cache (not recommended for production)');
+      const message =
+        'REDIS_URL not configured — running without shared cache or rate-limit store';
+      if (env.NODE_ENV === 'production') {
+        logger.error(message);
+      } else {
+        logger.warn(message);
+      }
     }
 
     const app = createApp();
@@ -41,6 +66,17 @@ async function main() {
       logger.info(`Server running on port ${env.PORT} [${env.NODE_ENV}]`);
     });
 
+    // ─── Background Reaper ─────────────────────────────────
+    // The boot-time sweep only catches generations orphaned by the *previous*
+    // container. A long-lived container can also orphan rows mid-life (a
+    // background processGeneration that dies without flipping status). Re-sweep
+    // periodically so those reconcile within ~5 min instead of next deploy.
+    // unref() lets the process exit even with the timer pending.
+    const reaperInterval = setInterval(() => {
+      void markStuckGenerationsFailed();
+    }, REAPER_INTERVAL_MS);
+    reaperInterval.unref();
+
     // ─── Graceful Shutdown ─────────────────────────────────
     let isShuttingDown = false;
 
@@ -49,6 +85,9 @@ async function main() {
       isShuttingDown = true;
 
       logger.info({ signal }, 'Shutdown signal received — draining connections');
+
+      // 0. Stop the background reaper so it can't fire mid-drain.
+      clearInterval(reaperInterval);
 
       // 1. Stop accepting new connections
       server.close(() => {

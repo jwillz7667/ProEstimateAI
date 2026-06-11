@@ -2,8 +2,14 @@ import SwiftUI
 
 enum AppDestination: Hashable {
     // Projects
-    case projectDetail(id: String, autoGenerate: Bool = false)
+    /// `highlightGenerationId` lets a deep link (notification tap) open the
+    /// detail screen focused on a specific generation's before/after preview
+    /// instead of defaulting to the newest one.
+    case projectDetail(id: String, autoGenerate: Bool = false, highlightGenerationId: String? = nil)
     case projectCreation
+
+    // Invoices
+    case invoiceDetail(id: String)
 
     // Clients
     case clientDetail(id: String)
@@ -34,23 +40,23 @@ enum AppDestination: Hashable {
 final class AppRouter {
     var dashboardPath = NavigationPath()
     var projectsPath = NavigationPath()
-    var estimatesPath = NavigationPath()
+    var invoicesPath = NavigationPath()
     var clientsPath = NavigationPath()
     var settingsPath = NavigationPath()
 
-    /// Legacy single path — unused, kept for compile compatibility.
-    var path = NavigationPath()
-
-    func navigate(to destination: AppDestination) {
-        path.append(destination)
-    }
-
-    func pop() {
-        guard !path.isEmpty else { return }
-        path.removeLast()
-    }
-
-    func popToRoot() {
-        path = NavigationPath()
+    /// Push a destination onto the navigation stack of the tab the user
+    /// is currently viewing. Detail screens reachable from more than one
+    /// tab (e.g. `ProjectDetailView` opens from both Dashboard and
+    /// Projects) must append onto the stack actually on screen —
+    /// hardcoding a single path would push onto a hidden tab and the
+    /// navigation would silently no-op.
+    func push(_ destination: AppDestination, on tab: AppTab) {
+        switch tab {
+        case .dashboard: dashboardPath.append(destination)
+        case .projects: projectsPath.append(destination)
+        case .invoices: invoicesPath.append(destination)
+        case .clients: clientsPath.append(destination)
+        case .settings: settingsPath.append(destination)
+        }
     }
 }

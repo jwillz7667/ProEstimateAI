@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { logger } from "../../config/logger";
 import { NotFoundError } from "../../lib/errors";
@@ -823,12 +824,30 @@ async function autoCreateEstimate(
  * List all AI generations for a project, newest first.
  * Verifies the project belongs to the requesting company.
  */
+// Everything the generation DTO needs — deliberately omits `imageData`,
+// the multi-MB base64 blob, so status polling and list endpoints never
+// drag it out of Postgres. The binary is served by its own endpoint
+// (getImageData / getPublicImageData) which selects imageData explicitly.
+const GENERATION_DTO_SELECT = {
+  id: true,
+  projectId: true,
+  prompt: true,
+  status: true,
+  previewUrl: true,
+  thumbnailUrl: true,
+  imageMimeType: true,
+  generationDurationMs: true,
+  errorMessage: true,
+  createdAt: true,
+} satisfies Prisma.AIGenerationSelect;
+
 export async function listByProject(projectId: string, companyId: string) {
   await verifyProjectOwnership(projectId, companyId);
 
   const generations = await prisma.aIGeneration.findMany({
     where: { projectId },
     orderBy: { createdAt: "desc" },
+    select: GENERATION_DTO_SELECT,
   });
 
   return generations;
@@ -841,7 +860,10 @@ export async function listByProject(projectId: string, companyId: string) {
 export async function getById(generationId: string, companyId: string) {
   const generation = await prisma.aIGeneration.findUnique({
     where: { id: generationId },
-    include: { project: { select: { companyId: true } } },
+    select: {
+      ...GENERATION_DTO_SELECT,
+      project: { select: { companyId: true } },
+    },
   });
 
   if (!generation || generation.project.companyId !== companyId) {

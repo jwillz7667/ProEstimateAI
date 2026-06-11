@@ -11,6 +11,12 @@ protocol APIClientProtocol {
     /// Execute a request that returns no meaningful body (e.g., DELETE).
     /// Throws `APIError` on failure.
     func request(_ endpoint: APIEndpoint) async throws
+
+    /// Execute a request and return the raw response bytes without envelope
+    /// decoding. Used for binary endpoints such as the server-rendered
+    /// invoice PDF (`GET /v1/invoices/:id/export`). Auth injection and the
+    /// 401 → refresh → retry path still apply.
+    func requestData(_ endpoint: APIEndpoint) async throws -> Data
 }
 
 /// Production API client that communicates with the ProEstimate backend.
@@ -74,17 +80,20 @@ final class APIClient: APIClientProtocol {
         // Custom date strategy: handles ISO8601 with and without fractional seconds.
         // JavaScript's toISOString() always produces fractional seconds (e.g. ".000Z")
         // which the default .iso8601 strategy cannot parse.
-        let isoWithFrac = ISO8601DateFormatter()
-        isoWithFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let isoWithout = ISO8601DateFormatter()
-        isoWithout.formatOptions = [.withInternetDateTime]
+        //
+        // The two formatters live as shared statics in `ISO8601DateParsing` rather
+        // than locals captured here: `JSONDecoder` is `Sendable`, so the strategy
+        // closure it stores must be `@Sendable`, and `ISO8601DateFormatter` is not
+        // `Sendable` — capturing local instances would not compile under
+        // `SWIFT_STRICT_CONCURRENCY = complete`. Referencing immutable statics
+        // sidesteps the capture entirely.
         dec.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateString = try container.decode(String.self)
-            if let date = isoWithFrac.date(from: dateString) {
+            if let date = ISO8601DateParsing.withFractionalSeconds.date(from: dateString) {
                 return date
             }
-            if let date = isoWithout.date(from: dateString) {
+            if let date = ISO8601DateParsing.withoutFractionalSeconds.date(from: dateString) {
                 return date
             }
             throw DecodingError.dataCorruptedError(
@@ -104,6 +113,10 @@ final class APIClient: APIClientProtocol {
 
     func request(_ endpoint: APIEndpoint) async throws {
         _ = try await performRequest(endpoint)
+    }
+
+    func requestData(_ endpoint: APIEndpoint) async throws -> Data {
+        try await performRequest(endpoint)
     }
 
     // MARK: - Internal
@@ -318,6 +331,28 @@ private actor RefreshCoordinator {
 }
 
 // MARK: - Supporting Types
+
+/// Shared ISO8601 parsers for the decoder's custom date strategy.
+///
+/// `ISO8601DateFormatter` is a reference type that is not `Sendable`, but both
+/// instances here are configured exactly once and only ever read afterwards
+/// (`.date(from:)` is a pure lookup that does not mutate the formatter), so
+/// concurrent reads are safe. `nonisolated(unsafe)` documents that we have
+/// reasoned about the safety manually rather than relying on the compiler, and
+/// lets the `@Sendable` decode closure reference them without a capture.
+private enum ISO8601DateParsing {
+    nonisolated(unsafe) static let withFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    nonisolated(unsafe) static let withoutFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+}
 
 /// Response from the token refresh endpoint.
 private struct TokenRefreshResponse: Decodable, Sendable {

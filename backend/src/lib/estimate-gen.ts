@@ -1,6 +1,7 @@
 import { env } from '../config/env';
 import { logger } from '../config/logger';
 import { AppError } from './errors';
+import { parseModelJson } from './llm-json';
 import {
   clampLaborRate,
   clampMaterialCost,
@@ -207,19 +208,7 @@ Respond with ONLY the JSON object. No markdown fences, no preamble, no trailing 
     'Generating AI estimate'
   );
 
-  const text = await callDeepSeekWithRetry(systemPrompt);
-
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch (err) {
-    logger.error({ err, textPreview: text.slice(0, 500) }, 'Failed to parse estimate-gen JSON');
-    throw new AppError(
-      502,
-      'AI_UNPARSEABLE',
-      'The AI returned an unexpected response. Please try again.',
-    );
-  }
+  const raw = await callDeepSeekWithRetry(systemPrompt);
 
   return normalizeGenerated(raw, context);
 }
@@ -228,7 +217,7 @@ Respond with ONLY the JSON object. No markdown fences, no preamble, no trailing 
 // DeepSeek transport with retry/backoff
 // ---------------------------------------------------------------------------
 
-async function callDeepSeekWithRetry(prompt: string): Promise<string> {
+async function callDeepSeekWithRetry(prompt: string): Promise<unknown> {
   let lastErr: unknown;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -237,7 +226,23 @@ async function callDeepSeekWithRetry(prompt: string): Promise<string> {
       if (!text.trim()) {
         throw new AppError(502, 'AI_EMPTY_RESPONSE', 'AI returned an empty response.');
       }
-      return text;
+      // Parse inside the retry loop: even in JSON mode the model
+      // occasionally returns malformed output, and a fresh completion
+      // almost always parses — so a parse failure is retryable, not a
+      // user-facing 502.
+      try {
+        return parseModelJson(text);
+      } catch (parseErr) {
+        logger.warn(
+          { textPreview: text.slice(0, 500) },
+          'Failed to parse estimate-gen JSON — retrying',
+        );
+        throw new AppError(
+          502,
+          'AI_UNPARSEABLE',
+          parseErr instanceof Error ? parseErr.message : 'AI returned unparseable JSON.',
+        );
+      }
     } catch (err) {
       lastErr = err;
 

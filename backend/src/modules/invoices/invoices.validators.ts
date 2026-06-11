@@ -27,5 +27,19 @@ export const updateInvoiceSchema = z.object({
 
 export const sendInvoiceSchema = z.object({}).strict();
 
+// Body for POST /v1/estimates/:id/convert-to-invoice. Every field is an
+// optional override; an empty body produces a faithful DRAFT invoice mirroring
+// the estimate. The money is taken from the estimate, never the request.
+export const convertEstimateToInvoiceSchema = z
+  .object({
+    due_date: z.string().datetime().nullable().optional(),
+    notes: z.string().max(10000).nullable().optional(),
+    payment_instructions: z.string().max(50000).nullable().optional(),
+  })
+  .strict();
+
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 export type UpdateInvoiceInput = z.infer<typeof updateInvoiceSchema>;
+export type ConvertEstimateToInvoiceInput = z.infer<
+  typeof convertEstimateToInvoiceSchema
+>;

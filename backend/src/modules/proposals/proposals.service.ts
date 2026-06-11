@@ -252,6 +252,14 @@ export async function respondToProposal(shareToken: string, data: RespondToPropo
     throw new NotFoundError('Proposal');
   }
 
+  // Idempotency: a client double-tapping "Approve"/"Decline" — or a request
+  // retried after a flaky mobile connection — must not error or flip an
+  // already-recorded decision. Once responded, the outcome is final; return
+  // the recorded proposal unchanged so the caller sees a clean success.
+  if (proposal.respondedAt) {
+    return proposal;
+  }
+
   // Only SENT or VIEWED proposals can be responded to
   if (proposal.status !== 'SENT' && proposal.status !== 'VIEWED') {
     throw new ValidationError(`Proposal cannot be responded to in status '${proposal.status.toLowerCase()}'`);

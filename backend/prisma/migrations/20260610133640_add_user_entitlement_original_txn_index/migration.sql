@@ -1,0 +1,12 @@
+-- No-op migration.
+--
+-- The index this migration originally declared —
+--   UserEntitlement_originalTransactionId_idx ON "UserEntitlement"("originalTransactionId")
+-- — is now built online by src/scripts/pre-deploy-indexes.ts using
+-- CREATE INDEX CONCURRENTLY, which cannot run inside the transaction Prisma
+-- wraps around every migration. The pre-deploy script runs before
+-- `prisma migrate deploy` in the container CMD.
+--
+-- This file is intentionally empty so the schema model still maps to a real
+-- index (kept in schema.prisma) while migrate deploy takes no table lock.
+-- Do not add DDL here; register new online indexes in the pre-deploy script.

@@ -13,6 +13,8 @@ import {
   generateEstimateSchema,
   updateEstimateSchema,
 } from './estimates.validators';
+import { convertFromEstimateHandler } from '../invoices/invoices.controller';
+import { convertEstimateToInvoiceSchema } from '../invoices/invoices.validators';
 import estimateLineItemNestedRoutes from '../estimate-line-items/estimate-line-items.nested.routes';
 import estimateExportsNestedRoutes from '../estimate-exports/estimate-exports.nested.routes';
 
@@ -30,6 +32,14 @@ router.get('/:id', asyncHandler(getByIdHandler));
 router.post('/', validate(createEstimateSchema), asyncHandler(createHandler));
 router.patch('/:id', validate(updateEstimateSchema), asyncHandler(updateHandler));
 router.delete('/:id', asyncHandler(deleteHandler));
+
+// Convert an estimate into a DRAFT invoice (Pro-gated). Distinct second path
+// segment from the nested routers below, so no ordering conflict.
+router.post(
+  '/:id/convert-to-invoice',
+  validate(convertEstimateToInvoiceSchema),
+  asyncHandler(convertFromEstimateHandler),
+);
 
 // Nested line items: /v1/estimates/:estimateId/line-items
 router.use('/:estimateId/line-items', estimateLineItemNestedRoutes);

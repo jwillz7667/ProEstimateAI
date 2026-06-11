@@ -13,7 +13,6 @@ final class ProjectDetailViewModel {
     var materials: [MaterialSuggestion] = []
     var estimates: [Estimate] = []
     var proposals: [Proposal] = []
-    var invoices: [Invoice] = []
     var activityLog: [ActivityLogEntry] = []
     var client: Client?
     var assets: [Asset] = []
@@ -81,7 +80,6 @@ final class ProjectDetailViewModel {
     private let clientService: ClientServiceProtocol
     private let estimateExportService: EstimateExportServiceProtocol
     private let proposalService: ProposalServiceProtocol
-    private let invoiceService: InvoiceServiceProtocol
 
     // MARK: - Init
 
@@ -91,8 +89,7 @@ final class ProjectDetailViewModel {
         estimateService: EstimateServiceProtocol = LiveEstimateService(),
         clientService: ClientServiceProtocol = LiveClientService(),
         estimateExportService: EstimateExportServiceProtocol = LiveEstimateExportService(),
-        proposalService: ProposalServiceProtocol = LiveProposalService(),
-        invoiceService: InvoiceServiceProtocol = LiveInvoiceService()
+        proposalService: ProposalServiceProtocol = LiveProposalService()
     ) {
         self.projectService = projectService
         self.generationService = generationService
@@ -100,7 +97,6 @@ final class ProjectDetailViewModel {
         self.clientService = clientService
         self.estimateExportService = estimateExportService
         self.proposalService = proposalService
-        self.invoiceService = invoiceService
     }
 
     // MARK: - Loading
@@ -125,9 +121,8 @@ final class ProjectDetailViewModel {
         async let clientTask: Void = loadClient()
         async let exportsTask: Void = loadEstimateExports(projectId: id)
         async let proposalsTask: Void = loadProposals(projectId: id)
-        async let invoicesTask: Void = loadInvoices(projectId: id)
 
-        _ = await (gensTask, estimatesTask, assetsTask, activityTask, clientTask, exportsTask, proposalsTask, invoicesTask)
+        _ = await (gensTask, estimatesTask, assetsTask, activityTask, clientTask, exportsTask, proposalsTask)
 
         // Warm URLCache for the photo grid (~320pt wide cards) and the
         // before/after preview (full-bleed). Backend snaps to canonical
@@ -188,18 +183,12 @@ final class ProjectDetailViewModel {
         proposals = (try? await proposalService.listByProject(projectId: projectId)) ?? []
     }
 
-    private func loadInvoices(projectId: String) async {
-        invoices = (try? await invoiceService.listByProject(projectId: projectId)) ?? []
-    }
-
-    /// Refresh just the proposal + invoice lists. Called when a billing sheet
-    /// dismisses so a status change (sent / paid) reflects on the project
+    /// Refresh just the proposal list. Called when the proposal sheet
+    /// dismisses so a status change (sent / viewed) reflects on the project
     /// without re-running the full project load + generation lifecycle wiring.
-    func reloadBilling() async {
+    func reloadProposals() async {
         guard let projectId = project?.id else { return }
-        async let proposalsTask: Void = loadProposals(projectId: projectId)
-        async let invoicesTask: Void = loadInvoices(projectId: projectId)
-        _ = await (proposalsTask, invoicesTask)
+        await loadProposals(projectId: projectId)
     }
 
     private func loadAssets(projectId: String) async {
@@ -482,7 +471,7 @@ final class ProjectDetailViewModel {
         }
     }
 
-    // MARK: - Proposal & Invoice Creation
+    // MARK: - Proposal Creation
 
     /// Create a client-facing proposal from an existing estimate. Errors are
     /// rethrown so the caller can route `APIError.paywall` to the paywall and
@@ -497,42 +486,12 @@ final class ProjectDetailViewModel {
         return proposal
     }
 
-    /// Create an invoice from an existing estimate, seeding its line items.
-    /// Requires the project to have a client (invoices are billed to a client).
-    /// Errors are rethrown so the caller can route `APIError.paywall` to the
-    /// paywall and surface other failures inline.
-    func createInvoice(fromEstimateId estimateId: String) async throws -> Invoice {
-        guard let estimate = estimates.first(where: { $0.id == estimateId }) else {
-            throw InvoiceServiceError.notFound
-        }
-        guard let clientId = project?.clientId, !clientId.isEmpty else {
-            throw InvoiceServiceError.missingClient
-        }
-        let lineItems = try await estimateService.getLineItems(estimateId: estimateId)
-        let invoice = try await invoiceService.createFromEstimate(
-            estimate: estimate,
-            lineItems: lineItems,
-            clientId: clientId
-        )
-        invoices.insert(invoice, at: 0)
-        return invoice
-    }
-
     /// Replace a proposal in local state after it round-trips (e.g. a send).
     func updateLocalProposal(_ proposal: Proposal) {
         if let index = proposals.firstIndex(where: { $0.id == proposal.id }) {
             proposals[index] = proposal
         } else {
             proposals.insert(proposal, at: 0)
-        }
-    }
-
-    /// Replace an invoice in local state after it round-trips (e.g. send / paid).
-    func updateLocalInvoice(_ invoice: Invoice) {
-        if let index = invoices.firstIndex(where: { $0.id == invoice.id }) {
-            invoices[index] = invoice
-        } else {
-            invoices.insert(invoice, at: 0)
         }
     }
 

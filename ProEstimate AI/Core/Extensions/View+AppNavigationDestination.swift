@@ -9,8 +9,14 @@ extension View {
     func appNavigationDestinations() -> some View {
         navigationDestination(for: AppDestination.self) { destination in
             switch destination {
-            case let .projectDetail(id, autoGenerate):
-                ProjectDetailView(projectId: id, autoGenerateOnOpen: autoGenerate)
+            case let .projectDetail(id, autoGenerate, highlightGenerationId):
+                ProjectDetailView(
+                    projectId: id,
+                    autoGenerateOnOpen: autoGenerate,
+                    highlightGenerationId: highlightGenerationId
+                )
+            case let .invoiceDetail(id):
+                InvoiceDetailView(invoiceId: id)
             default:
                 EmptyView()
             }

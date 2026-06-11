@@ -42,6 +42,16 @@ final class MockAPIClient: APIClientProtocol {
         // Void endpoints succeed silently.
     }
 
+    func requestData(_ endpoint: APIEndpoint) async throws -> Data {
+        try await simulateDelay()
+
+        if let error = forcedError {
+            throw error
+        }
+        // Minimal PDF header so previews/tests get non-empty binary data.
+        return Data("%PDF-1.4\n%mock-export\n".utf8)
+    }
+
     // MARK: - Delay Simulation
 
     private func simulateDelay() async throws {
@@ -88,6 +98,14 @@ final class MockAPIClient: APIClientProtocol {
             return EstimateLineItem.sample as? T
         case is [EstimateLineItem].Type:
             return [EstimateLineItem.sample] as? T
+        case is Invoice.Type:
+            return Invoice.sample as? T
+        case is [Invoice].Type:
+            return [Invoice.sample] as? T
+        case is InvoiceLineItem.Type:
+            return InvoiceLineItem.sample as? T
+        case is [InvoiceLineItem].Type:
+            return [InvoiceLineItem.sample] as? T
         case is PricingProfile.Type:
             return PricingProfile.sample as? T
         case is [PricingProfile].Type:

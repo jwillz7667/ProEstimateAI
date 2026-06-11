@@ -10,13 +10,20 @@ struct ProjectEstimatesSection: View {
     let estimates: [Estimate]
     var exports: [String: [EstimateExport]] = [:]
     var exportingEstimateId: String?
+    /// The estimate currently being converted into an invoice — drives the
+    /// inline spinner on that row's "Convert to Invoice" button.
+    var convertingEstimateId: String?
     var isGeneratingAI: Bool = false
     var onGenerateAI: (() -> Void)?
     var onCreateEstimate: (() -> Void)?
     var onExportEstimate: ((String) -> Void)?
     var onTapSavedExport: ((EstimateExport) -> Void)?
+    /// Wrap an approved estimate in a client-facing proposal (the approval
+    /// half of the get-paid loop). Optional so previews can omit it.
     var onCreateProposal: ((String) -> Void)?
-    var onCreateInvoice: ((String) -> Void)?
+    /// Convert an approved estimate into a Pro-only invoice. Optional so the
+    /// section still renders in previews / contexts that don't wire it.
+    var onConvertToInvoice: ((String) -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -83,11 +90,11 @@ struct ProjectEstimatesSection: View {
                                     Label("Create Proposal", systemImage: "doc.richtext")
                                 }
                             }
-                            if onCreateInvoice != nil {
+                            if onConvertToInvoice != nil {
                                 Button {
-                                    onCreateInvoice?(estimate.id)
+                                    onConvertToInvoice?(estimate.id)
                                 } label: {
-                                    Label("Create Invoice", systemImage: "dollarsign.circle")
+                                    Label("Convert to Invoice", systemImage: "doc.plaintext")
                                 }
                             }
                         }
@@ -177,23 +184,21 @@ struct ProjectEstimatesSection: View {
         .accessibilityHint("Render and save a branded PDF copy of this estimate")
     }
 
-    /// Secondary "Proposal" + "Invoice" actions beneath the export CTA. These
-    /// drive the get-paid loop: wrap the estimate in a client-facing proposal,
-    /// or convert it directly into an invoice. Only rendered when the host
-    /// wires the callbacks.
+    /// Secondary "Proposal" + "Convert to Invoice" actions beneath the export
+    /// CTA. These drive the get-paid loop: wrap the estimate in a client-facing
+    /// proposal, or convert it directly into a Pro-only invoice. Only rendered
+    /// when the host wires the corresponding callbacks.
     @ViewBuilder
     private func billingActions(for estimate: Estimate) -> some View {
-        if onCreateProposal != nil || onCreateInvoice != nil {
-            HStack(spacing: SpacingTokens.sm) {
+        if onCreateProposal != nil || onConvertToInvoice != nil {
+            VStack(spacing: SpacingTokens.sm) {
                 if onCreateProposal != nil {
-                    billingActionButton(title: "Proposal", icon: "doc.richtext") {
+                    billingActionButton(title: "Create Proposal", icon: "doc.richtext") {
                         onCreateProposal?(estimate.id)
                     }
                 }
-                if onCreateInvoice != nil {
-                    billingActionButton(title: "Invoice", icon: "dollarsign.circle.fill") {
-                        onCreateInvoice?(estimate.id)
-                    }
+                if onConvertToInvoice != nil {
+                    convertCTA(for: estimate)
                 }
             }
         }
@@ -221,6 +226,22 @@ struct ProjectEstimatesSection: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    /// Secondary action to turn this estimate into a billable invoice. Pro-
+    /// gated downstream — tapping while on the free tier surfaces the paywall.
+    /// Disabled while any conversion is in flight to avoid double-creating.
+    private func convertCTA(for estimate: Estimate) -> some View {
+        SecondaryButton(
+            title: convertingEstimateId == estimate.id ? "Creating Invoice…" : "Convert to Invoice",
+            icon: "doc.plaintext",
+            isLoading: convertingEstimateId == estimate.id,
+            emphasis: .accent
+        ) {
+            onConvertToInvoice?(estimate.id)
+        }
+        .disabled(convertingEstimateId != nil)
+        .accessibilityHint("Create an invoice from this estimate")
     }
 
     private func savedExportsList(_ savedExports: [EstimateExport]) -> some View {

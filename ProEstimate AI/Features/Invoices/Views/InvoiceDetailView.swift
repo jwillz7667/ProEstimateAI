@@ -1,182 +1,242 @@
 import SwiftUI
 
-/// Invoice detail + payment screen, presented as a sheet from the project
-/// detail screen. Shows the invoice's line items and totals, and exposes the
-/// two get-paid actions: send the invoice to the client and mark it paid.
+/// Full invoice detail screen. Renders the payment status, money breakdown,
+/// line items, and terms, plus the lifecycle actions a contractor takes on a
+/// bill: send a draft, record payment, export the server-rendered PDF, and
+/// delete.
+///
+/// The screen is reachable two ways and must work in both:
+///  - **Pushed** onto the Invoices tab's `NavigationStack` (from the list).
+///  - **Presented in a sheet** straight after converting an estimate, where
+///    a trailing "Done" button dismisses the sheet (`isPresentedInSheet`).
+///
+/// In both cases `@Environment(\.dismiss)` does the right thing — it pops the
+/// pushed view or closes the sheet — so deletion can simply call `dismiss()`.
 struct InvoiceDetailView: View {
-    /// Optional client name for the "Billed to" line. The host supplies it
-    /// from the already-loaded project client so the sheet doesn't re-fetch.
-    var clientName: String?
+    let invoiceId: String
+    /// When `true` the screen was presented modally (e.g. right after an
+    /// estimate→invoice conversion) and shows a "Done" button to close.
+    var isPresentedInSheet: Bool = false
 
-    @State private var viewModel: InvoiceDetailViewModel
+    @State private var viewModel = InvoiceDetailViewModel()
+    @State private var exportedPDF: ExportedPDF?
+    @State private var showDeleteConfirmation = false
+
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
 
-    init(invoice: Invoice, clientName: String? = nil) {
-        self.clientName = clientName
-        _viewModel = State(initialValue: InvoiceDetailViewModel(invoice: invoice))
+    /// Identifiable wrapper so the share sheet can be driven by `.sheet(item:)`
+    /// — the file URL is the identity, matching `ProjectDetailView`.
+    private struct ExportedPDF: Identifiable, Hashable {
+        let url: URL
+        var id: URL { url }
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: SpacingTokens.lg) {
-                    headerCard
-                    if !viewModel.lineItems.isEmpty {
-                        lineItemsCard
-                    }
-                    totalsCard
-                    if hasFooterText {
-                        footerCard
-                    }
-                    actions
-                    Spacer(minLength: SpacingTokens.lg)
+        Group {
+            if viewModel.isLoading && viewModel.invoice == nil {
+                LoadingStateView(message: "Loading invoice...")
+            } else if let error = viewModel.errorMessage, viewModel.invoice == nil {
+                RetryStateView(message: error) {
+                    Task { await viewModel.load(id: invoiceId) }
                 }
-                .padding(SpacingTokens.md)
+            } else if let invoice = viewModel.invoice {
+                invoiceContent(invoice)
+            } else {
+                LoadingStateView(message: "Loading invoice...")
+                    .onAppear {
+                        Task { await viewModel.load(id: invoiceId) }
+                    }
             }
-            .background(ColorTokens.background.ignoresSafeArea())
-            .navigationTitle(viewModel.invoice.invoiceNumber)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
+        }
+        .navigationTitle(viewModel.invoice?.invoiceNumber ?? "Invoice")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if isPresentedInSheet {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                 }
             }
-            .overlay {
-                if viewModel.isSending || viewModel.isMarkingPaid {
-                    Color.black.opacity(0.2).ignoresSafeArea()
-                        .overlay {
-                            ProgressView(viewModel.isMarkingPaid ? "Recording payment…" : "Sending invoice…")
-                                .padding()
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                        }
+        }
+        .refreshable {
+            await viewModel.load(id: invoiceId)
+        }
+        .task {
+            if viewModel.invoice == nil {
+                await viewModel.load(id: invoiceId)
+            }
+        }
+        .sheet(item: $exportedPDF) { pdf in
+            ActivityViewRepresentable(activityItems: [pdf.url])
+        }
+        .confirmationDialog(
+            "Delete Invoice",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Permanently", role: .destructive) {
+                Task {
+                    if await viewModel.delete() {
+                        dismiss()
+                    }
                 }
             }
-            .alert(
-                "Error",
-                isPresented: Binding(
-                    get: { viewModel.errorMessage != nil },
-                    set: { if !$0 { viewModel.errorMessage = nil } }
-                )
-            ) {
-                Button("OK") { viewModel.errorMessage = nil }
-            } message: {
-                if let message = viewModel.errorMessage { Text(message) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes the invoice and its line items. This cannot be undone.")
+        }
+        .alert(
+            "Something went wrong",
+            isPresented: Binding(
+                get: { viewModel.actionError != nil },
+                set: { if !$0 { viewModel.actionError = nil } }
+            )
+        ) {
+            Button("OK") { viewModel.actionError = nil }
+        } message: {
+            if let message = viewModel.actionError {
+                Text(message)
             }
-            .task { await viewModel.load() }
         }
     }
 
-    // MARK: - Header
+    // MARK: - Content
 
-    private var headerCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: SpacingTokens.sm) {
-                HStack {
-                    VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                        Text(viewModel.invoice.invoiceNumber)
-                            .font(TypographyTokens.title3)
-                        if let clientName, !clientName.isEmpty {
-                            Text("Billed to \(clientName)")
-                                .font(TypographyTokens.caption)
-                                .foregroundStyle(.secondary)
-                        }
+    private func invoiceContent(_ invoice: Invoice) -> some View {
+        ScrollView {
+            LazyVStack(spacing: SpacingTokens.lg) {
+                statusHeader(invoice)
+                amountCard(invoice)
+                totalsBreakdown(invoice)
+
+                if !viewModel.lineItems.isEmpty {
+                    lineItemsSection
+                }
+
+                if hasTerms(invoice) {
+                    termsCard(invoice)
+                }
+
+                actions(invoice)
+
+                Spacer(minLength: SpacingTokens.huge)
+            }
+            .padding(.horizontal, SpacingTokens.md)
+            .padding(.vertical, SpacingTokens.sm)
+        }
+    }
+
+    // MARK: - Status Header
+
+    private func statusHeader(_ invoice: Invoice) -> some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.sm) {
+            HStack {
+                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                    Text(invoice.invoiceNumber)
+                        .font(TypographyTokens.title3)
+                        .foregroundStyle(ColorTokens.primaryText)
+                    StatusBadge(text: invoice.statusLabel, style: invoice.statusBadgeStyle)
+                }
+                Spacer()
+                Image(systemName: "doc.plaintext.fill")
+                    .font(.title)
+                    .foregroundStyle(ColorTokens.primaryOrange)
+            }
+
+            if invoice.issuedDate != nil || invoice.dueDate != nil {
+                Divider()
+                HStack(spacing: SpacingTokens.lg) {
+                    if let issuedDate = invoice.issuedDate {
+                        dateColumn(title: "Issued", value: issuedDate.formatted(as: .invoiceDate), isAlert: false)
+                    }
+                    if let dueDate = invoice.dueDate {
+                        dateColumn(
+                            title: "Due",
+                            value: dueDate.formatted(as: .invoiceDate),
+                            isAlert: invoice.isPastDue
+                        )
                     }
                     Spacer()
-                    StatusBadge(text: statusName, style: statusStyle)
-                }
-
-                Divider()
-
-                VStack(spacing: SpacingTokens.xxs) {
-                    if let issued = viewModel.invoice.issuedDate {
-                        dateRow(label: "Issued", value: issued.formatted(as: .invoiceDate))
-                    }
-                    if let due = viewModel.invoice.dueDate {
-                        dateRow(label: "Due", value: due.formatted(as: .invoiceDate))
-                    }
-                    if let paid = viewModel.invoice.paidAt {
-                        dateRow(label: "Paid", value: paid.formatted(as: .invoiceDate))
-                    }
                 }
             }
+
+            if invoice.isPastDue {
+                Label("Past due", systemImage: "exclamationmark.triangle.fill")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.error)
+            }
+        }
+        .padding(SpacingTokens.md)
+        .glassCard()
+    }
+
+    private func dateColumn(title: String, value: String, isAlert: Bool) -> some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+            Text(title)
+                .font(TypographyTokens.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(TypographyTokens.subheadline)
+                .foregroundStyle(isAlert ? ColorTokens.error : ColorTokens.primaryText)
         }
     }
 
-    private func dateRow(label: String, value: String) -> some View {
-        HStack {
-            Text(label)
+    // MARK: - Amount Card
+
+    /// Headline money figure — the balance the contractor is chasing, or the
+    /// settled total once paid.
+    private func amountCard(_ invoice: Invoice) -> some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            Text(invoice.isPaid ? "Total Paid" : "Balance Due")
                 .font(TypographyTokens.caption)
                 .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .font(TypographyTokens.caption.weight(.medium))
-                .foregroundStyle(ColorTokens.primaryText)
-        }
-    }
+            CurrencyText(
+                amount: invoice.isPaid ? invoice.totalAmount : invoice.amountDue,
+                font: TypographyTokens.moneyLarge
+            )
+            .foregroundStyle(invoice.isPastDue ? ColorTokens.error : ColorTokens.primaryText)
 
-    // MARK: - Line Items
-
-    private var lineItemsCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: SpacingTokens.sm) {
-                Text("Line Items")
-                    .font(TypographyTokens.headline)
-
-                ForEach(viewModel.lineItems) { item in
-                    VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.name)
-                                    .font(TypographyTokens.subheadline.weight(.medium))
-                                    .foregroundStyle(ColorTokens.primaryText)
-                                if let description = item.description, !description.isEmpty {
-                                    Text(description)
-                                        .font(TypographyTokens.caption)
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                            Spacer()
-                            CurrencyText(amount: item.lineTotal, font: TypographyTokens.moneySmall)
-                        }
-                        if item.id != viewModel.lineItems.last?.id {
-                            Divider()
-                        }
-                    }
-                }
+            if invoice.isPartiallyPaid, !invoice.isPaid {
+                Text("\(currency(invoice.amountPaid)) paid of \(currency(invoice.totalAmount))")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(SpacingTokens.md)
+        .glassCard()
     }
 
-    // MARK: - Totals
+    // MARK: - Totals Breakdown
 
-    private var totalsCard: some View {
-        GlassCard {
-            VStack(spacing: SpacingTokens.xs) {
-                totalRow(label: "Subtotal", amount: viewModel.invoice.subtotal)
-                if viewModel.invoice.discountAmount > 0 {
-                    totalRow(label: "Discount", amount: -viewModel.invoice.discountAmount)
-                }
-                if viewModel.invoice.taxAmount > 0 {
-                    totalRow(label: "Tax", amount: viewModel.invoice.taxAmount)
-                }
+    private func totalsBreakdown(_ invoice: Invoice) -> some View {
+        VStack(spacing: SpacingTokens.xs) {
+            totalRow(label: "Subtotal", amount: invoice.subtotal)
+
+            if invoice.discountAmount > 0 {
+                totalRow(label: "Discount", amount: -invoice.discountAmount)
+            }
+
+            totalRow(label: "Tax", amount: invoice.taxAmount)
+
+            Divider()
+
+            totalRow(label: "Total", amount: invoice.totalAmount, emphasized: true)
+
+            if invoice.amountPaid > 0 {
+                totalRow(label: "Amount Paid", amount: -invoice.amountPaid)
                 Divider()
-                totalRow(label: "Total", amount: viewModel.invoice.totalAmount, emphasized: true)
-                if viewModel.invoice.amountPaid > 0 {
-                    totalRow(label: "Paid", amount: viewModel.invoice.amountPaid)
-                    Divider()
-                    totalRow(label: "Balance Due", amount: viewModel.invoice.amountDue, emphasized: true)
-                }
+                totalRow(label: "Balance Due", amount: invoice.amountDue, emphasized: true)
             }
         }
+        .padding(SpacingTokens.md)
+        .glassCard()
     }
 
     private func totalRow(label: String, amount: Decimal, emphasized: Bool = false) -> some View {
         HStack {
             Text(label)
                 .font(emphasized ? TypographyTokens.headline : TypographyTokens.subheadline)
-                .foregroundStyle(emphasized ? ColorTokens.primaryText : Color.secondary)
+                .foregroundStyle(emphasized ? ColorTokens.primaryText : ColorTokens.secondaryText)
             Spacer()
             CurrencyText(
                 amount: amount,
@@ -185,112 +245,173 @@ struct InvoiceDetailView: View {
         }
     }
 
-    // MARK: - Footer (notes + payment instructions)
+    // MARK: - Line Items
 
-    private var hasFooterText: Bool {
-        let notes = viewModel.invoice.notes?.isEmpty == false
-        let instructions = viewModel.invoice.paymentInstructions?.isEmpty == false
-        return notes || instructions
-    }
+    private var lineItemsSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            Text("Line Items")
+                .font(TypographyTokens.headline)
+                .foregroundStyle(ColorTokens.primaryText)
 
-    private var footerCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: SpacingTokens.sm) {
-                if let instructions = viewModel.invoice.paymentInstructions, !instructions.isEmpty {
-                    VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                        Text("Payment Instructions")
-                            .font(TypographyTokens.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text(instructions)
-                            .font(TypographyTokens.subheadline)
-                            .foregroundStyle(ColorTokens.primaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                if let notes = viewModel.invoice.notes, !notes.isEmpty {
-                    VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                        Text("Notes")
-                            .font(TypographyTokens.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text(notes)
-                            .font(TypographyTokens.subheadline)
-                            .foregroundStyle(ColorTokens.primaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            VStack(spacing: SpacingTokens.sm) {
+                ForEach(viewModel.lineItems) { item in
+                    lineItemRow(item)
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func lineItemRow(_ item: InvoiceLineItem) -> some View {
+        HStack(alignment: .top, spacing: SpacingTokens.sm) {
+            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                Text(item.name)
+                    .font(TypographyTokens.subheadline.weight(.semibold))
+                    .foregroundStyle(ColorTokens.primaryText)
+
+                if let description = item.description, !description.isEmpty {
+                    Text(description)
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: SpacingTokens.xxs) {
+                    Text("\(formattedQuantity(item.quantity)) \(item.unit) ×")
+                    CurrencyText(amount: item.unitCost, font: TypographyTokens.caption)
+                }
+                .font(TypographyTokens.caption)
+                .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: SpacingTokens.sm)
+
+            CurrencyText(amount: item.lineTotal, font: TypographyTokens.moneySmall)
+        }
+        .padding(SpacingTokens.md)
+        .glassCard()
+    }
+
+    // MARK: - Terms
+
+    private func termsCard(_ invoice: Invoice) -> some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.sm) {
+            if let instructions = invoice.paymentInstructions, !instructions.isEmpty {
+                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                    Text("Payment Instructions")
+                        .font(TypographyTokens.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(instructions)
+                        .font(TypographyTokens.subheadline)
+                        .foregroundStyle(ColorTokens.primaryText)
+                }
+            }
+
+            if let notes = invoice.notes, !notes.isEmpty {
+                if invoice.paymentInstructions?.isEmpty == false {
+                    Divider()
+                }
+                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                    Text("Notes")
+                        .font(TypographyTokens.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(notes)
+                        .font(TypographyTokens.subheadline)
+                        .foregroundStyle(ColorTokens.primaryText)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(SpacingTokens.md)
+        .glassCard()
     }
 
     // MARK: - Actions
 
-    @ViewBuilder
-    private var actions: some View {
+    private func actions(_ invoice: Invoice) -> some View {
         VStack(spacing: SpacingTokens.sm) {
-            if viewModel.invoice.canSend {
+            if invoice.status == .draft {
                 PrimaryCTAButton(
-                    title: "Send Invoice to Client",
+                    title: "Send Invoice",
                     icon: "paperplane.fill",
-                    isLoading: viewModel.isSending,
-                    isDisabled: viewModel.isMarkingPaid
+                    isLoading: viewModel.isPerformingAction,
+                    isDisabled: viewModel.isPerformingAction || viewModel.isExporting
                 ) {
-                    Task { await viewModel.send() }
+                    Task { await viewModel.markAsSent() }
                 }
             }
 
-            if viewModel.invoice.canMarkPaid {
+            if canMarkPaid(invoice) {
                 SecondaryButton(
                     title: "Mark as Paid",
                     icon: "checkmark.circle.fill",
-                    isLoading: viewModel.isMarkingPaid,
+                    isLoading: viewModel.isPerformingAction,
                     emphasis: .accent
                 ) {
-                    Task { await viewModel.markPaid() }
+                    Task { await viewModel.markAsPaid() }
                 }
             }
 
-            if viewModel.invoice.isPaid {
-                HStack(spacing: SpacingTokens.xs) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .foregroundStyle(ColorTokens.success)
-                    Text("Paid in full")
-                        .font(TypographyTokens.subheadline.weight(.semibold))
-                        .foregroundStyle(ColorTokens.success)
+            SecondaryButton(
+                title: "Export PDF",
+                icon: "square.and.arrow.up",
+                isLoading: viewModel.isExporting
+            ) {
+                Task {
+                    if let url = await viewModel.exportPDF() {
+                        exportedPDF = ExportedPDF(url: url)
+                    }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, SpacingTokens.sm)
             }
+
+            Button(role: .destructive) {
+                showDeleteConfirmation = true
+            } label: {
+                Label("Delete Invoice", systemImage: "trash")
+                    .font(TypographyTokens.subheadline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, SpacingTokens.sm)
+            }
+            .foregroundStyle(ColorTokens.error)
+            .disabled(viewModel.isPerformingAction || viewModel.isExporting)
+            .padding(.top, SpacingTokens.xs)
         }
     }
 
-    // MARK: - Status Presentation
+    // MARK: - Helpers
 
-    private var statusName: String {
-        switch viewModel.invoice.status {
-        case .draft: "Draft"
-        case .sent: "Sent"
-        case .viewed: "Viewed"
-        case .partiallyPaid: "Partially Paid"
-        case .paid: "Paid"
-        case .overdue: "Overdue"
-        case .void: "Void"
-        }
+    /// Payment can be recorded for any non-paid, non-void invoice that still
+    /// carries a balance. Draft invoices are included so a contractor who got
+    /// paid in cash before sending can close the loop in one tap.
+    private func canMarkPaid(_ invoice: Invoice) -> Bool {
+        invoice.status != .paid && invoice.status != .void && invoice.amountDue > 0
     }
 
-    private var statusStyle: StatusBadge.Style {
-        switch viewModel.invoice.status {
-        case .draft: .neutral
-        case .sent, .viewed: .info
-        case .partiallyPaid: .warning
-        case .paid: .success
-        case .overdue: .error
-        case .void: .neutral
-        }
+    private func hasTerms(_ invoice: Invoice) -> Bool {
+        let hasNotes = !(invoice.notes ?? "").isEmpty
+        let hasInstructions = !(invoice.paymentInstructions ?? "").isEmpty
+        return hasNotes || hasInstructions
+    }
+
+    private func formattedQuantity(_ value: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 0
+        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "\(value)"
+    }
+
+    private func currency(_ value: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "\(value)"
     }
 }
 
 // MARK: - Preview
 
 #Preview {
-    InvoiceDetailView(invoice: .sample, clientName: "Jordan Avery")
+    NavigationStack {
+        InvoiceDetailView(invoiceId: "inv-001")
+    }
 }

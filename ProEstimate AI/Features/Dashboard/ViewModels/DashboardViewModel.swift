@@ -104,7 +104,15 @@ final class DashboardViewModel {
                             let generations: [AIGeneration] = try await apiClient.request(
                                 .listGenerations(projectId: project.id)
                             )
-                            let completed = generations.first { $0.status == .completed }
+                            // Prefer the newest completed generation that
+                            // actually has a servable preview. A generation
+                            // can be COMPLETED yet carry no image (the backend
+                            // now nils preview_url in that case) — picking it
+                            // would blank the tile even when an older, imaged
+                            // generation exists.
+                            let completed = generations.first {
+                                $0.status == .completed && $0.previewURL != nil
+                            }
                             return (project.id, completed?.previewURL)
                         } catch {
                             return (project.id, nil)

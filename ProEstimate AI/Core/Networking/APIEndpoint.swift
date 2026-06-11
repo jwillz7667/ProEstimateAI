@@ -98,23 +98,6 @@ enum APIEndpoint: Sendable {
     case sendProposal(id: String, body: Encodable & Sendable)
     case deleteProposal(id: String)
 
-    // MARK: - Invoices
-
-    case listInvoices(projectId: String?)
-    case getInvoice(id: String)
-    case createInvoice(body: Encodable & Sendable)
-    case updateInvoice(id: String, body: Encodable & Sendable)
-    /// Send the invoice to the client (status → sent, emails client). Takes no body.
-    case sendInvoice(id: String)
-    case deleteInvoice(id: String)
-
-    // MARK: - Invoice Line Items
-
-    case listInvoiceLineItems(invoiceId: String)
-    case createInvoiceLineItem(invoiceId: String, body: Encodable & Sendable)
-    case updateInvoiceLineItem(id: String, body: Encodable & Sendable)
-    case deleteInvoiceLineItem(id: String)
-
     // MARK: - Estimate Exports (saved PDFs)
 
     case listEstimateExports(estimateId: String)
@@ -122,6 +105,29 @@ enum APIEndpoint: Sendable {
     case createEstimateExport(estimateId: String, body: Encodable & Sendable)
     case getEstimateExport(id: String)
     case deleteEstimateExport(id: String)
+
+    // MARK: - Invoices
+
+    /// List invoices for the company, optionally scoped to a single
+    /// project. `cursor` drives cursor-based pagination.
+    case listInvoices(projectId: String? = nil, cursor: String? = nil)
+    case getInvoice(id: String)
+    case updateInvoice(id: String, body: Encodable & Sendable)
+    /// Mark an invoice as sent. Empty body — the backend stamps `sent_at`
+    /// and transitions the status.
+    case sendInvoice(id: String)
+    case deleteInvoice(id: String)
+    /// Convert an approved estimate into a DRAFT invoice (Pro-gated). Body
+    /// carries optional `due_date` / `notes` / `payment_instructions`
+    /// overrides; money and line items are copied from the estimate.
+    case convertEstimateToInvoice(estimateId: String, body: Encodable & Sendable)
+    /// Server-rendered binary PDF of the invoice. Fetched via `requestData`
+    /// since the response is a PDF, not a JSON envelope.
+    case exportInvoicePDF(id: String)
+
+    // MARK: - Invoice Line Items
+
+    case listInvoiceLineItems(invoiceId: String)
 
     // MARK: - Pricing Profiles
 
@@ -242,24 +248,22 @@ extension APIEndpoint {
         case let .updateProposal(id, _): return "/proposals/\(id)"
         case let .sendProposal(id, _): return "/proposals/\(id)/send"
         case let .deleteProposal(id): return "/proposals/\(id)"
-        // Invoices
-        case .listInvoices: return "/invoices"
-        case let .getInvoice(id): return "/invoices/\(id)"
-        case .createInvoice: return "/invoices"
-        case let .updateInvoice(id, _): return "/invoices/\(id)"
-        case let .sendInvoice(id): return "/invoices/\(id)/send"
-        case let .deleteInvoice(id): return "/invoices/\(id)"
-        // Invoice Line Items
-        case let .listInvoiceLineItems(invoiceId): return "/invoices/\(invoiceId)/line-items"
-        case let .createInvoiceLineItem(invoiceId, _): return "/invoices/\(invoiceId)/line-items"
-        case let .updateInvoiceLineItem(id, _): return "/invoice-line-items/\(id)"
-        case let .deleteInvoiceLineItem(id): return "/invoice-line-items/\(id)"
         // Estimate Exports
         case let .listEstimateExports(estimateId): return "/estimates/\(estimateId)/exports"
         case let .listProjectEstimateExports(projectId): return "/projects/\(projectId)/estimate-exports"
         case let .createEstimateExport(estimateId, _): return "/estimates/\(estimateId)/exports"
         case let .getEstimateExport(id): return "/estimate-exports/\(id)"
         case let .deleteEstimateExport(id): return "/estimate-exports/\(id)"
+        // Invoices
+        case .listInvoices: return "/invoices"
+        case let .getInvoice(id): return "/invoices/\(id)"
+        case let .updateInvoice(id, _): return "/invoices/\(id)"
+        case let .sendInvoice(id): return "/invoices/\(id)/send"
+        case let .deleteInvoice(id): return "/invoices/\(id)"
+        case let .convertEstimateToInvoice(estimateId, _): return "/estimates/\(estimateId)/convert-to-invoice"
+        case let .exportInvoicePDF(id): return "/invoices/\(id)/export"
+        // Invoice Line Items
+        case let .listInvoiceLineItems(invoiceId): return "/invoices/\(invoiceId)/line-items"
         // Pricing Profiles
         case .listPricingProfiles: return "/pricing-profiles"
         case let .getPricingProfile(id): return "/pricing-profiles/\(id)"
@@ -306,7 +310,7 @@ extension APIEndpoint {
              .createEstimate, .generateAIEstimate, .createEstimateLineItem,
              .createEstimateExport,
              .createProposal, .sendProposal,
-             .createInvoice, .sendInvoice, .createInvoiceLineItem,
+             .sendInvoice, .convertEstimateToInvoice,
              .createPricingProfile, .createLaborRateRule,
              .createPurchaseAttempt, .syncTransaction, .restorePurchases,
              .checkUsage,
@@ -315,7 +319,7 @@ extension APIEndpoint {
 
         case .updateCompany, .updateClient, .updateProject,
              .updateMaterialSelection, .updateEstimate, .updateEstimateLineItem,
-             .updateProposal, .updateInvoice, .updateInvoiceLineItem,
+             .updateProposal, .updateInvoice,
              .updatePricingProfile, .updateLaborRateRule:
             return .patch
 
@@ -324,7 +328,7 @@ extension APIEndpoint {
              .deregisterApnsToken,
              .deleteClient, .deleteProject, .deleteAsset,
              .deleteEstimate, .deleteEstimateLineItem,
-             .deleteProposal, .deleteInvoice, .deleteInvoiceLineItem,
+             .deleteProposal, .deleteInvoice,
              .deleteEstimateExport,
              .deletePricingProfile, .deleteLaborRateRule:
             return .delete
@@ -359,8 +363,11 @@ extension APIEndpoint {
             return items.isEmpty ? nil : items
         case let .listProposals(projectId):
             return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
-        case let .listInvoices(projectId):
-            return projectId.map { [URLQueryItem(name: "project_id", value: $0)] }
+        case let .listInvoices(projectId, cursor):
+            var items: [URLQueryItem] = []
+            if let projectId { items.append(URLQueryItem(name: "project_id", value: projectId)) }
+            if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }
+            return items.isEmpty ? nil : items
         case let .listActivityLog(_, cursor):
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
         case let .searchMaterialsPricing(query, zipCode, sort, maxResults):
@@ -405,8 +412,7 @@ extension APIEndpoint {
              let .createEstimateExport(_, body),
              let .createProposal(body), let .updateProposal(_, body),
              let .sendProposal(_, body),
-             let .createInvoice(body), let .updateInvoice(_, body),
-             let .createInvoiceLineItem(_, body), let .updateInvoiceLineItem(_, body),
+             let .updateInvoice(_, body), let .convertEstimateToInvoice(_, body),
              let .createPricingProfile(body), let .updatePricingProfile(_, body),
              let .createLaborRateRule(_, body), let .updateLaborRateRule(_, body),
              let .createPurchaseAttempt(body), let .syncTransaction(body),

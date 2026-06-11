@@ -1,9 +1,9 @@
 import Foundation
 
-/// A single line within an invoice. Invoice line items are flat (no category
-/// grouping, no per-line markup or tax — those are baked into `unitCost` and
-/// rolled into the invoice's tax/discount totals). `lineTotal` is computed
-/// server-side as `quantity * unitCost`.
+/// A single billable line within an invoice. Unlike `EstimateLineItem`,
+/// invoice line items carry no per-line markup or tax-rate overrides — the
+/// invoice's money is fixed at conversion time, so each line just records
+/// the agreed quantity, unit, unit cost, and resulting total.
 struct InvoiceLineItem: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let invoiceId: String
@@ -34,12 +34,12 @@ extension InvoiceLineItem {
     static let sample = InvoiceLineItem(
         id: "ili-001",
         invoiceId: "inv-001",
-        name: "Kitchen Remodel — Materials & Labor",
-        description: "Per approved estimate EST-1001",
-        quantity: 1,
-        unit: "lot",
-        unitCost: 21000,
-        lineTotal: 21000,
+        name: "Quartz Countertop – Calacatta",
+        description: "Premium quartz slab, fabrication included",
+        quantity: 45,
+        unit: "sq ft",
+        unitCost: 75,
+        lineTotal: 3375,
         sortOrder: 0
     )
 }

@@ -8,6 +8,14 @@ final class AppState {
     var currentCompany: CurrentCompany?
     var selectedTab: AppTab = .dashboard
 
+    /// A notification tap that arrived before the session finished
+    /// restoring. On a cold launch from a "preview ready" tap, the system
+    /// hands us the payload while `AuthGateView` is still awaiting
+    /// `getMe`/`getCompany`, so `isAuthenticated` is still `false` and we
+    /// can't navigate yet. We stash the target here and the App-level
+    /// `onChange(of: isAuthenticated)` replays it once the user is in.
+    var pendingGenerationTap: GenerationNotificationCenter.TapPayload?
+
     struct CurrentUser: Sendable {
         let id: String
         let email: String
@@ -95,12 +103,16 @@ final class AppState {
         currentUser = nil
         currentCompany = nil
         selectedTab = .dashboard
+        // Drop any buffered deep-link so a different account signing in on
+        // the same device can't inherit the previous user's pending tap.
+        pendingGenerationTap = nil
     }
 }
 
 enum AppTab: Int, CaseIterable, Identifiable {
     case dashboard
     case projects
+    case invoices
     case clients
     case settings
 
@@ -110,6 +122,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
         switch self {
         case .dashboard: "Dashboard"
         case .projects: "Projects"
+        case .invoices: "Invoices"
         case .clients: "Clients"
         case .settings: "Settings"
         }
@@ -119,6 +132,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
         switch self {
         case .dashboard: "square.grid.2x2"
         case .projects: "folder"
+        case .invoices: "doc.plaintext"
         case .clients: "person.2"
         case .settings: "gearshape"
         }

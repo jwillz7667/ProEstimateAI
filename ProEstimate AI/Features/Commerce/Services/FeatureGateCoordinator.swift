@@ -161,6 +161,23 @@ final class FeatureGateCoordinator {
         )
     }
 
+    /// Check whether the user can create / convert an invoice. Invoices are
+    /// a Pro-only feature — the final billing step of the project loop. The
+    /// backend independently enforces `assertCanCreateInvoice`, so this gate
+    /// is the client-side fast path that routes free users to the paywall
+    /// before the round-trip.
+    func guardCreateInvoice() -> FeatureGateResult {
+        guard let entitlementStore else { return .allowed }
+        if entitlementStore.hasFeature(.canCreateInvoice) { return .allowed }
+        logger.info("Invoice creation blocked — subscription required.")
+        return blockWithTrialOffer(
+            placement: .invoiceLocked,
+            triggerReason: "Invoice creation requires a subscription",
+            headline: "Bill Clients with Invoices",
+            subheadline: "Turn approved estimates into professional invoices, track payments, and send branded PDFs. Start a 7-day free trial."
+        )
+    }
+
     /// Project creation is always allowed locally. Free users need to
     /// own a project to spend their starter generation credits against,
     /// so gating creation defeats the starter pack. The bottleneck for
@@ -210,23 +227,6 @@ final class FeatureGateCoordinator {
             triggerReason: "Client approval links require a subscription",
             headline: "One-Tap Client Approval",
             subheadline: "Send clients a secure link to review and approve proposals from any device — no app required."
-        )
-    }
-
-    /// Check whether the user can create an invoice. Invoicing is the
-    /// final step of the get-paid loop and is Pro-only — the backend
-    /// also enforces this and returns a 402 PaywallError, so this local
-    /// gate is the fast path that keeps a free user from ever reaching
-    /// the network call.
-    func guardCreateInvoice() -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.hasFeature(.canCreateInvoice) { return .allowed }
-        logger.info("Invoice creation blocked — subscription required.")
-        return blockWithTrialOffer(
-            placement: .invoiceLocked,
-            triggerReason: "Invoicing requires a subscription",
-            headline: "Send Invoices & Get Paid",
-            subheadline: "Turn approved estimates into branded invoices, send them to clients, and track payments. Start a 7-day free trial."
         )
     }
 

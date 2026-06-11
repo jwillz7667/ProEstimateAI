@@ -26,6 +26,14 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Prisma CLI and @prisma/client must upgrade in lockstep; a major
+      # bump of either alone breaks `prisma generate`/`migrate deploy`
+      # (Docker build + container boot). Upgrade majors deliberately.
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/web"

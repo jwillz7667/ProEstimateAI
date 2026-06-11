@@ -145,12 +145,28 @@ struct ProEstimate_AIApp: App {
                             await featureGateCoordinator.loadProducts()
                             await generationLifecycle.resumeAll()
                         }
+                        // Replay a notification tap that arrived during
+                        // session restore (cold-launch-from-tap). Deferred a
+                        // beat so MainTabView → DashboardView's NavigationStack
+                        // mounts first — the initial append onto a freshly
+                        // mounted stack is otherwise swallowed until the next
+                        // layout pass.
+                        if let pending = appState.pendingGenerationTap {
+                            appState.pendingGenerationTap = nil
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(450))
+                                routeGenerationTap(pending)
+                            }
+                        }
                     } else if wasAuthed, !isAuthed {
                         // Sign-out: drop any pending generations so a
                         // different account on the same device doesn't
                         // see a stranger's in-flight work or get a stale
                         // notification scheduled before sign-out.
                         generationLifecycle.clearAll()
+                        // Reset navigation so a re-login starts at a clean
+                        // dashboard instead of a stranger's pushed detail.
+                        appRouter.dashboardPath = NavigationPath()
                     }
                 }
                 .sheet(item: $paywallPresenter.activeDecision) { decision in
@@ -225,11 +241,31 @@ struct ProEstimate_AIApp: App {
         // because the singleton outlives the scene's task.
         Task { @MainActor in
             for await payload in GenerationNotificationCenter.shared.tapStream {
-                appState.selectedTab = .projects
-                appRouter.projectsPath.append(
-                    AppDestination.projectDetail(id: payload.projectId, autoGenerate: false)
-                )
+                if self.appState.isAuthenticated {
+                    self.routeGenerationTap(payload)
+                } else {
+                    // Cold-launch-from-tap before session restore finishes:
+                    // buffer the target and replay it once the user is
+                    // authenticated (see .onChange(of: isAuthenticated)).
+                    self.appState.pendingGenerationTap = payload
+                }
             }
         }
+    }
+
+    /// Translate a generation notification tap into navigation. Routes
+    /// through the Dashboard tab's NavigationStack — currently the only
+    /// stack that registers an `AppDestination` destination — and focuses
+    /// the specific generation the notification referenced.
+    @MainActor
+    private func routeGenerationTap(_ payload: GenerationNotificationCenter.TapPayload) {
+        appState.selectedTab = .dashboard
+        appRouter.dashboardPath.append(
+            AppDestination.projectDetail(
+                id: payload.projectId,
+                autoGenerate: false,
+                highlightGenerationId: payload.generationId
+            )
+        )
     }
 }

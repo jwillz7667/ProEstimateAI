@@ -74,6 +74,7 @@ import usageRoutes from "./modules/usage/usage.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 import contractorsRoutes from "./modules/contractors/contractors.routes";
 import materialsPricingRoutes from "./modules/materials-pricing/materials-pricing.routes";
+import adminRoutes from "./modules/admin/admin.routes";
 
 export function createApp() {
   const app = express();
@@ -255,6 +256,9 @@ export function createApp() {
   // Solar API, and a static-map proxy so GOOGLE_MAPS_API_KEY stays server
   // side. Auth required — these calls hit billable Google APIs.
   v1.use("/maps", requireAuth, mapsRoutes);
+  // Admin-only operations (generation reaper, etc.). requireAuth populates the
+  // user; requireAdmin (inside the router) enforces the ADMIN_EMAILS allowlist.
+  v1.use("/admin", requireAuth, adminRoutes);
   app.use("/v1", v1);
 
   // Global error handler

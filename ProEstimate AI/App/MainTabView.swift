@@ -19,6 +19,13 @@ struct MainTabView: View {
                     }
                 }
 
+                Tab("Invoices", systemImage: AppTab.invoices.systemImage, value: AppTab.invoices) {
+                    NavigationStack(path: $router.invoicesPath) {
+                        InvoiceListView()
+                            .appNavigationDestinations()
+                    }
+                }
+
                 Tab("Clients", systemImage: AppTab.clients.systemImage, value: AppTab.clients) {
                     ClientListView()
                 }

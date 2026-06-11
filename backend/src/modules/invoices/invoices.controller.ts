@@ -27,6 +27,19 @@ export async function createHandler(req: Request, res: Response) {
   sendSuccess(res, toInvoiceDto(invoice), { statusCode: 201 });
 }
 
+// Handles POST /v1/estimates/:id/convert-to-invoice. Lives in the invoices
+// module because it produces an invoice, but is mounted on the estimates router
+// (the :id is the estimate id).
+export async function convertFromEstimateHandler(req: Request, res: Response) {
+  const invoice = await invoicesService.createFromEstimate(
+    req.companyId!,
+    req.userId!,
+    param(req.params.id),
+    req.body,
+  );
+  sendSuccess(res, toInvoiceDto(invoice), { statusCode: 201 });
+}
+
 export async function updateHandler(req: Request, res: Response) {
   const invoice = await invoicesService.update(param(req.params.id), req.companyId!, req.body);
   sendSuccess(res, toInvoiceDto(invoice));

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import { logger } from "../config/logger";
 
@@ -31,15 +32,28 @@ import { logger } from "../config/logger";
  */
 export async function markStuckGenerationsFailed(
   thresholdMs: number = 10 * 60 * 1000,
+  dryRun: boolean = false,
 ): Promise<number> {
   const cutoff = new Date(Date.now() - thresholdMs);
+  const where: Prisma.AIGenerationWhereInput = {
+    status: { in: ["QUEUED", "PROCESSING"] },
+    createdAt: { lt: cutoff },
+  };
 
   try {
+    if (dryRun) {
+      const count = await prisma.aIGeneration.count({ where });
+      if (count > 0) {
+        logger.warn(
+          { count, thresholdMs, dryRun: true },
+          "[dry-run] would mark stuck AI generations as FAILED",
+        );
+      }
+      return count;
+    }
+
     const result = await prisma.aIGeneration.updateMany({
-      where: {
-        status: { in: ["QUEUED", "PROCESSING"] },
-        createdAt: { lt: cutoff },
-      },
+      where,
       data: {
         status: "FAILED",
         errorMessage:
@@ -50,7 +64,7 @@ export async function markStuckGenerationsFailed(
     if (result.count > 0) {
       logger.warn(
         { count: result.count, thresholdMs },
-        "marked stuck AI generations as FAILED on startup",
+        "marked stuck AI generations as FAILED",
       );
     }
 
@@ -62,6 +76,79 @@ export async function markStuckGenerationsFailed(
     logger.error(
       { err },
       "generation-cleanup sweep failed; continuing startup without it",
+    );
+    return 0;
+  }
+}
+
+/**
+ * Mark generations that report `COMPLETED` but carry no image bytes as
+ * `FAILED`, so the iOS client stops treating them as ready and 404-ing on
+ * the preview endpoint.
+ *
+ * Why this exists. A handful of production rows predate the DTO/preview
+ * fixes: `status = COMPLETED` while `imageData IS NULL`. The client polls
+ * them, sees "completed", then requests `GET /v1/generations/:id/preview`
+ * which has nothing to serve. They never self-heal because the generation
+ * pipeline already considers them done. Flipping them to FAILED reconciles
+ * the UI to a retryable state.
+ *
+ * The threshold (default 1 hour) protects an in-flight generation that has
+ * legitimately flipped to COMPLETED a split second before its bytes were
+ * written in the same transaction window — only rows old enough that no
+ * write is still racing are eligible.
+ *
+ * ⚠️ Cross-cutting with REC8 (object storage). Once image bytes can live in
+ * Cloudflare R2 instead of Postgres, `imageData IS NULL` will be the NORMAL
+ * state for healthy generations. When `imageStorageKey` is introduced this
+ * predicate MUST become `imageData IS NULL AND imageStorageKey IS NULL`,
+ * otherwise it would fail generations whose bytes are safely in object
+ * storage. Do not ship R2 without updating this filter.
+ */
+export async function markImagelessCompletedGenerationsFailed(
+  thresholdMs: number = 60 * 60 * 1000,
+  dryRun: boolean = false,
+): Promise<number> {
+  const cutoff = new Date(Date.now() - thresholdMs);
+  const where: Prisma.AIGenerationWhereInput = {
+    status: "COMPLETED",
+    imageData: null,
+    createdAt: { lt: cutoff },
+  };
+
+  try {
+    if (dryRun) {
+      const count = await prisma.aIGeneration.count({ where });
+      if (count > 0) {
+        logger.warn(
+          { count, thresholdMs, dryRun: true },
+          "[dry-run] would mark imageless COMPLETED generations as FAILED",
+        );
+      }
+      return count;
+    }
+
+    const result = await prisma.aIGeneration.updateMany({
+      where,
+      data: {
+        status: "FAILED",
+        errorMessage:
+          "Preview image was not saved. Please generate again.",
+      },
+    });
+
+    if (result.count > 0) {
+      logger.warn(
+        { count: result.count, thresholdMs },
+        "marked imageless COMPLETED AI generations as FAILED",
+      );
+    }
+
+    return result.count;
+  } catch (err) {
+    logger.error(
+      { err },
+      "imageless-generation sweep failed; continuing without it",
     );
     return 0;
   }
