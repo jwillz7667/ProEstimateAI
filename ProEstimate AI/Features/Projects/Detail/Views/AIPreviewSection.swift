@@ -54,7 +54,12 @@ struct AIPreviewSection: View {
         // changes — `hasAppliedHighlight` makes it idempotent and keeps the
         // user's manual paging from being overridden.
         .onAppear { applyHighlightIfNeeded() }
-        .onChange(of: generations.map(\.id)) { _, _ in applyHighlightIfNeeded() }
+        .onChange(of: completedGenerations.map(\.id)) { _, ids in
+            // Status/preview changes can complete an existing ID, and deletes
+            // can leave the old page index outside the remaining results.
+            selectedGenerationIndex = min(selectedGenerationIndex, max(0, ids.count - 1))
+            applyHighlightIfNeeded()
+        }
     }
 
     /// If a deep-link target was provided and it maps to a completed
@@ -87,7 +92,7 @@ struct AIPreviewSection: View {
     // MARK: - Computed
 
     private var completedGenerations: [AIGeneration] {
-        generations.filter { $0.status == .completed }
+        generations.filter { $0.status == .completed && $0.previewURL != nil }
     }
 
     private var bestPromptSuggestion: String {

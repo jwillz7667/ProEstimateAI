@@ -1,6 +1,23 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "auth.restore.error" : {
+      "comment" : "Shown when session restore cannot reach the server; credentials are retained and the user can retry.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't load your workspace. Check your connection and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo cargar tu espacio de trabajo. Revisa tu conexión e inténtalo de nuevo."
+          }
+        }
+      }
+    },
     "" : {
       "localizations" : {
         "es" : {

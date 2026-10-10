@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   respondToSharedProposal,
@@ -13,7 +13,7 @@ interface Props {
   primaryColor?: string | null;
 }
 
-type Mode = "idle" | "approving" | "declining" | "submitted" | "error";
+type Mode = "idle" | "approving" | "declining" | "submitted";
 
 export function ProposalActions({ token, primaryColor }: Props) {
   const router = useRouter();
@@ -21,6 +21,8 @@ export function ProposalActions({ token, primaryColor }: Props) {
   const [message, setMessage] = useState("");
   const [errorText, setErrorText] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const submitting = useRef(false);
+  const messageId = useId();
   const accent = primaryColor || "#FF9230";
 
   function open(decision: ProposalDecision) {
@@ -30,12 +32,15 @@ export function ProposalActions({ token, primaryColor }: Props) {
   }
 
   function cancel() {
-    if (isPending) return;
+    if (submitting.current || isPending) return;
     setMode("idle");
     setErrorText(null);
   }
 
   function submit(decision: ProposalDecision) {
+    // A synchronous lock also covers repeated clicks before React renders.
+    if (submitting.current) return;
+    submitting.current = true;
     setErrorText(null);
     startTransition(async () => {
       try {
@@ -49,7 +54,9 @@ export function ProposalActions({ token, primaryColor }: Props) {
             ? err.message
             : "Something went wrong. Please try again.";
         setErrorText(msg);
-        setMode("error");
+        // Keep the decision and message intact so the client can retry.
+      } finally {
+        submitting.current = false;
       }
     });
   }
@@ -58,14 +65,14 @@ export function ProposalActions({ token, primaryColor }: Props) {
     // The page will re-render with the new status — this is just a transient
     // confirmation while router.refresh resolves.
     return (
-      <div className="rounded-2xl border border-ink-100 bg-white p-6 text-center text-ink-700">
-        Submitting your response…
+      <div role="status" className="rounded-2xl border border-ink-100 bg-white p-6 text-center text-ink-700">
+        Your response has been recorded. Thank you.
       </div>
     );
   }
 
   const confirming =
-    mode === "approving" || mode === "declining" || mode === "error";
+    mode === "approving" || mode === "declining";
   const pendingDecision: ProposalDecision | null =
     mode === "approving"
       ? "approved"
@@ -133,11 +140,12 @@ export function ProposalActions({ token, primaryColor }: Props) {
               : "Let your contractor know why — this is optional but helpful."}
           </p>
 
-          <label className="mt-5 block text-sm font-medium text-ink-800">
+          <label htmlFor={messageId} className="mt-5 block text-sm font-medium text-ink-800">
             Message to your contractor{" "}
             <span className="text-ink-500 font-normal">(optional)</span>
           </label>
           <textarea
+            id={messageId}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={3}
@@ -179,7 +187,10 @@ export function ProposalActions({ token, primaryColor }: Props) {
               }
             >
               {isPending ? (
-                <Spinner />
+                <>
+                  <Spinner />
+                  <span>Sending response…</span>
+                </>
               ) : pendingDecision === "approved" ? (
                 "Confirm Approval"
               ) : (

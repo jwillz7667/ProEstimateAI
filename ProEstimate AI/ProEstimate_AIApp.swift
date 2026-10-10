@@ -192,13 +192,14 @@ struct ProEstimate_AIApp: App {
         // sites cannot surface a paywall to a paying subscriber.
         paywallPresenter.configure(entitlementStore: entitlementStore)
 
-        // Wire the unauthorized callback so a failed token refresh signs the user out
-        // instead of leaving them stuck in a half-authenticated state.
+        // Only a definitive rejection of the current login signs the user
+        // out. Ignore callbacks queued before a logout/account switch.
         let appState = self.appState
         let entitlementStore = self.entitlementStore
         let usageMeterStore = self.usageMeterStore
-        APIClient.shared.onUnauthorized = {
+        APIClient.shared.onUnauthorized = { sessionID in
             Task { @MainActor in
+                guard TokenStore.shared.sessionIdentifier == sessionID else { return }
                 appState.signOut(
                     entitlementStore: entitlementStore,
                     usageMeterStore: usageMeterStore

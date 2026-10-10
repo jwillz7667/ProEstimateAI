@@ -133,6 +133,29 @@ private struct CompanyBrandingBody: Encodable, Sendable {
     let websiteUrl: String?
     let primaryColor: String?
     let secondaryColor: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case name, phone, email, address, city, state, zip
+        case websiteUrl, primaryColor, secondaryColor
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        // Branding is a complete form snapshot. An empty optional field is
+        // an explicit clear; synthesized encodeIfPresent would omit it and
+        // PATCH would silently preserve the old contact details instead.
+        try container.encode(phone, forKey: .phone)
+        try container.encode(email, forKey: .email)
+        try container.encode(address, forKey: .address)
+        try container.encode(city, forKey: .city)
+        try container.encode(state, forKey: .state)
+        try container.encode(zip, forKey: .zip)
+        try container.encode(websiteUrl, forKey: .websiteUrl)
+        // A color conversion failure is not a user-requested clear.
+        try container.encodeIfPresent(primaryColor, forKey: .primaryColor)
+        try container.encodeIfPresent(secondaryColor, forKey: .secondaryColor)
+    }
 }
 
 /// Partial company update body for tax settings.

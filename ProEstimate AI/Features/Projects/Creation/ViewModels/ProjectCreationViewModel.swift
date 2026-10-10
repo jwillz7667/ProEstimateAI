@@ -167,6 +167,9 @@ final class ProjectCreationViewModel {
     /// "Create Project" on the details step.
     var pipelineStage: CreationPipelineStage = .idle
 
+    /// Successful uploads in this wizard run, retained for retry.
+    private var uploadedPhotoIndices: Set<Int> = []
+
     /// The newly created project, set once the create-project API call
     /// succeeds. Used by the wizard host to fire `onProjectCreated`.
     var createdProject: Project?
@@ -450,6 +453,11 @@ final class ProjectCreationViewModel {
     /// caller (the wizard's `Generating` step view) drives this and
     /// observes `pipelineStage` to render the progress checklist.
     func runCreationPipeline() async {
+        guard !isPipelineRunning else { return }
+        if createdProject != nil {
+            await retryGeneration()
+            return
+        }
         guard let projectType = selectedProjectType else {
             pipelineStage = .failed("Select a project category to continue.")
             return
@@ -511,10 +519,17 @@ final class ProjectCreationViewModel {
             }
         }
 
-        // Stage 2: upload photos. Photo upload failures are *not* fatal
-        // — the project exists and the user can re-upload from detail.
+        // Never spend a generation credit without the photos the user chose.
+        // Retain successful uploads so retry does not duplicate assets.
         pipelineStage = .uploadingPhotos
-        await uploadPhotos(projectId: project.id)
+        do {
+            try await uploadPhotos(projectId: project.id)
+        } catch {
+            let message = "Your project is saved, but a photo couldn't upload. Retry to upload the remaining photos before generating your preview."
+            pipelineError = message
+            pipelineStage = .failed(message)
+            return
+        }
 
         // Stage 3: kick off generation
         pipelineStage = .startingGeneration
@@ -542,21 +557,20 @@ final class ProjectCreationViewModel {
         await pollGeneration(initial: generation)
     }
 
-    private func uploadPhotos(projectId: String) async {
-        for imageData in selectedImageData {
+    private func uploadPhotos(projectId: String) async throws {
+        for (index, imageData) in selectedImageData.enumerated() {
+            guard !uploadedPhotoIndices.contains(index) else { continue }
+            try Task.checkCancellation()
             let compressed = Self.compressImage(imageData, maxBytes: 1_000_000)
             let base64 = compressed.base64EncodedString()
             let body = AssetUploadBody(
                 url: "data:image/jpeg;base64,\(base64)",
                 assetType: "original"
             )
-            do {
-                let _: Asset = try await apiClient.request(
-                    .uploadAsset(projectId: projectId, body: body)
-                )
-            } catch {
-                // Non-critical: project was created, photo upload failed silently.
-            }
+            let _: Asset = try await apiClient.request(
+                .uploadAsset(projectId: projectId, body: body)
+            )
+            uploadedPhotoIndices.insert(index)
         }
     }
 
@@ -655,6 +669,7 @@ final class ProjectCreationViewModel {
     /// inline retry button on the loading screen — the project itself
     /// was already created, so we restart from `.startingGeneration`.
     func retryGeneration() async {
+        guard !isPipelineRunning else { return }
         guard let project = createdProject else {
             // Nothing to retry against — restart the full pipeline.
             await runCreationPipeline()
@@ -662,9 +677,18 @@ final class ProjectCreationViewModel {
         }
 
         pipelineError = nil
-        pipelineStage = .startingGeneration
+        // A timeout only stops local waiting; the server job can still finish.
+        // Resume polling it instead of spending a second generation credit.
+        if let pendingGeneration, pendingGeneration.status != .failed {
+            pipelineStage = .generating
+            await pollGeneration(initial: pendingGeneration)
+            return
+        }
+        pipelineStage = .uploadingPhotos
 
         do {
+            try await uploadPhotos(projectId: project.id)
+            pipelineStage = .startingGeneration
             let generation = try await generationService.startGeneration(
                 projectId: project.id,
                 prompt: resolvedPrompt,

@@ -247,7 +247,9 @@ final class ProjectDetailViewModel {
     // MARK: - AI Generation
 
     func startGeneration(prompt: String? = nil, materials: [MaterialSpec]? = nil) async {
-        guard let project else { return }
+        // Multiple taps can arrive before SwiftUI redraws the loading state.
+        guard !isGenerating, let project else { return }
+        errorMessage = nil
 
         isGenerating = true
         currentGenerationStage = 0
