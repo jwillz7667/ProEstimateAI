@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
 import { NotFoundError, ValidationError } from "../../lib/errors";
@@ -115,7 +116,9 @@ export async function uploadLogo(companyId: string, data: UploadLogoInput) {
     throw new ValidationError("Logo must be 2MB or smaller after decoding");
   }
 
-  const serveUrl = `${env.API_BASE_URL}/v1/companies/${companyId}/logo`;
+  // A new URL also bypasses earlier immutable client/CDN cache entries.
+  const version = createHash("sha256").update(data.image_data).digest("hex").slice(0, 16);
+  const serveUrl = `${env.API_BASE_URL}/v1/companies/${companyId}/logo?v=${version}`;
   const company = await prisma.company.update({
     where: { id: companyId },
     data: {
