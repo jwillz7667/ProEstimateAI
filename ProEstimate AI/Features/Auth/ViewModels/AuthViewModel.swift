@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 
+@MainActor
 @Observable
 final class AuthViewModel {
     // MARK: - Form fields
@@ -22,7 +23,7 @@ final class AuthViewModel {
 
     private let authService: AuthServiceProtocol
     private let appleSignInCoordinator = AppleSignInCoordinator()
-    @MainActor private let googleSignInCoordinator = GoogleSignInCoordinator()
+    private let googleSignInCoordinator = GoogleSignInCoordinator()
 
     // MARK: - Init
 

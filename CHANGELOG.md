@@ -10,6 +10,7 @@ Dates are in `YYYY-MM-DD` format.
 
 ### Fixed
 - Bootstrap fresh backend databases before creating online indexes, and resolve indexes in the configured database schema.
+- Make auth UI initialization main-actor isolated and select Xcode 26 for simulator CI.
 - Drain in-flight HTTP requests before disconnecting backend dependencies during shutdown, with a bounded timeout.
 - Replace retired API URLs in iOS, web, backend-generated links, and active setup documentation.
 
