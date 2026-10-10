@@ -217,7 +217,8 @@ export function createApp() {
         req.query.w,
       );
       res.set("Content-Type", variant.mimeType);
-      res.set("Cache-Control", "public, max-age=86400, immutable");
+      // Company logos are mutable. Revalidate older unversioned URLs too.
+      res.set("Cache-Control", "public, max-age=0, must-revalidate");
       res.send(variant.data);
     } catch (err) {
       next(err);
