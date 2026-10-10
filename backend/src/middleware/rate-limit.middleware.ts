@@ -7,10 +7,13 @@ import { env } from '../config/env';
  * Build a Redis-backed rate limit store if Redis is available,
  * otherwise fall back to in-memory (acceptable for single-instance).
  */
-function buildStore(): RedisStore | undefined {
+function buildStore(scope: string): RedisStore | undefined {
   const redis = getRedis();
   if (redis) {
     return new RedisStore({
+      // Each limiter has independent budgets and expiry windows. Sharing the
+      // default Redis prefix makes ordinary traffic consume the auth budget.
+      prefix: `rate-limit:${scope}:`,
       sendCommand: async (...args: string[]) => {
         // ioredis call() expects (command, ...args)
         const [command, ...rest] = args;
@@ -37,7 +40,7 @@ export const globalRateLimit = rateLimit({
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
-  store: buildStore(),
+  store: buildStore("global"),
   // Railway Redis can transiently close or fail DNS resolution. Do not turn a
   // rate-limit store outage into a production-wide 500, especially before auth.
   passOnStoreError: true,
@@ -49,7 +52,7 @@ export const authRateLimit = rateLimit({
   max: authRateLimitMax,
   standardHeaders: true,
   legacyHeaders: false,
-  store: buildStore(),
+  store: buildStore("auth"),
   // Availability beats strict brute-force throttling during Redis incidents;
   // auth still validates credentials and keeps generic failure messages.
   passOnStoreError: true,
@@ -61,7 +64,7 @@ export const shareRateLimit = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  store: buildStore(),
+  store: buildStore("share"),
   // Public, unauthenticated proposal-share endpoints (GET + respond) are
   // reachable by anyone holding a token, so they're the natural surface for
   // token-guessing and scraping. 20/min per IP is a soft cap — a genuine
