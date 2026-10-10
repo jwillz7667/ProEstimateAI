@@ -166,6 +166,14 @@ end
 platform :ios do
   desc "Build the project from a clean checkout and push it to TestFlight"
   lane :beta do
+    # A release may reuse existing signing credentials, never create them.
+    %w[DIST_CERT_P12_BASE64 DIST_CERT_P12_PASSWORD].each do |name|
+      UI.user_error!("#{name} must contain the existing Distribution certificate credentials; beta will not create a certificate") if ENV[name].to_s.strip.empty?
+    end
+    # Fastlane 2.233.1 treats an explicitly supplied force:false as a
+    # conflict with readonly:true too. Leave force unset, including in ENV.
+    UI.user_error!("Unset SIGH_FORCE for the read-only beta signing flow") if ENV.key?("SIGH_FORCE")
+
     api_key = make_api_key
 
     # Align the build number with whatever App Store Connect has most
@@ -193,25 +201,17 @@ platform :ios do
       build_number: next_build
     )
 
-    # Distribution cert strategy:
-    #   - In CI the runner's keychain is ephemeral. Apple caps the team at
-    #     three Distribution certificates, so calling `cert` every run
-    #     quickly hits "reached the maximum number of available Distribution
-    #     certificates." Instead we package the cert + private key once as
-    #     a .p12, stash it in DIST_CERT_P12_BASE64 + DIST_CERT_P12_PASSWORD,
-    #     and import it into a fresh keychain on each run.
-    #   - Locally the dev's login.keychain already has the cert, so we fall
-    #     through to the plain `cert` path.
-    p12_base64   = ENV["DIST_CERT_P12_BASE64"]
-    p12_password = ENV["DIST_CERT_P12_PASSWORD"]
-    ci_keychain  = nil
+    # Import the existing certificate/private key into this runner only.
+    # Missing or unusable credentials must fail; there is no cert fallback.
+    require "securerandom"
+    require "base64"
+    require "tmpdir"
+    p12_base64       = ENV.fetch("DIST_CERT_P12_BASE64")
+    p12_password     = ENV.fetch("DIST_CERT_P12_PASSWORD")
+    ci_keychain      = "proestimate-ci-#{SecureRandom.hex(6)}.keychain"
+    ci_keychain_pass = SecureRandom.hex(16)
 
-    if p12_base64 && !p12_base64.empty?
-      require "securerandom"
-      require "base64"
-      ci_keychain      = "proestimate-ci.keychain"
-      ci_keychain_pass = SecureRandom.hex(16)
-
+    begin
       create_keychain(
         name:               ci_keychain,
         password:           ci_keychain_pass,
@@ -222,106 +222,94 @@ platform :ios do
         add_to_search_list: true
       )
 
-      p12_path = File.join(Dir.mktmpdir("p12"), "dist.p12")
-      File.write(p12_path, Base64.decode64(p12_base64))
+      Dir.mktmpdir("proestimate-signing") do |p12_dir|
+        p12_path = File.join(p12_dir, "dist.p12")
+        File.write(p12_path, Base64.strict_decode64(p12_base64.gsub(/\s+/, "")), mode: "wb", perm: 0o600)
+        import_certificate(
+          certificate_path:     p12_path,
+          certificate_password: p12_password,
+          keychain_name:        ci_keychain,
+          keychain_password:    ci_keychain_pass
+        )
+      end
 
-      import_certificate(
-        certificate_path:     p12_path,
-        certificate_password: p12_password.to_s,
-        keychain_name:        ci_keychain,
-        keychain_password:    ci_keychain_pass
+      UI.success("Imported existing Distribution certificate into #{ci_keychain}")
+
+      # Download and install a valid existing App Store profile matching
+      # the imported certificate. If none exists, fail without creating,
+      # renewing or deleting a profile. Do not supply the force option.
+      sigh(
+        api_key:                       api_key,
+        app_identifier:                BUNDLE_ID,
+        platform:                      "ios",
+        output_path:                   "./fastlane/signing",
+        readonly:                      true,
+        skip_certificate_verification: false
       )
 
-      UI.success("Imported Distribution cert from DIST_CERT_P12_BASE64 into #{ci_keychain}")
-    else
-      cert(
-        api_key:              api_key,
-        output_path:          "./fastlane/signing",
-        generate_apple_certs: true,
-        force:                false
+      # sigh only exposes the file path via lane_context — the profile's
+      # internal "Name" field (what xcodebuild's PROVISIONING_PROFILE_SPECIFIER
+      # matches against) has to be read out of the signed plist. Skipping this
+      # and relying on SharedValues::SIGH_NAME silently returns nil, which
+      # passes PROVISIONING_PROFILE_SPECIFIER="" to xcodebuild — xcodebuild then
+      # auto-matches a stale profile without Sign in with Apple and the archive
+      # dies with "requires a provisioning profile with the Sign in with Apple
+      # feature."
+      require "plist"
+      profile_path = lane_context[SharedValues::SIGH_PROFILE_PATH]
+      profile_xml  = `security cms -D -i "#{profile_path}"`
+      UI.user_error!("Could not decode #{profile_path}") if profile_xml.empty?
+      profile_plist = Plist.parse_xml(profile_xml)
+      profile_name  = profile_plist["Name"]
+      profile_uuid  = profile_plist["UUID"]
+      UI.user_error!("Provisioning profile at #{profile_path} has no Name field") if profile_name.nil? || profile_name.empty?
+      UI.important("Using profile '#{profile_name}' (UUID #{profile_uuid}) at #{profile_path}")
+
+      # Switch to manual signing just for this build so xcodebuild uses
+      # the existing profile sigh downloaded instead of its own cloud path.
+      key_id        = ENV.fetch("APP_STORE_CONNECT_API_KEY_ID")
+      key_issuer_id = ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID")
+      key_path      = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      signing_args = [
+        "-authenticationKeyID", key_id,
+        "-authenticationKeyIssuerID", key_issuer_id,
+      ]
+      signing_args += ["-authenticationKeyPath", key_path] if key_path && !key_path.empty?
+
+      build_ios_app(
+        project:                XCODE_PROJECT,
+        scheme:                 XCODE_SCHEME,
+        configuration:          "Release",
+        export_method:          "app-store",
+        clean:                  true,
+        include_bitcode:        false,
+        include_symbols:        true,
+        skip_profile_detection: true,
+        export_options: {
+          method: "app-store",
+          signingStyle: "manual",
+          provisioningProfiles: {
+            BUNDLE_ID => profile_name
+          }
+        },
+        xcargs: [
+          signing_args.join(" "),
+          "CODE_SIGN_STYLE=Manual",
+          "PROVISIONING_PROFILE_SPECIFIER=\"#{profile_name}\"",
+          "CODE_SIGN_IDENTITY=\"Apple Distribution\""
+        ].join(" ")
       )
+
+      upload_to_testflight(
+        api_key: api_key,
+        skip_waiting_for_build_processing: true,
+        distribute_external: false
+      )
+
+    ensure
+      # Clean up imported private keys even when signing/build/upload fails.
+      delete_keychain(name: ci_keychain)
     end
-
-    # force:true regenerates the canonical `Res.ProEstimate-AI AppStore`
-    # profile against whichever Distribution cert is now in the keychain.
-    # Without it, sigh refuses to touch an existing profile whose cert we
-    # don't have locally and instead creates a timestamp-suffixed duplicate
-    # that drifts further every run.
-    #
-    # skip_install defaults to false — we need the default. xcodebuild reads
-    # profiles from ~/Library/MobileDevice/Provisioning Profiles/ during
-    # `archive`, and if the freshly downloaded profile isn't installed
-    # there, the archive fails with "No profile for team ... matching ...".
-    sigh(
-      api_key:         api_key,
-      app_identifier:  BUNDLE_ID,
-      platform:        "ios",
-      output_path:     "./fastlane/signing",
-      force:           true
-    )
-
-    # sigh only exposes the file path via lane_context — the profile's
-    # internal "Name" field (what xcodebuild's PROVISIONING_PROFILE_SPECIFIER
-    # matches against) has to be read out of the signed plist. Skipping this
-    # and relying on SharedValues::SIGH_NAME silently returns nil, which
-    # passes PROVISIONING_PROFILE_SPECIFIER="" to xcodebuild — xcodebuild then
-    # auto-matches a stale profile without Sign in with Apple and the archive
-    # dies with "requires a provisioning profile with the Sign in with Apple
-    # feature."
-    require "plist"
-    profile_path = lane_context[SharedValues::SIGH_PROFILE_PATH]
-    profile_xml  = `security cms -D -i "#{profile_path}"`
-    UI.user_error!("Could not decode #{profile_path}") if profile_xml.empty?
-    profile_plist = Plist.parse_xml(profile_xml)
-    profile_name  = profile_plist["Name"]
-    profile_uuid  = profile_plist["UUID"]
-    UI.user_error!("Provisioning profile at #{profile_path} has no Name field") if profile_name.nil? || profile_name.empty?
-    UI.important("Using profile '#{profile_name}' (UUID #{profile_uuid}) at #{profile_path}")
-
-    # Switch to manual signing just for this build so xcodebuild uses
-    # the profile sigh just created instead of its own cloud path.
-    key_id        = ENV.fetch("APP_STORE_CONNECT_API_KEY_ID")
-    key_issuer_id = ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID")
-    key_path      = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
-    signing_args = [
-      "-authenticationKeyID", key_id,
-      "-authenticationKeyIssuerID", key_issuer_id,
-    ]
-    signing_args += ["-authenticationKeyPath", key_path] if key_path && !key_path.empty?
-
-    build_ios_app(
-      project:                XCODE_PROJECT,
-      scheme:                 XCODE_SCHEME,
-      configuration:          "Release",
-      export_method:          "app-store",
-      clean:                  true,
-      include_bitcode:        false,
-      include_symbols:        true,
-      skip_profile_detection: true,
-      export_options: {
-        method: "app-store",
-        signingStyle: "manual",
-        provisioningProfiles: {
-          BUNDLE_ID => profile_name
-        }
-      },
-      xcargs: [
-        signing_args.join(" "),
-        "CODE_SIGN_STYLE=Manual",
-        "PROVISIONING_PROFILE_SPECIFIER=\"#{profile_name}\"",
-        "CODE_SIGN_IDENTITY=\"Apple Distribution\""
-      ].join(" ")
-    )
-
-    upload_to_testflight(
-      api_key: api_key,
-      skip_waiting_for_build_processing: true,
-      distribute_external: false
-    )
-
-    # Runner keychains are ephemeral so this is belt-and-suspenders, but it
-    # also matters for the rare self-hosted-runner case where state persists.
-    delete_keychain(name: ci_keychain) if ci_keychain
   end
 
   desc "Push localized metadata and screenshots to App Store Connect (no binary)"
@@ -1292,3 +1280,4 @@ platform :ios do
     UI.error("Lane #{lane} failed: #{exception}")
   end
 end
+
