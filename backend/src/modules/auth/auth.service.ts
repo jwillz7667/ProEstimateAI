@@ -187,7 +187,11 @@ export async function appleSignIn(
   // 1. Verify the identity token with Apple's JWKS
   const claims = await verifyAppleIdentityToken(input.identity_token);
   const appleUserId = claims.sub;
-  const email = input.email || claims.email;
+  // Only signed, verified provider claims may identify an account. The
+  // client email is display metadata and must never authorize account linking.
+  const email = (claims.email_verified === true || claims.email_verified === "true")
+    ? claims.email?.trim().toLowerCase()
+    : undefined;
 
   // 2. Look for existing user by appleUserId
   let user = await prisma.user.findUnique({
@@ -219,7 +223,11 @@ export async function appleSignIn(
     return { user, company: user.company, accessToken, refreshToken };
   }
 
-  // 3. Check by email — link appleUserId to existing account
+  if (!email) {
+    throw new AuthenticationError("Apple account email not provided or unverified");
+  }
+
+  // 3. Check by verified email — link appleUserId to existing account
   if (email) {
     const existingUser = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
@@ -227,6 +235,10 @@ export async function appleSignIn(
     });
 
     if (existingUser) {
+      if (!existingUser.isActive ||
+          (existingUser.appleUserId && existingUser.appleUserId !== appleUserId)) {
+        throw new AuthenticationError("Unable to sign in with this Apple account");
+      }
       // Link Apple ID to existing user
       const updated = await prisma.user.update({
         where: { id: existingUser.id },
@@ -345,14 +357,8 @@ export async function googleSignIn(
     },
   );
 
-  if (!claims.emailVerified && !claims.email && !input.email) {
-    throw new AuthenticationError(
-      "Google account email not provided or unverified",
-    );
-  }
-
   const googleId = claims.sub;
-  const email = (input.email || claims.email)?.toLowerCase();
+  const email = claims.emailVerified ? claims.email?.trim().toLowerCase() : undefined;
 
   // 2. Look for an existing user already linked to this Google account.
   let user = await prisma.user.findUnique({
@@ -367,7 +373,11 @@ export async function googleSignIn(
     return await issueTokens(user);
   }
 
-  // 3. Match by email — link Google ID onto an existing email/password
+  if (!email) {
+    throw new AuthenticationError("Google account email not provided or unverified");
+  }
+
+  // 3. Match by verified email — link Google ID onto an existing email/password
   // account so a user who signed up with a password can later use
   // "Continue with Google" without losing their data.
   if (email) {
@@ -376,6 +386,17 @@ export async function googleSignIn(
       include: { company: true },
     });
     if (existingUser) {
+      // Google is not authoritative for third-party email addresses without
+      // a Workspace hosted-domain claim, even if email_verified is true.
+      // Such users must authenticate the existing account before linking.
+      const authoritativeEmail = email.endsWith("@gmail.com") || Boolean(claims.hostedDomain);
+      if (!authoritativeEmail) {
+        throw new AuthenticationError("Sign in to your existing account to link Google");
+      }
+      if (!existingUser.isActive ||
+          (existingUser.googleId && existingUser.googleId !== googleId)) {
+        throw new AuthenticationError("Unable to sign in with this Google account");
+      }
       const updated = await prisma.user.update({
         where: { id: existingUser.id },
         data: { googleId },
@@ -510,29 +531,33 @@ export async function refresh(
     throw new AuthenticationError("Refresh token has expired");
   }
 
-  // 3. Rotate: delete old token, issue new pair
-  // Use deleteMany to handle concurrent refresh attempts gracefully —
-  // if two requests race to refresh the same token, the second delete
-  // is a no-op instead of throwing P2025.
-  await prisma.refreshToken.deleteMany({ where: { id: storedToken.id } });
+  // Resolve current membership instead of trusting a possibly stale JWT.
+  const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+  if (!user?.isActive || storedToken.userId !== payload.userId) {
+    throw new AuthenticationError("Account is unavailable");
+  }
 
-  const jwtPayload: JwtPayload = {
-    userId: payload.userId,
-    companyId: payload.companyId,
-  };
-  const newAccessToken = signAccessToken(jwtPayload);
-  const newRefreshToken = signRefreshToken(jwtPayload);
-
-  // 4. Store the new refresh token
-  await prisma.refreshToken.create({
-    data: {
-      userId: payload.userId,
-      token: newRefreshToken,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    },
+  // Consume once and create the successor atomically. A concurrent request
+  // that lost the delete race must never mint a second valid session.
+  return prisma.$transaction(async (tx) => {
+    const consumed = await tx.refreshToken.deleteMany({
+      where: { id: storedToken.id, expiresAt: { gt: new Date() } },
+    });
+    if (consumed.count !== 1) {
+      throw new AuthenticationError("Refresh token has been revoked");
+    }
+    const jwtPayload: JwtPayload = { userId: user.id, companyId: user.companyId };
+    const accessToken = signAccessToken(jwtPayload);
+    const refreshToken = signRefreshToken(jwtPayload);
+    await tx.refreshToken.create({
+      data: {
+        userId: user.id,
+        token: refreshToken,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+    return { accessToken, refreshToken };
   });
-
-  return { accessToken: newAccessToken, refreshToken: newRefreshToken };
 }
 
 // ─── Logout ──────────────────────────────────────────────────────────────────

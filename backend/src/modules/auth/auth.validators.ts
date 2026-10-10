@@ -74,8 +74,8 @@ export type AppleSignInInput = z.infer<typeof appleSignInSchema>;
 // JWKS). The backend verifies it against `GOOGLE_OAUTH_*_CLIENT_ID` and
 // either logs the matching user in or provisions a new Company + User on
 // first sight. `full_name` and `email` are optional — Google supplies
-// them in the token claims, but the iOS layer can override (e.g. when
-// the user edits their name during sign-up).
+// them in the token claims. A client-provided name is display metadata;
+// a client-provided email never authorizes account lookup or linking.
 export const googleSignInSchema = z.object({
   identity_token: z.string().min(1, "Identity token is required"),
   full_name: z.string().trim().max(100).optional().nullable(),

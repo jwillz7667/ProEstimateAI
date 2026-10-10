@@ -32,6 +32,8 @@ export interface GoogleTokenClaims {
   sub: string;
   email?: string;
   emailVerified: boolean;
+  /** Verified Workspace hosted domain, when Google is authoritative. */
+  hostedDomain?: string;
   name?: string;
   givenName?: string;
   familyName?: string;
@@ -91,6 +93,7 @@ export async function verifyGoogleIdentityToken(
       sub,
       email: payload["email"] as string | undefined,
       emailVerified,
+      hostedDomain: typeof payload["hd"] === "string" ? payload["hd"] : undefined,
       name: payload["name"] as string | undefined,
       givenName: payload["given_name"] as string | undefined,
       familyName: payload["family_name"] as string | undefined,

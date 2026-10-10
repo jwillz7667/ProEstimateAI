@@ -31,6 +31,14 @@ const SERVICE_TRADE_TYPES: ReadonlySet<ProjectType> = new Set<ProjectType>([
   "WINDOW_CLEANING",
 ]);
 
+async function verifyClientOwnership(clientId: string | null | undefined, companyId: string) {
+  if (!clientId) return;
+  const client = await prisma.client.findFirst({
+    where: { id: clientId, companyId }, select: { id: true },
+  });
+  if (!client) throw new NotFoundError("Client", clientId);
+}
+
 export async function list(companyId: string, pagination: PaginationParams) {
   const { cursor, pageSize = 25 } = pagination;
 
@@ -174,6 +182,7 @@ export async function create(
   // exceed 2 projects/month. Premium users have a generous fair-use
   // ceiling. The gate throws PaywallError(402) which the iOS client
   // renders as the upgrade sheet.
+  await verifyClientOwnership(data.client_id, companyId);
   await gateAIAction({ userId, companyId, metric: "PROJECT_CREATED" });
 
   const resolvedType: ProjectType = data.project_type
@@ -260,6 +269,8 @@ export async function update(
   if (!existing) {
     throw new NotFoundError("Project", id);
   }
+
+  await verifyClientOwnership(data.client_id, companyId);
 
   const project = await prisma.project.update({
     where: { id },

@@ -17,6 +17,14 @@ import {
 import { gateAIAction } from "../commerce/entitlement-gate";
 import { recordUsage } from "../../lib/usage-limits";
 
+async function verifyPricingProfileOwnership(profileId: string | null | undefined, companyId: string) {
+  if (!profileId) return;
+  const profile = await prisma.pricingProfile.findFirst({
+    where: { id: profileId, companyId }, select: { id: true },
+  });
+  if (!profile) throw new NotFoundError("PricingProfile", profileId);
+}
+
 export async function list(
   companyId: string,
   pagination: PaginationParams,
@@ -74,6 +82,8 @@ export async function create(
   if (!project) {
     throw new NotFoundError("Project", data.project_id);
   }
+
+  await verifyPricingProfileOwnership(data.pricing_profile_id, companyId);
 
   // Auto-increment estimate number inside a transaction
   const estimate = await prisma.$transaction(async (tx) => {
@@ -151,6 +161,8 @@ export async function update(
   if (!existing) {
     throw new NotFoundError("Estimate", id);
   }
+
+  await verifyPricingProfileOwnership(data.pricing_profile_id, companyId);
 
   const updateData: any = {};
 
