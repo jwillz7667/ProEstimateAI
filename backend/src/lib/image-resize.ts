@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { createHash } from "node:crypto";
 import { logger } from "../config/logger";
 
 /**
@@ -46,8 +47,11 @@ function snapWidth(requested: number): ThumbnailWidth {
   return ALLOWED_WIDTHS[ALLOWED_WIDTHS.length - 1];
 }
 
-function cacheKey(id: string, width: ThumbnailWidth): string {
-  return `${id}:${width}`;
+function cacheKey(id: string, width: ThumbnailWidth, source: Buffer): string {
+  // Logos can change while their company ID remains constant. Bind cached
+  // and in-flight work to the actual bytes, not just the mutable record ID.
+  const fingerprint = createHash("sha256").update(source).digest("hex");
+  return `${id}:${width}:${fingerprint}`;
 }
 
 function touch(key: string, entry: CacheEntry) {
@@ -90,11 +94,10 @@ async function runResize(
 }
 
 /**
- * Resolve a thumbnail variant for a public image. Cached on `(id, width)`.
+ * Resolve a thumbnail variant, cached on `(id, width, source fingerprint)`.
  *
- * The caller passes `id` purely as a cache discriminator — it must be
- * stable per source buffer. For our public handlers that's the
- * generation/asset/logo CUID, which is stable for the life of the record.
+ * Record IDs remain stable while logos can change; the source fingerprint
+ * prevents a replacement from receiving an earlier cached thumbnail.
  */
 export async function resizeImage(
   id: string,
@@ -102,7 +105,7 @@ export async function resizeImage(
   requestedWidth: number,
 ): Promise<CacheEntry> {
   const width = snapWidth(requestedWidth);
-  const key = cacheKey(id, width);
+  const key = cacheKey(id, width, source);
 
   const cached = cache.get(key);
   if (cached) {

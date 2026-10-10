@@ -6,6 +6,8 @@ RUN npm ci
 COPY . .
 RUN npx prisma generate
 RUN npm run build
+# Validate native sharp/libvips against this actual Alpine/musl image before shipping.
+RUN node scripts/verify-image-runtime.cjs
 
 FROM node:20-alpine AS runner
 RUN apk add --no-cache openssl curl
