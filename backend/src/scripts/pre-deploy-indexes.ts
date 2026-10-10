@@ -7,10 +7,10 @@ import { logger } from '../config/logger';
  * A plain `CREATE INDEX` takes a lock that blocks writes to the table for the
  * whole build. On a live table that is a write outage. Postgres offers
  * `CREATE INDEX CONCURRENTLY` to build without that lock — but it *cannot* run
- * inside a transaction, and Prisma wraps every migration in one. So these
+ * inside a transaction. To keep heavy builds separate from schema changes, these
  * indexes are deliberately kept OUT of the migration files (their migration
  * SQL is a documented no-op) and created here, in a standalone process that
- * runs BEFORE `prisma migrate deploy` in the container CMD.
+ * runs AFTER `prisma migrate deploy` in the container CMD.
  *
  * Every statement is idempotent (`IF NOT EXISTS`) so re-running on each deploy
  * is a no-op once the index exists. We additionally repair the one failure
@@ -57,8 +57,8 @@ async function indexState(name: string): Promise<'missing' | 'valid' | 'invalid'
     `SELECT i.indisvalid
        FROM pg_class c
        JOIN pg_index i ON i.indexrelid = c.oid
-      WHERE c.relname = $1`,
-    name,
+      WHERE c.oid = to_regclass($1)`,
+    quoteIdent(name),
   );
   if (rows.length === 0) return 'missing';
   return rows[0].indisvalid ? 'valid' : 'invalid';
@@ -97,7 +97,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  logger.info({ count: CONCURRENT_INDEXES.length }, 'Ensuring online indexes before migrate deploy');
+  logger.info({ count: CONCURRENT_INDEXES.length }, 'Ensuring online indexes after migrate deploy');
 
   // Sequential, not parallel: each CONCURRENTLY build is I/O heavy and a single
   // failure should not leave siblings half-built with an ambiguous exit state.
@@ -116,8 +116,8 @@ main()
   .catch(async (err) => {
     logger.error({ err }, 'Pre-deploy index creation failed');
     await prisma.$disconnect();
-    // Non-zero exit aborts the container CMD chain before migrate deploy /
-    // server start, so a broken deploy fails loudly instead of silently
+    // Non-zero exit aborts the container CMD chain before server start,
+    // so a broken deploy fails loudly instead of silently
     // running without the index.
     process.exit(1);
   });

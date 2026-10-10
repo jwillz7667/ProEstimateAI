@@ -3,7 +3,7 @@ import Foundation
 enum AppConstants {
     // MARK: - API
 
-    static let apiBaseURL = "https://proestimate-api-production.up.railway.app/v1"
+    static let apiBaseURL = "https://proestimate-api-production-75e5.up.railway.app/v1"
 
     // MARK: - StoreKit Product IDs
 

@@ -32,6 +32,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Select Xcode
+        run: |
+          # Match TestFlight's Xcode 26 toolchain. The runner's default
+          # Xcode 16 does not support the app's default actor isolation
+          # setting or iOS 26 SDK.
+          xc=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1) || true
+          if [ -z "$xc" ]; then
+            echo "::error::No Xcode 26.x found on runner."
+            ls /Applications | grep -i Xcode || true
+            exit 1
+          fi
+          echo "Selecting $xc"
+          sudo xcode-select -s "$xc"
+
       - name: Show tool versions
         run: |
           sw_vers

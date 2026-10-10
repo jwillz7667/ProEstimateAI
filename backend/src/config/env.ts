@@ -32,7 +32,7 @@ const envSchema = z.object({
     .default("ProEstimate AI <noreply@proestimateai.com>"),
   API_BASE_URL: z
     .string()
-    .default("https://proestimate-api-production.up.railway.app"),
+    .default("https://proestimate-api-production-75e5.up.railway.app"),
   APP_STORE_ISSUER_ID: z.string().optional(),
   // App Store Server API credentials. When the issuer ID, key ID, and
   // PEM private key are all present, the backend cross-checks every
