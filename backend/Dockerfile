@@ -28,11 +28,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
 
 # Use exec form so SIGTERM is forwarded directly to node (not shell).
 # Order matters and each step must succeed before the next (&&):
-#   1. pre-deploy-indexes: builds performance indexes with CREATE INDEX
-#      CONCURRENTLY (no table-write lock). Must run OUTSIDE the migration
-#      transaction, so it cannot live in a migration file — hence a separate
-#      step before migrate deploy. Idempotent; a no-op once indexes exist.
-#   2. migrate deploy: applies schema migrations (these take their normal lock,
-#      but the heavy index builds already happened lock-free in step 1).
+#   1. migrate deploy: creates tables on a fresh database. The online-index
+#      migration is a no-op, so the heavy build still runs lock-free in step 2.
+#   2. pre-deploy-indexes: builds performance indexes with CREATE INDEX
+#      CONCURRENTLY (no table-write lock), outside schema migrations.
+#      Idempotent; a no-op once indexes exist.
 #   3. server: exec so node is PID 1 and receives SIGTERM directly.
-CMD ["sh", "-c", "node dist/scripts/pre-deploy-indexes.js && npx prisma migrate deploy && exec node dist/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/scripts/pre-deploy-indexes.js && exec node dist/index.js"]

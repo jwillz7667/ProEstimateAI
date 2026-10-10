@@ -8,7 +8,13 @@ Dates are in `YYYY-MM-DD` format.
 
 ## [Unreleased]
 
-(Next version's changes land here.)
+### Fixed
+- Bootstrap fresh backend databases before creating online indexes, and resolve indexes in the configured database schema.
+- Drain in-flight HTTP requests before disconnecting backend dependencies during shutdown, with a bounded timeout.
+- Replace retired API URLs in iOS, web, backend-generated links, and active setup documentation.
+
+### Added
+- Backend CI lint, unit tests, and real PostgreSQL integration coverage, including empty-database and repeated bootstrap checks.
 
 ## [1.0.0] - 2026-04-19
 

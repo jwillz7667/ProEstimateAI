@@ -174,7 +174,7 @@ The StoreKit config file in the repo mirrors what you need here.
 
 StoreKit 2 handles reconciliation client-side; this app already does a `POST /v1/commerce/transactions/sync` after each purchase. You do not need App Store Server Notifications to ship, but they are recommended for refund handling:
 
-- [ ] (Optional) App Store Server Notifications v2 URL: `https://proestimate-api-production.up.railway.app/v1/commerce/app-store-webhook` (only if you implement the handler)
+- [ ] (Optional) App Store Server Notifications v2 URL: `https://proestimate-api-production-75e5.up.railway.app/v1/commerce/app-store-webhook` (only if you implement the handler)
 
 ---
 

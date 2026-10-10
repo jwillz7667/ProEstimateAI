@@ -9,7 +9,7 @@
 export const API_BASE_URL: string =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   process.env.API_BASE_URL ??
-  "https://proestimate-api-production.up.railway.app/v1";
+  "https://proestimate-api-production-75e5.up.railway.app/v1";
 
 export interface APIEnvelope<T> {
   ok: boolean;

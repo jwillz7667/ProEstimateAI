@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   build:
-    name: Lint, typecheck, build
+    name: Lint, typecheck, build, test
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -30,11 +30,28 @@ jobs:
       run:
         working-directory: backend
 
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
-      # Prisma needs *some* DATABASE_URL to generate the client; CI never
-      # connects to a real database here. Migrations run against a real DB
-      # during deploy.
+      # Disposable service database only; never use production secrets in tests.
       DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
+      TEST_DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
+      JWT_SECRET: "test-secret-test-secret-test-secret-aaaaa"
+      JWT_REFRESH_SECRET: "test-refresh-test-refresh-test-refresh-aaa"
+      NODE_ENV: test
 
     steps:
       - name: Checkout
@@ -56,8 +73,20 @@ jobs:
       - name: Validate Prisma schema
         run: npx prisma validate
 
+      - name: Lint
+        run: npm run lint
+
       - name: Typecheck
         run: npx tsc --noEmit
 
       - name: Build
         run: npm run build
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Integration test typecheck
+        run: npx tsc --project test/tsconfig.json
+
+      - name: Integration tests and fresh-database bootstrap
+        run: npm run test:integration

@@ -9,6 +9,7 @@ import {
   markImagelessCompletedGenerationsFailed,
   markStuckGenerationsFailed,
 } from './lib/generation-cleanup';
+import { shutdownHttpServer } from './lib/shutdown';
 
 // How often the background reaper re-sweeps generations orphaned by a crash
 // between deploys. Unref'd so it never holds the event loop open at shutdown.
@@ -89,30 +90,24 @@ async function main() {
       // 0. Stop the background reaper so it can't fire mid-drain.
       clearInterval(reaperInterval);
 
-      // 1. Stop accepting new connections
-      server.close(() => {
-        logger.info('HTTP server closed — no more incoming connections');
-      });
-
-      // 2. Give in-flight requests time to finish (max 30s)
-      const forceTimeout = setTimeout(() => {
-        logger.error('Forced shutdown — in-flight requests did not complete in 30s');
-        process.exit(1);
-      }, 30_000);
-
       try {
-        // 3. Disconnect Redis
-        await disconnectRedis();
+        // Keep Redis and Prisma available until active requests finish. The
+        // shared 30s deadline also bounds a stalled dependency disconnect.
+        const completed = await shutdownHttpServer(server, async () => {
+          logger.info('HTTP server closed — all in-flight requests finished');
+          await disconnectRedis();
+          await prisma.$disconnect();
+        });
 
-        // 4. Disconnect database
-        await prisma.$disconnect();
+        if (!completed) {
+          logger.error('Forced shutdown — HTTP drain or dependency cleanup exceeded 30s');
+          process.exit(1);
+        }
+
         logger.info('All connections closed — exiting cleanly');
-
-        clearTimeout(forceTimeout);
         process.exit(0);
       } catch (err) {
         logger.error({ err }, 'Error during shutdown');
-        clearTimeout(forceTimeout);
         process.exit(1);
       }
     }
