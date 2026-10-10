@@ -1,0 +1,40 @@
+name: Release safety
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "fastlane/**"
+      - "Gemfile"
+      - "Gemfile.lock"
+      - ".github/workflows/testflight.yml"
+      - ".github/workflows/release-safety.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "fastlane/**"
+      - "Gemfile"
+      - "Gemfile.lock"
+      - ".github/workflows/testflight.yml"
+      - ".github/workflows/release-safety.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  signing-safety:
+    name: TestFlight signing safety (no Apple secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+      - name: Check Fastfile syntax
+        run: ruby -c fastlane/Fastfile
+      - name: Test release safety with mocked actions
+        run: bundle exec ruby fastlane/tests/beta_safety_test.rb
