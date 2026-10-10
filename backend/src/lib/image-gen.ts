@@ -8,6 +8,7 @@ import {
 } from "@google/genai";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
+import { aspectRatioForProjectType } from "./image-framing";
 import { generatePreviewImagePiAPI } from "./piapi-image-gen";
 import { getImageEditPrompt, getImagePrompt } from "./prompts";
 import {
@@ -99,30 +100,6 @@ export function toPromptContext(ctx: ImageGenContext): PromptContext {
 }
 
 /**
- * Determine the best aspect ratio for a given project type. LANDSCAPING /
- * LAWN_CARE / EXTERIOR / ROOFING / SIDING are outdoor wide shots and benefit
- * from 16:9; BATHROOM is portrait; everything else stays 4:3.
- */
-function aspectRatioForProjectType(projectType: string): string {
-  switch (projectType.toUpperCase()) {
-    case "EXTERIOR":
-    case "ROOFING":
-    case "SIDING":
-    case "LANDSCAPING":
-    case "LAWN_CARE":
-      return "16:9";
-    case "BATHROOM":
-      return "3:4";
-    case "KITCHEN":
-    case "ROOM_REMODEL":
-    case "FLOORING":
-    case "PAINTING":
-    default:
-      return "4:3";
-  }
-}
-
-/**
  * The full prompt sent to the image model. For the reference-photo path
  * (PiAPI / Google with attached photo) we use the camera-locked
  * `getImageEditPrompt` and explicitly do NOT splice in the per-type
@@ -192,6 +169,13 @@ export async function generatePreviewImage(
   referencePhoto?: ReferencePhoto,
   referenceAssetUrl?: string,
 ): Promise<GeneratedImage | null> {
+  // Google receives image bytes, not the asset URL. Never reinterpret an edit
+  // as a text-only request if the caller could not load its source photograph.
+  if (referenceAssetUrl && !referencePhoto) {
+    logger.warn("Reference asset provided without image bytes — refusing text-only generation");
+    return null;
+  }
+
   if (env.GOOGLE_AI_API_KEY) {
     try {
       logger.info(
@@ -269,7 +253,12 @@ async function generatePreviewImageGoogle(
     const fullPrompt = buildFullPrompt(userPrompt, context, !!referencePhoto);
     const startMs = Date.now();
 
-    const aspectRatio = aspectRatioForProjectType(context.projectType);
+    // The API chooses the reference image's ratio when aspectRatio is omitted.
+    // Category framing would otherwise conflict with a camera-locked edit.
+    // https://ai.google.dev/api/generate-content#ImageConfig
+    const aspectRatio = referencePhoto
+      ? undefined
+      : aspectRatioForProjectType(context.projectType);
 
     // Edit-mode wants a tight camera lock so the after lines up with the
     // before in the slider. Text-to-image wants enough creativity to
@@ -331,7 +320,7 @@ async function generatePreviewImageGoogle(
           },
         ],
         imageConfig: {
-          aspectRatio,
+          ...(aspectRatio ? { aspectRatio } : {}),
           imageSize: "2K",
         },
       },

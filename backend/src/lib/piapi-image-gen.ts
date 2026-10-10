@@ -1,5 +1,6 @@
 import { env } from "../config/env";
 import { logger } from "../config/logger";
+import { aspectRatioForProjectType, aspectRatioForReferencePhoto } from "./image-framing";
 import type {
   GeneratedImage,
   ImageGenContext,
@@ -51,28 +52,6 @@ interface PiAPITaskResponse {
       ended_at: string | null;
     };
   };
-}
-
-// ─── Aspect Ratio (shared logic) ────────────────────────────────────────────
-
-function aspectRatioForProjectType(projectType: string): string {
-  const type = projectType.toUpperCase();
-  switch (type) {
-    case "EXTERIOR":
-    case "ROOFING":
-    case "SIDING":
-    case "LANDSCAPING":
-    case "LAWN_CARE":
-      return "16:9";
-    case "BATHROOM":
-      return "3:4";
-    case "KITCHEN":
-    case "ROOM_REMODEL":
-    case "FLOORING":
-    case "PAINTING":
-    default:
-      return "4:3";
-  }
 }
 
 // ─── HTTP Helpers ───────────────────────────────────────────────────────────
@@ -177,9 +156,9 @@ async function pollTask(taskId: string): Promise<PiAPITaskResponse["data"]> {
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
- * Build a reference image URL from a base64 reference photo.
- * If a referenceAssetUrl is provided (publicly accessible), use that directly.
- * Otherwise, we can't send base64 to PiAPI — it requires URLs.
+ * Reference edits require both the image bytes (for source dimensions) and
+ * a publicly accessible URL pointing to that same image (for PiAPI's input).
+ * An incomplete reference is rejected rather than becoming text-to-image.
  */
 export interface PiAPIGenerateOptions {
   userPrompt: string;
@@ -198,10 +177,26 @@ export interface PiAPIGenerateOptions {
 export async function generatePreviewImagePiAPI(
   options: PiAPIGenerateOptions,
 ): Promise<GeneratedImage | null> {
-  const { userPrompt, context, referenceAssetUrl } = options;
+  const { userPrompt, context, referencePhoto, referenceAssetUrl } = options;
   const startMs = Date.now();
 
-  const aspectRatio = aspectRatioForProjectType(context.projectType);
+  // The URL supplies PiAPI's image; the same image bytes supply its framing.
+  // Refuse incomplete inputs instead of silently changing an edit into a new
+  // scene, or guessing category framing for a URL whose dimensions are unknown.
+  if ((referencePhoto || referenceAssetUrl) && (!referencePhoto || !referenceAssetUrl?.trim())) {
+    logger.warn("PiAPI reference edit requires both image bytes and an asset URL");
+    return null;
+  }
+
+  let aspectRatio: string;
+  try {
+    aspectRatio = referencePhoto
+      ? await aspectRatioForReferencePhoto(referencePhoto)
+      : aspectRatioForProjectType(context.projectType);
+  } catch (err) {
+    logger.warn({ err }, "PiAPI reference photo is unreadable — refusing generation");
+    return null;
+  }
 
   // Build prompt — same rich prompt as the Google GenAI path
   const prompt = buildPiAPIPrompt(userPrompt, context, !!referenceAssetUrl);
