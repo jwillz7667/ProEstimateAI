@@ -176,6 +176,24 @@ final class SettingsViewModel {
     /// changes as immediately saved when they pause.
     private let debounceNanoseconds: UInt64 = 600_000_000
 
+    /// Debounce tasks may be cancelled while typing; accepted writes must not
+    /// be. A single queue preserves server write order, including immediate
+    /// toggles and logo changes, even when a caller's task is cancelled.
+    private var companySaveTask: Task<Void, Never>?
+
+    private enum SaveSection: Hashable {
+        case branding, tax, labor, numbering, language, appearance, aiPreview, logo
+    }
+
+    /// A response can acknowledge its own revision without replacing a newer
+    /// draft, or fields belonging to another settings section.
+    private var saveRevisions: [SaveSection: Int] = [:]
+    private var saveSessions: [SaveSection: UUID] = [:]
+    private var pendingSaveSections: Set<SaveSection> = []
+    private var saveFailures: [SaveSection: String] = [:]
+    private var activeSaveSection: SaveSection?
+    private var lastSavedAt: Date?
+
     // MARK: - Init
 
     init(service: SettingsServiceProtocol = LiveSettingsService()) {
@@ -185,18 +203,30 @@ final class SettingsViewModel {
     // MARK: - Load
 
     func loadSettings() async {
+        // Revisiting Settings must not overwrite a pending or failed draft.
+        guard !isLoading, pendingSaveSections.isEmpty, saveFailures.isEmpty else { return }
+        let revisionsAtLoad = saveRevisions
+        let sessionID = TokenStore.shared.sessionIdentifier
         isLoading = true
+        defer { isLoading = false }
         errorMessage = nil
         do {
             let loadedCompany = try await service.loadCompanySettings()
-            company = loadedCompany
-            populateFields(from: loadedCompany)
+            guard TokenStore.shared.sessionIdentifier == sessionID else { return }
+            // A user can edit while the GET is in flight. In that case its
+            // snapshot predates their edits and must not hydrate the form.
+            if saveRevisions == revisionsAtLoad, pendingSaveSections.isEmpty {
+                company = loadedCompany
+                populateFields(from: loadedCompany)
+                syncAppState(from: loadedCompany)
+            }
 
-            pricingProfiles = try await service.loadPricingProfiles()
+            let loadedProfiles = try await service.loadPricingProfiles()
+            guard TokenStore.shared.sessionIdentifier == sessionID else { return }
+            pricingProfiles = loadedProfiles
         } catch {
             errorMessage = error.localizedDescription
         }
-        isLoading = false
     }
 
     // MARK: - Auto-save Schedulers
@@ -205,13 +235,16 @@ final class SettingsViewModel {
     /// every editable branding field (text inputs and color pickers).
     func scheduleSaveBranding() {
         guard !isHydrating else { return }
-        saveStatus = .pending
+        let revision = beginSave(.branding)
         brandingSaveTask?.cancel()
         brandingSaveTask = Task { [weak self] in
             guard let self else { return }
             try? await Task.sleep(nanoseconds: self.debounceNanoseconds)
             if Task.isCancelled { return }
-            await self.commitBranding()
+            // Only the debounce is cancellable. A newer edit must not abort
+            // an already accepted write and let the server reorder requests.
+            self.brandingSaveTask = nil
+            await self.commitBranding(revision: revision)
         }
     }
 
@@ -220,13 +253,16 @@ final class SettingsViewModel {
     /// toggle/edit changes should still coalesce.
     func scheduleSaveTax() {
         guard !isHydrating else { return }
-        saveStatus = .pending
+        let revision = beginSave(.tax)
         taxSaveTask?.cancel()
         taxSaveTask = Task { [weak self] in
             guard let self else { return }
             try? await Task.sleep(nanoseconds: self.debounceNanoseconds)
             if Task.isCancelled { return }
-            await self.commitTax()
+            // Only the debounce is cancellable. A newer edit must not abort
+            // an already accepted write and let the server reorder requests.
+            self.taxSaveTask = nil
+            await self.commitTax(revision: revision)
         }
     }
 
@@ -235,13 +271,16 @@ final class SettingsViewModel {
     /// single PATCH.
     func scheduleSaveLabor() {
         guard !isHydrating else { return }
-        saveStatus = .pending
+        let revision = beginSave(.labor)
         laborSaveTask?.cancel()
         laborSaveTask = Task { [weak self] in
             guard let self else { return }
             try? await Task.sleep(nanoseconds: self.debounceNanoseconds)
             if Task.isCancelled { return }
-            await self.commitLabor()
+            // Only the debounce is cancellable. A newer edit must not abort
+            // an already accepted write and let the server reorder requests.
+            self.laborSaveTask = nil
+            await self.commitLabor(revision: revision)
         }
     }
 
@@ -249,13 +288,16 @@ final class SettingsViewModel {
     /// events — debouncing collapses a held-down stepper into one PATCH.
     func scheduleSaveNumbering() {
         guard !isHydrating else { return }
-        saveStatus = .pending
+        let revision = beginSave(.numbering)
         numberingSaveTask?.cancel()
         numberingSaveTask = Task { [weak self] in
             guard let self else { return }
             try? await Task.sleep(nanoseconds: self.debounceNanoseconds)
             if Task.isCancelled { return }
-            await self.commitNumbering()
+            // Only the debounce is cancellable. A newer edit must not abort
+            // an already accepted write and let the server reorder requests.
+            self.numberingSaveTask = nil
+            await self.commitNumbering(revision: revision)
         }
     }
 
@@ -263,121 +305,106 @@ final class SettingsViewModel {
     /// single, deliberate user action — no need to debounce them.
     func saveLanguageImmediately() async {
         guard !isHydrating else { return }
-        saveStatus = .saving
-        do {
-            let updated = try await service.saveLanguagePreference(selectedLanguage)
-            apply(updated: updated)
-            markSaved()
-        } catch {
-            saveStatus = .failed(message: error.localizedDescription)
-            errorMessage = error.localizedDescription
-        }
+        let desired = selectedLanguage
+        let revision = beginSave(.language)
+        // Keep the interface and its launch-time preference responsive even
+        // when this write is waiting for an earlier request to finish.
+        appearanceStore?.setLanguage(desired)
+        await enqueueCompanySave(
+            section: .language,
+            revision: revision,
+            showsError: true,
+            operation: { try await self.service.saveLanguagePreference(desired) }
+        )
     }
 
     /// Save the appearance mode immediately on user pick.
     func saveAppearanceImmediately(_ mode: AppearanceMode) async {
         guard !isHydrating else { return }
-        saveStatus = .saving
-        do {
-            let updated = try await service.saveAppearanceMode(mode)
-            apply(updated: updated)
-            markSaved()
-        } catch {
-            saveStatus = .failed(message: error.localizedDescription)
-            errorMessage = error.localizedDescription
-        }
+        let revision = beginSave(.appearance)
+        await enqueueCompanySave(
+            section: .appearance,
+            revision: revision,
+            showsError: true,
+            operation: { try await self.service.saveAppearanceMode(mode) }
+        )
     }
 
-    /// Save the company-wide AI-preview default immediately on toggle. A
-    /// toggle is a single deliberate action — no debounce needed. On failure
-    /// we revert the local value so the switch reflects persisted truth.
+    /// Save the company-wide AI-preview default immediately on toggle. Only
+    /// the latest failed choice may roll back, to the last confirmed value.
     func saveDefaultAiPreviewImmediately() async {
         guard !isHydrating else { return }
         let desired = defaultAiPreviewEnabled
-        saveStatus = .saving
-        do {
-            let updated = try await service.saveDefaultAiPreview(desired)
-            apply(updated: updated)
-            markSaved()
-        } catch {
-            defaultAiPreviewEnabled = !desired
-            saveStatus = .failed(message: error.localizedDescription)
-            errorMessage = error.localizedDescription
-        }
+        let revision = beginSave(.aiPreview)
+        await enqueueCompanySave(
+            section: .aiPreview,
+            revision: revision,
+            showsError: true,
+            operation: { try await self.service.saveDefaultAiPreview(desired) },
+            onFailure: {
+                if self.defaultAiPreviewEnabled == desired {
+                    self.defaultAiPreviewEnabled = self.company?.defaultAiPreviewEnabled ?? !desired
+                }
+            }
+        )
     }
 
     // MARK: - Commit (executed after debounce)
 
-    private func commitBranding() async {
-        // Skip saves the backend validator would reject. Without this, every
-        // mid-typed email ("j") or bare website ("acme.com") fires a doomed
-        // PATCH that surfaces as a "Retry" status pill — making it look like
-        // the app errors continuously while the user is just typing.
-        guard isBrandingFormValid else {
-            saveStatus = .pending
-            return
-        }
-        saveStatus = .saving
-        do {
-            let update = CompanyBrandingUpdate(
-                name: companyName,
-                phone: companyPhone.isEmpty ? nil : companyPhone,
-                email: companyEmail.isEmpty ? nil : companyEmail,
-                address: companyAddress.isEmpty ? nil : companyAddress,
-                city: companyCity.isEmpty ? nil : companyCity,
-                state: companyState.isEmpty ? nil : companyState,
-                zip: companyZip.isEmpty ? nil : companyZip,
-                websiteUrl: normalizedWebsiteForSave,
-                primaryColor: primaryColorHex,
-                secondaryColor: secondaryColorHex
-            )
-            let updated = try await service.saveCompanyBranding(update)
-            apply(updated: updated)
-            markSaved()
-        } catch {
-            // Surface failure on the toolbar pill only — the modal alert in
-            // CompanyBrandingView is for explicit user actions (logo upload),
-            // not for transient autosave failures.
-            saveStatus = .failed(message: error.localizedDescription)
-        }
+    private func commitBranding(revision: Int) async {
+        // Partial emails and URLs remain pending until the form is valid.
+        guard saveRevisions[.branding] == revision, isBrandingFormValid else { return }
+        let update = CompanyBrandingUpdate(
+            name: companyName,
+            phone: companyPhone.isEmpty ? nil : companyPhone,
+            email: companyEmail.isEmpty ? nil : companyEmail,
+            address: companyAddress.isEmpty ? nil : companyAddress,
+            city: companyCity.isEmpty ? nil : companyCity,
+            state: companyState.isEmpty ? nil : companyState,
+            zip: companyZip.isEmpty ? nil : companyZip,
+            websiteUrl: normalizedWebsiteForSave,
+            primaryColor: primaryColorHex,
+            secondaryColor: secondaryColorHex
+        )
+        // Autosave failures belong in the toolbar. The modal branding alert
+        // is reserved for explicit actions such as uploading a logo.
+        await enqueueCompanySave(
+            section: .branding,
+            revision: revision,
+            operation: { try await self.service.saveCompanyBranding(update) }
+        )
     }
 
-    private func commitTax() async {
-        // Sync the free-form text field into the canonical decimal so the
-        // server sees what the user actually typed.
+    private func commitTax(revision: Int) async {
+        guard saveRevisions[.tax] == revision else { return }
         if let parsed = Decimal(string: taxRateText) {
             defaultTaxRate = parsed
         }
-        saveStatus = .saving
-        do {
-            let update = TaxSettingsUpdate(
-                defaultTaxRate: defaultTaxRate,
-                taxInclusivePricing: taxInclusivePricing
-            )
-            let updated = try await service.saveTaxSettings(update)
-            apply(updated: updated)
-            markSaved()
-        } catch {
-            saveStatus = .failed(message: error.localizedDescription)
-        }
+        let update = TaxSettingsUpdate(
+            defaultTaxRate: defaultTaxRate,
+            taxInclusivePricing: taxInclusivePricing
+        )
+        await enqueueCompanySave(
+            section: .tax,
+            revision: revision,
+            operation: { try await self.service.saveTaxSettings(update) }
+        )
     }
 
-    private func commitLabor() async {
-        // Sync the free-form text into the canonical decimal, clamped to the
-        // backend-accepted range (0...999). An unparseable string leaves the
-        // last good value in place rather than zeroing the user's margin.
+    private func commitLabor(revision: Int) async {
+        guard saveRevisions[.labor] == revision else { return }
         if let parsed = Decimal(string: laborMarkupText.trimmingCharacters(in: .whitespaces)) {
             laborMarkupPercent = clampMarkup(parsed)
         }
-        saveStatus = .saving
-        do {
-            let update = LaborSettingsUpdate(laborMarkupPercent: laborMarkupPercent)
-            let updated = try await service.saveLaborSettings(update)
-            apply(updated: updated)
-            markSaved()
-        } catch {
-            saveStatus = .failed(message: error.localizedDescription)
-        }
+        // Normalize the captured input before sending, never from a response
+        // that may arrive while the user is typing their next value.
+        laborMarkupText = Self.formatMarkup(laborMarkupPercent)
+        let update = LaborSettingsUpdate(laborMarkupPercent: laborMarkupPercent)
+        await enqueueCompanySave(
+            section: .labor,
+            revision: revision,
+            operation: { try await self.service.saveLaborSettings(update) }
+        )
     }
 
     /// Clamp labor markup into the backend validator's accepted band so a
@@ -388,21 +415,19 @@ final class SettingsViewModel {
         return value
     }
 
-    private func commitNumbering() async {
-        saveStatus = .saving
-        do {
-            let update = NumberingSettingsUpdate(
-                estimatePrefix: estimatePrefix,
-                invoicePrefix: invoicePrefix,
-                nextEstimateNumber: nextEstimateNumber,
-                nextInvoiceNumber: nextInvoiceNumber
-            )
-            let updated = try await service.saveNumberingSettings(update)
-            apply(updated: updated)
-            markSaved()
-        } catch {
-            saveStatus = .failed(message: error.localizedDescription)
-        }
+    private func commitNumbering(revision: Int) async {
+        guard saveRevisions[.numbering] == revision else { return }
+        let update = NumberingSettingsUpdate(
+            estimatePrefix: estimatePrefix,
+            invoicePrefix: invoicePrefix,
+            nextEstimateNumber: nextEstimateNumber,
+            nextInvoiceNumber: nextInvoiceNumber
+        )
+        await enqueueCompanySave(
+            section: .numbering,
+            revision: revision,
+            operation: { try await self.service.saveNumberingSettings(update) }
+        )
     }
 
     // MARK: - Local Validation (keep autosave from firing doomed PATCHes)
@@ -419,7 +444,7 @@ final class SettingsViewModel {
         return true
     }
 
-    /// Normalize the website for transit: empty stays empty (omitted), bare
+    /// Normalize the website for transit: empty clears it (JSON null), bare
     /// domains get an `https://` scheme so Zod's `.url()` validator accepts
     /// them. Mirrors what most users intuit: typing "acme.com" should save.
     private var normalizedWebsiteForSave: String? {
@@ -450,33 +475,37 @@ final class SettingsViewModel {
     /// crisp, freshly-picked bytes rather than waiting for `AsyncImage` to
     /// re-download what the server just accepted.
     func uploadCompanyLogo(data: Data, mimeType: String) async {
+        let revision = beginSave(.logo)
         isUploadingLogo = true
         errorMessage = nil
-        do {
-            let updated = try await service.uploadLogo(imageData: data, mimeType: mimeType)
-            company = updated
-            companyLogoURL = updated.logoURL
-            companyLogoImage = UIImage(data: data)
-            syncAppState(from: updated)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        isUploadingLogo = false
+        await enqueueCompanySave(
+            section: .logo,
+            revision: revision,
+            showsError: true,
+            operation: { try await self.service.uploadLogo(imageData: data, mimeType: mimeType) },
+            onSuccess: { updated in
+                self.companyLogoURL = updated.logoURL
+                self.companyLogoImage = UIImage(data: data)
+            }
+        )
+        if saveRevisions[.logo] == revision { isUploadingLogo = false }
     }
 
     func removeCompanyLogo() async {
+        let revision = beginSave(.logo)
         isUploadingLogo = true
         errorMessage = nil
-        do {
-            let updated = try await service.deleteLogo()
-            company = updated
-            companyLogoURL = nil
-            companyLogoImage = nil
-            syncAppState(from: updated)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        isUploadingLogo = false
+        await enqueueCompanySave(
+            section: .logo,
+            revision: revision,
+            showsError: true,
+            operation: { try await self.service.deleteLogo() },
+            onSuccess: { _ in
+                self.companyLogoURL = nil
+                self.companyLogoImage = nil
+            }
+        )
+        if saveRevisions[.logo] == revision { isUploadingLogo = false }
     }
 
     // MARK: - Pricing Profiles
@@ -524,35 +553,97 @@ final class SettingsViewModel {
 
     // MARK: - Private
 
+    @discardableResult
+    private func beginSave(_ section: SaveSection) -> Int {
+        let revision = (saveRevisions[section] ?? 0) + 1
+        saveRevisions[section] = revision
+        saveSessions[section] = TokenStore.shared.sessionIdentifier
+        pendingSaveSections.insert(section)
+        saveFailures[section] = nil
+        updateSaveStatus()
+        return revision
+    }
+
+    private func enqueueCompanySave(
+        section: SaveSection,
+        revision: Int,
+        showsError: Bool = false,
+        operation: @escaping @MainActor () async throws -> Company,
+        onSuccess: @escaping @MainActor (Company) -> Void = { _ in },
+        onFailure: @escaping @MainActor () -> Void = {}
+    ) async {
+        let precedingTask = companySaveTask
+        let sessionID = saveSessions[section]
+        let accountID = appState == nil ? nil : (company?.id ?? appState?.currentCompany?.id)
+        let task = Task { @MainActor [self] in
+            await precedingTask?.value
+            // Coalesce superseded writes that have not reached the server.
+            guard saveRevisions[section] == revision else { return }
+            // A queued save from the previous session must not use a newly
+            // signed-in account's credentials or repopulate a signed-out app.
+            guard appState?.currentCompany?.id == accountID,
+                  TokenStore.shared.sessionIdentifier == sessionID else {
+                pendingSaveSections.remove(section)
+                updateSaveStatus()
+                return
+            }
+            activeSaveSection = section
+            updateSaveStatus()
+            defer {
+                activeSaveSection = nil
+                updateSaveStatus()
+            }
+            do {
+                let updated = try await operation()
+                guard appState?.currentCompany?.id == accountID,
+                      TokenStore.shared.sessionIdentifier == sessionID else { return }
+                // All company writes share this queue, so the full snapshot
+                // is the newest confirmed state for app-wide consumers.
+                apply(updated: updated)
+                guard saveRevisions[section] == revision else { return }
+                onSuccess(updated)
+                pendingSaveSections.remove(section)
+                saveFailures[section] = nil
+                lastSavedAt = Date()
+            } catch {
+                guard appState?.currentCompany?.id == accountID,
+                      TokenStore.shared.sessionIdentifier == sessionID,
+                      saveRevisions[section] == revision else { return }
+                pendingSaveSections.remove(section)
+                saveFailures[section] = error.localizedDescription
+                onFailure()
+                if showsError { errorMessage = error.localizedDescription }
+            }
+        }
+        companySaveTask = task
+        await task.value
+    }
+
     private func apply(updated: Company) {
+        // PATCH returns a full snapshot. Keep the confirmed company available
+        // to app-wide consumers, but never rehydrate editable fields here:
+        // even this request's section may already contain a newer draft.
         company = updated
         syncAppState(from: updated)
-        // Reflect any server-side normalization (e.g., trimmed whitespace,
-        // canonicalized hex casing, default fallbacks) back into the form
-        // without re-triggering autosave.
-        isHydrating = true
-        defer { isHydrating = false }
-        // Appearance mode is intentionally device-local and is NOT synced
-        // back from server responses here. Pulling the server's value into
-        // the local AppearanceStore on every save / Settings load could
-        // silently flip the user's chosen color scheme if the server's
-        // value diverged (e.g. a failed PATCH on another device left the
-        // record stale). Local UserDefaults remains authoritative; the
-        // PATCH on user pick still pushes outward.
-        if let lang = updated.defaultLanguage, let parsed = AppLanguage(rawValue: lang) {
-            selectedLanguage = parsed
-            // Mirror to the AppearanceStore so the SwiftUI \.locale is in
-            // sync with the saved preference on returning sessions.
-            appearanceStore?.applyRemote(language: parsed)
+    }
+
+    private func updateSaveStatus() {
+        if let failure = saveFailures.values.first {
+            saveStatus = .failed(message: failure)
+        } else if activeSaveSection != nil {
+            saveStatus = .saving
+        } else if !pendingSaveSections.isEmpty {
+            saveStatus = .pending
+        } else if let lastSavedAt {
+            saveStatus = .saved(at: lastSavedAt)
+        } else {
+            saveStatus = .idle
         }
-        defaultAiPreviewEnabled = updated.defaultAiPreviewEnabled
-        let resolvedLaborMarkup = updated.laborMarkupPercent ?? Decimal(Self.defaultLaborMarkupPercent)
-        laborMarkupPercent = resolvedLaborMarkup
-        laborMarkupText = Self.formatMarkup(resolvedLaborMarkup)
     }
 
     private func markSaved() {
-        saveStatus = .saved(at: Date())
+        lastSavedAt = Date()
+        updateSaveStatus()
     }
 
     private func syncAppState(from company: Company) {
@@ -595,7 +686,7 @@ final class SettingsViewModel {
             selectedLanguage = parsed
             appearanceStore?.applyRemote(language: parsed)
         }
-        // See `apply(updated:)`: appearance mode is device-local. Pulling
+        // Appearance mode is device-local. Pulling
         // it from the server on Settings load was the cause of users seeing
         // the screen flip light↔dark when entering Settings if the server
         // value diverged from the local choice.

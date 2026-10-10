@@ -38,9 +38,9 @@ final class APIClient: APIClientProtocol {
     /// `NSLock` across `await` is a documented Swift-concurrency deadlock.
     private let refreshCoordinator = RefreshCoordinator()
 
-    /// Callback invoked when token refresh fails and the user must re-authenticate.
-    /// Set by the app's auth coordinator.
-    var onUnauthorized: (@Sendable () -> Void)?
+    /// Called only when the server definitively rejects the session. The
+    /// recipient must recheck this identity before changing UI/account state.
+    var onUnauthorized: (@Sendable (UUID) -> Void)?
 
     init(
         baseURL: String = AppConstants.apiBaseURL,
@@ -124,28 +124,35 @@ final class APIClient: APIClientProtocol {
     /// Build a URLRequest, execute it, and return the raw response data.
     /// Handles 401 by attempting a single token refresh before failing.
     private func performRequest(_ endpoint: APIEndpoint) async throws -> Data {
-        let urlRequest = try buildRequest(endpoint)
+        let originalSession = tokenStore.sessionSnapshot
+        let urlRequest = try buildRequest(endpoint, accessToken: originalSession.accessToken)
         let (data, response) = try await execute(urlRequest)
+        if endpoint.requiresAuth {
+            guard tokenStore.sessionIdentifier == originalSession.id else { throw CancellationError() }
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.network("Invalid response type")
         }
 
-        // Handle 401 with token refresh retry.
         if httpResponse.statusCode == 401, endpoint.requiresAuth {
-            let didRefresh = await attemptTokenRefresh()
-            if didRefresh {
-                // Rebuild the request with the new token and retry once.
-                let retryRequest = try buildRequest(endpoint)
-                let (retryData, retryResponse) = try await execute(retryRequest)
-                guard let retryHTTP = retryResponse as? HTTPURLResponse else {
-                    throw APIError.network("Invalid response type on retry")
-                }
-                return try handleHTTPResponse(retryHTTP, data: retryData)
-            } else {
-                onUnauthorized?()
+            // Transient refresh failures propagate as network/server errors;
+            // they must never clear an otherwise recoverable session.
+            try await attemptTokenRefresh(for: originalSession)
+            try Task.checkCancellation()
+            let retrySession = tokenStore.sessionSnapshot
+            guard retrySession.id == originalSession.id else { throw CancellationError() }
+            let retryRequest = try buildRequest(endpoint, accessToken: retrySession.accessToken)
+            let (retryData, retryResponse) = try await execute(retryRequest)
+            guard tokenStore.sessionIdentifier == originalSession.id else { throw CancellationError() }
+            guard let retryHTTP = retryResponse as? HTTPURLResponse else {
+                throw APIError.network("Invalid response type on retry")
+            }
+            if retryHTTP.statusCode == 401 {
+                onUnauthorized?(originalSession.id)
                 throw APIError.unauthorized
             }
+            return try handleHTTPResponse(retryHTTP, data: retryData)
         }
 
         return try handleHTTPResponse(httpResponse, data: data)
@@ -179,7 +186,7 @@ final class APIClient: APIClientProtocol {
     }
 
     /// Build a URLRequest from an `APIEndpoint`.
-    private func buildRequest(_ endpoint: APIEndpoint) throws -> URLRequest {
+    private func buildRequest(_ endpoint: APIEndpoint, accessToken: String? = nil) throws -> URLRequest {
         guard var components = URLComponents(string: baseURL + endpoint.path) else {
             throw APIError.network("Invalid URL: \(baseURL + endpoint.path)")
         }
@@ -197,7 +204,7 @@ final class APIClient: APIClientProtocol {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         // Inject bearer token for authenticated endpoints.
-        if endpoint.requiresAuth, let token = tokenStore.accessToken {
+        if endpoint.requiresAuth, let token = accessToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
@@ -270,63 +277,80 @@ final class APIClient: APIClientProtocol {
         }
     }
 
-    /// Attempt to refresh the access token using the stored refresh token.
-    /// Returns `true` if the refresh succeeded and new tokens are stored.
-    ///
-    /// Single-flight via `RefreshCoordinator` — concurrent 401s wait on the
-    /// same in-flight task instead of each making their own refresh call.
-    private func attemptTokenRefresh() async -> Bool {
-        guard tokenStore.refreshToken != nil else { return false }
-        return await refreshCoordinator.refresh { [weak self] in
-            guard let self else { return false }
-            return await self.performRefresh()
+    /// Concurrent 401s share one refresh for their original login session.
+    /// A late 401 for an old access token reuses an already completed refresh.
+    private func attemptTokenRefresh(for originalSession: TokenStore.SessionSnapshot) async throws {
+        try await refreshCoordinator.refresh(sessionID: originalSession.id) { [weak self] in
+            guard let self else { throw CancellationError() }
+            try await self.performRefresh(for: originalSession)
         }
     }
 
-    /// The actual HTTP work for a refresh. Called at most once at a time by
-    /// `RefreshCoordinator`.
-    private func performRefresh() async -> Bool {
-        guard let refreshToken = tokenStore.refreshToken else { return false }
+    private func performRefresh(for originalSession: TokenStore.SessionSnapshot) async throws {
+        let current = tokenStore.sessionSnapshot
+        guard current.id == originalSession.id else { throw CancellationError() }
+        if current.accessToken != originalSession.accessToken, current.accessToken != nil {
+            return
+        }
+        guard let refreshToken = current.refreshToken else {
+            onUnauthorized?(current.id)
+            throw APIError.unauthorized
+        }
 
-        do {
-            let endpoint = APIEndpoint.authRefreshToken(refreshToken: refreshToken)
-            let request = try buildRequest(endpoint)
-            let (data, response) = try await execute(request)
+        let endpoint = APIEndpoint.authRefreshToken(refreshToken: refreshToken)
+        let request = try buildRequest(endpoint)
+        let (data, response) = try await execute(request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.network("Invalid response type during refresh")
+        }
 
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200 ... 299).contains(httpResponse.statusCode)
-            else {
-                return false
-            }
-
+        if (200 ... 299).contains(httpResponse.statusCode) {
             let tokenResponse: TokenRefreshResponse = try decodeSuccess(data: data)
-            tokenStore.storeTokens(
+            if tokenStore.replaceTokens(
+                for: current,
                 accessToken: tokenResponse.accessToken,
                 refreshToken: tokenResponse.refreshToken
-            )
-            return true
-        } catch {
-            return false
+            ) {
+                return
+            }
+            // Logout may have revoked the old token while the server was
+            // rotating it. Revoke the newly issued token too; never restore
+            // credentials belonging to an ended or replaced login session.
+            try? await self.request(.authLogout(refreshToken: tokenResponse.refreshToken)) as Void
+            throw CancellationError()
         }
+
+        let latest = tokenStore.sessionSnapshot
+        guard latest.id == current.id else { throw CancellationError() }
+        if latest.refreshToken != refreshToken, latest.accessToken != nil {
+            // Another client using this TokenStore completed the rotation.
+            return
+        }
+        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+            onUnauthorized?(current.id)
+            throw APIError.unauthorized
+        }
+        // Rate limits, outages, transport and decoding failures remain
+        // retryable. Only an explicit authentication rejection ends a login.
+        _ = try handleHTTPResponse(httpResponse, data: data)
     }
 }
 
 // MARK: - Refresh Coordinator
 
-/// Serializes token-refresh attempts so a burst of 401s only triggers one
-/// `/auth/refresh` call. All concurrent callers await the same `Task<Bool, Never>`.
+/// Share a refresh within one session without allowing an old login's task
+/// (or its cleanup) to interfere with a newly signed-in account.
 private actor RefreshCoordinator {
-    private var inFlight: Task<Bool, Never>?
+    private var inFlight: [UUID: Task<Void, Error>] = [:]
 
-    func refresh(_ operation: @escaping @Sendable () async -> Bool) async -> Bool {
-        if let inFlight {
-            return await inFlight.value
+    func refresh(sessionID: UUID, _ operation: @escaping @Sendable () async throws -> Void) async throws {
+        if let task = inFlight[sessionID] {
+            return try await task.value
         }
-        let task = Task { await operation() }
-        inFlight = task
-        let result = await task.value
-        inFlight = nil
-        return result
+        let task = Task { try await operation() }
+        inFlight[sessionID] = task
+        defer { inFlight[sessionID] = nil }
+        try await task.value
     }
 }
 

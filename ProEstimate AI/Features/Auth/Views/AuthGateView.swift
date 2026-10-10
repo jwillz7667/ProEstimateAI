@@ -6,7 +6,10 @@ import SwiftUI
 struct AuthGateView: View {
     @Environment(AppState.self) private var appState
     @Environment(OnboardingStore.self) private var onboardingStore
+    @Environment(EntitlementStore.self) private var entitlementStore
+    @Environment(UsageMeterStore.self) private var usageMeterStore
     @State private var isRestoring = true
+    @State private var hasRestoreError = false
 
     var body: some View {
         Group {
@@ -21,6 +24,22 @@ struct AuthGateView: View {
                         onboardingStore.markCompleted()
                     }
                     .transition(.opacity)
+                }
+            } else if hasRestoreError {
+                VStack(spacing: SpacingTokens.md) {
+                    RetryStateView(message: String(localized: "auth.restore.error")) {
+                        Task { await restoreSession() }
+                    }
+                    // A deleted account or other persistent server failure
+                    // must not trap the user on a retry-only screen.
+                    Button("Sign Out", role: .destructive) {
+                        appState.signOut(
+                            entitlementStore: entitlementStore,
+                            usageMeterStore: usageMeterStore
+                        )
+                        hasRestoreError = false
+                    }
+                    .padding(.bottom, SpacingTokens.xxl)
                 }
             } else {
                 LoginView()
@@ -79,13 +98,20 @@ struct AuthGateView: View {
     }
 
     /// Hard deadline for the cold-launch session restore. If the backend is
-    /// unreachable (Railway cold start, offline, DNS hiccup), we drop the
-    /// stored tokens and show login rather than trap the user at the splash.
+    /// unreachable, retain credentials and offer retry instead of treating
+    /// a connection failure as an expired login.
     private static let restoreTimeout: Duration = .seconds(8)
 
     private func restoreSession() async {
+        isRestoring = true
+        hasRestoreError = false
+        let sessionID = TokenStore.shared.sessionIdentifier
         if TokenStore.shared.hasTokens {
             let result = await fetchSessionWithTimeout()
+            guard TokenStore.shared.sessionIdentifier == sessionID else {
+                isRestoring = false
+                return
+            }
             switch result {
             case .success(let user, let company):
                 appState.currentUser = AppState.CurrentUser(
@@ -97,11 +123,12 @@ struct AuthGateView: View {
                 appState.currentCompany = AppState.CurrentCompany.from(company)
                 appState.isAuthenticated = true
 
-            case .failure:
-                // Auth failed, network failed, or the call didn't come back in
-                // time — clear tokens so the user is routed to login instead
-                // of staring at a stuck splash.
-                TokenStore.shared.clearTokens()
+            case .failure(let isUnauthorized):
+                if isUnauthorized {
+                    TokenStore.shared.clearTokens()
+                } else {
+                    hasRestoreError = true
+                }
             }
         }
 
@@ -112,7 +139,7 @@ struct AuthGateView: View {
 
     private enum SessionOutcome {
         case success(user: User, company: Company)
-        case failure
+        case failure(isUnauthorized: Bool)
     }
 
     /// Fetch the current user + company, racing against `restoreTimeout` so a
@@ -124,18 +151,20 @@ struct AuthGateView: View {
                     async let userTask: User = APIClient.shared.request(.getMe)
                     async let companyTask: Company = APIClient.shared.request(.getCompany)
                     return .success(user: try await userTask, company: try await companyTask)
+                } catch let error as APIError where error == .unauthorized {
+                    return .failure(isUnauthorized: true)
                 } catch {
-                    return .failure
+                    return .failure(isUnauthorized: false)
                 }
             }
 
             group.addTask {
                 try? await Task.sleep(for: Self.restoreTimeout)
-                return .failure
+                return .failure(isUnauthorized: false)
             }
 
             // Take whichever task completes first, cancel the other.
-            let outcome = await group.next() ?? .failure
+            let outcome = await group.next() ?? .failure(isUnauthorized: false)
             group.cancelAll()
             return outcome
         }

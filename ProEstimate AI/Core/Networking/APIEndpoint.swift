@@ -13,7 +13,7 @@ enum APIEndpoint: Sendable {
     /// the iOS Client; backend verifies + provisions / logs the user in.
     case authGoogleSignIn(body: Encodable & Sendable)
     case authRefreshToken(refreshToken: String)
-    case authLogout
+    case authLogout(refreshToken: String)
     case authForgotPassword(email: String)
 
     // MARK: - Devices (APNs)
@@ -342,7 +342,7 @@ extension APIEndpoint {
     var requiresAuth: Bool {
         switch self {
         case .authLogin, .authSignup, .authAppleSignIn, .authGoogleSignIn,
-             .authRefreshToken, .authForgotPassword:
+             .authRefreshToken, .authLogout, .authForgotPassword:
             return false
         default:
             return true
@@ -396,7 +396,7 @@ extension APIEndpoint {
             return body
         case let .authGoogleSignIn(body):
             return body
-        case let .authRefreshToken(refreshToken):
+        case let .authRefreshToken(refreshToken), let .authLogout(refreshToken):
             return RefreshBody(refreshToken: refreshToken)
         case let .authForgotPassword(email):
             return ForgotPasswordBody(email: email)

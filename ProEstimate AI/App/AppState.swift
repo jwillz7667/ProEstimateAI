@@ -96,7 +96,14 @@ final class AppState {
         entitlementStore: EntitlementStore? = nil,
         usageMeterStore: UsageMeterStore? = nil
     ) {
-        TokenStore.shared.clearTokens()
+        let refreshToken = TokenStore.shared.clearTokens()
+        if let refreshToken {
+            // Revocation is best-effort and uses the captured token. Local
+            // sign-out is immediate, even offline or during a server outage.
+            Task {
+                try? await APIClient.shared.request(.authLogout(refreshToken: refreshToken)) as Void
+            }
+        }
         entitlementStore?.reset()
         usageMeterStore?.reset()
         isAuthenticated = false
