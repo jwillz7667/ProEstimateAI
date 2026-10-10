@@ -386,6 +386,13 @@ export async function googleSignIn(
       include: { company: true },
     });
     if (existingUser) {
+      // Google is not authoritative for third-party email addresses without
+      // a Workspace hosted-domain claim, even if email_verified is true.
+      // Such users must authenticate the existing account before linking.
+      const authoritativeEmail = email.endsWith("@gmail.com") || Boolean(claims.hostedDomain);
+      if (!authoritativeEmail) {
+        throw new AuthenticationError("Sign in to your existing account to link Google");
+      }
       if (!existingUser.isActive ||
           (existingUser.googleId && existingUser.googleId !== googleId)) {
         throw new AuthenticationError("Unable to sign in with this Google account");

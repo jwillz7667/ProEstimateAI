@@ -23,7 +23,7 @@ import { appleSignIn, googleSignIn, refresh } from "./auth.service";
 const user = { id: "user-1", companyId: "company-current", isActive: true, company: { id: "company-current" } };
 const providers = [
   { name: "Apple", claim: mocks.apple, idField: "appleUserId", call: () => appleSignIn({ identity_token: "signed", authorization_code: "code", email: "victim@example.test" }), verified: { email_verified: true } },
-  { name: "Google", claim: mocks.google, idField: "googleId", call: () => googleSignIn({ identity_token: "signed", email: "victim@example.test" }), verified: { emailVerified: true } },
+  { name: "Google", claim: mocks.google, idField: "googleId", call: () => googleSignIn({ identity_token: "signed", email: "victim@example.test" }), verified: { emailVerified: true, hostedDomain: "example.test" } },
 ];
 beforeEach(() => {
   vi.resetAllMocks();
@@ -97,5 +97,21 @@ describe("refresh rotation", () => {
     mocks.refreshToken.findUnique.mockResolvedValue({ id: "session", userId: "another-user", expiresAt: new Date(Date.now() + 60_000) });
     await expect(refresh("old-token")).rejects.toThrow(/unavailable/);
     expect(mocks.refreshToken.create).not.toHaveBeenCalled();
+  });
+});
+
+ describe("Google authoritative email linking", () => {
+  it("rejects linking verified third-party email without Workspace authority", async () => {
+    mocks.google.mockResolvedValue({ sub: "new-google", email: "owner@example.test", emailVerified: true });
+    mocks.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(user);
+    await expect(googleSignIn({ identity_token: "signed" })).rejects.toThrow(/existing account/);
+    expect(mocks.user.update).not.toHaveBeenCalled();
+    expect(mocks.refreshToken.create).not.toHaveBeenCalled();
+  });
+  it("allows verified Gmail account linking without Workspace claims", async () => {
+    mocks.google.mockResolvedValue({ sub: "gmail-owner", email: "owner@gmail.com", emailVerified: true });
+    mocks.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(user);
+    await expect(googleSignIn({ identity_token: "signed" })).resolves.toMatchObject({ accessToken: "access" });
+    expect(mocks.user.update).toHaveBeenCalled();
   });
 });
