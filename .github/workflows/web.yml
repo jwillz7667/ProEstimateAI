@@ -49,5 +49,8 @@ jobs:
       # removal in Next.js 16. Re-enable once we migrate to the ESLint
       # CLI with a committed config file.
 
+      - name: Test proposal state regressions
+        run: npm test
+
       - name: Build
         run: npm run build

@@ -124,7 +124,7 @@ export default function CTA() {
           className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-white/90 md:text-xl"
           variants={fadeInUp}
         >
-          Free to start. Three full AI previews on the house. No credit card
+          Free to start. Five full AI previews on the house. No credit card
           required.
         </motion.p>
 

@@ -266,7 +266,7 @@ export default async function ProposalPage({ params }: Params) {
         {/* Actions --------------------------------------------------------- */}
         {open && (
           <section className="mb-10">
-            <ProposalActions token={token} primaryColor={accent} />
+            <ProposalActions key={token} token={token} primaryColor={accent} />
             {proposal.expires_at && (
               <p className="mt-3 text-sm text-ink-500 text-center">
                 This proposal expires {formatDate(proposal.expires_at)}.
