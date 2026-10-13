@@ -164,6 +164,34 @@ def ensure_editable_app_store_version(app)
 end
 
 platform :ios do
+  desc "Read App Store versions, recent builds and subscription prices without modifying Apple records"
+  lane :asc_status do
+    require "net/http"
+    require "json"
+    setup_spaceship_token
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+    asc_get = lambda do |path|
+      uri = URI("https://api.appstoreconnect.apple.com/v1/#{path}")
+      request = Net::HTTP::Get.new(uri)
+      request["Authorization"] = "Bearer #{Spaceship::ConnectAPI.token.text}"
+      response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 15, read_timeout: 60) { |http| http.request(request) }
+      parsed = JSON.parse(response.body)
+      UI.user_error!("App Store status request failed (#{response.code}): #{parsed.fetch('errors', []).map { |error| error['detail'] }.join('; ')}") unless response.is_a?(Net::HTTPSuccess)
+      parsed
+    end
+    versions = asc_get.call("apps/#{app.id}/appStoreVersions?filter[platform]=IOS&limit=20").fetch("data")
+    builds = asc_get.call("builds?filter[app]=#{app.id}&sort=-uploadedDate&include=preReleaseVersion&limit=10")
+    groups = asc_get.call("apps/#{app.id}/subscriptionGroups?limit=20").fetch("data")
+    subscriptions = groups.flat_map do |group|
+      asc_get.call("subscriptionGroups/#{group['id']}/subscriptions?limit=50").fetch("data").map do |subscription|
+        prices = asc_get.call("subscriptions/#{subscription['id']}/prices?filter[territory]=USA&include=subscriptionPricePoint&limit=50")
+        { id: subscription["id"], attributes: subscription["attributes"], prices: prices }
+      end
+    end
+    UI.message(JSON.pretty_generate({ app_id: app.id, versions: versions.map { |v| { id: v["id"], attributes: v["attributes"] } }, builds: builds, subscriptions: subscriptions }))
+  end
+
   desc "Build the project from a clean checkout and push it to TestFlight"
   lane :beta do
     # A release may reuse existing signing credentials, never create them.

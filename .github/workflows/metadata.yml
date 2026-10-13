@@ -12,6 +12,7 @@ on:
           - copy            # fast: text only, skips screenshots
           - screenshots     # screenshots only
           - all             # text + screenshots (slow, Apple-flaky)
+          - status          # read-only release and subscription inspection
 
 concurrency:
   group: metadata-${{ github.ref }}
@@ -59,6 +60,7 @@ jobs:
             copy)        echo "name=metadata_copy" >> "$GITHUB_OUTPUT" ;;
             screenshots) echo "name=metadata_screenshots" >> "$GITHUB_OUTPUT" ;;
             all)         echo "name=metadata" >> "$GITHUB_OUTPUT" ;;
+            status)      echo "name=asc_status" >> "$GITHUB_OUTPUT" ;;
             *)           echo "::error::Unknown scope ${{ inputs.scope }}"; exit 1 ;;
           esac
 
