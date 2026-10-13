@@ -139,7 +139,7 @@ tests["existing certificate and read-only profile upload internally"] = lambda d
   assert(harness.calls.assoc(:increment).last[:build_number] == 11, "build number should increment")
   build = harness.calls.assoc(:build).last
   assert(build[:export_options][:signingStyle] == "manual", "manual export signing is required")
-  assert(build[:export_options][:provisioningProfiles]["Res.ProEstimate-AI"] == "Existing AppStore", "use the downloaded profile")
+  assert(build[:export_options][:provisioningProfiles]["Res.ProEstimate-AI"] == "test-profile", "export must use the exact downloaded profile UUID")
   assert(!build[:xcargs].include?("allowProvisioning"), "Xcode must not mutate provisioning")
   upload = harness.calls.assoc(:upload).last
   assert(upload[:distribute_external] == false, "external distribution must remain disabled")

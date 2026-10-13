@@ -309,7 +309,7 @@ platform :ios do
           method: "app-store",
           signingStyle: "manual",
           provisioningProfiles: {
-            BUNDLE_ID => profile_name
+            BUNDLE_ID => profile_uuid
           }
         },
         xcargs: [
@@ -1282,7 +1282,7 @@ platform :ios do
         method: "app-store",
         signingStyle: "manual",
         provisioningProfiles: {
-          BUNDLE_ID => profile_name
+          BUNDLE_ID => profile_uuid
         }
       },
       xcargs: [
