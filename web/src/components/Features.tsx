@@ -32,7 +32,7 @@ const features: Feature[] = [
     ),
     title: "Photoreal AI previews",
     description:
-      "Powered by Nano Banana 2. Upload a single photo and get a preview that holds the room layout while showing your renovation choices.",
+      "Powered by Nano Banana 2.1. Upload a single photo and get a preview that holds the room layout while showing your renovation choices.",
   },
   {
     icon: (

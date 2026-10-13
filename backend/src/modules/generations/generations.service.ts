@@ -198,7 +198,7 @@ function toMaterialSpecs(
 }
 
 /**
- * Fire-and-forget: call Nano Banana 2 and update the generation record.
+ * Fire-and-forget: call Nano Banana 2.1 and update the generation record.
  * Runs outside the request transaction so the API responds immediately
  * while the image generates in the background.
  */
@@ -310,7 +310,7 @@ async function processGeneration(
       );
     }
 
-    // Call image generation with provider fallback (PiAPI primary → Google GenAI fallback)
+    // Call image generation with provider fallback (Google GenAI → PiAPI).
     const result = await generatePreviewImage(
       prompt,
       context,

@@ -22,7 +22,6 @@ interface PiAPITaskInput {
   output_format: string;
   aspect_ratio: string;
   resolution: string;
-  safety_level?: string;
 }
 
 interface PiAPICreateRequest {
@@ -168,11 +167,11 @@ export interface PiAPIGenerateOptions {
 }
 
 /**
- * Generate a remodel preview image using PiAPI Nano Banana Pro.
+ * Generate a remodel preview image using PiAPI Nano Banana 2.1.
  *
  * Flow: create task → poll until complete → download image → return base64.
- * Primary model: nano-banana-pro (best quality, safety controls).
- * Fallback within PiAPI: nano-banana-2 if pro fails.
+ * Primary model: nano-banana-2.1.
+ * Fallback within PiAPI: nano-banana-2 if 2.1 is unavailable.
  */
 export async function generatePreviewImagePiAPI(
   options: PiAPIGenerateOptions,
@@ -207,7 +206,7 @@ export async function generatePreviewImagePiAPI(
     imageUrls.push(referenceAssetUrl);
   }
 
-  const taskType = "nano-banana-pro";
+  const taskType = "nano-banana-2.1";
 
   logger.info(
     {
@@ -221,7 +220,7 @@ export async function generatePreviewImagePiAPI(
   );
 
   try {
-    // Attempt with nano-banana-pro first
+    // Attempt with Nano Banana 2.1 first.
     const result = await attemptGeneration(
       taskType,
       prompt,
@@ -236,10 +235,10 @@ export async function generatePreviewImagePiAPI(
       );
       return { ...result, durationMs };
     }
-  } catch (proErr) {
+  } catch (primaryErr) {
     logger.warn(
-      { err: proErr, taskType },
-      "PiAPI nano-banana-pro failed, trying nano-banana-2 fallback",
+      { err: primaryErr, taskType },
+      "PiAPI nano-banana-2.1 failed, trying nano-banana-2 fallback",
     );
   }
 
@@ -284,7 +283,6 @@ async function attemptGeneration(
       aspect_ratio: aspectRatio,
       resolution: "2K",
       ...(imageUrls.length > 0 ? { image_urls: imageUrls } : {}),
-      ...(taskType === "nano-banana-pro" ? { safety_level: "high" } : {}),
     },
   };
 

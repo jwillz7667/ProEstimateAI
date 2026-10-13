@@ -23,11 +23,12 @@ const context: ImageGenContext = { projectType: "EXTERIOR", qualityTier: "STANDA
 const sourceUrl = "https://assets.example.test/source.png";
 let source: ReferencePhoto;
 
-function mockPiAPISuccess() {
+function mockPiAPISuccess(options: { contentType?: string; singularOutput?: boolean } = {}) {
+  const imageUrl = "https://assets.example.test/output.png";
   const fetchMock = vi.fn()
     .mockResolvedValueOnce(new Response(JSON.stringify({ code: 200, data: { task_id: "test-task" } })))
-    .mockResolvedValueOnce(new Response(JSON.stringify({ code: 200, data: { status: "completed", output: { image_url: "https://assets.example.test/output.png" } } })))
-    .mockResolvedValueOnce(new Response(Buffer.from(source.base64Data, "base64"), { headers: { "content-type": "image/png" } }));
+    .mockResolvedValueOnce(new Response(JSON.stringify({ code: 200, data: { status: "completed", output: options.singularOutput ? { image_url: imageUrl } : { image_urls: [imageUrl] } } })))
+    .mockResolvedValueOnce(new Response(Buffer.from(source.base64Data, "base64"), { headers: { "content-type": options.contentType ?? "image/png" } }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
@@ -50,6 +51,7 @@ describe("Google reference framing", () => {
     const result = await generatePreviewImage("Paint only the siding", { ...context, projectType }, source, sourceUrl);
     expect(result?.base64Data).toBe("result");
     const request = mocks.generateContent.mock.calls[0][0];
+    expect(request.model).toBe("gemini-nano-banana-2.1");
     expect(request.config.imageConfig).toEqual({ imageSize: "2K" });
     expect(request.contents.parts[0].inlineData).toEqual({ data: source.base64Data, mimeType: source.mimeType });
     expect(fetch).not.toHaveBeenCalled();
@@ -58,7 +60,9 @@ describe("Google reference framing", () => {
   it.each([["EXTERIOR", "16:9"], ["BATHROOM", "3:4"], ["KITCHEN", "4:3"]])(
     "keeps %s text-only framing", async (projectType, aspectRatio) => {
       await generatePreviewImage("Create a concept", { ...context, projectType });
-      expect(mocks.generateContent.mock.calls[0][0].config.imageConfig).toEqual({ imageSize: "2K", aspectRatio });
+      const request = mocks.generateContent.mock.calls[0][0];
+      expect(request.model).toBe("gemini-nano-banana-2.1");
+      expect(request.config.imageConfig).toEqual({ imageSize: "2K", aspectRatio });
     },
   );
 
@@ -79,9 +83,78 @@ describe("Google reference framing", () => {
     const fetchMock = mockPiAPISuccess();
     expect(await generatePreviewImage("Repaint", context, source, sourceUrl)).not.toBeNull();
     const request = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(request.model).toBe("gemini");
+    expect(request.task_type).toBe("nano-banana-2.1");
+    expect(request.input.resolution).toBe("2K");
     expect(request.input.aspect_ratio).toBe("3:4");
     expect(request.input.image_urls).toEqual([sourceUrl]);
     expect(request.input.prompt).toContain("SAME photograph");
+  });
+
+  it("uses Nano Banana 2.1 through PiAPI when Google is not configured", async () => {
+    mocks.env.GOOGLE_AI_API_KEY = undefined;
+    const fetchMock = mockPiAPISuccess();
+    expect(await generatePreviewImage("Create a concept", context)).not.toBeNull();
+    expect(mocks.generateContent).not.toHaveBeenCalled();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).task_type).toBe("nano-banana-2.1");
+  });
+
+  it("falls back to PiAPI when Google produces text without an image", async () => {
+    mocks.generateContent.mockResolvedValue({ candidates: [{ content: { parts: [{ text: "Unable to generate an image" }] } }] });
+    const fetchMock = mockPiAPISuccess();
+    expect(await generatePreviewImage("Repaint", context, source, sourceUrl)).not.toBeNull();
+    expect(mocks.generateContent).toHaveBeenCalledOnce();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).task_type).toBe("nano-banana-2.1");
+  });
+
+  it("returns the final image instead of an intermediate thinking image", async () => {
+    mocks.generateContent.mockResolvedValue({ candidates: [{ content: { parts: [
+      { thought: true, inlineData: { data: "intermediate", mimeType: "image/png" } },
+      { inlineData: { data: "final", mimeType: "image/png" } },
+    ] } }] });
+    const result = await generatePreviewImage("Repaint", context, source, sourceUrl);
+    expect(result?.base64Data).toBe("final");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, "", "   "])("falls back when Google's final image data is unusable (%s)", async (data) => {
+    mocks.generateContent.mockResolvedValue({ candidates: [{ content: { parts: [{ inlineData: { data, mimeType: "image/png" } }] } }] });
+    const fetchMock = mockPiAPISuccess();
+    const result = await generatePreviewImage("Repaint", context, source, sourceUrl);
+    expect(result?.base64Data).toBe(source.base64Data);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).task_type).toBe("nano-banana-2.1");
+  });
+
+  it("falls back when Google returns only intermediate thinking images", async () => {
+    mocks.generateContent.mockResolvedValue({ candidates: [{ content: { parts: [{ thought: true, inlineData: { data: "intermediate", mimeType: "image/png" } }] } }] });
+    const fetchMock = mockPiAPISuccess();
+    const result = await generatePreviewImage("Repaint", context, source, sourceUrl);
+    expect(result?.base64Data).toBe(source.base64Data);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).task_type).toBe("nano-banana-2.1");
+  });
+
+  it("rejects non-image inline data and uses the PiAPI fallback", async () => {
+    mocks.generateContent.mockResolvedValue({ candidates: [{ content: { parts: [{ inlineData: { data: "not-an-image", mimeType: "text/plain" } }] } }] });
+    const fetchMock = mockPiAPISuccess();
+    const result = await generatePreviewImage("Repaint", context, source, sourceUrl);
+    expect(result?.base64Data).toBe(source.base64Data);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).task_type).toBe("nano-banana-2.1");
+  });
+
+  it("retains PNG compatibility when Google omits the image MIME type", async () => {
+    mocks.generateContent.mockResolvedValue({ candidates: [{ content: { parts: [{ inlineData: { data: "final" } }] } }] });
+    const result = await generatePreviewImage("Repaint", context, source, sourceUrl);
+    expect(result?.base64Data).toBe("final");
+    expect(result?.mimeType).toBe("image/png");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("returns null without contacting providers when neither is configured", async () => {
+    mocks.env.GOOGLE_AI_API_KEY = undefined;
+    mocks.env.PIAPI_API_KEY = undefined;
+    expect(await generatePreviewImage("Create a concept", context)).toBeNull();
+    expect(mocks.generateContent).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 
@@ -107,23 +180,66 @@ describe("PiAPI reference safety", () => {
     const fetchMock = mockPiAPISuccess();
     expect(await generatePreviewImagePiAPI({ userPrompt: "Create a concept", context })).not.toBeNull();
     const request = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(request.model).toBe("gemini");
+    expect(request.task_type).toBe("nano-banana-2.1");
     expect(request.input.aspect_ratio).toBe("16:9");
+    expect(request.input.output_format).toBe("png");
+    expect(request.input.resolution).toBe("2K");
     expect(request.input).not.toHaveProperty("image_urls");
+    expect(request.input).not.toHaveProperty("safety_level");
   });
 
-  it("keeps reference inputs when falling back from Pro to Nano Banana 2", async () => {
+  it("keeps reference inputs when falling back from Nano Banana 2.1 to Nano Banana 2", async () => {
     const fetchMock = mockPiAPISuccess();
     fetchMock.mockReset()
       .mockResolvedValueOnce(new Response("Unavailable", { status: 503 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ code: 200, data: { task_id: "test-task" } })))
       .mockResolvedValueOnce(new Response(JSON.stringify({ code: 200, data: { status: "completed", output: { image_url: "https://assets.example.test/output.png" } } })))
-      .mockResolvedValueOnce(new Response("output", { headers: { "content-type": "image/png" } }));
+      .mockResolvedValueOnce(new Response(Buffer.from(source.base64Data, "base64"), { headers: { "content-type": "image/png" } }));
     expect(await generatePreviewImagePiAPI({ userPrompt: "Repaint", context, referencePhoto: source, referenceAssetUrl: sourceUrl })).not.toBeNull();
     for (const index of [0, 1]) {
       const request = JSON.parse(fetchMock.mock.calls[index][1].body);
       expect(request.input.aspect_ratio).toBe("3:4");
       expect(request.input.image_urls).toEqual([sourceUrl]);
+      expect(request.input.resolution).toBe("2K");
+      expect(request.input.output_format).toBe("png");
+      expect(request.input.prompt).toContain("SAME photograph");
+      expect(request.input).not.toHaveProperty("safety_level");
     }
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).task_type).toBe("nano-banana-2.1");
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).task_type).toBe("nano-banana-2");
+  });
+
+  it("accepts the actual downloaded format even when PNG was requested", async () => {
+    mockPiAPISuccess({ contentType: "image/webp; charset=binary" });
+    const result = await generatePreviewImagePiAPI({ userPrompt: "Create a concept", context });
+    expect(result?.mimeType).toBe("image/webp");
+    expect(result?.base64Data).toBe(source.base64Data);
+  });
+
+  it("retains compatibility with a singular output image URL", async () => {
+    mockPiAPISuccess({ singularOutput: true });
+    expect(await generatePreviewImagePiAPI({ userPrompt: "Create a concept", context })).not.toBeNull();
+  });
+
+  it("tries the compatibility model when Nano Banana 2.1 finishes without an image", async () => {
+    const fetchMock = mockPiAPISuccess();
+    fetchMock.mockReset()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 200, data: { task_id: "empty-task" } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 200, data: { status: "completed", output: null } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 200, data: { task_id: "fallback-task" } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 200, data: { status: "completed", output: { image_urls: ["https://assets.example.test/output.png"] } } })))
+      .mockResolvedValueOnce(new Response(Buffer.from(source.base64Data, "base64"), { headers: { "content-type": "image/png" } }));
+    expect(await generatePreviewImagePiAPI({ userPrompt: "Create a concept", context })).not.toBeNull();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).task_type).toBe("nano-banana-2.1");
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).task_type).toBe("nano-banana-2");
+  });
+
+  it("returns null when both Nano Banana versions are unavailable", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("Unavailable", { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await generatePreviewImagePiAPI({ userPrompt: "Repaint", context, referencePhoto: source, referenceAssetUrl: sourceUrl })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.map((call) => JSON.parse(call[1].body).task_type)).toEqual(["nano-banana-2.1", "nano-banana-2"]);
   });
 });

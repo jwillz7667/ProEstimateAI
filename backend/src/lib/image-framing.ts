@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import type { ReferencePhoto } from "./image-gen";
 
-// Ratios shared by Nano Banana Pro and Nano Banana 2. Do not send arbitrary
+// Ratios shared by Nano Banana 2.1 and Nano Banana 2. Do not send arbitrary
 // ratios (or an undocumented "auto" value) to the PiAPI task endpoint.
 const EDIT_ASPECT_RATIOS = [
   "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9",
