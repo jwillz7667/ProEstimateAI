@@ -27,21 +27,21 @@ Works for solo handymen winning their next bid, contractors scaling client appro
 Kitchen · Bathroom · Flooring · Roofing · Painting · Siding · Room remodel · Exterior / outdoor living · Landscaping · Lawn care (recurring contracts) · Custom
 
 — WHY PROS PICK PROESTIMATE —
-• AI estimates that match real material and labor pricing, not generic averages
+• AI estimates that organize material and labor costs for your review
 • Branded proposals (your logo, your colors, your terms) that close
 • Materials linked out to purchasable products
 • Recurring service contracts price per visit, per month, and per contract automatically — built for lawn care, snow, pest, cleaning
-• Sign in with Apple, secure cloud sync, full audit trail on every client edit
+• Sign in with Apple, secure cloud sync, client and project management
 
 — PRICING —
-Free to download. Pro and Premium subscriptions unlock unlimited AI previews, AI-generated estimates, invoicing, custom branding, watermark-free PDFs, client approval links, and material purchase links.
+Free to download. Start with five lifetime AI preview credits and manual estimating tools. Pro subscriptions add AI-generated estimates, invoicing, custom branding, watermark-free PDFs, client approval links, and material purchase links.
 
-• Pro Monthly — 7-day free trial for new subscribers
-• Pro Annual — best value, save vs. monthly
-• Premium Monthly — unlimited projects + priority generation
-• Premium Annual — save vs. monthly
+• Pro Monthly — monthly billing; eligible subscribers may receive an introductory offer
+• Pro Annual — annual billing with the same Pro features
 
-Pricing for your region is shown in the app before you subscribe. Payment is charged to your Apple ID at confirmation of purchase. Subscriptions renew automatically unless auto-renew is turned off at least 24 hours before the end of the current period. Manage or cancel anytime in your Apple ID subscription settings.
+Pro includes up to 2 new projects, 20 AI previews, 20 AI-generated estimates, and 50 quote exports per 30 days. Daily and weekly limits also apply. Final localized prices and offer eligibility are shown in the app and App Store before purchase.
+
+Payment is charged to your Apple ID at confirmation of purchase. Subscriptions renew automatically unless auto-renew is turned off at least 24 hours before the end of the current period. Manage or cancel anytime in your Apple ID subscription settings.
 
 Privacy Policy: https://proestimateai.com/privacy
 Terms of Use: https://proestimateai.com/terms

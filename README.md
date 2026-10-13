@@ -268,7 +268,7 @@ npm run dev                       # http://localhost:3000
 
 | Command | Purpose |
 | :------ | :------ |
-| `npm run dev` | Nodemon dev server with hot reload |
+| `npm run dev` | Node.js watch server with automatic reload |
 | `npm run build` | Compile TypeScript into `dist/` |
 | `npm start` | Run compiled server |
 | `npm run prisma:studio` | Visual database browser |
