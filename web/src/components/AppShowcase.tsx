@@ -62,7 +62,7 @@ const APP_SCREENS: AppScreen[] = [
   },
   {
     title: "Plans",
-    caption: "Free, Pro, or Premium — toggle monthly or annual on the same sheet.",
+    caption: "Start free or choose Pro with monthly or annual billing.",
     screenshot: "/screenshots/paywall.jpg",
   },
 ];

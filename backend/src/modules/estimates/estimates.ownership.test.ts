@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
+  $queryRaw: vi.fn(),
   project: { findFirst: vi.fn() }, pricingProfile: { findFirst: vi.fn() },
   estimate: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   company: { update: vi.fn() }, activityLogEntry: { create: vi.fn() },
@@ -7,12 +8,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../config/database", () => ({ prisma: { ...mocks,
   $transaction: async (fn: (tx: unknown) => unknown) => fn(mocks),
 } }));
+vi.mock("../../lib/project-quality-tier", () => ({ readProjectQualityTier: vi.fn().mockResolvedValue(null) }));
 vi.mock("../../lib/estimate-gen", () => ({ generateEstimate: vi.fn() }));
-vi.mock("../commerce/entitlement-gate", () => ({ gateAIAction: vi.fn() }));
+vi.mock("../commerce/entitlement-gate", () => ({ gateAIAction: vi.fn(), runReservedAction: (_reservation: unknown, action: () => Promise<unknown>) => action() }));
 vi.mock("../../lib/usage-limits", () => ({ recordUsage: vi.fn() }));
 import { create, update } from "./estimates.service";
 beforeEach(() => {
-  vi.resetAllMocks(); mocks.project.findFirst.mockResolvedValue({ id: "project" });
+  vi.resetAllMocks(); mocks.$queryRaw.mockResolvedValue([{ id: "estimate" }]); mocks.project.findFirst.mockResolvedValue({ id: "project" });
   mocks.estimate.findFirst.mockResolvedValue({ id: "estimate", projectId: "project" });
   mocks.company.update.mockResolvedValue({ estimatePrefix: "EST", nextEstimateNumber: 2 });
 });

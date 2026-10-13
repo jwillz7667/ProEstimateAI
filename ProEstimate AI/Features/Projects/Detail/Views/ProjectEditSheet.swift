@@ -23,20 +23,29 @@ struct ProjectEditSheet: View {
     /// project (e.g. turn a fencing job's before/after preview back on).
     @State private var aiPreviewEnabled: Bool
 
+    @State private var selectedClientId: String?
+    @State private var clients: [Client] = []
+    @State private var isLoadingClients = false
+    @State private var clientLoadError: String?
+    @State private var showNewClient = false
+
     @State private var isSaving: Bool = false
     @State private var errorMessage: String?
 
     @Environment(\.dismiss) private var dismiss
     private let projectService: ProjectServiceProtocol
+    private let clientService: ClientServiceProtocol
 
     init(
         project: Project,
         onSaved: @escaping (Project) -> Void,
-        projectService: ProjectServiceProtocol = LiveProjectService()
+        projectService: ProjectServiceProtocol = LiveProjectService(),
+        clientService: ClientServiceProtocol = LiveClientService()
     ) {
         self.project = project
         self.onSaved = onSaved
         self.projectService = projectService
+        self.clientService = clientService
 
         _title = State(initialValue: project.title)
         _description = State(initialValue: project.description ?? "")
@@ -47,18 +56,32 @@ struct ProjectEditSheet: View {
         _squareFootageText = State(initialValue: project.squareFootage.map { "\($0)" } ?? "")
         _dimensions = State(initialValue: project.dimensions ?? "")
         _aiPreviewEnabled = State(initialValue: project.aiPreviewEnabled)
+        _selectedClientId = State(initialValue: project.clientId)
     }
 
     // MARK: - Computed
 
     private var isValid: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        validationMessage == nil
+    }
+
+    private var validationMessage: String? {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTitle.isEmpty { return "Enter a project name." }
+        if trimmedTitle.count > 255 { return "Keep the project name under 256 characters." }
+        if description.count > 5000 { return "Keep the description under 5,001 characters." }
+        if dimensions.count > 500 { return "Keep dimensions under 501 characters." }
+        if let message = DecimalFormInput.budgetValidationMessage(minimum: budgetMinText, maximum: budgetMaxText) {
+            return message
+        }
+        return DecimalFormInput.validationMessage(for: squareFootageText, field: "square footage")
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 titleSection
+                clientSection
                 descriptionSection
                 typeSection
                 qualitySection
@@ -67,9 +90,9 @@ struct ProjectEditSheet: View {
                 squareFootageSection
                 dimensionsSection
 
-                if let errorMessage {
+                if let message = errorMessage ?? validationMessage {
                     Section {
-                        Text(errorMessage)
+                        Text(message)
                             .font(TypographyTokens.caption)
                             .foregroundStyle(ColorTokens.error)
                     }
@@ -97,9 +120,44 @@ struct ProjectEditSheet: View {
                 }
             }
         }
+        .interactiveDismissDisabled(isSaving)
+        .task { await loadClients() }
+        .sheet(isPresented: $showNewClient) {
+            ClientFormView { client in
+                clients.append(client)
+                clients.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                selectedClientId = client.id
+            }
+        }
     }
 
     // MARK: - Sections
+
+    private var clientSection: some View {
+        Section {
+            Picker("Client", selection: $selectedClientId) {
+                Text("Unassigned").tag(String?.none)
+                if let selectedClientId, !clients.contains(where: { $0.id == selectedClientId }) {
+                    Text("Current client").tag(String?.some(selectedClientId))
+                }
+                ForEach(clients) { client in
+                    Text(client.name).tag(String?.some(client.id))
+                }
+            }
+            .disabled(isLoadingClients || isSaving)
+            if isLoadingClients { ProgressView("Loading clients…") }
+            if let clientLoadError {
+                Text(clientLoadError).font(TypographyTokens.caption).foregroundStyle(ColorTokens.error)
+                Button("Retry loading clients") { Task { await loadClients() } }
+            }
+            Button("Add New Client", systemImage: "person.badge.plus") { showNewClient = true }
+                .disabled(isSaving)
+        } header: {
+            Text("Client")
+        } footer: {
+            Text("Assign a client before creating an invoice for this project.")
+        }
+    }
 
     private var titleSection: some View {
         Section {
@@ -207,7 +265,7 @@ struct ProjectEditSheet: View {
     // MARK: - Save
 
     private func save() async {
-        guard isValid else { return }
+        guard !isSaving, isValid else { return }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
@@ -215,14 +273,14 @@ struct ProjectEditSheet: View {
         let request = ProjectCreationRequest(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             projectType: projectType,
-            clientId: project.clientId,
+            clientId: selectedClientId,
             description: description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil
                 : description.trimmingCharacters(in: .whitespacesAndNewlines),
-            budgetMin: Decimal(string: budgetMinText),
-            budgetMax: Decimal(string: budgetMaxText),
+            budgetMin: DecimalFormInput.parse(budgetMinText),
+            budgetMax: DecimalFormInput.parse(budgetMaxText),
             qualityTier: qualityTier,
-            squareFootage: Decimal(string: squareFootageText),
+            squareFootage: DecimalFormInput.parse(squareFootageText),
             dimensions: dimensions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil
                 : dimensions.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -248,6 +306,20 @@ struct ProjectEditSheet: View {
     }
 
     // MARK: - Helpers
+
+    private func loadClients() async {
+        guard !isLoadingClients else { return }
+        isLoadingClients = true
+        clientLoadError = nil
+        defer { isLoadingClients = false }
+        do {
+            clients = try await clientService.listClients().sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+        } catch {
+            clientLoadError = error.localizedDescription
+        }
+    }
 
     private func typeLabel(_ type: Project.ProjectType) -> String {
         type.displayName

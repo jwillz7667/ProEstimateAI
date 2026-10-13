@@ -25,6 +25,10 @@ export const signupSchema = z.object({
     .regex(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
       "Password must contain at least one uppercase letter, one lowercase letter, and one digit",
+    )
+    .refine(
+      (value) => Buffer.byteLength(value, "utf8") <= 72,
+      "Password must not exceed 72 UTF-8 bytes",
     ),
 });
 
@@ -119,6 +123,10 @@ export const resetPasswordSchema = z.object({
     .regex(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
       "Password must contain at least one uppercase letter, one lowercase letter, and one digit",
+    )
+    .refine(
+      (value) => Buffer.byteLength(value, "utf8") <= 72,
+      "Password must not exceed 72 UTF-8 bytes",
     ),
 });
 

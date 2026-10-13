@@ -14,13 +14,19 @@ import {
   generateEstimate,
   type EstimateGenContext,
 } from "../../lib/estimate-gen";
-import { gateAIAction } from "../commerce/entitlement-gate";
+import { gateAIAction, runReservedAction } from "../commerce/entitlement-gate";
+import { readProjectQualityTier } from "../../lib/project-quality-tier";
 import { recordUsage } from "../../lib/usage-limits";
 
-async function verifyPricingProfileOwnership(profileId: string | null | undefined, companyId: string) {
+async function verifyPricingProfileOwnership(
+  profileId: string | null | undefined,
+  companyId: string,
+  database: Prisma.TransactionClient = prisma,
+) {
   if (!profileId) return;
-  const profile = await prisma.pricingProfile.findFirst({
-    where: { id: profileId, companyId }, select: { id: true },
+  const profile = await database.pricingProfile.findFirst({
+    where: { id: profileId, companyId },
+    select: { id: true },
   });
   if (!profile) throw new NotFoundError("PricingProfile", profileId);
 }
@@ -84,6 +90,7 @@ export async function create(
   }
 
   await verifyPricingProfileOwnership(data.pricing_profile_id, companyId);
+  const qualityTier = await readProjectQualityTier(data.project_id, companyId);
 
   // Auto-increment estimate number inside a transaction
   const estimate = await prisma.$transaction(async (tx) => {
@@ -128,7 +135,7 @@ export async function create(
         // Snapshot the tier the project carried at create time. If the project
         // is on Auto (null), we leave the estimate's tier null so audit shows
         // the contractor didn't lock a tier in.
-        qualityTier: null,
+        qualityTier,
       },
     });
 
@@ -154,79 +161,106 @@ export async function update(
   userId: string,
   data: UpdateEstimateInput,
 ) {
-  const existing = await prisma.estimate.findFirst({
-    where: { id, companyId },
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<
+      Array<{ id: string }>
+    >`SELECT id FROM "Estimate" WHERE id = ${id} AND "companyId" = ${companyId} FOR UPDATE`;
+    if (rows.length === 0) throw new NotFoundError("Estimate", id);
+    const existing = await tx.estimate.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!existing) {
+      throw new NotFoundError("Estimate", id);
+    }
+
+    await verifyPricingProfileOwnership(data.pricing_profile_id, companyId, tx);
+
+    const updateData: any = {};
+
+    if (data.status !== undefined) {
+      updateData.status = data.status.toUpperCase() as EstimateStatus;
+    }
+    if (data.title !== undefined) {
+      updateData.title = data.title;
+    }
+    if (data.pricing_profile_id !== undefined) {
+      updateData.pricingProfileId = data.pricing_profile_id;
+    }
+    if (data.notes !== undefined) {
+      updateData.notes = data.notes;
+    }
+    if (data.assumptions !== undefined) {
+      updateData.assumptions = data.assumptions;
+    }
+    if (data.exclusions !== undefined) {
+      updateData.exclusions = data.exclusions;
+    }
+    if (data.contingency_amount !== undefined) {
+      updateData.contingencyAmount = data.contingency_amount;
+    }
+    if (data.valid_until !== undefined) {
+      updateData.validUntil = data.valid_until
+        ? new Date(data.valid_until)
+        : null;
+    }
+    if (data.subtotal_materials !== undefined) {
+      updateData.subtotalMaterials = data.subtotal_materials;
+    }
+    if (data.subtotal_labor !== undefined) {
+      updateData.subtotalLabor = data.subtotal_labor;
+    }
+    if (data.subtotal_other !== undefined) {
+      updateData.subtotalOther = data.subtotal_other;
+    }
+    if (data.tax_amount !== undefined) {
+      updateData.taxAmount = data.tax_amount;
+    }
+    if (data.discount_amount !== undefined) {
+      updateData.discountAmount = data.discount_amount;
+    }
+    if (data.total_amount !== undefined) {
+      updateData.totalAmount = data.total_amount;
+    }
+
+    if (
+      data.total_amount === undefined &&
+      [
+        data.subtotal_materials,
+        data.subtotal_labor,
+        data.subtotal_other,
+        data.tax_amount,
+        data.discount_amount,
+      ].some((value) => value !== undefined)
+    ) {
+      updateData.totalAmount = Prisma.Decimal.max(
+        0,
+        new Prisma.Decimal(
+          data.subtotal_materials ?? existing.subtotalMaterials,
+        )
+          .plus(data.subtotal_labor ?? existing.subtotalLabor)
+          .plus(data.subtotal_other ?? existing.subtotalOther)
+          .plus(data.tax_amount ?? existing.taxAmount)
+          .minus(data.discount_amount ?? existing.discountAmount),
+      ).toDecimalPlaces(2);
+    }
+    const estimate = await tx.estimate.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // Log activity
+    await tx.activityLogEntry.create({
+      data: {
+        projectId: existing.projectId,
+        userId,
+        action: "ESTIMATE_UPDATED",
+        description: `Estimate ${existing.estimateNumber} updated`,
+      },
+    });
+
+    return estimate;
   });
-
-  if (!existing) {
-    throw new NotFoundError("Estimate", id);
-  }
-
-  await verifyPricingProfileOwnership(data.pricing_profile_id, companyId);
-
-  const updateData: any = {};
-
-  if (data.status !== undefined) {
-    updateData.status = data.status.toUpperCase() as EstimateStatus;
-  }
-  if (data.title !== undefined) {
-    updateData.title = data.title;
-  }
-  if (data.pricing_profile_id !== undefined) {
-    updateData.pricingProfileId = data.pricing_profile_id;
-  }
-  if (data.notes !== undefined) {
-    updateData.notes = data.notes;
-  }
-  if (data.assumptions !== undefined) {
-    updateData.assumptions = data.assumptions;
-  }
-  if (data.exclusions !== undefined) {
-    updateData.exclusions = data.exclusions;
-  }
-  if (data.contingency_amount !== undefined) {
-    updateData.contingencyAmount = data.contingency_amount;
-  }
-  if (data.valid_until !== undefined) {
-    updateData.validUntil = data.valid_until
-      ? new Date(data.valid_until)
-      : null;
-  }
-  if (data.subtotal_materials !== undefined) {
-    updateData.subtotalMaterials = data.subtotal_materials;
-  }
-  if (data.subtotal_labor !== undefined) {
-    updateData.subtotalLabor = data.subtotal_labor;
-  }
-  if (data.subtotal_other !== undefined) {
-    updateData.subtotalOther = data.subtotal_other;
-  }
-  if (data.tax_amount !== undefined) {
-    updateData.taxAmount = data.tax_amount;
-  }
-  if (data.discount_amount !== undefined) {
-    updateData.discountAmount = data.discount_amount;
-  }
-  if (data.total_amount !== undefined) {
-    updateData.totalAmount = data.total_amount;
-  }
-
-  const estimate = await prisma.estimate.update({
-    where: { id },
-    data: updateData,
-  });
-
-  // Log activity
-  await prisma.activityLogEntry.create({
-    data: {
-      projectId: existing.projectId,
-      userId,
-      action: "ESTIMATE_UPDATED",
-      description: `Estimate ${existing.estimateNumber} updated`,
-    },
-  });
-
-  return estimate;
 }
 
 export async function remove(id: string, companyId: string) {
@@ -262,11 +296,6 @@ export async function generateAI(
   userId: string,
   projectId: string,
 ) {
-  // Gate AI work behind subscription + rolling-window usage caps.
-  // Counts toward the same AI_GENERATION metric as image previews so a single
-  // pool of AI calls applies regardless of which AI feature the user invokes.
-  await gateAIAction({ userId, companyId, metric: "AI_GENERATION" });
-
   const project = await prisma.project.findFirst({
     where: { id: projectId, companyId },
     select: {
@@ -299,12 +328,13 @@ export async function generateAI(
     }),
   ]);
 
+  const qualityTier = await readProjectQualityTier(projectId, companyId);
   const context: EstimateGenContext = {
     projectType: project.projectType,
     // Auto-mode falls back to STANDARD for the prompt + clamping; the audit
     // snapshot below preserves the original null so we can tell apart "user
     // chose STANDARD" from "user left it on Auto".
-    qualityTier: "STANDARD",
+    qualityTier: qualityTier ?? "STANDARD",
     projectTitle: project.title,
     projectDescription: project.description ?? undefined,
     squareFootage: project.squareFootage?.toString(),
@@ -349,152 +379,159 @@ export async function generateAI(
       : undefined,
   };
 
-  const generated = await generateEstimate(context);
+  const reservation = await gateAIAction({
+    userId,
+    companyId,
+    metric: "ESTIMATE_GENERATED",
+  });
+  return runReservedAction(reservation, async () => {
+    const generated = await generateEstimate(context);
 
-  // Compute totals from the generated line items so the Estimate row has
-  // realistic pre-tax and total numbers on first load — the user can still
-  // tweak everything in the editor.
-  let subtotalMaterials = 0;
-  let subtotalLabor = 0;
-  let subtotalOther = 0;
-  let taxAmount = 0;
+    // Compute totals from the generated line items so the Estimate row has
+    // realistic pre-tax and total numbers on first load — the user can still
+    // tweak everything in the editor.
+    let subtotalMaterials = 0;
+    let subtotalLabor = 0;
+    let subtotalOther = 0;
+    let taxAmount = 0;
 
-  for (const item of generated.lineItems) {
-    const lineBase = item.quantity * item.unitCost;
-    const markup = lineBase * (item.markupPercent / 100);
-    const preTax = lineBase + markup;
-    const lineTax = preTax * item.taxRate;
-
-    switch (item.category) {
-      case "materials":
-        subtotalMaterials += preTax;
-        break;
-      case "labor":
-        subtotalLabor += preTax;
-        break;
-      case "other":
-        subtotalOther += preTax;
-        break;
-    }
-    taxAmount += lineTax;
-  }
-
-  const totalAmount =
-    subtotalMaterials + subtotalLabor + subtotalOther + taxAmount;
-
-  const validUntil = new Date();
-  validUntil.setDate(validUntil.getDate() + generated.validDays);
-
-  const notesWithTerms = [generated.overview, generated.terms]
-    .filter((s) => s && s.trim().length > 0)
-    .join("\n\n");
-
-  // Compose Assumptions and Exclusions into the dedicated Estimate columns.
-  const estimate = await prisma.$transaction(async (tx) => {
-    // Atomically claim the next number — see the manual-create path above
-    // for why the read-then-write is replaced by an increment-and-read.
-    const co = await tx.company
-      .update({
-        where: { id: companyId },
-        data: { nextEstimateNumber: { increment: 1 } },
-        select: { estimatePrefix: true, nextEstimateNumber: true },
-      })
-      .catch((err: unknown) => {
-        if (
-          err instanceof Prisma.PrismaClientKnownRequestError &&
-          err.code === "P2025"
-        ) {
-          throw new NotFoundError("Company", companyId);
-        }
-        throw err;
-      });
-
-    const estimateNumber = `${co.estimatePrefix || "EST"}-${co.nextEstimateNumber - 1}`;
-
-    const created = await tx.estimate.create({
-      data: {
-        projectId,
-        companyId,
-        estimateNumber,
-        title: generated.title,
-        pricingProfileId: defaultPricingProfile?.id ?? null,
-        createdByUserId: userId,
-        // Snapshot the project's tier (or null for Auto). Stored alongside
-        // the line items so audit trails show what was clamped against.
-        qualityTier: null,
-        subtotalMaterials,
-        subtotalLabor,
-        subtotalOther,
-        taxAmount,
-        discountAmount: 0,
-        totalAmount,
-        assumptions: generated.assumptions || null,
-        exclusions: generated.exclusions || null,
-        notes: notesWithTerms || null,
-        validUntil,
-      },
-    });
-
-    // Persist each AI-generated line item.
-    for (let i = 0; i < generated.lineItems.length; i++) {
-      const item = generated.lineItems[i];
+    for (const item of generated.lineItems) {
       const lineBase = item.quantity * item.unitCost;
       const markup = lineBase * (item.markupPercent / 100);
       const preTax = lineBase + markup;
-      // lineTotal is the PRE-TAX line subtotal. This must match the manual
-      // create path (estimate-line-items.service.ts) and recalculateEstimateTotals,
-      // which both treat lineTotal as pre-tax and add `lineTotal * taxRate`
-      // separately. Storing it tax-inclusive here caused tax to be applied
-      // twice (and subtotals to be inflated) the moment any line item on an
-      // AI-generated estimate was edited and totals were recalculated.
-      const lineTotal = preTax;
+      const lineTax = preTax * item.taxRate;
 
-      const categoryEnum =
-        item.category === "materials"
-          ? LineItemCategory.MATERIALS
-          : item.category === "labor"
-            ? LineItemCategory.LABOR
-            : LineItemCategory.OTHER;
-
-      await tx.estimateLineItem.create({
-        data: {
-          estimateId: created.id,
-          category: categoryEnum,
-          itemType: "per_unit",
-          name: item.name,
-          description: item.description || null,
-          quantity: item.quantity,
-          unit: item.unit,
-          unitCost: item.unitCost,
-          markupPercent: item.markupPercent,
-          // Canonical: tax_rate stored as a fraction (e.g. 0.0825 for 8.25%),
-          // matching the validator (max 1.0) and the recalc logic that
-          // treats the DB value as a multiplier.
-          taxRate: item.taxRate,
-          lineTotal,
-          sortOrder: i,
-        },
-      });
+      switch (item.category) {
+        case "materials":
+          subtotalMaterials += preTax;
+          break;
+        case "labor":
+          subtotalLabor += preTax;
+          break;
+        case "other":
+          subtotalOther += preTax;
+          break;
+      }
+      taxAmount += lineTax;
     }
 
-    await tx.activityLogEntry.create({
-      data: {
-        projectId,
-        userId,
-        action: "ESTIMATE_CREATED",
-        description: `AI-generated estimate ${estimateNumber} created`,
-      },
+    const totalAmount =
+      subtotalMaterials + subtotalLabor + subtotalOther + taxAmount;
+
+    const validUntil = new Date();
+    validUntil.setDate(validUntil.getDate() + generated.validDays);
+
+    const notesWithTerms = [generated.overview, generated.terms]
+      .filter((s) => s && s.trim().length > 0)
+      .join("\n\n");
+
+    // Compose Assumptions and Exclusions into the dedicated Estimate columns.
+    const estimate = await prisma.$transaction(async (tx) => {
+      // Atomically claim the next number — see the manual-create path above
+      // for why the read-then-write is replaced by an increment-and-read.
+      const co = await tx.company
+        .update({
+          where: { id: companyId },
+          data: { nextEstimateNumber: { increment: 1 } },
+          select: { estimatePrefix: true, nextEstimateNumber: true },
+        })
+        .catch((err: unknown) => {
+          if (
+            err instanceof Prisma.PrismaClientKnownRequestError &&
+            err.code === "P2025"
+          ) {
+            throw new NotFoundError("Company", companyId);
+          }
+          throw err;
+        });
+
+      const estimateNumber = `${co.estimatePrefix || "EST"}-${co.nextEstimateNumber - 1}`;
+
+      const created = await tx.estimate.create({
+        data: {
+          projectId,
+          companyId,
+          estimateNumber,
+          title: generated.title,
+          pricingProfileId: defaultPricingProfile?.id ?? null,
+          createdByUserId: userId,
+          // Snapshot the project's tier (or null for Auto). Stored alongside
+          // the line items so audit trails show what was clamped against.
+          qualityTier,
+          subtotalMaterials,
+          subtotalLabor,
+          subtotalOther,
+          taxAmount,
+          discountAmount: 0,
+          totalAmount,
+          assumptions: generated.assumptions || null,
+          exclusions: generated.exclusions || null,
+          notes: notesWithTerms || null,
+          validUntil,
+        },
+      });
+
+      // Persist each AI-generated line item.
+      for (let i = 0; i < generated.lineItems.length; i++) {
+        const item = generated.lineItems[i];
+        const lineBase = item.quantity * item.unitCost;
+        const markup = lineBase * (item.markupPercent / 100);
+        const preTax = lineBase + markup;
+        // lineTotal is the PRE-TAX line subtotal. This must match the manual
+        // create path (estimate-line-items.service.ts) and recalculateEstimateTotals,
+        // which both treat lineTotal as pre-tax and add `lineTotal * taxRate`
+        // separately. Storing it tax-inclusive here caused tax to be applied
+        // twice (and subtotals to be inflated) the moment any line item on an
+        // AI-generated estimate was edited and totals were recalculated.
+        const lineTotal = preTax;
+
+        const categoryEnum =
+          item.category === "materials"
+            ? LineItemCategory.MATERIALS
+            : item.category === "labor"
+              ? LineItemCategory.LABOR
+              : LineItemCategory.OTHER;
+
+        await tx.estimateLineItem.create({
+          data: {
+            estimateId: created.id,
+            category: categoryEnum,
+            itemType: "per_unit",
+            name: item.name,
+            description: item.description || null,
+            quantity: item.quantity,
+            unit: item.unit,
+            unitCost: item.unitCost,
+            markupPercent: item.markupPercent,
+            // Canonical: tax_rate stored as a fraction (e.g. 0.0825 for 8.25%),
+            // matching the validator (max 1.0) and the recalc logic that
+            // treats the DB value as a multiplier.
+            taxRate: item.taxRate,
+            lineTotal,
+            sortOrder: i,
+          },
+        });
+      }
+
+      await tx.activityLogEntry.create({
+        data: {
+          projectId,
+          userId,
+          action: "ESTIMATE_CREATED",
+          description: `AI-generated estimate ${estimateNumber} created`,
+        },
+      });
+
+      return created;
     });
 
-    return created;
+    // Record usage AFTER the estimate is committed so a failed write doesn't burn cap.
+    if (!reservation)
+      await recordUsage(userId, companyId, "ESTIMATE_GENERATED", {
+        projectId,
+        estimateId: estimate.id,
+        kind: "ai_estimate",
+      });
+    return estimate;
   });
-
-  // Record usage AFTER the estimate is committed so a failed write doesn't burn cap.
-  await recordUsage(userId, companyId, "AI_GENERATION", {
-    projectId,
-    estimateId: estimate.id,
-    kind: "ai_estimate",
-  });
-
-  return estimate;
 }

@@ -10,12 +10,14 @@ import {
   groupLineItems,
   isProposalExpired,
   isProposalOpen,
+  safeWebsiteURL,
   type SharedLineItem,
   type SharedProposalPage,
 } from "@/lib/proposal";
 import { APIError } from "@/lib/api";
 
 import { ProposalActions } from "./ProposalActions";
+import { PrintProposal } from "./PrintProposal";
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -37,6 +39,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       title,
       description,
       robots: { index: false, follow: false },
+      referrer: "no-referrer",
       openGraph: {
         title,
         description,
@@ -50,6 +53,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     return {
       title: "Proposal",
       robots: { index: false, follow: false },
+      referrer: "no-referrer",
     };
   }
 }
@@ -74,10 +78,11 @@ export default async function ProposalPage({ params }: Params) {
   const groups = groupLineItems(estimate.line_items);
   const expired = isProposalExpired(proposal);
   const open = isProposalOpen(proposal) && !expired;
+  const websiteURL = safeWebsiteURL(company.website_url);
 
   return (
     <main
-      className="min-h-screen bg-surface-secondary"
+      className="proposal-page min-h-screen bg-surface-secondary"
       style={{ "--accent": accent } as React.CSSProperties}
     >
       {/* Accent bar */}
@@ -114,6 +119,7 @@ export default async function ProposalPage({ params }: Params) {
           </div>
           <StatusPill proposal={proposal} expired={expired} />
         </header>
+        <PrintProposal />
 
         {/* Status banner --------------------------------------------------- */}
         {!open && (
@@ -265,7 +271,7 @@ export default async function ProposalPage({ params }: Params) {
 
         {/* Actions --------------------------------------------------------- */}
         {open && (
-          <section className="mb-10">
+          <section className="proposal-response-controls mb-10">
             <ProposalActions key={token} token={token} primaryColor={accent} />
             {proposal.expires_at && (
               <p className="mt-3 text-sm text-ink-500 text-center">
@@ -299,7 +305,9 @@ export default async function ProposalPage({ params }: Params) {
                 </div>
               )}
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                {company.phone && <span>{company.phone}</span>}
+                {company.phone && (
+                  <a href={`tel:${company.phone}`} className="hover:text-brand-600">{company.phone}</a>
+                )}
                 {company.email && (
                   <a
                     href={`mailto:${company.email}`}
@@ -308,14 +316,14 @@ export default async function ProposalPage({ params }: Params) {
                     {company.email}
                   </a>
                 )}
-                {company.website_url && (
+                {websiteURL && (
                   <a
-                    href={company.website_url}
+                    href={websiteURL}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-brand-600"
                   >
-                    {company.website_url.replace(/^https?:\/\//, "")}
+                    {websiteURL.replace(/^https?:\/\//, "").replace(/\/$/, "")}
                   </a>
                 )}
               </div>

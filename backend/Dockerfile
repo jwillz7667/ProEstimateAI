@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 RUN apk add --no-cache openssl
 WORKDIR /app
 COPY package*.json ./
@@ -9,7 +9,7 @@ RUN npm run build
 # Validate native sharp/libvips against this actual Alpine/musl image before shipping.
 RUN node scripts/verify-image-runtime.cjs
 
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 RUN apk add --no-cache openssl curl
 RUN addgroup -g 1001 -S nodejs && adduser -S appuser -u 1001
 WORKDIR /app

@@ -40,15 +40,14 @@ final class LiveEstimateService: EstimateServiceProtocol, Sendable {
     }
 
     func saveLineItems(_ items: [EstimateLineItem], estimateId: String) async throws -> [EstimateLineItem] {
-        // Create each line item individually via the API.
-        // The backend assigns IDs and computes line totals.
-        var savedItems: [EstimateLineItem] = []
-        for item in items {
-            let saved: EstimateLineItem = try await apiClient.request(
-                .createEstimateLineItem(estimateId: estimateId, body: item)
-            )
-            savedItems.append(saved)
-        }
-        return savedItems
+        guard !items.isEmpty else { return [] }
+        // A single transaction prevents a failed upload from leaving half an estimate.
+        return try await apiClient.request(
+            .batchCreateEstimateLineItems(estimateId: estimateId, body: EstimateLineItemsBatch(items: items))
+        )
     }
+}
+
+struct EstimateLineItemsBatch: Encodable, Sendable {
+    let items: [EstimateLineItem]
 }

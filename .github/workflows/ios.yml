@@ -6,12 +6,14 @@ on:
     paths:
       - "ProEstimate AI/**"
       - "ProEstimate AI.xcodeproj/**"
+      - "scripts/tests/**"
       - ".github/workflows/ios.yml"
   pull_request:
     branches: [main]
     paths:
       - "ProEstimate AI/**"
       - "ProEstimate AI.xcodeproj/**"
+      - "scripts/tests/**"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
 
@@ -88,3 +90,6 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             test
+
+      - name: Run model and pagination regressions
+        run: scripts/tests/run-ios-regressions.sh

@@ -53,12 +53,15 @@ final class ProjectDetailViewModel {
 
     /// Local toggle state for material suggestions. Key = material ID.
     var materialSelectionState: [String: Bool] = [:]
+    private var confirmedMaterialSelections: [String: Bool] = [:]
+    private var materialSelectionRevisions: [String: Int] = [:]
+    private var materialSelectionTasks: [String: Task<Void, Never>] = [:]
 
     /// Whether the user plans to do the work themselves (no labor costs).
     var isDIY: Bool = false
 
     var selectedMaterialCount: Int {
-        materialSelectionState.values.filter { $0 }.count
+        selectedMaterials.count
     }
 
     var selectedMaterialsTotal: Decimal {
@@ -80,6 +83,7 @@ final class ProjectDetailViewModel {
     private let clientService: ClientServiceProtocol
     private let estimateExportService: EstimateExportServiceProtocol
     private let proposalService: ProposalServiceProtocol
+    private let apiClient: APIClientProtocol
 
     // MARK: - Init
 
@@ -89,7 +93,8 @@ final class ProjectDetailViewModel {
         estimateService: EstimateServiceProtocol = LiveEstimateService(),
         clientService: ClientServiceProtocol = LiveClientService(),
         estimateExportService: EstimateExportServiceProtocol = LiveEstimateExportService(),
-        proposalService: ProposalServiceProtocol = LiveProposalService()
+        proposalService: ProposalServiceProtocol = LiveProposalService(),
+        apiClient: APIClientProtocol = APIClient.shared
     ) {
         self.projectService = projectService
         self.generationService = generationService
@@ -97,11 +102,14 @@ final class ProjectDetailViewModel {
         self.clientService = clientService
         self.estimateExportService = estimateExportService
         self.proposalService = proposalService
+        self.apiClient = apiClient
     }
 
     // MARK: - Loading
 
     func loadProject(id: String) async {
+        guard !isLoading else { return }
+        let selectionRevisionsAtLoad = materialSelectionRevisions
         isLoading = true
         errorMessage = nil
 
@@ -142,8 +150,12 @@ final class ProjectDetailViewModel {
         await loadMaterials()
 
         // Initialize selection state from server values
-        for material in materials {
+        let activeMaterialIDs = Set(materials.map(\.id))
+        materialSelectionState = materialSelectionState.filter { activeMaterialIDs.contains($0.key) }
+        for material in materials where materialSelectionTasks[material.id] == nil
+            && materialSelectionRevisions[material.id] == selectionRevisionsAtLoad[material.id] {
             materialSelectionState[material.id] = material.isSelected
+            confirmedMaterialSelections[material.id] = material.isSelected
         }
 
         isLoading = false
@@ -168,19 +180,26 @@ final class ProjectDetailViewModel {
             isGenerating = true
             currentGenerationStage = 2
             startProgressSimulation()
+        } else if isGenerating, awaitingGenerationId != nil {
+            stopProgressSimulation()
+            awaitingGenerationId = nil
+            isGenerating = false
         }
     }
 
     private func loadGenerations(projectId: String) async {
-        generations = (try? await generationService.listGenerations(projectId: projectId)) ?? []
+        do { generations = try await generationService.listGenerations(projectId: projectId) }
+        catch { reportRefreshFailure("AI previews", error: error) }
     }
 
     private func loadEstimates(projectId: String) async {
-        estimates = (try? await estimateService.listByProject(projectId: projectId)) ?? []
+        do { estimates = try await estimateService.listByProject(projectId: projectId) }
+        catch { reportRefreshFailure("estimates", error: error) }
     }
 
     private func loadProposals(projectId: String) async {
-        proposals = (try? await proposalService.listByProject(projectId: projectId)) ?? []
+        do { proposals = try await proposalService.listByProject(projectId: projectId) }
+        catch { reportRefreshFailure("proposals", error: error) }
     }
 
     /// Refresh just the proposal list. Called when the proposal sheet
@@ -192,24 +211,29 @@ final class ProjectDetailViewModel {
     }
 
     private func loadAssets(projectId: String) async {
-        assets = (try? await APIClient.shared.request(.listAssets(projectId: projectId))) ?? []
+        do { assets = try await apiClient.request(.listAssets(projectId: projectId)) }
+        catch { reportRefreshFailure("photos", error: error) }
     }
 
     private func loadActivity(projectId: String) async {
-        activityLog = (try? await APIClient.shared.request(.listActivityLog(projectId: projectId, cursor: nil))) ?? []
+        do { activityLog = try await apiClient.request(.listActivityLog(projectId: projectId, cursor: nil)) }
+        catch { reportRefreshFailure("activity", error: error) }
     }
 
     private func loadClient() async {
-        guard let clientId = project?.clientId else { return }
-        client = try? await clientService.getClient(id: clientId)
+        guard let clientId = project?.clientId else { client = nil; return }
+        do { client = try await clientService.getClient(id: clientId) }
+        catch { reportRefreshFailure("client", error: error) }
     }
 
     /// Pull every persisted PDF export for this project's estimates and
     /// bucket them by `estimateId` so the per-row UI can render its
     /// "Saved exports" sublist without a second round-trip per estimate.
     private func loadEstimateExports(projectId: String) async {
-        let all = (try? await estimateExportService.listByProject(projectId: projectId)) ?? []
-        estimateExports = Dictionary(grouping: all, by: { $0.estimateId })
+        do {
+            let all = try await estimateExportService.listByProject(projectId: projectId)
+            estimateExports = Dictionary(grouping: all, by: { $0.estimateId })
+        } catch { reportRefreshFailure("saved exports", error: error) }
     }
 
     /// Insert a freshly-uploaded export at the top of its bucket so the UI
@@ -235,13 +259,20 @@ final class ProjectDetailViewModel {
     private func loadMaterials() async {
         var allMaterials: [MaterialSuggestion] = []
         for generation in generations where generation.status == .completed {
-            if let mats: [MaterialSuggestion] = try? await APIClient.shared.request(
-                .listMaterialSuggestions(generationId: generation.id)
-            ) {
+            do {
+                let mats: [MaterialSuggestion] = try await apiClient.request(.listMaterialSuggestions(generationId: generation.id))
                 allMaterials.append(contentsOf: mats)
+            } catch {
+                allMaterials.append(contentsOf: materials.filter { $0.generationId == generation.id })
+                reportRefreshFailure("materials", error: error)
             }
         }
         materials = allMaterials
+    }
+
+    private func reportRefreshFailure(_ resource: String, error: Error) {
+        guard !Task.isCancelled else { return }
+        errorMessage = "Couldn't refresh \(resource). \(error.localizedDescription) Pull to refresh to try again."
     }
 
     // MARK: - AI Generation
@@ -375,15 +406,13 @@ final class ProjectDetailViewModel {
         // Tear down any in-flight polling for this project's generations
         // so the coordinator doesn't continue ticking against a now-404
         // record after the cascade delete commits server-side.
-        let coordinator = GenerationLifecycleCoordinator.shared
-        for inFlight in generations where inFlight.status == .processing || inFlight.status == .queued {
-            coordinator.cancel(generationId: inFlight.id)
-        }
-        stopObservingLifecycle()
-        isGenerating = false
-        awaitingGenerationId = nil
         do {
             try await projectService.deleteProject(id: project.id)
+            GenerationLifecycleCoordinator.shared.cancel(projectId: project.id)
+            stopObservingLifecycle()
+            stopProgressSimulation()
+            isGenerating = false
+            awaitingGenerationId = nil
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -409,13 +438,17 @@ final class ProjectDetailViewModel {
     /// Returns the created Estimate or nil on failure.
     func createEstimate() async -> Estimate? {
         guard let project else { return nil }
+        await finishMaterialSelections()
 
+        var createdEstimate: Estimate?
         do {
             let body = CreateEstimateBody(projectId: project.id)
-            let estimate: Estimate = try await APIClient.shared.request(.createEstimate(body: body))
+            let estimate: Estimate = try await apiClient.request(.createEstimate(body: body))
+            createdEstimate = estimate
 
             // Import selected materials as line items
             let materialsToImport = selectedMaterials
+            var items: [EstimateLineItem] = []
             for (index, material) in materialsToImport.enumerated() {
                 let draft = LineItemDraft(
                     from: material,
@@ -423,10 +456,7 @@ final class ProjectDetailViewModel {
                     isDIY: isDIY,
                     sortOrder: index
                 )
-                let lineItem = draft.toLineItem()
-                let _: EstimateLineItem = try await APIClient.shared.request(
-                    .createEstimateLineItem(estimateId: estimate.id, body: lineItem)
-                )
+                items.append(draft.toLineItem())
             }
 
             // If professional mode (not DIY), add a placeholder labor line item
@@ -435,18 +465,31 @@ final class ProjectDetailViewModel {
                     estimateId: estimate.id,
                     projectType: project.projectType,
                     materialsCost: selectedMaterialsTotal,
-                    sortOrder: 0
+                    sortOrder: items.count
                 )
-                let laborItem = laborDraft.toLineItem()
-                let _: EstimateLineItem = try await APIClient.shared.request(
-                    .createEstimateLineItem(estimateId: estimate.id, body: laborItem)
-                )
+                items.append(laborDraft.toLineItem())
             }
 
-            estimates.insert(estimate, at: 0)
-            return estimate
+            if !items.isEmpty {
+                let _: [EstimateLineItem] = try await apiClient.request(
+                    .batchCreateEstimateLineItems(estimateId: estimate.id, body: EstimateLineItemsBatch(items: items))
+                )
+            }
+            // Line insertion recalculates server totals. Display those totals,
+            // rather than the zero-valued snapshot returned before insertion.
+            let refreshed: Estimate = try await apiClient.request(.getEstimate(id: estimate.id))
+            estimates.insert(refreshed, at: 0)
+            return refreshed
         } catch {
-            errorMessage = error.localizedDescription
+            // A transport error may arrive after a successful server write.
+            // Retain and refresh the confirmed creation for review.
+            if let createdEstimate {
+                estimates.insert(createdEstimate, at: 0)
+                await loadEstimates(projectId: project.id)
+            }
+            errorMessage = createdEstimate == nil
+                ? error.localizedDescription
+                : "The estimate was created, but the remaining steps couldn't finish. Review it before creating another estimate. \(error.localizedDescription)"
             return nil
         }
     }
@@ -462,9 +505,10 @@ final class ProjectDetailViewModel {
     /// success the caller can navigate directly to the editor.
     func generateAIEstimate() async -> Estimate? {
         guard let project else { return nil }
+        await finishMaterialSelections()
         do {
             let body = GenerateAIEstimateBody(projectId: project.id)
-            let estimate: Estimate = try await APIClient.shared.request(.generateAIEstimate(body: body))
+            let estimate: Estimate = try await apiClient.request(.generateAIEstimate(body: body))
             estimates.insert(estimate, at: 0)
             return estimate
         } catch {
@@ -500,12 +544,42 @@ final class ProjectDetailViewModel {
     // MARK: - Material Selection
 
     func toggleMaterial(id: String) {
-        let newValue = !(materialSelectionState[id] ?? false)
+        guard let material = materials.first(where: { $0.id == id }) else { return }
+        let newValue = !(materialSelectionState[id] ?? material.isSelected)
         materialSelectionState[id] = newValue
-        Task {
-            let _: MaterialSuggestion? = try? await APIClient.shared.request(
-                .updateMaterialSelection(id: id, isSelected: newValue)
-            )
+        let revision = (materialSelectionRevisions[id] ?? 0) + 1
+        materialSelectionRevisions[id] = revision
+        let previousTask = materialSelectionTasks[id]
+        let sessionID = TokenStore.shared.sessionIdentifier
+        let projectID = project?.id
+        let task = Task { @MainActor [self] in
+            await previousTask?.value
+            guard materialSelectionRevisions[id] == revision else { return }
+            defer {
+                if materialSelectionRevisions[id] == revision { materialSelectionTasks[id] = nil }
+            }
+            guard TokenStore.shared.sessionIdentifier == sessionID, project?.id == projectID else { return }
+            do {
+                let updated: MaterialSuggestion = try await apiClient.request(.updateMaterialSelection(id: id, isSelected: newValue))
+                guard TokenStore.shared.sessionIdentifier == sessionID, project?.id == projectID else { return }
+                confirmedMaterialSelections[id] = updated.isSelected
+                if materialSelectionRevisions[id] == revision {
+                    materialSelectionState[id] = updated.isSelected
+                }
+            } catch {
+                guard materialSelectionRevisions[id] == revision,
+                      TokenStore.shared.sessionIdentifier == sessionID else { return }
+                materialSelectionState[id] = confirmedMaterialSelections[id] ?? material.isSelected
+                errorMessage = "Couldn't save the material selection. \(error.localizedDescription)"
+            }
+        }
+        materialSelectionTasks[id] = task
+    }
+
+    private func finishMaterialSelections() async {
+        while !materialSelectionTasks.isEmpty {
+            let tasks = Array(materialSelectionTasks.values)
+            for task in tasks { await task.value }
         }
     }
 

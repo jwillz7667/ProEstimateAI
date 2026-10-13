@@ -60,7 +60,24 @@ struct InvoiceListView: View {
                 subtitle: "Create an invoice from an approved estimate inside a project to start billing clients."
             )
         } else {
-            invoiceList
+            VStack(spacing: SpacingTokens.sm) {
+                if let error = viewModel.errorMessage {
+                    HStack {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .font(TypographyTokens.caption)
+                        Spacer()
+                        Button("Retry") { Task { await viewModel.loadInvoices() } }
+                            .disabled(viewModel.isLoading)
+                    }
+                    .foregroundStyle(ColorTokens.error)
+                    .padding(.horizontal, SpacingTokens.md)
+                }
+                if viewModel.filteredInvoices.isEmpty {
+                    EmptyStateView(icon: "magnifyingglass", title: "No Matching Invoices", subtitle: "Try another invoice number or payment status.")
+                } else {
+                    invoiceList
+                }
+            }
         }
     }
 

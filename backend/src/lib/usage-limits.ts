@@ -1,5 +1,5 @@
 import { prisma } from "../config/database";
-import type { UsageMetricCode } from "@prisma/client";
+import type { UsageMetricCode, Prisma } from "@prisma/client";
 
 /**
  * Rolling-window usage gating. We count UsageEvent rows for a metric over the
@@ -98,13 +98,14 @@ export async function checkUsageLimit(
   userId: string,
   metric: UsageMetric,
   limits: UsageLimits,
+  database: Prisma.TransactionClient = prisma,
 ): Promise<LimitCheckResult> {
   const now = new Date();
   const dayStart = new Date(now.getTime() - DAY_MS);
   const weekStart = new Date(now.getTime() - WEEK_MS);
   const monthStart = new Date(now.getTime() - MONTH_MS);
 
-  const events = await prisma.usageEvent.findMany({
+  const events = await database.usageEvent.findMany({
     where: {
       userId,
       metricCode: metric,

@@ -121,6 +121,14 @@ ensure
 end
 
 tests = {}
+tests["App Store access failure stops before signing or upload"] = lambda do
+  harness = BetaHarness.new
+  harness.fail_at = :latest_build
+  expect_failure("mock latest_build failure") { harness.run }
+  assert(!harness.calls.assoc(:increment), "must not guess a build number after App Store access fails")
+  assert(!harness.calls.assoc(:create_keychain), "must not start signing after App Store access fails")
+  assert(!harness.calls.assoc(:upload), "must not upload after App Store access fails")
+end
 tests["existing certificate and read-only profile upload internally"] = lambda do
   harness = BetaHarness.new
   harness.run

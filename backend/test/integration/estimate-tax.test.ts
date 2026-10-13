@@ -12,6 +12,7 @@ vi.mock("../../src/lib/estimate-gen", () => ({
 }));
 vi.mock("../../src/modules/commerce/entitlement-gate", () => ({
   gateAIAction: vi.fn().mockResolvedValue(undefined),
+  runReservedAction: (_reservation: unknown, action: () => Promise<unknown>) => action(),
 }));
 vi.mock("../../src/lib/usage-limits", () => ({
   recordUsage: vi.fn().mockResolvedValue(undefined),

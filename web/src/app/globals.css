@@ -159,3 +159,16 @@ body {
 /* Hide scrollbar but allow scrolling */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@media print {
+  @page { margin: 16mm; }
+  .proposal-print-control,
+  .proposal-response-controls { display: none !important; }
+  .proposal-page { background: white !important; }
+  .proposal-page > div:last-child { max-width: none; padding: 0; }
+  .proposal-page h1,
+  .proposal-page h2 { break-after: avoid; }
+  .proposal-page li,
+  .proposal-page img,
+  .proposal-page footer { break-inside: avoid; }
+}

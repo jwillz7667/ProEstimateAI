@@ -1,233 +1,253 @@
-import { prisma } from '../../config/database';
-import { NotFoundError } from '../../lib/errors';
-import { LineItemCategory } from '@prisma/client';
-import { CreateEstimateLineItemInput, UpdateEstimateLineItemInput } from './estimate-line-items.validators';
+import { Prisma, LineItemCategory } from "@prisma/client";
+import { prisma } from "../../config/database";
+import { NotFoundError, ValidationError } from "../../lib/errors";
+import {
+  CreateEstimateLineItemInput,
+  UpdateEstimateLineItemInput,
+} from "./estimate-line-items.validators";
 
-/**
- * Recalculates the aggregate totals on an Estimate by summing its line items.
- * Called after every line item create / update / delete.
- */
-async function recalculateEstimateTotals(estimateId: string) {
-  const lineItems = await prisma.estimateLineItem.findMany({ where: { estimateId } });
-  const estimate = await prisma.estimate.findUnique({ where: { id: estimateId } });
+type LineItemInput = CreateEstimateLineItemInput | UpdateEstimateLineItemInput;
 
-  let subtotalMaterials = 0;
-  let subtotalLabor = 0;
-  let subtotalOther = 0;
-  let taxAmount = 0;
+/** Serialize edits on the parent to keep its totals and hierarchy consistent. */
+async function lockEstimate(
+  tx: Prisma.TransactionClient,
+  estimateId: string,
+  companyId: string,
+) {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM "Estimate" WHERE id = ${estimateId} AND "companyId" = ${companyId} FOR UPDATE
+  `;
+  if (rows.length === 0) throw new NotFoundError("Estimate", estimateId);
+  return tx.estimate.findUniqueOrThrow({ where: { id: estimateId } });
+}
 
+export async function recalculateEstimateTotals(
+  estimateId: string,
+  tx: Prisma.TransactionClient = prisma,
+) {
+  const [lineItems, estimate] = await Promise.all([
+    tx.estimateLineItem.findMany({ where: { estimateId } }),
+    tx.estimate.findUniqueOrThrow({ where: { id: estimateId } }),
+  ]);
+  let subtotalMaterials = new Prisma.Decimal(0);
+  let subtotalLabor = new Prisma.Decimal(0);
+  let subtotalOther = new Prisma.Decimal(0);
+  let taxAmount = new Prisma.Decimal(0);
   for (const item of lineItems) {
-    const lt = Number(item.lineTotal);
-    const tax = lt * Number(item.taxRate);
-    taxAmount += tax;
-
-    if (item.category === 'MATERIALS') {
-      subtotalMaterials += lt;
-    } else if (item.category === 'LABOR') {
-      subtotalLabor += lt;
-    } else {
-      subtotalOther += lt;
-    }
+    taxAmount = taxAmount.plus(item.lineTotal.times(item.taxRate));
+    if (item.category === "MATERIALS")
+      subtotalMaterials = subtotalMaterials.plus(item.lineTotal);
+    else if (item.category === "LABOR")
+      subtotalLabor = subtotalLabor.plus(item.lineTotal);
+    else subtotalOther = subtotalOther.plus(item.lineTotal);
   }
-
-  const discountAmount = Number(estimate?.discountAmount ?? 0);
-  const totalAmount = subtotalMaterials + subtotalLabor + subtotalOther + taxAmount - discountAmount;
-
-  await prisma.estimate.update({
+  taxAmount = taxAmount.toDecimalPlaces(2);
+  const totalAmount = Prisma.Decimal.max(
+    0,
+    subtotalMaterials
+      .plus(subtotalLabor)
+      .plus(subtotalOther)
+      .plus(taxAmount)
+      .minus(estimate.discountAmount),
+  );
+  return tx.estimate.update({
     where: { id: estimateId },
-    data: { subtotalMaterials, subtotalLabor, subtotalOther, taxAmount, totalAmount },
+    data: {
+      subtotalMaterials,
+      subtotalLabor,
+      subtotalOther,
+      taxAmount,
+      totalAmount,
+    },
   });
 }
 
-/**
- * Verify that an estimate exists and belongs to the given company.
- */
-async function verifyEstimateOwnership(estimateId: string, companyId: string) {
-  const estimate = await prisma.estimate.findFirst({
-    where: { id: estimateId, companyId },
+async function verifyLineItemOwnership(
+  lineItemId: string,
+  companyId: string,
+  tx: Prisma.TransactionClient = prisma,
+) {
+  const lineItem = await tx.estimateLineItem.findFirst({
+    where: { id: lineItemId, estimate: { companyId } },
   });
-
-  if (!estimate) {
-    throw new NotFoundError('Estimate', estimateId);
-  }
-
-  return estimate;
-}
-
-/**
- * Verify a line item exists and that its parent estimate belongs to the given company.
- */
-async function verifyLineItemOwnership(lineItemId: string, companyId: string) {
-  const lineItem = await prisma.estimateLineItem.findUnique({
-    where: { id: lineItemId },
-    include: { estimate: { select: { id: true, companyId: true } } },
-  });
-
-  if (!lineItem || lineItem.estimate.companyId !== companyId) {
-    throw new NotFoundError('EstimateLineItem', lineItemId);
-  }
-
+  if (!lineItem) throw new NotFoundError("EstimateLineItem", lineItemId);
   return lineItem;
+}
+
+async function verifyReferences(
+  tx: Prisma.TransactionClient,
+  estimateId: string,
+  projectId: string,
+  data: LineItemInput,
+  lineItemId?: string,
+) {
+  if (data.source_material_suggestion_id) {
+    const source = await tx.materialSuggestion.findFirst({
+      where: { id: data.source_material_suggestion_id, projectId },
+      select: { id: true },
+    });
+    if (!source)
+      throw new NotFoundError(
+        "MaterialSuggestion",
+        data.source_material_suggestion_id,
+      );
+  }
+  let parentId = data.parent_line_item_id;
+  const visited = new Set<string>();
+  // Traverse the existing ancestry to reject self-links and cycles, including
+  // linking a parent to one of its own descendants.
+  while (parentId) {
+    if (parentId === lineItemId || visited.has(parentId))
+      throw new ValidationError("Line item hierarchy cannot contain a cycle");
+    visited.add(parentId);
+    const parent = await tx.estimateLineItem.findFirst({
+      where: { id: parentId, estimateId },
+      select: { parentLineItemId: true },
+    });
+    if (!parent) throw new NotFoundError("EstimateLineItem", parentId);
+    parentId = parent.parentLineItemId;
+  }
+}
+
+function lineMoney(quantity: number, unitCost: number, markupPercent: number) {
+  const storedQuantity = new Prisma.Decimal(quantity).toDecimalPlaces(2);
+  const storedUnitCost = new Prisma.Decimal(unitCost).toDecimalPlaces(2);
+  const storedMarkup = new Prisma.Decimal(markupPercent).toDecimalPlaces(2);
+  const lineTotal = storedQuantity
+    .times(storedUnitCost)
+    .times(storedMarkup.div(100).plus(1))
+    .toDecimalPlaces(2);
+  if (storedQuantity.lte(0) || lineTotal.gt("9999999999.99"))
+    throw new ValidationError(
+      "Line item quantity or total is outside the supported range",
+    );
+  return {
+    quantity: storedQuantity,
+    unitCost: storedUnitCost,
+    markupPercent: storedMarkup,
+    lineTotal,
+  };
+}
+
+function createData(
+  estimateId: string,
+  data: CreateEstimateLineItemInput,
+): Prisma.EstimateLineItemUncheckedCreateInput {
+  return {
+    estimateId,
+    category: data.category.toUpperCase() as LineItemCategory,
+    name: data.name,
+    description: data.description ?? null,
+    unit: data.unit,
+    taxRate: data.tax_rate ?? 0,
+    sortOrder: data.sort_order ?? 0,
+    parentLineItemId: data.parent_line_item_id ?? null,
+    sourceMaterialSuggestionId: data.source_material_suggestion_id ?? null,
+    itemType: data.item_type ?? null,
+    ...lineMoney(data.quantity, data.unit_cost, data.markup_percent ?? 0),
+  };
 }
 
 export async function listByEstimate(estimateId: string, companyId: string) {
-  // Verify the estimate belongs to this company
-  await verifyEstimateOwnership(estimateId, companyId);
-
-  const lineItems = await prisma.estimateLineItem.findMany({
+  const estimate = await prisma.estimate.findFirst({
+    where: { id: estimateId, companyId },
+    select: { id: true },
+  });
+  if (!estimate) throw new NotFoundError("Estimate", estimateId);
+  return prisma.estimateLineItem.findMany({
     where: { estimateId },
-    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
   });
-
-  return lineItems;
 }
 
-export async function create(estimateId: string, companyId: string, data: CreateEstimateLineItemInput) {
-  // Verify the estimate belongs to this company
-  await verifyEstimateOwnership(estimateId, companyId);
-
-  // Calculate line total: quantity * unitCost * (1 + markupPercent / 100)
-  const markupPercent = data.markup_percent ?? 0;
-  const lineTotal = data.quantity * data.unit_cost * (1 + markupPercent / 100);
-
-  const lineItem = await prisma.estimateLineItem.create({
-    data: {
-      estimateId,
-      category: data.category.toUpperCase() as LineItemCategory,
-      name: data.name,
-      description: data.description ?? null,
-      quantity: data.quantity,
-      unit: data.unit,
-      unitCost: data.unit_cost,
-      markupPercent,
-      taxRate: data.tax_rate ?? 0,
-      lineTotal,
-      sortOrder: data.sort_order ?? 0,
-      parentLineItemId: data.parent_line_item_id ?? null,
-      sourceMaterialSuggestionId: data.source_material_suggestion_id ?? null,
-      itemType: data.item_type ?? null,
-    },
-  });
-
-  // Recalculate estimate totals after adding a line item
-  await recalculateEstimateTotals(estimateId);
-
-  return lineItem;
+export async function create(
+  estimateId: string,
+  companyId: string,
+  data: CreateEstimateLineItemInput,
+) {
+  const items = await createBatch(estimateId, companyId, [data]);
+  return items[0];
 }
 
-export async function update(lineItemId: string, companyId: string, data: UpdateEstimateLineItemInput) {
-  const existing = await verifyLineItemOwnership(lineItemId, companyId);
-
-  const updateData: any = {};
-
-  if (data.category !== undefined) {
-    updateData.category = data.category.toUpperCase() as LineItemCategory;
-  }
-  if (data.name !== undefined) {
-    updateData.name = data.name;
-  }
-  if (data.description !== undefined) {
-    updateData.description = data.description;
-  }
-  if (data.quantity !== undefined) {
-    updateData.quantity = data.quantity;
-  }
-  if (data.unit !== undefined) {
-    updateData.unit = data.unit;
-  }
-  if (data.unit_cost !== undefined) {
-    updateData.unitCost = data.unit_cost;
-  }
-  if (data.markup_percent !== undefined) {
-    updateData.markupPercent = data.markup_percent;
-  }
-  if (data.tax_rate !== undefined) {
-    updateData.taxRate = data.tax_rate;
-  }
-  if (data.sort_order !== undefined) {
-    updateData.sortOrder = data.sort_order;
-  }
-  if (data.parent_line_item_id !== undefined) {
-    updateData.parentLineItemId = data.parent_line_item_id;
-  }
-  if (data.source_material_suggestion_id !== undefined) {
-    updateData.sourceMaterialSuggestionId = data.source_material_suggestion_id;
-  }
-  if (data.item_type !== undefined) {
-    updateData.itemType = data.item_type;
-  }
-
-  // Recalculate line total using merged values
-  const quantity = data.quantity ?? Number(existing.quantity);
-  const unitCost = data.unit_cost ?? Number(existing.unitCost);
-  const markupPercent = data.markup_percent ?? Number(existing.markupPercent);
-  updateData.lineTotal = quantity * unitCost * (1 + markupPercent / 100);
-
-  const lineItem = await prisma.estimateLineItem.update({
-    where: { id: lineItemId },
-    data: updateData,
-  });
-
-  // Recalculate estimate totals
-  await recalculateEstimateTotals(existing.estimateId);
-
-  return lineItem;
-}
-
-export async function remove(lineItemId: string, companyId: string) {
-  const existing = await verifyLineItemOwnership(lineItemId, companyId);
-
-  await prisma.estimateLineItem.delete({ where: { id: lineItemId } });
-
-  // Recalculate estimate totals after removal
-  await recalculateEstimateTotals(existing.estimateId);
-}
-
-/**
- * Batch-create multiple line items for an estimate in a single Prisma transaction.
- * Recalculates estimate totals once at the end (not per item).
- */
 export async function createBatch(
   estimateId: string,
   companyId: string,
-  items: ReadonlyArray<CreateEstimateLineItemInput>
+  items: ReadonlyArray<CreateEstimateLineItemInput>,
 ) {
-  await verifyEstimateOwnership(estimateId, companyId);
-
-  const createdItems = await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
+    const estimate = await lockEstimate(tx, estimateId, companyId);
     const results = [];
-
     for (const data of items) {
-      const markupPercent = data.markup_percent ?? 0;
-      const lineTotal = data.quantity * data.unit_cost * (1 + markupPercent / 100);
-
-      const lineItem = await tx.estimateLineItem.create({
-        data: {
-          estimateId,
-          category: data.category.toUpperCase() as LineItemCategory,
-          name: data.name,
-          description: data.description ?? null,
-          quantity: data.quantity,
-          unit: data.unit,
-          unitCost: data.unit_cost,
-          markupPercent,
-          taxRate: data.tax_rate ?? 0,
-          lineTotal,
-          sortOrder: data.sort_order ?? 0,
-          parentLineItemId: data.parent_line_item_id ?? null,
-          sourceMaterialSuggestionId: data.source_material_suggestion_id ?? null,
-          itemType: data.item_type ?? null,
-        },
-      });
-
-      results.push(lineItem);
+      await verifyReferences(tx, estimateId, estimate.projectId, data);
+      results.push(
+        await tx.estimateLineItem.create({
+          data: createData(estimateId, data),
+        }),
+      );
     }
-
+    await recalculateEstimateTotals(estimateId, tx);
     return results;
   });
+}
 
-  // Recalculate estimate totals once after all items are created
-  await recalculateEstimateTotals(estimateId);
+export async function update(
+  lineItemId: string,
+  companyId: string,
+  data: UpdateEstimateLineItemInput,
+) {
+  const parent = await verifyLineItemOwnership(lineItemId, companyId);
+  return prisma.$transaction(async (tx) => {
+    const estimate = await lockEstimate(tx, parent.estimateId, companyId);
+    const existing = await verifyLineItemOwnership(lineItemId, companyId, tx);
+    await verifyReferences(
+      tx,
+      estimate.id,
+      estimate.projectId,
+      data,
+      lineItemId,
+    );
+    const updateData: Prisma.EstimateLineItemUncheckedUpdateInput = {};
+    if (data.category !== undefined)
+      updateData.category = data.category.toUpperCase() as LineItemCategory;
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined)
+      updateData.description = data.description;
+    if (data.unit !== undefined) updateData.unit = data.unit;
+    if (data.tax_rate !== undefined) updateData.taxRate = data.tax_rate;
+    if (data.sort_order !== undefined) updateData.sortOrder = data.sort_order;
+    if (data.parent_line_item_id !== undefined)
+      updateData.parentLineItemId = data.parent_line_item_id;
+    if (data.source_material_suggestion_id !== undefined)
+      updateData.sourceMaterialSuggestionId =
+        data.source_material_suggestion_id;
+    if (data.item_type !== undefined) updateData.itemType = data.item_type;
+    Object.assign(
+      updateData,
+      lineMoney(
+        data.quantity ?? Number(existing.quantity),
+        data.unit_cost ?? Number(existing.unitCost),
+        data.markup_percent ?? Number(existing.markupPercent),
+      ),
+    );
+    const lineItem = await tx.estimateLineItem.update({
+      where: { id: lineItemId },
+      data: updateData,
+    });
+    await recalculateEstimateTotals(existing.estimateId, tx);
+    return lineItem;
+  });
+}
 
-  return createdItems;
+export async function remove(lineItemId: string, companyId: string) {
+  const parent = await verifyLineItemOwnership(lineItemId, companyId);
+  await prisma.$transaction(async (tx) => {
+    await lockEstimate(tx, parent.estimateId, companyId);
+    const existing = await verifyLineItemOwnership(lineItemId, companyId, tx);
+    await tx.estimateLineItem.updateMany({
+      where: { parentLineItemId: lineItemId },
+      data: { parentLineItemId: null },
+    });
+    await tx.estimateLineItem.delete({ where: { id: lineItemId } });
+    await recalculateEstimateTotals(existing.estimateId, tx);
+  });
 }

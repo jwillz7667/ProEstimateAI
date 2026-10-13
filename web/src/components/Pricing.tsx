@@ -9,12 +9,12 @@ import { APP_STORE_URL, PRICING } from "@/lib/constants";
 
 const FREE_FEATURES = [
   "5 AI preview generations (lifetime)",
-  "Manual estimating & invoicing tools",
+  "Manual estimating tools",
   "Project, client & photo library",
-  "Watermarked PDFs",
 ] as const;
 
 const PRO_FEATURES = [
+  "2 new projects / month",
   "20 AI previews / month",
   "20 AI-generated estimates / month",
   "50 quote exports / month",
@@ -23,15 +23,6 @@ const PRO_FEATURES = [
   "Material supplier links in exports",
   "Invoices & proposals",
   "Watermark removed, hi-res preview",
-] as const;
-
-const PREMIUM_FEATURES = [
-  "Everything in Pro",
-  "Unlimited projects, previews & estimates",
-  "Priority generation queue",
-  "Up to 200 AI previews per day",
-  "Up to 500 projects per month",
-  "Priority support",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -52,20 +43,6 @@ function CheckIcon({ className }: { className?: string }) {
         d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
         clipRule="evenodd"
       />
-    </svg>
-  );
-}
-
-function CrownIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      className={className ?? "h-3.5 w-3.5"}
-    >
-      <path d="M12 2.5 9 8 4 5l1.5 11h13L20 5l-5 3-3-5.5Z" />
     </svg>
   );
 }
@@ -101,16 +78,16 @@ export default function Pricing() {
             Simple pricing
           </p>
           <h2 className="mt-3 text-4xl font-bold tracking-tight text-balance text-ink-950 sm:text-5xl">
-            Pick the plan that fits your week.
+            Start free. Upgrade when you need more.
           </h2>
           <p className="mt-5 text-lg leading-8 text-pretty text-ink-500">
-            Start free to try the workflow. Pro covers a busy solo contractor.
-            Premium removes the caps when you&apos;re running multiple crews.
+            Try five AI previews free. Pro adds branded documents, AI estimates,
+            and shareable proposals with clear usage limits.
           </p>
         </div>
 
         {/* Cards */}
-        <div className="mx-auto mt-16 grid max-w-7xl grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-6">
+        <div className="mx-auto mt-16 grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-2">
           {/* ---- Free ---- */}
           <motion.div
             custom={0}
@@ -204,8 +181,7 @@ export default function Pricing() {
               </span>
             </div>
             <p className="mt-2 text-sm text-ink-400">
-              or {PRICING.proAnnual.price}/yr · save{" "}
-              {PRICING.proAnnual.savingsPct}%
+              Annual billing also available. See your App Store price.
             </p>
 
             <ul className="mt-8 flex flex-col gap-y-3.5 text-sm leading-6 text-ink-700">
@@ -229,76 +205,6 @@ export default function Pricing() {
             </div>
           </motion.div>
 
-          {/* ---- Premium ---- */}
-          <motion.div
-            custom={2}
-            variants={cardVariants}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-            whileHover={{
-              y: -6,
-              boxShadow:
-                "0 20px 60px -12px rgba(217, 119, 6, 0.30), 0 8px 24px -8px rgba(217, 119, 6, 0.18)",
-            }}
-            transition={{ type: "spring", stiffness: 260, damping: 20 }}
-            className="relative flex flex-col rounded-2xl p-7 sm:p-8"
-            style={{
-              background:
-                "linear-gradient(rgba(20,16,10,0.92), rgba(20,16,10,0.92)) padding-box, linear-gradient(135deg, #D97706, #F59E0B, #FBBF24) border-box",
-              border: "2px solid transparent",
-              backdropFilter: "blur(20px) saturate(180%)",
-              WebkitBackdropFilter: "blur(20px) saturate(180%)",
-              boxShadow:
-                "0 0 40px rgba(217, 119, 6, 0.18), 0 0 80px rgba(217, 119, 6, 0.10)",
-            }}
-          >
-            {/* Badge */}
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-600 to-amber-400 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-amber-500/30">
-                <CrownIcon className="h-3.5 w-3.5" />
-                Best value
-              </span>
-            </div>
-
-            <h3 className="text-2xl font-semibold text-white">Premium</h3>
-            <p className="mt-1 text-sm text-pretty text-white/60">
-              For multi-crew shops running heavy AI.
-            </p>
-
-            <div className="mt-6 flex items-baseline gap-x-1">
-              <span className="text-5xl font-bold tracking-tight text-white">
-                {PRICING.premiumMonthly.price}
-              </span>
-              <span className="text-base font-medium text-white/60">
-                {PRICING.premiumMonthly.cadence}
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-white/60">
-              or {PRICING.premiumAnnual.price}/yr · save{" "}
-              {PRICING.premiumAnnual.savingsPct}%
-            </p>
-
-            <ul className="mt-8 flex flex-col gap-y-3.5 text-sm leading-6 text-white/85">
-              {PREMIUM_FEATURES.map((feature) => (
-                <li key={feature} className="flex items-start gap-x-3">
-                  <CheckIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-400" />
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-auto pt-10">
-              <a
-                href={APP_STORE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 px-6 py-3.5 text-center text-sm font-semibold text-ink-950 shadow-lg shadow-amber-500/30 transition-all duration-200 hover:from-amber-400 hover:to-amber-300 hover:shadow-amber-400/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
-              >
-                Go Premium
-              </a>
-            </div>
-          </motion.div>
         </div>
 
         <p
@@ -306,7 +212,8 @@ export default function Pricing() {
           style={{ maxWidth: "28rem" }}
         >
           Subscriptions auto-renew until canceled. Manage from your Apple ID
-          settings. 7-day free trial offered to new Pro subscribers only.
+          settings. 7-day free trial offered to eligible new Pro subscribers.
+          Daily and weekly usage limits also apply. App Store pricing is final.
         </p>
       </div>
     </section>

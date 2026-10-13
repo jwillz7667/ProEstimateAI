@@ -25,6 +25,11 @@ struct ProjectDetailsStep: View {
                 squareFootageSection
                 lotSizeSection
                 budgetSection
+                if let message = viewModel.detailsValidationMessage {
+                    Label(message, systemImage: "exclamationmark.circle")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(ColorTokens.error)
+                }
             }
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.sm)

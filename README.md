@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-iOS%2026.4%2B-000000?style=flat-square&logo=apple&logoColor=white)](https://proestimateai.com)
 [![Swift](https://img.shields.io/badge/Swift-6.x-F05138?style=flat-square&logo=swift&logoColor=white)](https://swift.org)
-[![Node](https://img.shields.io/badge/Node.js-20%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/Node.js-24%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![License](https://img.shields.io/badge/License-Proprietary-FF9230?style=flat-square)](./LICENSE)
 
@@ -172,7 +172,7 @@ Key architectural decisions:
   <tr>
     <td><b>Backend</b></td>
     <td>
-      Node.js 20+ &middot; TypeScript (strict) &middot; Express &middot; Zod &middot; Prisma &middot; PostgreSQL &middot; ioredis &middot; pino &middot; jose / jsonwebtoken &middot; bcryptjs &middot; Resend
+      Node.js 24+ &middot; TypeScript (strict) &middot; Express &middot; Zod &middot; Prisma &middot; PostgreSQL &middot; ioredis &middot; pino &middot; jose / jsonwebtoken &middot; bcryptjs &middot; Resend
     </td>
   </tr>
   <tr>
@@ -232,7 +232,7 @@ Key architectural decisions:
 ### Prerequisites
 
 - macOS with Xcode 26.4+ for iOS work
-- Node.js 20+ — `nvm use` picks the pinned version from `.nvmrc`
+- Node.js 24+ — `nvm use` picks the pinned version from `.nvmrc`
 - PostgreSQL 15+ (local install or Docker)
 - Optional: Railway CLI for deployment, GitHub CLI for PR workflows
 

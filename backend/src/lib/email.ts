@@ -1,6 +1,6 @@
-import { Resend } from 'resend';
-import { env } from '../config/env';
-import { logger } from '../config/logger';
+import { Resend } from "resend";
+import { env } from "../config/env";
+import { logger } from "../config/logger";
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
@@ -8,11 +8,25 @@ interface SendEmailParams {
   to: string;
   subject: string;
   html: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  }>;
 }
 
-export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<void> {
+export async function sendEmail({
+  to,
+  subject,
+  html,
+  attachments,
+}: SendEmailParams): Promise<void> {
   if (!resend) {
-    logger.warn('RESEND_API_KEY not set — skipping email to %s (subject: %s)', to, subject);
+    logger.warn(
+      "RESEND_API_KEY not set — skipping email to %s (subject: %s)",
+      to,
+      subject,
+    );
     return;
   }
 
@@ -21,17 +35,21 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
     to,
     subject,
     html,
+    ...(attachments ? { attachments } : {}),
   });
 
   if (error) {
-    logger.error({ err: error, to, subject }, 'Failed to send email');
+    logger.error({ err: error, to, subject }, "Failed to send email");
     throw new Error(`Email send failed: ${error.message}`);
   }
 
-  logger.info({ to, subject }, 'Email sent');
+  logger.info({ to, subject }, "Email sent");
 }
 
-export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<void> {
+export async function sendPasswordResetEmail(
+  email: string,
+  resetUrl: string,
+): Promise<void> {
   const html = `
 <!DOCTYPE html>
 <html>
@@ -54,7 +72,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
 
   await sendEmail({
     to: email,
-    subject: 'Reset your ProEstimate AI password',
+    subject: "Reset your ProEstimate AI password",
     html,
   });
 }
@@ -67,7 +85,7 @@ export async function sendProposalEmail(
 ): Promise<void> {
   const messageBlock = clientMessage
     ? `<p style="line-height: 1.6; color: #444; background: #f9f9f9; padding: 16px; border-radius: 8px; margin: 16px 0;">${escapeHtml(clientMessage)}</p>`
-    : '';
+    : "";
 
   const html = `
 <!DOCTYPE html>
@@ -102,6 +120,7 @@ export async function sendInvoiceEmail(
   invoiceUrl: string,
   companyName: string,
   amount: string,
+  invoicePdf?: { filename: string; content: Buffer },
 ): Promise<void> {
   const html = `
 <!DOCTYPE html>
@@ -112,12 +131,14 @@ export async function sendInvoiceEmail(
   <p style="line-height: 1.6; color: #444;">
     You have received an invoice for <strong>${escapeHtml(amount)}</strong>.
   </p>
-  <a href="${invoiceUrl}" style="display: inline-block; margin: 24px 0; padding: 12px 28px; background: #F97316; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">
-    View Invoice
-  </a>
-  <p style="line-height: 1.6; color: #444;">
-    Click the button above to view the full invoice details and payment information.
-  </p>
+  ${
+    invoiceUrl
+      ? `
+  <a href="${escapeHtml(invoiceUrl)}" style="display: inline-block; margin: 24px 0; padding: 12px 28px; background: #F97316; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">View Invoice</a>
+  <p style="line-height: 1.6; color: #444;">Open the invoice for the full details and payment information.</p>
+  `
+      : `<p style="line-height: 1.6; color: #444;">${invoicePdf ? "Your invoice PDF is attached with the full details and payment information." : "Contact your contractor for invoice details and payment information."}</p>`
+  }
   <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 32px 0;" />
   <p style="font-size: 13px; color: #999;">Sent via ProEstimate AI on behalf of ${escapeHtml(companyName)}</p>
 </body>
@@ -127,14 +148,17 @@ export async function sendInvoiceEmail(
     to: clientEmail,
     subject: `Invoice for ${amount} from ${companyName}`,
     html,
+    ...(invoicePdf
+      ? { attachments: [{ ...invoicePdf, contentType: "application/pdf" }] }
+      : {}),
   });
 }
 
 function escapeHtml(unsafe: string): string {
   return unsafe
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

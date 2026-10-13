@@ -213,7 +213,7 @@ const mobileAppLd = {
       price: "0",
       priceCurrency: "USD",
       description:
-        "Five lifetime AI preview generations and three estimate exports. No credit card required.",
+        "Five lifetime AI preview generations and manual estimating tools. No credit card required.",
     },
     {
       "@type": "Offer",
@@ -227,34 +227,13 @@ const mobileAppLd = {
         billingDuration: "P1M",
       },
       description:
-        "20 AI previews and 50 quote exports per month, branded PDFs, invoices, and client approval links.",
+        "2 new projects, 20 AI previews, 20 AI estimates and 50 quote exports per month, branded PDFs, invoices, and client approval links. Daily and weekly limits apply.",
     },
     {
       "@type": "Offer",
       name: "Pro Annual",
-      price: "149.99",
-      priceCurrency: "USD",
-      priceSpecification: {
-        "@type": "UnitPriceSpecification",
-        price: "149.99",
-        priceCurrency: "USD",
-        billingDuration: "P1Y",
-      },
-      description: "Pro plan billed annually — saves 37% vs monthly.",
-    },
-    {
-      "@type": "Offer",
-      name: "Premium Monthly",
-      price: "49.99",
-      priceCurrency: "USD",
-      priceSpecification: {
-        "@type": "UnitPriceSpecification",
-        price: "49.99",
-        priceCurrency: "USD",
-        billingDuration: "P1M",
-      },
-      description:
-        "Unlimited projects, priority generation queue, and up to 200 AI previews per day.",
+      url: APP_STORE_URL,
+      description: "Pro plan billed annually. Current localized pricing is shown in the App Store before purchase.",
     },
   ],
   featureList: [

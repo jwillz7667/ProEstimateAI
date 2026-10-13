@@ -7,9 +7,9 @@
  * `API_BASE_URL` (server) or `NEXT_PUBLIC_API_BASE_URL` (client) to override.
  */
 export const API_BASE_URL: string =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  process.env.API_BASE_URL ??
-  "https://proestimate-api-production-75e5.up.railway.app/v1";
+  (process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.API_BASE_URL ||
+    "https://proestimate-api-production-75e5.up.railway.app/v1").replace(/\/+$/, "");
 
 export interface APIEnvelope<T> {
   ok: boolean;
@@ -34,21 +34,24 @@ export async function fetchAPI<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
-  const url = path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
+  const url = /^https?:\/\//.test(path) ? path : `${API_BASE_URL}${path}`;
+  // RequestInit accepts both objects and Headers instances. Spreading Headers
+  // silently drops their entries, including authorization and custom headers.
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
+  if (init?.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
   const response = await fetch(url, {
     cache: "no-store",
     ...init,
-    headers: {
-      Accept: "application/json",
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
 
-  let body: APIEnvelope<T>;
+  let rawBody: unknown;
   try {
-    body = (await response.json()) as APIEnvelope<T>;
+    rawBody = await response.json();
   } catch {
     throw new APIError(
       `Invalid JSON response (HTTP ${response.status})`,
@@ -57,9 +60,17 @@ export async function fetchAPI<T>(
     );
   }
 
+  if (!rawBody || typeof rawBody !== "object" || !("ok" in rawBody) ||
+      typeof rawBody.ok !== "boolean") {
+    throw new APIError("Unable to read the server response. Please try again.", "INVALID_RESPONSE", response.status);
+  }
+  const body = rawBody as APIEnvelope<T>;
+
   if (!response.ok || !body.ok || body.data === undefined) {
-    const code = body.error?.code ?? "API_ERROR";
-    const message = body.error?.message ?? response.statusText;
+    const code = typeof body.error?.code === "string" ? body.error.code : "API_ERROR";
+    const message = typeof body.error?.message === "string" && body.error.message
+      ? body.error.message
+      : response.statusText || "The server could not complete your request. Please try again.";
     throw new APIError(message, code, response.status);
   }
 

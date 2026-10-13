@@ -597,6 +597,10 @@ struct ProjectDetailView: View {
         switch result {
         case .allowed:
             guard convertingEstimateId == nil else { return }
+            guard viewModel.project?.clientId != nil else {
+                showEditSheet = true
+                return
+            }
             convertingEstimateId = estimateId
             Task {
                 let service = LiveInvoiceService()

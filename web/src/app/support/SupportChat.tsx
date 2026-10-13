@@ -28,6 +28,7 @@ export function SupportChat() {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sending = useRef(false);
 
   // Auto-scroll to the newest message. Uses a ref on the transcript container
   // rather than window.scrollTo so the rest of the page (FAQ, footer) stays
@@ -40,7 +41,9 @@ export function SupportChat() {
 
   const send = useCallback(async () => {
     const trimmed = input.trim();
-    if (!trimmed || isSending) return;
+    if (!trimmed || sending.current) return;
+    // Prevent same-event repeated submits before disabled controls render.
+    sending.current = true;
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -94,20 +97,25 @@ export function SupportChat() {
         );
       }
 
+      buffer += decoder.decode();
       if (!buffer.trim()) {
         throw new Error("No response from the assistant.");
       }
+      setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: buffer } : m));
     } catch (err) {
       const detail =
         err instanceof Error
           ? err.message
           : "Something went wrong reaching the assistant.";
       setError(detail);
-      setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+      setMessages((prev) => prev.filter((m) => m.id !== assistantId && m.id !== userMessage.id));
+      // Keep the question available for retry without duplicating failed turns.
+      setInput(trimmed);
     } finally {
+      sending.current = false;
       setIsSending(false);
     }
-  }, [input, isSending, messages]);
+  }, [input, messages]);
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -152,7 +160,7 @@ export function SupportChat() {
       </div>
 
       {error ? (
-        <div className="border-t border-red-100 bg-red-50 px-5 py-3 text-sm text-red-700">
+        <div role="alert" className="border-t border-red-100 bg-red-50 px-5 py-3 text-sm text-red-700">
           {error}{" "}
           <a
             className="underline font-medium"
@@ -177,12 +185,14 @@ export function SupportChat() {
           onKeyDown={(e) => {
             // Shift+Enter inserts a newline; plain Enter submits. Follows the
             // convention most chat UIs use.
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               void send();
             }
           }}
           rows={2}
+          maxLength={2000}
+          aria-label="Your question about ProEstimate AI"
           placeholder="e.g. How do I upload my company logo?"
           className="flex-1 resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
           disabled={isSending}

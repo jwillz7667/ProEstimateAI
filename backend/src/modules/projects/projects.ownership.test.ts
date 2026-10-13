@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("../../config/database", () => ({ prisma: mocks }));
 vi.mock("../../config/env", () => ({ env: {} }));
-vi.mock("../commerce/entitlement-gate", () => ({ gateAIAction: mocks.gate }));
+vi.mock("../commerce/entitlement-gate", () => ({ gateAIAction: mocks.gate, runReservedAction: (_reservation: unknown, action: () => Promise<unknown>) => action() }));
 vi.mock("../../lib/usage-limits", () => ({ recordUsage: vi.fn() }));
 import { create, update } from "./projects.service";
 beforeEach(() => { vi.resetAllMocks(); mocks.project.findFirst.mockResolvedValue({ id: "project" }); });

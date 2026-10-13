@@ -25,6 +25,9 @@ protocol InvoiceServiceProtocol: Sendable {
 struct UpdateInvoiceRequest: Encodable, Sendable {
     var status: Invoice.Status?
     var amountPaid: Decimal?
+    /// Compare with the locked server balance before replacing a cumulative
+    /// payment total; omit for older callers that only edit invoice terms.
+    var expectedAmountPaid: Decimal?
     var dueDate: Date?
     var notes: String?
     var paymentInstructions: String?
@@ -32,6 +35,7 @@ struct UpdateInvoiceRequest: Encodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case status
         case amountPaid = "amount_paid"
+        case expectedAmountPaid = "expected_amount_paid"
         case dueDate = "due_date"
         case notes
         case paymentInstructions = "payment_instructions"

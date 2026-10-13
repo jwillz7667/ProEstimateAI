@@ -56,6 +56,12 @@ final class ProjectCreationViewModel {
     /// User-facing error if one or more picker items failed to transfer
     /// from the Photos library. Cleared on a successful retry.
     var imageLoadError: String?
+    private var cameraImages: [Data] = []
+    private var loadedLibraryPhotos: [(item: PhotosPickerItem, data: Data)] = []
+    private var imageLoadRevision = 0
+
+    var maxLibraryPhotoCount: Int { max(1, 10 - cameraImages.count) }
+    var canAddCameraPhoto: Bool { selectedImageData.count < 10 && !isLoadingImages }
 
     /// User-tapped suggestion card — drives the AI prompt's stylistic
     /// baseline. `nil` means the user is going prompt-only.
@@ -146,19 +152,19 @@ final class ProjectCreationViewModel {
     }
 
     var squareFootage: Decimal? {
-        Decimal(string: squareFootageText)
+        DecimalFormInput.parse(squareFootageText)
     }
 
     var lotSize: Decimal? {
-        Decimal(string: lotSizeText)
+        DecimalFormInput.parse(lotSizeText)
     }
 
     var budgetMin: Decimal? {
-        Decimal(string: budgetMinText)
+        DecimalFormInput.parse(budgetMinText)
     }
 
     var budgetMax: Decimal? {
-        Decimal(string: budgetMaxText)
+        DecimalFormInput.parse(budgetMaxText)
     }
 
     // MARK: - Step 3: Generation Pipeline
@@ -237,6 +243,7 @@ final class ProjectCreationViewModel {
         case .type:
             return selectedProjectType != nil
         case .photos:
+            guard !isLoadingImages, customInstructionsCharacterCount <= maxCustomInstructionsLength else { return false }
             // Service trades (plumbing, HVAC, …) and recurring lawn care
             // don't need an uploaded photo — service trades aren't
             // redesigning anything, and lawn care generates from its prompt
@@ -254,11 +261,19 @@ final class ProjectCreationViewModel {
             // estimate per-area pricing.
             return hasValidLawnPolygon
         case .details:
-            // Name + advanced fields are all optional.
-            return true
+            return detailsValidationMessage == nil
         case .generating:
             return false
         }
+    }
+
+    var detailsValidationMessage: String? {
+        if customTitle.trimmingCharacters(in: .whitespacesAndNewlines).count > 255 {
+            return "Keep the project name under 256 characters."
+        }
+        if let error = DecimalFormInput.validationMessage(for: squareFootageText, field: "project area") { return error }
+        if let error = DecimalFormInput.validationMessage(for: lotSizeText, field: "lot size") { return error }
+        return DecimalFormInput.budgetValidationMessage(minimum: budgetMinText, maximum: budgetMaxText)
     }
 
     /// True when the user has supplied either a tapped suggestion card
@@ -401,16 +416,19 @@ final class ProjectCreationViewModel {
     // MARK: - Photos
 
     func loadImages() async {
+        imageLoadRevision += 1
+        let revision = imageLoadRevision
+        let items = selectedPhotosItems
         isLoadingImages = true
         imageLoadError = nil
 
-        var loadedData: [Data] = []
+        var loadedPhotos: [(item: PhotosPickerItem, data: Data)] = []
         var failedCount = 0
 
-        for item in selectedPhotosItems {
+        for item in items {
             do {
                 if let data = try await item.loadTransferable(type: Data.self) {
-                    loadedData.append(data)
+                    loadedPhotos.append((item: item, data: data))
                 } else {
                     failedCount += 1
                 }
@@ -419,12 +437,16 @@ final class ProjectCreationViewModel {
             }
         }
 
-        selectedImageData = loadedData
+        // A newer picker selection owns the result, even if this older iCloud
+        // transfer finishes afterwards. Camera photos remain part of the draft.
+        guard imageLoadRevision == revision, selectedPhotosItems == items else { return }
+        loadedLibraryPhotos = loadedPhotos
+        selectedImageData = cameraImages + loadedPhotos.map(\.data)
         isLoadingImages = false
 
         if failedCount > 0 {
             let plural = failedCount == 1 ? "photo" : "photos"
-            imageLoadError = "\(failedCount) \(plural) couldn't be loaded. Retry, or continue with the \(loadedData.count) that loaded."
+            imageLoadError = "\(failedCount) \(plural) couldn't be loaded. Retry, or continue with the \(selectedImageData.count) that loaded."
         }
     }
 
@@ -434,17 +456,25 @@ final class ProjectCreationViewModel {
     }
 
     func removeImage(at index: Int) {
-        guard index < selectedImageData.count else { return }
-        selectedImageData.remove(at: index)
-        if index < selectedPhotosItems.count {
-            selectedPhotosItems.remove(at: index)
+        guard selectedImageData.indices.contains(index), !isLoadingImages else { return }
+        if index < cameraImages.count {
+            cameraImages.remove(at: index)
+        } else {
+            let libraryIndex = index - cameraImages.count
+            guard loadedLibraryPhotos.indices.contains(libraryIndex) else { return }
+            let photo = loadedLibraryPhotos.remove(at: libraryIndex)
+            if let pickerIndex = selectedPhotosItems.firstIndex(of: photo.item) {
+                selectedPhotosItems.remove(at: pickerIndex)
+            }
         }
+        selectedImageData = cameraImages + loadedLibraryPhotos.map(\.data)
     }
 
     /// Adds an image captured from the camera to the selected images array.
     func addCameraImage(_ image: UIImage) {
-        guard let data = image.jpegData(compressionQuality: 0.8) else { return }
-        selectedImageData.append(data)
+        guard canAddCameraPhoto, let data = image.jpegData(compressionQuality: 0.8) else { return }
+        cameraImages.append(data)
+        selectedImageData = cameraImages + loadedLibraryPhotos.map(\.data)
     }
 
     // MARK: - Pipeline
@@ -460,6 +490,12 @@ final class ProjectCreationViewModel {
         }
         guard let projectType = selectedProjectType else {
             pipelineStage = .failed("Select a project category to continue.")
+            return
+        }
+
+        if let message = detailsValidationMessage {
+            pipelineError = message
+            pipelineStage = .failed(message)
             return
         }
 

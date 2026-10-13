@@ -6,6 +6,30 @@ Dates are in `YYYY-MM-DD` format.
 
 ---
 
+## [1.0.8] - 2026-10-13
+
+### Added
+- Assign or create a client from project editing, enabling estimate-to-invoice conversion.
+- Record partial invoice payments and show the remaining balance in the iOS app.
+- Print or save public proposals as PDF from the browser.
+- Read-only App Store release status inspection through the metadata workflow.
+
+### Fixed
+- Load all cursor pages of projects, clients, estimates and invoices rather than hiding records after page one.
+- Clear nullable project metadata correctly and validate budget and measurement input.
+- Surface project-list and material-selection failures; keep generation monitoring active when deletion fails.
+- Check invoice proposal references against the current company, project and estimate.
+- Preserve agreed invoice tax rates through payment and line-item updates, with an additive historical tax snapshot migration.
+- Serialize estimate/invoice line edits and proposal responses; invalidate public proposal data after changes.
+- Use client-facing proposal URLs in outbound proposal emails.
+- Show completed proposal statuses accurately after expiration; isolate private proposal responses from caches and search indexing.
+- Align website plan limits with the enforced backend catalog and remove retired Premium claims.
+- Handle malformed support requests and API responses, with targeted dependency security updates.
+
+### Changed
+- Run backend and CI on supported Node.js 24 LTS.
+- Reuse existing distribution credentials and read-only provisioning profiles for TestFlight; stop releases on App Store access failures and preserve reviews already in progress.
+
 ## [Unreleased]
 
 ### Fixed

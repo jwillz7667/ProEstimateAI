@@ -62,6 +62,7 @@ struct PhotosAndPromptStep: View {
                     ) {
                         isCameraPresented = true
                     }
+                    .disabled(!viewModel.canAddCameraPhoto)
                 }
 
                 photoLibraryButton
@@ -182,7 +183,7 @@ struct PhotosAndPromptStep: View {
     private var photoLibraryButton: some View {
         PhotosPicker(
             selection: $viewModel.selectedPhotosItems,
-            maxSelectionCount: 10,
+            maxSelectionCount: viewModel.maxLibraryPhotoCount,
             matching: .images,
             photoLibrary: .shared()
         ) {
@@ -262,6 +263,7 @@ struct PhotosAndPromptStep: View {
             }
             .offset(x: 6, y: -6)
             .accessibilityLabel("Remove photo \(index + 1)")
+            .disabled(viewModel.isLoadingImages)
         }
     }
 

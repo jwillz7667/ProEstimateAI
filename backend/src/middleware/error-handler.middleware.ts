@@ -68,6 +68,19 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
     return;
   }
 
+  const bodyError = err as Error & { type?: string };
+  const bodyStatus = bodyError.type === 'entity.too.large' ? 413
+    : bodyError.type === 'entity.parse.failed' ? 400
+    : bodyError.type === 'encoding.unsupported' || bodyError.type === 'charset.unsupported' ? 415 : undefined;
+  if (bodyStatus && canStillRespond(res)) {
+    sendError(res, bodyStatus, {
+      code: bodyStatus === 413 ? 'PAYLOAD_TOO_LARGE' : 'INVALID_REQUEST_BODY',
+      message: bodyStatus === 413 ? 'Request body is too large' : 'Request body is invalid or unsupported',
+      retryable: false,
+    });
+    return;
+  }
+
   logger.error({ err, requestId: req.requestId }, 'Unhandled error');
 
   if (!canStillRespond(res)) {
