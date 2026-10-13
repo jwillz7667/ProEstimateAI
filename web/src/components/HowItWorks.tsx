@@ -40,7 +40,7 @@ const STEPS: Step[] = [
     eyebrow: "Watch it generate",
     title: "Photoreal preview in under 60 seconds.",
     description:
-      "Nano Banana 2 produces a before/after preview that holds the layout while showing the renovation. Slide to compare, pinch to zoom, double-tap to reset.",
+      "Nano Banana 2.1 produces a before/after preview that holds the layout while showing the renovation. Slide to compare, pinch to zoom, double-tap to reset.",
     screenshot: "/screenshots/ai-preview.jpg",
     alt: "Before/after AI-generated landscape install with cobble path and retaining wall",
   },

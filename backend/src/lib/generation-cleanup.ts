@@ -26,9 +26,9 @@ import { logger } from "../config/logger";
  *
  * The threshold is generous (default 10 min) so we don't accidentally
  * fail a legitimately long-running generation on a different
- * container that hasn't crashed. Real PiAPI runs complete in 60–130s;
- * Google GenAI fallback adds another 30s. 10 minutes is well past
- * the 99th percentile.
+ * container that hasn't crashed. Google GenAI is tried first, followed by
+ * up to two PiAPI tasks with two-minute polling limits. Ten minutes leaves
+ * additional headroom for provider latency and image downloads.
  */
 export async function markStuckGenerationsFailed(
   thresholdMs: number = 10 * 60 * 1000,

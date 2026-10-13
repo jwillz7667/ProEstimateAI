@@ -17,7 +17,7 @@ import {
   RecurrenceFrequency,
 } from "./prompts/types";
 
-const NANO_BANANA_2_MODEL = "gemini-3.1-flash-image-preview";
+const NANO_BANANA_2_1_MODEL = "gemini-nano-banana-2.1";
 
 let genAI: GoogleGenAI | null = null;
 
@@ -157,8 +157,9 @@ export interface ReferencePhoto {
  * Generate a preview image using the best available provider.
  *
  * Provider strategy:
- *   1. Google GenAI (Gemini 3.1 Flash Image) when GOOGLE_AI_API_KEY is set.
- *   2. PiAPI nano-banana-pro/2 when PIAPI_API_KEY is set.
+ *   1. Google GenAI Nano Banana 2.1 when GOOGLE_AI_API_KEY is set.
+ *   2. PiAPI Nano Banana 2.1 when PIAPI_API_KEY is set, with Nano Banana 2
+ *      retained as a last resort if the newer model is unavailable.
  *
  * Both return GeneratedImage with the same shape; the caller is unaware
  * of which provider fulfilled the request.
@@ -269,7 +270,7 @@ async function generatePreviewImageGoogle(
 
     logger.info(
       {
-        model: NANO_BANANA_2_MODEL,
+        model: NANO_BANANA_2_1_MODEL,
         provider: "google",
         projectType: context.projectType,
         qualityTier: context.qualityTier,
@@ -294,7 +295,7 @@ async function generatePreviewImageGoogle(
       : fullPrompt;
 
     const response = await ai.models.generateContent({
-      model: NANO_BANANA_2_MODEL,
+      model: NANO_BANANA_2_1_MODEL,
       contents,
       config: {
         temperature,
@@ -328,7 +329,7 @@ async function generatePreviewImageGoogle(
 
     const durationMs = Date.now() - startMs;
     logger.info(
-      { durationMs, model: NANO_BANANA_2_MODEL, provider: "google" },
+      { durationMs, model: NANO_BANANA_2_1_MODEL, provider: "google" },
       "Google GenAI generation complete",
     );
 
@@ -339,10 +340,15 @@ async function generatePreviewImageGoogle(
     }
 
     for (const part of parts) {
-      if (part.inlineData) {
+      // Nano Banana can return intermediate thought images. Only publish the
+      // final image, and allow the provider fallback when no usable image exists.
+      if (part.thought) continue;
+      const imageData = part.inlineData?.data;
+      const mimeType = part.inlineData?.mimeType || "image/png";
+      if (imageData?.trim() && mimeType.startsWith("image/")) {
         return {
-          base64Data: part.inlineData.data as string,
-          mimeType: (part.inlineData.mimeType as string) || "image/png",
+          base64Data: imageData,
+          mimeType,
           durationMs,
         };
       }

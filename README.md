@@ -52,7 +52,7 @@ Built as a native iOS application with a TypeScript backend. Shipping on the App
     </td>
     <td align="center" width="33%">
       <img src=".github/assets/readme/ai-preview.png" width="240" alt="Before and after remodel preview" />
-      <br /><sub><b>Before / after</b><br />Photoreal renders via Nano Banana Pro with a Gemini fallback.</sub>
+      <br /><sub><b>Before / after</b><br />Photoreal renders via Nano Banana 2.1 with provider fallback.</sub>
     </td>
     <td align="center" width="33%">
       <img src=".github/assets/readme/paywall.png" width="240" alt="Subscription paywall" />
@@ -71,7 +71,7 @@ Photo upload  ->  AI remodel preview  ->  Material & labor suggestions
 ```
 
 1. **Capture.** Contractor shoots one or more photos of the space on device. Assets upload to the backend and are stored as base64 in PostgreSQL with immutable cache headers.
-2. **Generate.** The backend orchestrates image generation via PiAPI (Nano Banana Pro, then Nano Banana 2 as internal fallback) with a Google GenAI (Gemini 3.1 Flash Image) fallback if PiAPI is unavailable.
+2. **Generate.** The backend uses Google GenAI Nano Banana 2.1 (`gemini-nano-banana-2.1`) for image generation, then PiAPI Nano Banana 2.1 (`nano-banana-2.1`) if Google is unavailable. PiAPI retains Nano Banana 2 as a last resort. Both providers preserve reference-photo framing and request 2K output. See the [Google model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1) and [PiAPI task documentation](https://piapi.ai/docs/gemini-api/nano-banana-2).
 3. **Price.** Gemini 2.5 Flash produces line-item material and labor suggestions, scaled by the project's quality tier (Standard, Premium, or Luxury).
 4. **Send.** The contractor reviews the auto-built estimate, sends a branded proposal with a shareable approval link, and converts the approved estimate into an invoice with tracking for partial payments and overdue balances.
 
@@ -178,7 +178,7 @@ Key architectural decisions:
   <tr>
     <td><b>AI</b></td>
     <td>
-      PiAPI Nano Banana Pro / Nano Banana 2 (primary image) &middot; Google GenAI Gemini 3.1 Flash Image (fallback) &middot; Gemini 2.5 Flash (material + labor estimation)
+      Google GenAI Nano Banana 2.1 (primary image) &middot; PiAPI Nano Banana 2.1 / Nano Banana 2 (fallback) &middot; Gemini 2.5 Flash (material + labor estimation)
     </td>
   </tr>
   <tr>
@@ -292,8 +292,8 @@ Backend variables (see `backend/.env.example`):
 | `DATABASE_URL` | yes | PostgreSQL connection string |
 | `JWT_SECRET` | yes | At least 32 characters, access-token signing |
 | `JWT_REFRESH_SECRET` | yes | At least 32 characters, refresh-token signing |
-| `PIAPI_API_KEY` | one of | PiAPI key for primary image generation |
-| `GOOGLE_AI_API_KEY` | one of | Google GenAI key for fallback and materials |
+| `PIAPI_API_KEY` | one of | PiAPI key for fallback image generation |
+| `GOOGLE_AI_API_KEY` | one of | Google GenAI key for primary image generation and materials |
 | `GOOGLE_PLACES_API_KEY` | no | Address autocomplete |
 | `REDIS_URL` | recommended | Distributed rate-limit counters; falls back to in-memory |
 | `RESEND_API_KEY` | no | Transactional email |
