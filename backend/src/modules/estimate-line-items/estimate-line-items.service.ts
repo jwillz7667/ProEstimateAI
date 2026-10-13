@@ -221,19 +221,20 @@ export async function update(
       updateData.sourceMaterialSuggestionId =
         data.source_material_suggestion_id;
     if (data.item_type !== undefined) updateData.itemType = data.item_type;
-    Object.assign(
-      updateData,
-      lineMoney(
-        data.quantity ?? Number(existing.quantity),
-        data.unit_cost ?? Number(existing.unitCost),
-        data.markup_percent ?? Number(existing.markupPercent),
-      ),
-    );
+    const linePriceChange = (data.quantity !== undefined && !existing.quantity.equals(new Prisma.Decimal(data.quantity).toDecimalPlaces(2)))
+      || (data.unit_cost !== undefined && !existing.unitCost.equals(new Prisma.Decimal(data.unit_cost).toDecimalPlaces(2)))
+      || (data.markup_percent !== undefined && !existing.markupPercent.equals(new Prisma.Decimal(data.markup_percent).toDecimalPlaces(2)));
+    if (linePriceChange) {
+      Object.assign(updateData, lineMoney(data.quantity ?? Number(existing.quantity), data.unit_cost ?? Number(existing.unitCost), data.markup_percent ?? Number(existing.markupPercent)));
+    }
+    const totalsChange = linePriceChange
+      || (data.category !== undefined && data.category.toUpperCase() !== existing.category)
+      || (data.tax_rate !== undefined && !existing.taxRate.equals(new Prisma.Decimal(data.tax_rate).toDecimalPlaces(4)));
     const lineItem = await tx.estimateLineItem.update({
       where: { id: lineItemId },
       data: updateData,
     });
-    await recalculateEstimateTotals(existing.estimateId, tx);
+    if (totalsChange) await recalculateEstimateTotals(existing.estimateId, tx);
     return lineItem;
   });
 }

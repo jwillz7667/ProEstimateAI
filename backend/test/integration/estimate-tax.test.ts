@@ -105,6 +105,14 @@ describe("estimates.generateAI — line-item tax accounting", () => {
     expect(Number(items[0].taxRate)).toBeCloseTo(0.1, 4);
   });
 
+  it("honors the stored Premium tier in AI context and estimate snapshot", async () => {
+    const { company, user, project } = await seedCompanyUserProject();
+    await prisma.project.update({ where: { id: project.id }, data: { qualityTier: "PREMIUM" } });
+    const estimate = await generateAI(company.id, user.id, project.id);
+    expect(generateEstimateMock.mock.calls[0][0].qualityTier).toBe("PREMIUM");
+    expect(estimate.qualityTier).toBe("PREMIUM");
+  });
+
   it("keeps tax single-counted when totals are recalculated after an edit", async () => {
     const { company, user, project } = await seedCompanyUserProject();
 

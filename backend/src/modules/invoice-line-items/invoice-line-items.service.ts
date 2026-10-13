@@ -175,20 +175,16 @@ export async function update(
     if (data.unit !== undefined) updateData.unit = data.unit;
     if (data.unit_cost !== undefined) updateData.unitCost = data.unit_cost;
     if (data.sort_order !== undefined) updateData.sortOrder = data.sort_order;
-    if (data.quantity !== undefined || data.unit_cost !== undefined) {
-      Object.assign(
-        updateData,
-        lineMoney(
-          data.quantity ?? Number(existing.quantity),
-          data.unit_cost ?? Number(existing.unitCost),
-        ),
-      );
+    const financialChange = (data.quantity !== undefined && !existing.quantity.equals(new Prisma.Decimal(data.quantity).toDecimalPlaces(2)))
+      || (data.unit_cost !== undefined && !existing.unitCost.equals(new Prisma.Decimal(data.unit_cost).toDecimalPlaces(2)));
+    if (financialChange) {
+      Object.assign(updateData, lineMoney(data.quantity ?? Number(existing.quantity), data.unit_cost ?? Number(existing.unitCost)));
     }
     const lineItem = await tx.invoiceLineItem.update({
       where: { id: lineItemId },
       data: updateData,
     });
-    await recalculateInvoiceTotals(existing.invoiceId, tx);
+    if (financialChange) await recalculateInvoiceTotals(existing.invoiceId, tx);
     return lineItem;
   });
 }

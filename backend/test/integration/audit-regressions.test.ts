@@ -262,7 +262,7 @@ describe("invoice money and reference invariants", () => {
       where: { invoiceId: invoice.id },
     });
     const updated = await invoiceLines.update(line.id, t.company.id, {
-      description: "Clarified scope",
+      description: "Clarified scope", quantity: 3, unit_cost: 0.33,
     });
     expect(Number(updated.lineTotal)).toBe(1);
     expect(
