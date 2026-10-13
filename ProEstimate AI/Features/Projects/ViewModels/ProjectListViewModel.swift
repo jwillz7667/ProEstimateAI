@@ -2,6 +2,7 @@ import Foundation
 
 /// Drives the project list screen — loads projects, applies search + status
 /// filtering, and handles deletion.
+@MainActor
 @Observable
 final class ProjectListViewModel {
     // MARK: - Published State
@@ -16,6 +17,8 @@ final class ProjectListViewModel {
     var selectedFilter: ProjectStatusFilter = .all
     var isLoading: Bool = false
     var errorMessage: String?
+    var actionError: String?
+    var deletingProjectIDs: Set<String> = []
 
     // MARK: - Dependencies
 
@@ -48,12 +51,13 @@ final class ProjectListViewModel {
         }
 
         // Apply search text
-        if !searchText.isEmpty {
-            let query = searchText.lowercased()
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
             result = result.filter { project in
-                project.title.lowercased().contains(query)
-                || (project.description?.lowercased().contains(query) ?? false)
-                || project.projectType.rawValue.lowercased().contains(query)
+                project.title.localizedCaseInsensitiveContains(query)
+                || (project.description?.localizedCaseInsensitiveContains(query) ?? false)
+                || project.projectType.displayName.localizedCaseInsensitiveContains(query)
+                || (project.clientId.flatMap { clientLookup[$0] }?.localizedCaseInsensitiveContains(query) ?? false)
             }
         }
 
@@ -76,35 +80,38 @@ final class ProjectListViewModel {
     // MARK: - Actions
 
     func loadProjects() async {
+        guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
 
         do {
             async let projectsTask = projectService.listProjects()
             async let clientsTask = clientService.listClients()
 
             projects = try await projectsTask
-            let clients = try await clientsTask
-            var lookup: [String: String] = [:]
-            for client in clients {
-                lookup[client.id] = client.name
+            // Client labels are supplemental. Preserve projects even if a
+            // separate client request fails during an otherwise good refresh.
+            if let clients = try? await clientsTask {
+                clientLookup = Dictionary(clients.map { ($0.id, $0.name) }, uniquingKeysWith: { _, newest in newest })
             }
-            clientLookup = lookup
             await loadThumbnails(for: projects)
         } catch {
-            errorMessage = error.localizedDescription
+            if !Task.isCancelled { errorMessage = error.localizedDescription }
         }
-
-        isLoading = false
     }
 
     func deleteProject(id: String) async {
+        guard deletingProjectIDs.insert(id).inserted else { return }
+        actionError = nil
+        defer { deletingProjectIDs.remove(id) }
         do {
             try await projectService.deleteProject(id: id)
+            GenerationLifecycleCoordinator.shared.cancel(projectId: id)
             projects.removeAll { $0.id == id }
             projectThumbnails.removeValue(forKey: id)
         } catch {
-            errorMessage = error.localizedDescription
+            actionError = error.localizedDescription
         }
     }
 

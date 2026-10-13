@@ -12,7 +12,7 @@ final class LiveClientService: ClientServiceProtocol, Sendable {
     // MARK: - ClientServiceProtocol
 
     func listClients() async throws -> [Client] {
-        try await apiClient.request(.listClients(cursor: nil))
+        try await apiClient.requestAllPages { .listClients(cursor: $0) }
     }
 
     func getClient(id: String) async throws -> Client {

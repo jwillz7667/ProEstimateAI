@@ -7,8 +7,7 @@ const DEEPSEEK_ENDPOINT = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_MODEL = "deepseek-chat";
 
 /// How much of the user's prior chat to forward. The client also caps this,
-/// but an independent server-side ceiling prevents prompt-injection via
-/// overlong histories.
+/// and the server applies the same ceiling to bound upstream cost.
 const MAX_FORWARDED_MESSAGES = 10;
 const MAX_USER_MESSAGE_CHARS = 2000;
 const MAX_TOTAL_PROMPT_CHARS = 12_000;
@@ -32,8 +31,8 @@ Core product (what the app actually does — do not promise features that aren't
 - Estimates can be exported as PDFs that include the company letterhead, before/after project photos, grouped line items, and totals.
 
 Pricing / plans:
-- Free tier: 3 AI generations + 3 quote exports. Exports carry a ProEstimate AI watermark.
-- Pro: unlimited generations and exports, branded PDFs (no watermark), invoice creation, client share links. Monthly or annual; annual saves roughly 37%. Monthly plan includes a 7-day free trial.
+- Free tier: 5 lifetime AI preview generations and manual estimating tools. Starter preview credits never reset. AI estimate generation, quote exports, invoices, branding, and approval links require Pro.
+- Pro: 2 new projects, 20 AI preview generations, 20 AI-generated estimates, and 50 quote exports per month. Daily and weekly limits also apply. Includes branded PDFs (no watermark), invoice creation, and client approval links. Monthly or annual; eligible new monthly subscribers can start a 7-day free trial. Refer users to the App Store for final prices and eligibility. Premium subscriptions are no longer offered.
 - Subscriptions are billed through the Apple App Store. Cancellation is via iOS Settings → Apple ID → Subscriptions.
 
 Account management:
@@ -126,15 +125,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let payload: { messages?: IncomingMessage[] };
+  let payload: unknown;
   try {
-    payload = (await req.json()) as { messages?: IncomingMessage[] };
+    payload = await req.json();
   } catch {
     return new Response("Invalid JSON body.", { status: 400 });
   }
 
-  const rawMessages = Array.isArray(payload.messages) ? payload.messages : [];
-  const clean = sanitize(rawMessages).slice(-MAX_FORWARDED_MESSAGES);
+  if (!payload || typeof payload !== "object" || !("messages" in payload) ||
+      !Array.isArray(payload.messages)) {
+    return new Response("Please send a messages array.", { status: 400 });
+  }
+  const clean = sanitize(payload.messages.slice(-MAX_FORWARDED_MESSAGES));
 
   if (clean.length === 0) {
     return new Response("Please send at least one message.", { status: 400 });
@@ -148,26 +150,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const upstream = await fetch(DEEPSEEK_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...clean],
-      temperature: 0.4,
-      max_tokens: 700,
-      stream: true,
-    }),
-  });
+  const unavailable = "The assistant is temporarily unavailable. Please try again or email support@proestimateai.com.";
+  let upstream: Response;
+  try {
+    upstream = await fetch(DEEPSEEK_ENDPOINT, {
+      method: "POST",
+      signal: AbortSignal.timeout(30_000),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...clean],
+        temperature: 0.4,
+        max_tokens: 700,
+        stream: true,
+      }),
+    });
+  } catch {
+    return new Response(unavailable, { status: 502 });
+  }
 
   if (!upstream.ok || !upstream.body) {
-    const detail = await upstream.text().catch(() => "");
+    await upstream.body?.cancel().catch(() => undefined);
     return new Response(
-      detail ||
-        "The assistant is temporarily unavailable. Please try again or email support@proestimateai.com.",
+      unavailable,
       { status: upstream.status === 429 ? 429 : 502 },
     );
   }
@@ -177,12 +185,30 @@ export async function POST(req: NextRequest) {
   const decoder = new TextDecoder();
   let sseBuffer = "";
 
+  function enqueueLine(line: string, controller: ReadableStreamDefaultController<Uint8Array>) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) return;
+    const data = trimmed.slice(5).trim();
+    if (!data || data === "[DONE]") return;
+    try {
+      const json: unknown = JSON.parse(data);
+      if (!json || typeof json !== "object" || !("choices" in json) || !Array.isArray(json.choices)) return;
+      const chunk: unknown = json.choices[0]?.delta?.content;
+      if (typeof chunk === "string" && chunk) controller.enqueue(encoder.encode(chunk));
+    } catch {
+      // Keep-alive comments or malformed provider frames carry no text.
+    }
+  }
+
   // Transform DeepSeek's SSE stream into a plain text stream so the client
   // just concatenates bytes — no SSE parsing in the browser.
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
       const { done, value } = await reader.read();
       if (done) {
+        sseBuffer += decoder.decode();
+        // Some providers close after a final data frame without a newline.
+        if (sseBuffer) enqueueLine(sseBuffer, controller);
         controller.close();
         return;
       }
@@ -190,20 +216,7 @@ export async function POST(req: NextRequest) {
       const lines = sseBuffer.split("\n");
       sseBuffer = lines.pop() ?? "";
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data:")) continue;
-        const data = trimmed.slice(5).trim();
-        if (!data || data === "[DONE]") continue;
-        try {
-          const json = JSON.parse(data) as {
-            choices?: Array<{ delta?: { content?: string } }>;
-          };
-          const chunk = json.choices?.[0]?.delta?.content;
-          if (chunk) controller.enqueue(encoder.encode(chunk));
-        } catch {
-          // Ignore malformed SSE frames — the stream may have keep-alive
-          // comments or heartbeat pings that aren't JSON.
-        }
+        enqueueLine(line, controller);
       }
     },
     cancel() {

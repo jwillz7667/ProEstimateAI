@@ -144,9 +144,23 @@ export function isProposalOpen(proposal: SharedProposalMeta): boolean {
 }
 
 export function isProposalExpired(proposal: SharedProposalMeta): boolean {
+  // Expiration closes an unanswered offer; it never replaces a final decision.
+  if (proposal.status === "approved" || proposal.status === "declined") return false;
+  if (proposal.status === "expired") return true;
   if (!proposal.expires_at) return false;
   const expires = new Date(proposal.expires_at);
-  return !Number.isNaN(expires.getTime()) && expires < new Date();
+  return !Number.isNaN(expires.getTime()) && expires.getTime() <= Date.now();
+}
+
+/** Accept only web links, including when old company records predate validation. */
+export function safeWebsiteURL(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

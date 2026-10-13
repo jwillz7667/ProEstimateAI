@@ -53,33 +53,63 @@ struct ProjectCreationRequest: Codable, Sendable {
         case recurrenceStartDate = "recurrence_start_date"
     }
 
-    /// Emit `quality_tier: null` when the user picked Auto. The backend's
-    /// PATCH endpoint treats absent fields as "leave unchanged"; a literal
-    /// null is the only way to clear a previously-set tier back to Auto.
-    /// Other optional fields retain default Codable omission until they
-    /// hit the same need.
+    /// This is a complete metadata snapshot. Encode nullable fields as null
+    /// so clearing an edit removes the old server value. Boolean defaults
+    /// remain omitted when the creation wizard has not overridden them.
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(title, forKey: .title)
         try c.encode(projectType, forKey: .projectType)
-        try c.encodeIfPresent(clientId, forKey: .clientId)
-        try c.encodeIfPresent(description, forKey: .description)
-        try c.encodeIfPresent(budgetMin, forKey: .budgetMin)
-        try c.encodeIfPresent(budgetMax, forKey: .budgetMax)
+        try c.encode(clientId, forKey: .clientId)
+        try c.encode(description, forKey: .description)
+        try c.encode(budgetMin, forKey: .budgetMin)
+        try c.encode(budgetMax, forKey: .budgetMax)
         if let tier = qualityTier {
             try c.encode(tier, forKey: .qualityTier)
         } else {
             try c.encodeNil(forKey: .qualityTier)
         }
-        try c.encodeIfPresent(squareFootage, forKey: .squareFootage)
-        try c.encodeIfPresent(dimensions, forKey: .dimensions)
-        try c.encodeIfPresent(language, forKey: .language)
+        try c.encode(squareFootage, forKey: .squareFootage)
+        try c.encode(dimensions, forKey: .dimensions)
+        try c.encode(language, forKey: .language)
         try c.encodeIfPresent(aiPreviewEnabled, forKey: .aiPreviewEnabled)
         try c.encodeIfPresent(isRecurring, forKey: .isRecurring)
-        try c.encodeIfPresent(recurrenceFrequency, forKey: .recurrenceFrequency)
-        try c.encodeIfPresent(visitsPerMonth, forKey: .visitsPerMonth)
-        try c.encodeIfPresent(contractMonths, forKey: .contractMonths)
-        try c.encodeIfPresent(recurrenceStartDate, forKey: .recurrenceStartDate)
+        try c.encode(recurrenceFrequency, forKey: .recurrenceFrequency)
+        try c.encode(visitsPerMonth, forKey: .visitsPerMonth)
+        try c.encode(contractMonths, forKey: .contractMonths)
+        try c.encode(recurrenceStartDate, forKey: .recurrenceStartDate)
+    }
+}
+
+// MARK: - Numeric Form Input
+
+/// Decimal(string:) accepts numeric prefixes such as "250 sq ft". Validate
+/// the entire input first so a typo cannot silently alter a project or payment.
+enum DecimalFormInput {
+    static func parse(_ text: String, locale: Locale = .current) -> Decimal? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let separator = locale.decimalSeparator ?? "."
+        let allowedSeparator = separator == "," ? "[.,]" : "\\."
+        let pattern = "^(?:[0-9]+(?:\(allowedSeparator)[0-9]*)?|\(allowedSeparator)[0-9]+)$"
+        guard trimmed.range(of: pattern, options: .regularExpression) != nil else { return nil }
+        let normalized = separator == "," ? trimmed.replacingOccurrences(of: ",", with: ".") : trimmed
+        guard let value = Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX")),
+              !value.isNaN else { return nil }
+        return value
+    }
+
+    static func validationMessage(for text: String, field: String) -> String? {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return parse(text) == nil ? "Enter a valid nonnegative number for \(field)." : nil
+    }
+
+    static func budgetValidationMessage(minimum: String, maximum: String) -> String? {
+        if let error = validationMessage(for: minimum, field: "the minimum budget") { return error }
+        if let error = validationMessage(for: maximum, field: "the maximum budget") { return error }
+        if let min = parse(minimum), let max = parse(maximum), min > max {
+            return "The maximum budget must be at least the minimum budget."
+        }
+        return nil
     }
 }
 

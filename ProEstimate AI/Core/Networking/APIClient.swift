@@ -3,7 +3,7 @@ import Foundation
 /// Protocol defining the API client interface.
 /// All networking goes through this protocol so the app can swap in
 /// `MockAPIClient` for previews and tests without changing view models.
-protocol APIClientProtocol {
+protocol APIClientProtocol: Sendable {
     /// Execute a request and decode the response body into `T`.
     /// Throws `APIError` on failure.
     func request<T: Decodable>(_ endpoint: APIEndpoint) async throws -> T
@@ -17,6 +17,24 @@ protocol APIClientProtocol {
     /// invoice PDF (`GET /v1/invoices/:id/export`). Auth injection and the
     /// 401 → refresh → retry path still apply.
     func requestData(_ endpoint: APIEndpoint) async throws -> Data
+
+    /// Preserve cursor metadata for lists that span multiple server pages.
+    func requestPage<T: Decodable>(_ endpoint: APIEndpoint) async throws -> APIPage<T>
+}
+
+extension APIClientProtocol {
+    /// Existing mock clients can model a single page through their normal request.
+    func requestPage<T: Decodable>(_ endpoint: APIEndpoint) async throws -> APIPage<T> {
+        APIPage(items: try await request(endpoint), nextCursor: nil)
+    }
+
+    func requestAllPages<T: Decodable & Identifiable>(
+        _ endpoint: (String?) -> APIEndpoint
+    ) async throws -> [T] {
+        try await APIPageCollector.collect { cursor in
+            try await requestPage(endpoint(cursor))
+        }
+    }
 }
 
 /// Production API client that communicates with the ProEstimate backend.
@@ -117,6 +135,16 @@ final class APIClient: APIClientProtocol {
 
     func requestData(_ endpoint: APIEndpoint) async throws -> Data {
         try await performRequest(endpoint)
+    }
+
+    func requestPage<T: Decodable>(_ endpoint: APIEndpoint) async throws -> APIPage<T> {
+        let data = try await performRequest(endpoint)
+        do {
+            let envelope = try decoder.decode(APISuccessEnvelope<[T]>.self, from: data)
+            return APIPage(items: envelope.data, nextCursor: envelope.meta?.pagination?.nextCursor)
+        } catch let error as DecodingError {
+            throw APIError.decoding(Self.describe(error, type: [T].self))
+        }
     }
 
     // MARK: - Internal

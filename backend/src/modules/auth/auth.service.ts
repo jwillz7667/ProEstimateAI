@@ -593,7 +593,7 @@ export async function forgotPassword(
   });
 
   // Always return silently to prevent email enumeration
-  if (!user) return;
+  if (!user?.isActive) return;
 
   // Apple-only accounts have no password to reset
   if (!user.passwordHash) return;
@@ -632,8 +632,8 @@ export async function resetPassword(input: ResetPasswordInput): Promise<void> {
     user.passwordResetExpiresAt < new Date()
   ) {
     // Clear the expired token
-    await prisma.user.update({
-      where: { id: user.id },
+    await prisma.user.updateMany({
+      where: { id: user.id, passwordResetToken: input.token },
       data: {
         passwordResetToken: null,
         passwordResetExpiresAt: null,
@@ -646,14 +646,16 @@ export async function resetPassword(input: ResetPasswordInput): Promise<void> {
 
   // Update password, clear reset token, and invalidate all refresh tokens in a transaction
   await prisma.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: user.id },
+    const changed = await tx.user.updateMany({
+      where: { id: user.id, isActive: true, passwordResetToken: input.token, passwordResetExpiresAt: { gt: new Date() } },
       data: {
         passwordHash,
         passwordResetToken: null,
         passwordResetExpiresAt: null,
       },
     });
+
+    if (changed.count !== 1) throw new ValidationError("Invalid or expired reset token");
 
     // Invalidate all active sessions so the user must re-login with the new password
     await tx.refreshToken.deleteMany({

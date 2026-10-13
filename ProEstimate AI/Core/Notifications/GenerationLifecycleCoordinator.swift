@@ -166,6 +166,14 @@ final class GenerationLifecycleCoordinator {
         }
     }
 
+    /// Stop every watched generation only after the project's deletion has
+    /// succeeded. The list screen does not have generation records loaded.
+    func cancel(projectId: String) {
+        for entry in store.list() where entry.projectId == projectId {
+            cancel(generationId: entry.id)
+        }
+    }
+
     /// Tear down everything. Called on sign-out so a different user
     /// signing in on the same device doesn't see a stranger's pending
     /// generations.

@@ -1,8 +1,8 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const createInvoiceSchema = z.object({
-  project_id: z.string().min(1, 'project_id is required'),
-  client_id: z.string().min(1, 'client_id is required'),
+  project_id: z.string().min(1, "project_id is required"),
+  client_id: z.string().min(1, "client_id is required"),
   estimate_id: z.string().min(1).nullable().optional(),
   proposal_id: z.string().nullable().optional(),
   notes: z.string().max(10000).nullable().optional(),
@@ -14,7 +14,17 @@ export const createInvoiceSchema = z.object({
 });
 
 export const updateInvoiceSchema = z.object({
-  status: z.enum(['draft', 'sent', 'viewed', 'partially_paid', 'paid', 'overdue', 'void']).optional(),
+  status: z
+    .enum([
+      "draft",
+      "sent",
+      "viewed",
+      "partially_paid",
+      "paid",
+      "overdue",
+      "void",
+    ])
+    .optional(),
   notes: z.string().max(10000).nullable().optional(),
   proposal_id: z.string().nullable().optional(),
   issued_date: z.string().datetime().nullable().optional(),
@@ -22,7 +32,13 @@ export const updateInvoiceSchema = z.object({
   discount_amount: z.number().min(0).nullable().optional(),
   payment_instructions: z.string().max(50000).nullable().optional(),
   currency_code: z.string().max(10).nullable().optional(),
-  amount_paid: z.number().min(0).optional(),
+  amount_paid: z.number().finite().min(0).max(9999999999.99).optional(),
+  expected_amount_paid: z
+    .number()
+    .finite()
+    .min(0)
+    .max(9999999999.99)
+    .optional(),
 });
 
 export const sendInvoiceSchema = z.object({}).strict();

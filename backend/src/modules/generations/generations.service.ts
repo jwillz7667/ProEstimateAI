@@ -15,8 +15,9 @@ import {
   MaterialGenContext,
 } from "../../lib/material-gen";
 import { sendGenerationReady } from "../../lib/apns";
+import { readProjectQualityTier } from "../../lib/project-quality-tier";
 import { recordUsage } from "../../lib/usage-limits";
-import { gateAIAction } from "../commerce/entitlement-gate";
+import { gateAIAction, runReservedAction } from "../commerce/entitlement-gate";
 import { env } from "../../config/env";
 import { CreateGenerationInput } from "./generations.validators";
 import * as estimatesService from "../estimates/estimates.service";
@@ -64,7 +65,7 @@ async function verifyProjectOwnership(projectId: string, companyId: string) {
     throw new NotFoundError("Project", projectId);
   }
 
-  return project;
+  return { ...project, qualityTier: await readProjectQualityTier(projectId, companyId) };
 }
 
 /**
@@ -933,9 +934,9 @@ export async function create(
   const shouldGenerateImage = data.generate_preview ?? project.aiPreviewEnabled;
 
   // Throws PaywallError on block (admin, trial, or pro within caps → returns).
-  await gateAIAction({ userId, companyId, metric: "AI_GENERATION" });
+  const reservation = await gateAIAction({ userId, companyId, metric: "AI_GENERATION" });
 
-  const generation = await prisma.$transaction(async (tx) => {
+  const generation = await runReservedAction(reservation, () => prisma.$transaction(async (tx) => {
     const gen = await tx.aIGeneration.create({
       data: {
         projectId,
@@ -957,13 +958,11 @@ export async function create(
       },
     });
     return gen;
-  });
+  }));
 
   // Record usage AFTER successful creation so a failed write doesn't burn cap.
-  await recordUsage(userId, companyId, "AI_GENERATION", {
-    projectId,
-    generationId: generation.id,
-    kind: "image_preview",
+  if (!reservation) await recordUsage(userId, companyId, "AI_GENERATION", {
+    projectId, generationId: generation.id, kind: "image_preview",
   });
 
   // Fire-and-forget background processing. When shouldGenerateImage is

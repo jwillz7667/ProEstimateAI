@@ -641,6 +641,8 @@ model InvoiceLineItem {
   quantity    Decimal @db.Decimal(10, 2)
   unit        String
   unitCost    Decimal @db.Decimal(12, 2)
+  /// Snapshot of the line's tax fraction. Company settings may change after billing.
+  taxRate     Decimal @default(0) @db.Decimal(5, 4)
   lineTotal   Decimal @default(0) @db.Decimal(12, 2)
   sortOrder   Int     @default(0)
 

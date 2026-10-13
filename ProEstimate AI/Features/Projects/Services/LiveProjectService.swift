@@ -12,7 +12,7 @@ final class LiveProjectService: ProjectServiceProtocol, Sendable {
     // MARK: - ProjectServiceProtocol
 
     func listProjects() async throws -> [Project] {
-        try await apiClient.request(.listProjects(cursor: nil))
+        try await apiClient.requestAllPages { .listProjects(cursor: $0) }
     }
 
     func getProject(id: String) async throws -> Project {

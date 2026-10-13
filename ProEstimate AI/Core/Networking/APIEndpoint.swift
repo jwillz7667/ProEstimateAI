@@ -84,6 +84,7 @@ enum APIEndpoint: Sendable {
 
     case listEstimateLineItems(estimateId: String)
     case createEstimateLineItem(estimateId: String, body: Encodable & Sendable)
+    case batchCreateEstimateLineItems(estimateId: String, body: Encodable & Sendable)
     case updateEstimateLineItem(id: String, body: Encodable & Sendable)
     case deleteEstimateLineItem(id: String)
 
@@ -239,6 +240,7 @@ extension APIEndpoint {
         // Estimate Line Items
         case let .listEstimateLineItems(estimateId): return "/estimates/\(estimateId)/line-items"
         case let .createEstimateLineItem(estimateId, _): return "/estimates/\(estimateId)/line-items"
+        case let .batchCreateEstimateLineItems(estimateId, _): return "/estimates/\(estimateId)/line-items/batch"
         case let .updateEstimateLineItem(id, _): return "/estimate-line-items/\(id)"
         case let .deleteEstimateLineItem(id): return "/estimate-line-items/\(id)"
         // Proposals
@@ -307,7 +309,7 @@ extension APIEndpoint {
              .uploadCompanyLogo,
              .registerApnsToken,
              .createClient, .createProject, .uploadAsset, .createGeneration,
-             .createEstimate, .generateAIEstimate, .createEstimateLineItem,
+             .createEstimate, .generateAIEstimate, .createEstimateLineItem, .batchCreateEstimateLineItems,
              .createEstimateExport,
              .createProposal, .sendProposal,
              .sendInvoice, .convertEstimateToInvoice,
@@ -408,7 +410,7 @@ extension APIEndpoint {
              let .createGeneration(_, body),
              let .createEstimate(body), let .generateAIEstimate(body),
              let .updateEstimate(_, body),
-             let .createEstimateLineItem(_, body), let .updateEstimateLineItem(_, body),
+             let .createEstimateLineItem(_, body), let .batchCreateEstimateLineItems(_, body), let .updateEstimateLineItem(_, body),
              let .createEstimateExport(_, body),
              let .createProposal(body), let .updateProposal(_, body),
              let .sendProposal(_, body),

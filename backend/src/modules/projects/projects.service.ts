@@ -2,7 +2,11 @@ import { ProjectType, ProjectStatus, QualityTier } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
 import { NotFoundError } from "../../lib/errors";
-import { gateAIAction } from "../commerce/entitlement-gate";
+import { gateAIAction, runReservedAction } from "../commerce/entitlement-gate";
+import {
+  readProjectQualityTiers,
+  readProjectQualityTier,
+} from "../../lib/project-quality-tier";
 import { recordUsage } from "../../lib/usage-limits";
 import {
   PaginationParams,
@@ -31,10 +35,14 @@ const SERVICE_TRADE_TYPES: ReadonlySet<ProjectType> = new Set<ProjectType>([
   "WINDOW_CLEANING",
 ]);
 
-async function verifyClientOwnership(clientId: string | null | undefined, companyId: string) {
+async function verifyClientOwnership(
+  clientId: string | null | undefined,
+  companyId: string,
+) {
   if (!clientId) return;
   const client = await prisma.client.findFirst({
-    where: { id: clientId, companyId }, select: { id: true },
+    where: { id: clientId, companyId },
+    select: { id: true },
   });
   if (!client) throw new NotFoundError("Client", clientId);
 }
@@ -77,7 +85,17 @@ export async function list(companyId: string, pagination: PaginationParams) {
     ...buildCursorWhere(cursor),
   });
 
-  return paginateResults(projects, pageSize);
+  const tiers = await readProjectQualityTiers(
+    projects.map((project) => project.id),
+    companyId,
+  );
+  return paginateResults(
+    projects.map((project) => ({
+      ...project,
+      qualityTier: tiers.get(project.id) ?? null,
+    })),
+    pageSize,
+  );
 }
 
 /**
@@ -170,7 +188,10 @@ export async function getById(id: string, companyId: string) {
     throw new NotFoundError("Project", id);
   }
 
-  return project;
+  return {
+    ...project,
+    qualityTier: await readProjectQualityTier(id, companyId),
+  };
 }
 
 export async function create(
@@ -183,78 +204,83 @@ export async function create(
   // ceiling. The gate throws PaywallError(402) which the iOS client
   // renders as the upgrade sheet.
   await verifyClientOwnership(data.client_id, companyId);
-  await gateAIAction({ userId, companyId, metric: "PROJECT_CREATED" });
-
-  const resolvedType: ProjectType = data.project_type
-    ? (data.project_type.toUpperCase() as ProjectType)
-    : "CUSTOM";
-
-  // Resolve the image switch: explicit client value wins; otherwise service
-  // trades default off, and everything else follows the company-wide default
-  // (which itself defaults true). Only hit the company row when we actually
-  // need the fallback.
-  let aiPreviewEnabled: boolean;
-  if (data.ai_preview_enabled !== undefined) {
-    aiPreviewEnabled = data.ai_preview_enabled;
-  } else if (SERVICE_TRADE_TYPES.has(resolvedType)) {
-    aiPreviewEnabled = false;
-  } else {
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-      select: { defaultAiPreviewEnabled: true },
-    });
-    aiPreviewEnabled = company?.defaultAiPreviewEnabled ?? true;
-  }
-
-  const project = await prisma.project.create({
-    data: {
-      companyId,
-      title: data.title,
-      clientId: data.client_id ?? null,
-      description: data.description ?? null,
-      aiPreviewEnabled,
-      projectType: data.project_type
-        ? (data.project_type.toUpperCase() as ProjectType)
-        : undefined,
-      status: data.status
-        ? (data.status.toUpperCase() as ProjectStatus)
-        : undefined,
-      budgetMin: data.budget_min ?? null,
-      budgetMax: data.budget_max ?? null,
-      // null = explicit "Auto"; undefined = field omitted, leave default (null).
-      qualityTier:
-        data.quality_tier === null
-          ? null
-          : data.quality_tier
-            ? (data.quality_tier.toUpperCase() as QualityTier)
-            : undefined,
-      squareFootage: data.square_footage ?? null,
-      dimensions: data.dimensions ?? null,
-      language: data.language ?? undefined,
-      lawnAreaSqFt: data.lawn_area_sq_ft ?? null,
-      roofAreaSqFt: data.roof_area_sq_ft ?? null,
-      propertyLatitude: data.property_latitude ?? null,
-      propertyLongitude: data.property_longitude ?? null,
-      isRecurring: data.is_recurring ?? false,
-      recurrenceFrequency: data.recurrence_frequency ?? null,
-      visitsPerMonth: data.visits_per_month ?? null,
-      contractMonths: data.contract_months ?? null,
-      recurrenceStartDate: data.recurrence_start_date
-        ? new Date(data.recurrence_start_date)
-        : null,
-    },
+  const reservation = await gateAIAction({
+    userId,
+    companyId,
+    metric: "PROJECT_CREATED",
   });
+  return runReservedAction(reservation, async () => {
+    const resolvedType: ProjectType = data.project_type
+      ? (data.project_type.toUpperCase() as ProjectType)
+      : "CUSTOM";
 
-  // Record the usage event so the rolling-window cap reflects this
-  // project. Non-fatal: if it fails the project still exists; the
-  // user's next attempt would just be one closer to the cap edge.
-  try {
-    await recordUsage(userId, companyId, "PROJECT_CREATED");
-  } catch {
-    // swallowed intentionally — see comment above
-  }
+    // Resolve the image switch: explicit client value wins; otherwise service
+    // trades default off, and everything else follows the company-wide default
+    // (which itself defaults true). Only hit the company row when we actually
+    // need the fallback.
+    let aiPreviewEnabled: boolean;
+    if (data.ai_preview_enabled !== undefined) {
+      aiPreviewEnabled = data.ai_preview_enabled;
+    } else if (SERVICE_TRADE_TYPES.has(resolvedType)) {
+      aiPreviewEnabled = false;
+    } else {
+      const company = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { defaultAiPreviewEnabled: true },
+      });
+      aiPreviewEnabled = company?.defaultAiPreviewEnabled ?? true;
+    }
 
-  return project;
+    const project = await prisma.project.create({
+      data: {
+        companyId,
+        title: data.title,
+        clientId: data.client_id ?? null,
+        description: data.description ?? null,
+        aiPreviewEnabled,
+        projectType: data.project_type
+          ? (data.project_type.toUpperCase() as ProjectType)
+          : undefined,
+        status: data.status
+          ? (data.status.toUpperCase() as ProjectStatus)
+          : undefined,
+        budgetMin: data.budget_min ?? null,
+        budgetMax: data.budget_max ?? null,
+        // null = explicit "Auto"; undefined = field omitted, leave default (null).
+        qualityTier:
+          data.quality_tier === null
+            ? null
+            : data.quality_tier
+              ? (data.quality_tier.toUpperCase() as QualityTier)
+              : undefined,
+        squareFootage: data.square_footage ?? null,
+        dimensions: data.dimensions ?? null,
+        language: data.language ?? undefined,
+        lawnAreaSqFt: data.lawn_area_sq_ft ?? null,
+        roofAreaSqFt: data.roof_area_sq_ft ?? null,
+        propertyLatitude: data.property_latitude ?? null,
+        propertyLongitude: data.property_longitude ?? null,
+        isRecurring: data.is_recurring ?? false,
+        recurrenceFrequency: data.recurrence_frequency ?? null,
+        visitsPerMonth: data.visits_per_month ?? null,
+        contractMonths: data.contract_months ?? null,
+        recurrenceStartDate: data.recurrence_start_date
+          ? new Date(data.recurrence_start_date)
+          : null,
+      },
+    });
+
+    // Record the usage event so the rolling-window cap reflects this
+    // project. Non-fatal: if it fails the project still exists; the
+    // user's next attempt would just be one closer to the cap edge.
+    try {
+      if (!reservation) await recordUsage(userId, companyId, "PROJECT_CREATED");
+    } catch {
+      // swallowed intentionally — see comment above
+    }
+
+    return project;
+  });
 }
 
 export async function update(

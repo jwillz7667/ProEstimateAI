@@ -41,11 +41,11 @@ const faqs: Array<{ q: string; a: string }> = [
   },
   {
     q: "What's included in the free plan?",
-    a: "Three AI remodel previews and three quote exports. Exports on the free plan include a small ProEstimate AI watermark. Pro removes the watermark and unlocks unlimited previews, invoices, branded PDFs, and client approval links.",
+    a: "Five AI remodel previews for the lifetime of your account and manual estimating tools. AI estimates, quote exports, branded PDFs, invoices, and client approval links require Pro. Pro includes 2 AI project creations, 20 previews, 20 AI estimates, and 50 quote exports per month; daily and weekly limits also apply.",
   },
   {
     q: "How much is Pro and how do I subscribe?",
-    a: "Pro is available monthly or annually through the App Store. Annual saves about 37% versus monthly. There is a 7-day free trial on the monthly plan. Manage or cancel anytime from iOS Settings → Apple ID → Subscriptions.",
+    a: "Pro is available monthly or annually through the App Store. Check the App Store for current pricing and introductory-offer eligibility. Eligible new monthly subscribers can start a 7-day free trial. Manage or cancel anytime from iOS Settings → Apple ID → Subscriptions.",
   },
   {
     q: "Can I use my own company branding on estimates?",

@@ -40,12 +40,7 @@ export interface ProjectDto {
   thumbnail_url?: string | null;
 }
 
-export type ProjectListRow = Omit<Project, "qualityTier"> & {
-  // We intentionally omit `qualityTier` from some list queries as a
-  // defensive measure when DB/schema/client enum nullability is out of sync.
-  // In those cases, `quality_tier` is treated as unknown/auto (null).
-  qualityTier?: never;
-};
+export type ProjectListRow = Project;
 
 export function toProjectDto(
   project: Project,
@@ -105,7 +100,7 @@ export function toProjectListDto(
     status: project.status.toLowerCase(),
     budget_min: project.budgetMin ? Number(project.budgetMin) : null,
     budget_max: project.budgetMax ? Number(project.budgetMax) : null,
-    quality_tier: null,
+    quality_tier: project.qualityTier?.toLowerCase() ?? null,
     square_footage: project.squareFootage
       ? Number(project.squareFootage)
       : null,

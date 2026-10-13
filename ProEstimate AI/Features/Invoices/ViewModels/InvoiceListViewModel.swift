@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 
+@MainActor
 @Observable
 final class InvoiceListViewModel {
     // MARK: - State
@@ -13,13 +14,13 @@ final class InvoiceListViewModel {
     // MARK: - Computed
 
     var filteredInvoices: [Invoice] {
-        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
             return invoices
         }
-        let query = searchText.lowercased()
         return invoices.filter { invoice in
-            invoice.invoiceNumber.lowercased().contains(query)
-                || invoice.statusLabel.lowercased().contains(query)
+            invoice.invoiceNumber.localizedCaseInsensitiveContains(query)
+                || invoice.statusLabel.localizedCaseInsensitiveContains(query)
         }
     }
 

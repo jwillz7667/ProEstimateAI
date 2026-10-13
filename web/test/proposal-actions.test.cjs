@@ -11,6 +11,7 @@ const path = require('node:path');
 const apiPort = 14319;
 const webPort = 14320;
 let api, app, browser;
+let isProposalUnavailable = false;
 const fixture = {
   company: { name: 'Fixture Contractor', primary_color: '#FF9230' },
   project: { title: 'Fixture kitchen', project_type: 'KITCHEN' },
@@ -22,7 +23,17 @@ const fixture = {
 before(async () => {
   api = http.createServer((req, res) => {
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ ok: true, data: fixture }));
+    const token = req.url.split('/').pop();
+    if (token === 'recover' && isProposalUnavailable) {
+      res.statusCode = 503;
+      res.end(JSON.stringify({ ok: false, error: { code: 'UNAVAILABLE', message: 'Temporary fixture outage' } }));
+      return;
+    }
+    const data = ['approved', 'declined', 'expired'].includes(token)
+      ? { ...fixture, proposal: { ...fixture.proposal, status: token, expires_at: token === 'expired' ? null : '2000-01-01T00:00:00Z' } }
+      : token === 'unsafe-website' ? { ...fixture, company: { ...fixture.company, website_url: 'javascript:alert(1)' } }
+      : fixture;
+    res.end(JSON.stringify({ ok: true, data }));
   });
   await new Promise(resolve => api.listen(apiPort, '127.0.0.1', resolve));
   app = spawn(process.execPath, [require.resolve('next/dist/bin/next'), 'dev', '-H', '127.0.0.1', '-p', String(webPort)], {
@@ -76,8 +87,9 @@ for (const decision of ['approved', 'declined']) {
     await opener.click();
     await page.getByRole('textbox', { name: 'Message to your contractor' }).fill('Fixture message');
     await page.getByRole('button', { name: confirmName }).click();
-    await page.getByRole('alert').waitFor();
-    assert.equal(await page.getByRole('alert').textContent(), 'Temporary fixture outage');
+    const responseError = page.getByRole('alert').filter({ hasText: 'Temporary fixture outage' });
+    await responseError.waitFor();
+    assert.equal(await responseError.textContent(), 'Temporary fixture outage');
     assert.equal(await page.getByRole('textbox').inputValue(), 'Fixture message');
     await page.getByRole('button', { name: 'Keep Reviewing' }).click();
     await opener.waitFor();
@@ -98,3 +110,70 @@ for (const decision of ['approved', 'declined']) {
     await page.close();
   }, { timeout: 45000 });
 }
+
+test('final decisions remain visible after expiry; explicit expired proposals explain closure', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  for (const status of ['approved', 'declined', 'expired']) {
+    await page.goto(`http://127.0.0.1:${webPort}/proposal/${status}`);
+    assert.equal(await page.locator('header').getByText(status[0].toUpperCase() + status.slice(1), { exact: true }).count(), 1);
+    assert.equal(await page.getByRole('button', { name: 'Approve Proposal', exact: true }).count(), 0);
+    if (status === 'expired') assert.equal(await page.getByText('This proposal has expired', { exact: true }).count(), 1);
+  }
+  await page.screenshot({ path: process.env.SCREENSHOT_DIR ? `${process.env.SCREENSHOT_DIR}/proposal-expired.png` : '/tmp/proposal-expired.png', fullPage: true });
+  await page.close();
+});
+
+test('proposal print opens the native print flow and hides response controls on paper', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.goto(`http://127.0.0.1:${webPort}/proposal/fixture`);
+  await page.evaluate(() => { window.printCalls = 0; window.print = () => { window.printCalls++; }; });
+  await page.getByRole('button', { name: 'Print or save PDF', exact: true }).click();
+  assert.equal(await page.evaluate(() => window.printCalls), 1);
+  await page.emulateMedia({ media: 'print' });
+  assert.equal(await page.getByRole('button', { name: 'Print or save PDF', exact: true }).isVisible(), false);
+  assert.equal(await page.getByRole('button', { name: 'Approve Proposal', exact: true }).isVisible(), false);
+  assert.equal(await page.getByRole('heading', { name: 'Pricing', exact: true }).isVisible(), true);
+  await page.screenshot({ path: process.env.SCREENSHOT_DIR ? `${process.env.SCREENSHOT_DIR}/proposal-print.png` : '/tmp/proposal-print.png', fullPage: true });
+  await page.close();
+});
+
+test('shared page prevents unsafe website navigation and suppresses referrers', async () => {
+  const page = await browser.newPage();
+  await page.goto(`http://127.0.0.1:${webPort}/proposal/unsafe-website`);
+  assert.equal(await page.locator('a[href^="javascript:"]').count(), 0);
+  assert.equal(await page.locator('meta[name="referrer"]').getAttribute('content'), 'no-referrer');
+  await page.close();
+});
+
+test('proposal connection failure offers retry and recovers after the API returns', async () => {
+  const page = await browser.newPage();
+  isProposalUnavailable = true;
+  try {
+    await page.goto(`http://127.0.0.1:${webPort}/proposal/recover`);
+    await page.getByRole('heading', { name: 'Unable to load this proposal', exact: true }).waitFor();
+    isProposalUnavailable = false;
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
+    await page.getByRole('heading', { name: 'Fixture proposal', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Approve Proposal', exact: true }).count(), 1);
+  } finally {
+    isProposalUnavailable = false;
+    await page.close();
+  }
+});
+
+test('current plan marketing and upgraded carousel render without browser errors', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(`http://127.0.0.1:${webPort}/`);
+  await page.addStyleTag({ content: 'html { scroll-behavior: auto !important; }' });
+  await page.locator('#pricing').scrollIntoViewIfNeeded();
+  const proCard = await page.getByRole('heading', { name: 'Pro', exact: true }).locator('..').elementHandle();
+  await page.waitForFunction(card => getComputedStyle(card).opacity === '1', proCard);
+  assert.equal(await page.getByRole('heading', { name: 'Premium', exact: true }).count(), 0);
+  assert.equal(await page.getByText('2 AI project creations / month', { exact: true }).count(), 1);
+  assert.ok(await page.locator('.swiper-slide').count() > 0);
+  assert.deepEqual(errors, []);
+  await page.locator('#pricing').screenshot({ path: process.env.SCREENSHOT_DIR ? `${process.env.SCREENSHOT_DIR}/pricing.png` : '/tmp/pricing.png' });
+  await page.close();
+});

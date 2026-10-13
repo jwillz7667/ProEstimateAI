@@ -127,17 +127,19 @@ export default function TermsOfService() {
 
           <h3>4.1 Free Tier</h3>
           <p>
-            The free tier includes 3 AI preview generations, 3 estimate exports,
-            and basic features. Free tier limits are tracked server-side and
-            reset based on your usage bucket period.
+            The free tier includes five AI preview generations for the lifetime of
+            your account and manual estimating tools. Starter preview credits
+            do not reset. AI estimate generation and quote exports require Pro.
           </p>
 
           <h3>4.2 Pro Subscription</h3>
           <p>
-            Pro subscriptions are available as monthly ($19.99/month) or annual
-            ($199.99/year) plans, billed through the Apple App Store. Pro
-            includes unlimited AI generations, unlimited exports, priority
-            processing, proposals, invoicing, and priority support.
+            Pro subscriptions are available as monthly or annual plans, billed
+            through the Apple App Store at the price shown before purchase.
+            Pro includes 2 AI project creations, 20 AI previews, 20 AI-generated
+            estimates, and 50 quote exports per month, plus branded PDFs,
+            proposals, and invoicing. Daily and weekly limits also apply;
+            limits and reset times are shown in the app.
           </p>
 
           <h3>4.3 Free Trial</h3>

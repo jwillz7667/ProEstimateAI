@@ -21,6 +21,8 @@ struct InvoiceDetailView: View {
     @State private var viewModel = InvoiceDetailViewModel()
     @State private var exportedPDF: ExportedPDF?
     @State private var showDeleteConfirmation = false
+    @State private var showPaymentSheet = false
+    @State private var paymentAmountText = ""
 
     @Environment(\.dismiss) private var dismiss
 
@@ -68,6 +70,9 @@ struct InvoiceDetailView: View {
         .sheet(item: $exportedPDF) { pdf in
             ActivityViewRepresentable(activityItems: [pdf.url])
         }
+        .sheet(isPresented: $showPaymentSheet) {
+            paymentSheet
+        }
         .confirmationDialog(
             "Delete Invoice",
             isPresented: $showDeleteConfirmation,
@@ -87,7 +92,7 @@ struct InvoiceDetailView: View {
         .alert(
             "Something went wrong",
             isPresented: Binding(
-                get: { viewModel.actionError != nil },
+                get: { viewModel.actionError != nil && !showPaymentSheet },
                 set: { if !$0 { viewModel.actionError = nil } }
             )
         ) {
@@ -105,6 +110,16 @@ struct InvoiceDetailView: View {
         ScrollView {
             LazyVStack(spacing: SpacingTokens.lg) {
                 statusHeader(invoice)
+                if let error = viewModel.errorMessage ?? viewModel.lineItemsError {
+                    VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .font(TypographyTokens.caption)
+                            .foregroundStyle(ColorTokens.error)
+                        Button("Retry") { Task { await viewModel.load(id: invoiceId) } }
+                            .disabled(viewModel.isLoading)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 amountCard(invoice)
                 totalsBreakdown(invoice)
 
@@ -341,6 +356,13 @@ struct InvoiceDetailView: View {
             }
 
             if canMarkPaid(invoice) {
+                SecondaryButton(title: "Record Payment", icon: "banknote", emphasis: .accent) {
+                    paymentAmountText = ""
+                    viewModel.actionError = nil
+                    showPaymentSheet = true
+                }
+                .disabled(viewModel.isPerformingAction || viewModel.isExporting || viewModel.isLoading)
+
                 SecondaryButton(
                     title: "Mark as Paid",
                     icon: "checkmark.circle.fill",
@@ -349,6 +371,7 @@ struct InvoiceDetailView: View {
                 ) {
                     Task { await viewModel.markAsPaid() }
                 }
+                .disabled(viewModel.isPerformingAction || viewModel.isExporting || viewModel.isLoading)
             }
 
             SecondaryButton(
@@ -378,6 +401,70 @@ struct InvoiceDetailView: View {
     }
 
     // MARK: - Helpers
+
+    private var paymentValidationMessage: String? {
+        guard let invoice = viewModel.invoice else { return "The invoice is unavailable." }
+        guard let amount = DecimalFormInput.parse(paymentAmountText), amount > 0 else {
+            return "Enter the payment amount received."
+        }
+        if amount > invoice.amountDue { return "The payment exceeds the outstanding balance." }
+        var input = amount
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &input, 2, .plain)
+        return rounded == amount ? nil : "Use no more than two decimal places."
+    }
+
+    private var paymentSheet: some View {
+        NavigationStack {
+            Form {
+                if let invoice = viewModel.invoice {
+                    Section {
+                        LabeledContent("Already paid", value: currency(invoice.amountPaid))
+                        LabeledContent("Outstanding", value: currency(invoice.amountDue))
+                    }
+                }
+                Section("Payment received") {
+                    TextField("Amount", text: $paymentAmountText)
+                        .keyboardType(.decimalPad)
+                    if !paymentAmountText.isEmpty, let message = paymentValidationMessage {
+                        Text(message).font(TypographyTokens.caption).foregroundStyle(ColorTokens.error)
+                    }
+                }
+                if let actionError = viewModel.actionError {
+                    Text(actionError).foregroundStyle(ColorTokens.error)
+                }
+                if viewModel.paymentNeedsRefresh {
+                    Section {
+                        Text("Refresh and review the current balance before saving another payment.")
+                            .font(TypographyTokens.caption)
+                        Button("Refresh Invoice") {
+                            Task { await viewModel.refreshPaymentState() }
+                        }
+                        .disabled(viewModel.isLoading)
+                    }
+                }
+            }
+            .navigationTitle("Record Payment")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { showPaymentSheet = false }
+                        .disabled(viewModel.isPerformingAction)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        guard let amount = DecimalFormInput.parse(paymentAmountText) else { return }
+                        Task {
+                            if await viewModel.recordPayment(amount: amount) { showPaymentSheet = false }
+                        }
+                    }
+                    .disabled(paymentValidationMessage != nil || viewModel.isPerformingAction || viewModel.isLoading || viewModel.paymentNeedsRefresh)
+                }
+            }
+            .overlay { if viewModel.isPerformingAction { ProgressView("Saving payment…") } }
+        }
+        .interactiveDismissDisabled(viewModel.isPerformingAction)
+    }
 
     /// Payment can be recorded for any non-paid, non-void invoice that still
     /// carries a balance. Draft invoices are included so a contractor who got

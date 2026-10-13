@@ -14,7 +14,7 @@ final class LiveInvoiceService: InvoiceServiceProtocol, Sendable {
     // MARK: - InvoiceServiceProtocol
 
     func listInvoices() async throws -> [Invoice] {
-        try await apiClient.request(.listInvoices())
+        try await apiClient.requestAllPages { .listInvoices(cursor: $0) }
     }
 
     func getInvoice(id: String) async throws -> Invoice {

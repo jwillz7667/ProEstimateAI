@@ -11,9 +11,7 @@ export default defineConfig({
     // another that's still mid-transaction.
     fileParallelism: false,
     pool: "forks",
-    poolOptions: {
-      forks: { singleFork: true },
-    },
+    maxWorkers: 1,
     testTimeout: 30_000,
     hookTimeout: 60_000,
   },

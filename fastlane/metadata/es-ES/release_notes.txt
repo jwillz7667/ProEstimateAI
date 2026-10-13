@@ -1,9 +1,10 @@
-Dashboard renovado + creación de proyectos más ágil.
+Esta actualización mejora la edición de proyectos, presupuestos, facturas y propuestas compartidas.
 
-Novedades
-• Dashboard: un nuevo video destacado en bucle ocupa la parte superior de la pantalla principal, con "Nuevo proyecto" como acción principal justo debajo.
-• Creación de proyectos: las miniaturas de categoría y las tarjetas de estilo ahora tienen el tamaño justo — con espacio entre ellas, sin imágenes desproporcionadas, y quitamos el icono genérico para que la fotografía sea la protagonista.
-• Insignia de suscripción: la insignia PRO arriba a la izquierda ya no se recorta a "P" en pantallas más estrechas.
-• Icono de la app renovado en modo oscuro.
+• Asigna un cliente a un proyecto antes de crear una factura.
+• Registra pagos parciales de facturas y consulta el saldo pendiente.
+• Borra detalles guardados del proyecto y valida presupuestos y medidas.
+• Recibe mensajes claros cuando una operación falla.
+• Conserva los impuestos acordados al actualizar los pagos de facturas.
+• Imprime o guarda propuestas compartidas en PDF desde el navegador.
 
-Gracias por tus comentarios — síguenos contando en support@proestimateai.com.
+Incluye mejoras de fiabilidad y seguridad.

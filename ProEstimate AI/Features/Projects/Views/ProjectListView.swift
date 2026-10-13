@@ -9,6 +9,7 @@ struct ProjectListView: View {
     @State private var showCreation = false
     @State private var navigateToProjectId: String?
     @State private var navigateAutoGenerate: Bool = false
+    @State private var projectPendingDeletion: Project?
     @Environment(AppRouter.self) private var router
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
     @Environment(PaywallPresenter.self) private var paywallPresenter
@@ -19,6 +20,18 @@ struct ProjectListView: View {
             filterBar
                 .padding(.horizontal, SpacingTokens.md)
                 .padding(.vertical, SpacingTokens.xs)
+
+            if let error = viewModel.errorMessage, !viewModel.projects.isEmpty {
+                HStack {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(TypographyTokens.caption)
+                    Spacer()
+                    Button("Retry") { Task { await viewModel.loadProjects() } }
+                        .disabled(viewModel.isLoading)
+                }
+                .padding(SpacingTokens.md)
+                .foregroundStyle(ColorTokens.error)
+            }
 
             contentView
         }
@@ -45,9 +58,36 @@ struct ProjectListView: View {
             await viewModel.loadProjects()
         }
         .task {
-            if viewModel.projects.isEmpty {
-                await viewModel.loadProjects()
+            await viewModel.loadProjects()
+        }
+        .onAppear {
+            if !viewModel.projects.isEmpty { Task { await viewModel.loadProjects() } }
+        }
+        .confirmationDialog(
+            "Delete Project",
+            isPresented: Binding(
+                get: { projectPendingDeletion != nil },
+                set: { if !$0 { projectPendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let project = projectPendingDeletion {
+                Button("Delete Permanently", role: .destructive) {
+                    Task { await viewModel.deleteProject(id: project.id) }
+                    projectPendingDeletion = nil
+                }
             }
+            Button("Cancel", role: .cancel) { projectPendingDeletion = nil }
+        } message: {
+            Text("This permanently deletes the project and all linked documents, invoices, and photos.")
+        }
+        .alert("Couldn't delete project", isPresented: Binding(
+            get: { viewModel.actionError != nil },
+            set: { if !$0 { viewModel.actionError = nil } }
+        )) {
+            Button("OK") { viewModel.actionError = nil }
+        } message: {
+            Text(viewModel.actionError ?? "")
         }
         .fullScreenCover(isPresented: $showCreation) {
             ProjectCreationFlowView { projectId, autoGenerate in
@@ -144,11 +184,12 @@ struct ProjectListView: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button(role: .destructive) {
-                            Task { await viewModel.deleteProject(id: project.id) }
+                            projectPendingDeletion = project
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
                     }
+                    .disabled(viewModel.deletingProjectIDs.contains(project.id))
                 }
             }
             .padding(.horizontal, SpacingTokens.md)
