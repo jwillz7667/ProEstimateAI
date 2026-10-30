@@ -32,7 +32,9 @@ permissions:
 jobs:
   push:
     name: Upload metadata to App Store Connect
-    runs-on: macos-15
+    # API-only listing tasks do not need Xcode or Apple's upload transporter.
+    # Keep macOS runners available for the separate signed TestFlight build.
+    runs-on: ubuntu-latest
     timeout-minutes: 60
 
     env:
