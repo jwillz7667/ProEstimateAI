@@ -23,7 +23,7 @@ import {
   verifyGoogleIdentityToken,
   GoogleAuthNotConfiguredError,
 } from "../../lib/google-auth";
-import type { User, Company } from "@prisma/client";
+import { Prisma, type User, type Company } from "@prisma/client";
 import type {
   SignupInput,
   LoginInput,
@@ -184,8 +184,12 @@ export async function login(input: LoginInput): Promise<AuthResult> {
 export async function appleSignIn(
   input: AppleSignInInput,
 ): Promise<AuthResult> {
+  return retryIdentityCreationConflict(() => appleSignInOnce(input));
+}
+
+async function appleSignInOnce(input: AppleSignInInput): Promise<AuthResult> {
   // 1. Verify the identity token with Apple's JWKS
-  const claims = await verifyAppleIdentityToken(input.identity_token);
+  const claims = await verifyAppleIdentityToken(input.identity_token, input.raw_nonce);
   const appleUserId = claims.sub;
   // Only signed, verified provider claims may identify an account. The
   // client email is display metadata and must never authorize account linking.
@@ -347,10 +351,14 @@ export async function appleSignIn(
 export async function googleSignIn(
   input: GoogleSignInInput,
 ): Promise<AuthResult> {
+  return retryIdentityCreationConflict(() => googleSignInOnce(input));
+}
+
+async function googleSignInOnce(input: GoogleSignInInput): Promise<AuthResult> {
   // 1. Verify Google's identity token (signature + iss + aud).
   // GoogleAuthNotConfiguredError leaks through unchanged so the route
   // can surface a 503; AuthenticationError covers everything else.
-  const claims = await verifyGoogleIdentityToken(input.identity_token).catch(
+  const claims = await verifyGoogleIdentityToken(input.identity_token, input.raw_nonce).catch(
     (err) => {
       if (err instanceof GoogleAuthNotConfiguredError) throw err;
       throw err;
@@ -470,6 +478,20 @@ export async function googleSignIn(
   });
 
   return await issueTokens({ ...newUser, company });
+}
+
+/** A concurrent first sign-in may create this subject after our initial read.
+ * Its failed creation transaction rolls back completely; retry the verified
+ * subject lookup once so both requests resolve the same existing account. */
+async function retryIdentityCreationConflict(action: () => Promise<AuthResult>): Promise<AuthResult> {
+  try {
+    return await action();
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return action();
+    }
+    throw error;
+  }
 }
 
 /**

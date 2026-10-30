@@ -59,8 +59,9 @@ export type RefreshInput = z.infer<typeof refreshSchema>;
 
 // ─── Apple Sign In ──────────────────────────────────────────────────────────
 export const appleSignInSchema = z.object({
-  identity_token: z.string().min(1, "Identity token is required"),
-  authorization_code: z.string().min(1, "Authorization code is required"),
+  identity_token: z.string().min(1, "Identity token is required").max(16384),
+  authorization_code: z.string().min(1, "Authorization code is required").max(2048),
+  raw_nonce: z.string().min(16).max(128).optional(),
   full_name: z.string().trim().max(100).optional().nullable(),
   email: z
     .string()
@@ -81,7 +82,8 @@ export type AppleSignInInput = z.infer<typeof appleSignInSchema>;
 // them in the token claims. A client-provided name is display metadata;
 // a client-provided email never authorizes account lookup or linking.
 export const googleSignInSchema = z.object({
-  identity_token: z.string().min(1, "Identity token is required"),
+  identity_token: z.string().min(1, "Identity token is required").max(16384),
+  raw_nonce: z.string().min(16).max(128).optional(),
   full_name: z.string().trim().max(100).optional().nullable(),
   email: z
     .string()
