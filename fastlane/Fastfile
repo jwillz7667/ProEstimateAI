@@ -200,7 +200,7 @@ platform :ios do
       parsed
     end
     versions = asc_get.call("apps/#{app.id}/appStoreVersions?filter[platform]=IOS&limit=20").fetch("data")
-    app_info = asc_get.call("apps/#{app.id}/appInfos?limit=50").fetch("data").map do |info|
+    app_info = asc_get.call("apps/#{app.id}/appInfos?include=primaryCategory,secondaryCategory&limit=50").fetch("data").map do |info|
       localizations = asc_get.call("appInfos/#{info['id']}/appInfoLocalizations?limit=50").fetch("data").map do |localization|
         attributes = localization.fetch("attributes")
         { locale: attributes["locale"], name: attributes["name"], subtitle: attributes["subtitle"], privacy_policy_url: attributes["privacyPolicyUrl"] }
