@@ -30,5 +30,6 @@
   "reviewNotesUpdatedForFreshWorkspace": true,
   "reviewNotesDiscloseFiniteProLimits": true,
   "reviewCredentialsChanged": false,
-  "reviewNotesAppleUploadPending": true
+  "reviewNotesAppleUploadPending": true,
+  "oldFixedTrialAndProviderClaimsRemoved": true
 }

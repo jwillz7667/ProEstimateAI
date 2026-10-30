@@ -5,7 +5,7 @@ Sign in with the demo username and password supplied in the App Review login fie
 
 Pro features are enabled for this designated account through an administrative App Review grant. No subscription purchase is required to inspect these features. The grant is not an Apple purchase or receipt. Normal Pro limits still apply: up to 2 new projects, 20 AI previews, 20 AI-generated estimates and 50 PDF quote exports per rolling 30-day period, with daily/weekly limits as shown in the app.
 
-Suggested review flow: sign in; create a client and project; add or generate editable material/labor line items; review quantities, markup and tax; prepare a PDF quote; share a proposal approval link; create an invoice and record payments. AI previews and suggestions are optional starting points that users must review.
+Suggested review flow: sign in; create a client and project; add or generate editable material/labor line items; review quantities, markup and tax; prepare a PDF quote; share a proposal approval link; create an invoice and record payments. AI previews and suggestions are optional starting points that users must review. The current primary image provider is fal.ai.
 
 The app offers Pro monthly and annual auto-renewable subscriptions. Localized pricing and eligible introductory offers are shown before purchase. Restore Purchases is available in the app. Existing Premium purchases are supported for restoration; Premium is not offered as a new subscription.
 
