@@ -37,9 +37,9 @@ extension SubscriptionState {
     /// and admin-granted overrides.
     var hasProAccess: Bool {
         switch self {
-        case .trialActive, .proActive, .gracePeriod, .billingRetry, .canceledActive, .adminOverride:
+        case .trialActive, .proActive, .gracePeriod, .canceledActive, .adminOverride:
             return true
-        case .free, .expired, .revoked:
+        case .free, .billingRetry, .expired, .revoked:
             return false
         }
     }

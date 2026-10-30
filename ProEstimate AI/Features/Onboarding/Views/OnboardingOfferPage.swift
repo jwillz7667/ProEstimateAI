@@ -13,7 +13,7 @@ struct OnboardingOfferPage: View {
     let onContinueFree: () -> Void
 
     private let proBenefits: [ProBenefit] = [
-        ProBenefit(icon: "infinity", title: "Unlimited AI previews", subtitle: "No more 3-a-month cap"),
+        ProBenefit(icon: "photo.fill", title: "20 AI previews per month", subtitle: "Plus 20 AI estimates and 2 new projects"),
         ProBenefit(icon: "doc.richtext.fill", title: "Branded PDFs", subtitle: "Your logo, colors, no watermark"),
         ProBenefit(icon: "dollarsign.circle.fill", title: "Invoicing", subtitle: "Send and track payments"),
         ProBenefit(icon: "link", title: "Client approval links", subtitle: "One-tap online sign-off"),

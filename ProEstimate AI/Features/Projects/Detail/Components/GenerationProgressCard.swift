@@ -11,6 +11,7 @@ struct GenerationProgressCard: View {
     /// Current stage index from `GenerationStage`. Drives both the stage
     /// chips and the linear progress track.
     let currentStage: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var elapsedSeconds: Int = 0
     @State private var iconPulse: Bool = false
@@ -63,7 +64,7 @@ struct GenerationProgressCard: View {
                     .frame(width: 68, height: 68)
                     .scaleEffect(iconPulse ? 1.08 : 0.92)
                     .animation(
-                        .easeInOut(duration: 1.6).repeatForever(autoreverses: true),
+                        reduceMotion ? nil : .easeInOut(duration: 1.6).repeatForever(autoreverses: true),
                         value: iconPulse
                     )
 
@@ -71,7 +72,7 @@ struct GenerationProgressCard: View {
                     .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(ColorTokens.primaryOrange)
                     .symbolRenderingMode(.hierarchical)
-                    .symbolEffect(.pulse, options: .repeating, value: iconPulse)
+                    .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion && iconPulse)
             }
 
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
@@ -146,7 +147,7 @@ struct GenerationProgressCard: View {
                                     ? proxy.size.width * clampedProgressFraction
                                     : -60)
                             .animation(
-                                .linear(duration: 1.4).repeatForever(autoreverses: false),
+                                reduceMotion ? nil : .linear(duration: 1.4).repeatForever(autoreverses: false),
                                 value: iconPulse
                             )
                             .mask(
@@ -156,7 +157,7 @@ struct GenerationProgressCard: View {
                                 )
                             )
                     )
-                    .animation(.easeInOut(duration: 0.6), value: clampedProgressFraction)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: clampedProgressFraction)
             }
         }
         .frame(height: 6)
@@ -182,7 +183,7 @@ struct GenerationProgressCard: View {
                 case .active:
                     Image(systemName: "circle.fill")
                         .foregroundStyle(ColorTokens.primaryOrange)
-                        .symbolEffect(.pulse, options: .repeating, value: iconPulse)
+                        .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion && iconPulse)
                 case .pending:
                     Image(systemName: "circle")
                         .foregroundStyle(ColorTokens.progressTrack)

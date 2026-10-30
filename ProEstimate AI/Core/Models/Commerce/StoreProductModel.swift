@@ -45,6 +45,25 @@ extension StoreProductModel {
         hasIntroOffer && (isEligibleForIntroOffer ?? false)
     }
 
+    /// Trial copy is valid only for the selected product and confirmed eligibility.
+    func purchaseButtonTitle(fallback: String) -> String {
+        if !showsTrialBadge,
+           fallback.localizedCaseInsensitiveContains("trial") || fallback.localizedCaseInsensitiveContains("free") {
+            return "Subscribe Now"
+        }
+        return fallback
+    }
+
+    static func annualSavingsText(monthlyPrice: Decimal, annualPrice: Decimal) -> String? {
+        let yearlyMonthlyPrice = monthlyPrice * 12
+        guard yearlyMonthlyPrice > 0, annualPrice > 0, annualPrice < yearlyMonthlyPrice else { return nil }
+        var savingsPercent = (yearlyMonthlyPrice - annualPrice) / yearlyMonthlyPrice * 100
+        var roundedPercent = Decimal()
+        NSDecimalRound(&roundedPercent, &savingsPercent, 0, .down)
+        let percent = NSDecimalNumber(decimal: roundedPercent).intValue
+        return percent > 0 ? "Save \(percent)%" : nil
+    }
+
     /// Tier (Free vs Pro). Derived from the plan code so the UI
     /// stays in sync with the backend's authoritative classification.
     var tier: PlanTier {
@@ -97,7 +116,7 @@ extension StoreProductModel {
                 introOfferDisplayText: nil,
                 isEligibleForIntroOffer: nil,
                 isFeatured: false,
-                savingsText: "Save 17%"
+                savingsText: nil
             )
         }
         return StoreProductModel(

@@ -1,4 +1,5 @@
 import SwiftUI
+import ImageIO
 
 /// Interactive before/after image comparison slider.
 /// The user drags a vertical divider to reveal the "before" image on the
@@ -11,6 +12,8 @@ struct BeforeAfterSlider: View {
 
     @State private var sliderPosition: CGFloat = 0.5
     @GestureState private var isDragging: Bool = false
+    @State private var beforePreviewImage: UIImage?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         beforeImageURL: URL?,
@@ -87,10 +90,8 @@ struct BeforeAfterSlider: View {
                         state = true
                     }
                     .onChanged { value in
-                        withAnimation(.interactiveSpring) {
-                            let newPosition = value.location.x / width
-                            sliderPosition = min(max(newPosition, 0.02), 0.98)
-                        }
+                        guard width > 0 else { return }
+                        sliderPosition = min(max(value.location.x / width, 0), 1)
                     }
             )
         }
@@ -100,14 +101,29 @@ struct BeforeAfterSlider: View {
         .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Before and after comparison")
-        .accessibilityHint("Drag horizontally to reveal before or after image")
+        .accessibilityValue("\(Int(sliderPosition * 100)) percent before")
+        .accessibilityHint("Swipe up or down to adjust the comparison")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: sliderPosition = min(1, sliderPosition + 0.1)
+            case .decrement: sliderPosition = max(0, sliderPosition - 0.1)
+            @unknown default: break
+            }
+        }
+        .task(id: beforeImageData) {
+            beforePreviewImage = nil
+            guard let data = beforeImageData else { return }
+            let image = await Self.makePreview(data)
+            guard !Task.isCancelled else { return }
+            beforePreviewImage = image
+        }
     }
 
     // MARK: - Subviews
 
     private var beforeImage: some View {
         Group {
-            if let beforeImageData, let uiImage = UIImage(data: beforeImageData) {
+            if let uiImage = beforePreviewImage {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
@@ -164,8 +180,8 @@ struct BeforeAfterSlider: View {
                     }
                     .foregroundStyle(.gray)
                 }
-                .scaleEffect(isDragging ? 1.15 : 1.0)
-                .animation(.easeInOut(duration: 0.15), value: isDragging)
+                .scaleEffect(isDragging && !reduceMotion ? 1.15 : 1.0)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isDragging)
                 .position(x: x, y: totalHeight / 2)
         }
     }
@@ -184,17 +200,18 @@ struct BeforeAfterSlider: View {
                 }
             }
     }
-}
 
-// MARK: - Clip Shape
-
-/// Custom shape that clips to a rectangle from the leading edge
-/// to a specified width.
-private struct HorizontalClipShape: Shape {
-    let width: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        Path(CGRect(x: 0, y: 0, width: width, height: rect.height))
+    private nonisolated static func makePreview(_ data: Data) async -> UIImage? {
+        await Task.detached(priority: .userInitiated) {
+            guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+                  let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceShouldCacheImmediately: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 2048,
+                  ] as CFDictionary) else { return nil }
+            return UIImage(cgImage: image)
+        }.value
     }
 }
 

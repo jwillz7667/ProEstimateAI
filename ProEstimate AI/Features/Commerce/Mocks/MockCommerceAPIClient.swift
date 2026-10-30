@@ -9,6 +9,7 @@ final class MockCommerceAPIClient: CommerceAPIClientProtocol {
 
     /// When set, all methods will throw this error.
     var forcedError: Error?
+    var syncForcedError: Error?
 
     /// The entitlement snapshot to return from `fetchEntitlement()`.
     var entitlementSnapshot: EntitlementSnapshot
@@ -24,6 +25,7 @@ final class MockCommerceAPIClient: CommerceAPIClientProtocol {
     private(set) var fetchEntitlementCallCount = 0
     private(set) var createPurchaseAttemptCallCount = 0
     private(set) var syncTransactionCallCount = 0
+    private(set) var restoreTransactionCallCount = 0
     private(set) var consumeUsageCallCount = 0
     private(set) var lastConsumedMetric: UsageMetricCode?
 
@@ -70,6 +72,7 @@ final class MockCommerceAPIClient: CommerceAPIClientProtocol {
     func syncTransaction(request: SyncTransactionRequest) async throws -> EntitlementSnapshot {
         try await simulateDelay()
         syncTransactionCallCount += 1
+        if let error = syncForcedError { throw error }
         if let error = forcedError { throw error }
 
         // After sync, return a Pro entitlement.
@@ -78,6 +81,7 @@ final class MockCommerceAPIClient: CommerceAPIClientProtocol {
 
     func restoreTransactions(_ transactions: [RestoreTransactionItem]) async throws -> EntitlementSnapshot {
         try await simulateDelay()
+        restoreTransactionCallCount += 1
         if let error = forcedError { throw error }
         // If any transactions are restored, return Pro; otherwise return current snapshot.
         return transactions.isEmpty ? entitlementSnapshot : .samplePro

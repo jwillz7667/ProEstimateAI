@@ -21,6 +21,9 @@ protocol PurchaseCoordinating: Sendable {
     /// Begin listening for transaction updates (renewals, revocations, refunds).
     /// This should be called once at app launch and run indefinitely.
     func listenForTransactions() async
+
+    /// Retry unfinished deliveries after authentication or connectivity recovers.
+    func reconcileUnfinishedTransactions() async
 }
 
 // MARK: - Purchase Errors
@@ -34,6 +37,9 @@ enum PurchaseError: Error, LocalizedError, Sendable {
 
     /// The purchase is pending (e.g., Ask to Buy, requires approval).
     case pending
+
+    /// Apple completed the purchase, but backend delivery needs to be retried.
+    case deliveryPending
 
     /// StoreKit returned an unverified transaction — possible tampering.
     case unverified
@@ -71,6 +77,8 @@ enum PurchaseError: Error, LocalizedError, Sendable {
             return String(localized: "purchase.error.cancelled", defaultValue: "Purchase was cancelled.")
         case .pending:
             return String(localized: "purchase.error.pending.message", defaultValue: "Your purchase is pending approval.")
+        case .deliveryPending:
+            return "Your purchase is waiting to sync. Restore Purchases to finish activating access."
         case .unverified:
             return String(localized: "purchase.error.unverified.message", defaultValue: "The transaction could not be verified. Please try again.")
         case .productNotFound:
@@ -83,7 +91,7 @@ enum PurchaseError: Error, LocalizedError, Sendable {
         case .accountMismatch:
             return String(
                 localized: "purchase.error.account_mismatch.message",
-                defaultValue: "We detected a different Apple ID than the one linked to your ProEstimate account. Sign out of the other Apple ID in Settings → App Store, or tap Restore Purchases if you've already subscribed."
+                defaultValue: "This purchase is associated with another ProEstimate account. Sign in to that account, or restore purchases to check your subscription."
             )
         case .subscriptionBoundToOtherUser:
             return String(

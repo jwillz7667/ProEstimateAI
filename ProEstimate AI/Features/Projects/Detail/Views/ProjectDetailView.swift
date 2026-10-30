@@ -68,6 +68,7 @@ struct ProjectDetailView: View {
 
     @Environment(AppRouter.self) private var router
     @Environment(FeatureGateCoordinator.self) private var featureGateCoordinator
+    @Environment(UsageMeterStore.self) private var usageMeterStore
     @Environment(PaywallPresenter.self) private var paywallPresenter
     @Environment(AppState.self) private var appState
 
@@ -674,7 +675,11 @@ struct ProjectDetailView: View {
                     }
                 } catch {
                     await MainActor.run {
-                        viewModel.errorMessage = "Export failed: \(error.localizedDescription)"
+                        if case let APIError.paywall(decision) = error {
+                            paywallPresenter.present(decision)
+                        } else {
+                            viewModel.errorMessage = "Export failed: \(error.localizedDescription)"
+                        }
                         exportingEstimateId = nil
                         exportProgressMessage = nil
                     }
@@ -712,7 +717,12 @@ struct ProjectDetailView: View {
     /// not the JSON envelope APIClient expects.
     private func downloadSavedExport(_ export: EstimateExport) async -> URL? {
         do {
-            let (data, _) = try await URLSession.shared.data(from: export.downloadURL)
+            let (data, response) = try await URLSession.shared.data(from: export.downloadURL)
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode),
+                  data.starts(with: Data("%PDF-".utf8)) else {
+                return nil
+            }
             let tmpDir = FileManager.default.temporaryDirectory
             let dest = tmpDir.appendingPathComponent(export.fileName)
             try? FileManager.default.removeItem(at: dest)
@@ -736,7 +746,10 @@ struct ProjectDetailView: View {
         // and show the misleading "needs a line item" message. Ancillary
         // fetches below stay optional so a missing logo/asset never blocks.
         let estimate = try await estimateService.getEstimate(id: estimateId)
-        let lineItems = (try? await estimateService.getLineItems(estimateId: estimateId)) ?? []
+        let lineItems = try await estimateService.getLineItems(estimateId: estimateId)
+        guard !lineItems.isEmpty else {
+            throw APIError.validation(fields: ["line_items": ["Add at least one line item before exporting the estimate."]])
+        }
         let projectId = estimate.projectId
         let isDIY = viewModel.isDIY
 
@@ -786,7 +799,7 @@ struct ProjectDetailView: View {
 
         await setExportProgress("Rendering PDF...")
 
-        return await MainActor.run {
+        guard let url = await MainActor.run(body: {
             EstimatePDFRenderer.render(
                 estimate: estimate,
                 lineItems: lineItems,
@@ -797,6 +810,16 @@ struct ProjectDetailView: View {
                 afterImage: afterImage,
                 projectTitle: project?.title
             )
+        }) else { return nil }
+
+        // Prepare locally before reserving quota, then require the server's
+        // atomic approval before returning any file to upload or share.
+        do {
+            try await usageMeterStore.consumeQuoteExport()
+            return url
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            throw error
         }
     }
 

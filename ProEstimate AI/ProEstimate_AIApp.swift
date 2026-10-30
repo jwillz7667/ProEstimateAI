@@ -118,6 +118,7 @@ struct ProEstimate_AIApp: App {
                     generationLifecycle.handleScenePhase(newPhase)
                     if newPhase == .active {
                         Task {
+                            await reconcilePurchases()
                             await entitlementStore.refresh()
                             await usageMeterStore.refresh()
                         }
@@ -140,6 +141,7 @@ struct ProEstimate_AIApp: App {
                 .onChange(of: appState.isAuthenticated) { wasAuthed, isAuthed in
                     if !wasAuthed, isAuthed {
                         Task {
+                            await reconcilePurchases()
                             await entitlementStore.refresh()
                             await usageMeterStore.refresh()
                             await featureGateCoordinator.loadProducts()
@@ -177,6 +179,17 @@ struct ProEstimate_AIApp: App {
                             await usageMeterStore.refresh()
                         }
                     }
+                }
+                .alert(
+                    paywallPresenter.activeLimitNotice?.headline ?? "Plan Limit Reached",
+                    isPresented: Binding(
+                        get: { paywallPresenter.activeLimitNotice != nil },
+                        set: { if !$0 { paywallPresenter.activeLimitNotice = nil } }
+                    )
+                ) {
+                    Button("OK", role: .cancel) { paywallPresenter.activeLimitNotice = nil }
+                } message: {
+                    Text(paywallPresenter.activeLimitNotice?.subheadline ?? "Please try again when your allowance resets.")
                 }
         }
         .modelContainer(modelContainer)
@@ -252,6 +265,12 @@ struct ProEstimate_AIApp: App {
                 }
             }
         }
+    }
+
+    private func reconcilePurchases() async {
+        guard appState.isAuthenticated else { return }
+        let coordinator = StoreKitPurchaseCoordinator(commerceAPI: CommerceAPIClient(), entitlementStore: entitlementStore)
+        await coordinator.reconcileUnfinishedTransactions()
     }
 
     /// Translate a generation notification tap into navigation. Routes

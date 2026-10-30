@@ -123,7 +123,7 @@ final class FeatureGateCoordinator {
             placement: .generationLimitHit,
             triggerReason: "Free generation credits exhausted",
             headline: "You've Used All 5 Free Generations",
-            subheadline: "Start a 7-day free trial to keep generating AI previews — unlimited while you trial, then continue on any paid plan."
+            subheadline: "Pro includes 20 AI previews per month. Eligible monthly subscribers can start with a 7-day free trial."
         )
     }
 

@@ -4,7 +4,7 @@ Status recorded October 30, 2026. The replacement API, PostgreSQL 18, Redis 8.2,
 
 The original API hostname now routes to the replacement API: <https://proestimate-api-production-75e5.up.railway.app>. Released iOS clients can continue using that hostname. At 08:11 UTC, `/health` reported `healthy`, PostgreSQL `connected`, and Redis `connected`. The replacement website at <https://proestimate-web-production.up.railway.app> returned `ok` from `/api/health`.
 
-The website custom-domain cutover and the remaining integration checks below are still outstanding. A healthy website process does not establish correct browser API configuration: the serving website bundle was found to contain the superseded `75b9` API hostname and needs a successful rebuild.
+The website custom-domain cutover and the remaining integration checks below are still outstanding. The website was rebuilt successfully after a stale browser API origin was found. The proposal page's eight script files now contain the preserved `75e5` API origin and zero references to the superseded `75b9` origin.
 
 ## Deployment record
 
@@ -27,8 +27,11 @@ The reviewed baseline source is commit `44a4c0b34ff8ec7bc862639628f89918bb018489
 | Website `f7f86f0a-ccfa-4e0d-b82e-87a06017f02e` | `SUCCESS`; serving website build |
 | Website `beceb147-a46d-4f47-96c9-38edc24330cc` | `SKIPPED`; the attempted hostname-change rebuild did not replace the serving build |
 | Website `39d3fd0a-557a-43af-91bd-6ffea84f30e9` | `SKIPPED`; a repeat upload also did not replace the serving build |
+| Website `473db366-8906-4ee7-b073-ca2c9fb03b95` | `SUCCESS`; rebuilt with the preserved API origin, browser bundle verified |
+| API `33228806-1753-4a53-bbf7-b7c13096da41` | `SUCCESS`; reviewed billing/refund fixes from `a2341ed` |
+| API `97a13dd4-5734-488f-9d9d-f1e0c8b78ec2` | `SUCCESS`; reviewed Apple/Google OAuth verification and first-login fixes from `7f86ea8` |
 
-The public JavaScript loaded by `/proposal/migration-config-check` still embedded `https://proestimate-api-production-75b9.up.railway.app/v1` at this review. Rebuild the website with both API variables set to the preserved `75e5` origin and verify the proposal page's browser bundle before changing DNS. Billing, entitlement, generation-refund, and frontend audit changes in the working tree are separate from the baseline deployment; record their reviewed commit and successful deployment before claiming those fixes are live.
+The stale website origin was corrected by clearing the service watch filter and uploading the tracked website archive again. Its successful build now embeds `https://proestimate-api-production-75e5.up.railway.app/v1`; the public proposal page and scripts were checked after deployment. Backend billing/refund and OAuth fixes are deployed from `7f86ea8`. iOS source changes compile through the Build iOS Apps plugin; they still require a signed release build and distribution before existing installed apps receive them.
 
 ## Data decision and preserved source
 
@@ -52,7 +55,7 @@ Application binary content lives in PostgreSQL as base64 text: `Asset.imageData`
 | Health path / timeout | `/health` / 300 seconds | `/api/health` / 300 seconds |
 | Restart policy | On failure, maximum 3 retries | On failure, maximum 3 retries |
 | Public target port | 3000 | 3000 |
-| Watch path | `/backend/**` | `/web/**` |
+| Watch path | `/backend/**` | Empty during CLI-driven migration rebuilds |
 
 The API Dockerfile runs `prisma migrate deploy`, the production-only catalog bootstrap, concurrent entitlement-index setup, then the server. The catalog bootstrap uses transactional, create-only upserts and does not create demo users or customer records. The baseline creates the Free/Pro catalog; the billing audit adds retired Premium records for signed historical restores while keeping them unavailable for new sales. Do not replace the container start sequence with `npm start`, which skips migration/bootstrap/index setup.
 
@@ -105,13 +108,17 @@ The deployed baseline passed the following live HTTP checks using a disposable Q
 - A real fal.ai photo edit, generation polling, persisted preview download, and exactly one starter credit consumed. The preview completed in about 13 seconds at 1182 × 886 pixels.
 - Website process health and successful Docker builds for API and website.
 
+Post-billing-deployment checks passed again: real fal preview in 6.05 seconds, exact one-credit consumption, quote-export and property-map requests returning HTTP 402 for a Free user, and QA cleanup. Post-OAuth-deployment checks rejected invalid Apple and Google signing keys with HTTP 401 `UNAUTHORIZED` rather than accepting a session or failing with HTTP 500. This rejection check is not a real interactive provider login.
+
+DeepSeek funding is now confirmed: its balance endpoint returned HTTP 200 with an available positive balance. A subsequent isolated app generation exposed 23 persisted material/labor suggestions through the normal generation-materials API; the real iPad UI showed an AI estimate and subtotals. That QA tenancy was deleted after capture. The Railway website's support chat endpoint also returned HTTP 200 with a nonempty streamed response after funding. These observations replace the earlier insufficient-balance blocker.
+
 Direct fal.ai generation and edit checks also succeeded. The selected FLUX.2 Flash provider is billed by input/output megapixels; see the [fal.ai model page](https://fal.ai/models/fal-ai/flux-2/flash/edit) for current pricing. Keys and full provider responses are excluded from deployment evidence.
 
 The following remain separate from the successful infrastructure/API cutover:
 
-1. **Website build and branded DNS:** successfully rebuild the website, then perform the scoped DNS cutover once Vercel owner access exists. Process health alone did not catch the stale public API origin.
-2. **DeepSeek credit:** the copied key was accepted, but direct service checks returned HTTP 402 “Insufficient Balance.” The user said they would add credits; funding is not confirmed. AI estimates, material/labor suggestions, and website support chat need a successful post-funding check. The live material-suggestion check returned no suggestions before its deadline.
-3. **Billing and frontend audit release:** review, test, commit, and deploy the audit fixes. A baseline `/v1/usage/check` request returned HTTP 404 `NOT_FOUND` for a paid quote flow; the audit addresses entitlement/usage gates, Apple lifecycle handling, and iOS paywall/state decoding. Working-tree fixes are not live until their deployment succeeds.
+1. **Branded DNS:** perform the scoped DNS cutover once Vercel owner access exists. The replacement website build and browser API origin have now been verified.
+2. **Frontend distribution:** backend billing/refund/OAuth changes are deployed from `7f86ea8`; 221 unit tests, 93 distinct billing/database integration cases and nine focused OAuth/auth cases were verified across the relevant runs. A baseline paid quote check returned HTTP 404 `NOT_FOUND`; its post-fix live check now returns the expected HTTP 402. iOS regression checks and plugin compilation pass, but App Store/TestFlight distribution is not performed by this migration.
+3. **OAuth lifecycle:** Google client-ID configuration matches the iOS app, invalid-token HTTP checks pass, and automated nonce/account-creation regressions pass. Real signed-app Apple/Google logins and Apple token revocation during account deletion remain unverified/unimplemented respectively. See [oauth-audit-2026-10-30.md](oauth-audit-2026-10-30.md).
 4. **Apple purchase validation:** real sandbox/TestFlight purchase, restore, renewal, billing grace/retry, expiry, revocation/refund, original-transaction ownership, and notification delivery still need end-to-end evidence. Automated tests with mocked Apple proof and real PostgreSQL are not real StoreKit validation. Confirm App Store Connect's notification URL is `https://proestimate-api-production-75e5.up.railway.app/v1/commerce/webhooks/app-store` and configure missing server API credentials if authenticated cross-checks are required.
 5. **Other integrations and recovery:** configure missing outbound-email/APNs credentials and test delivery; check Google sign-in/API restrictions, proposal approval, PDFs/invoice totals, and website CORS. Schedule destination volume backups and verify a restore into an isolated database; backup scheduling and restoration have not been verified.
 

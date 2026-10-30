@@ -62,7 +62,7 @@ final class MockStoreKitCatalogService: StoreKitCatalogProviding {
         return nil
     }
 
-    func isEligibleForIntroOffer(groupID: String) async -> Bool {
+    func isEligibleForIntroOffer() async -> Bool {
         introOfferCheckCallCount += 1
         return introOfferEligible
     }

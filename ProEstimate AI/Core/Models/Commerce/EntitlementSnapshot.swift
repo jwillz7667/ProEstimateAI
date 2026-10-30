@@ -33,12 +33,8 @@ struct EntitlementSnapshot: Codable, Equatable, Sendable {
 
 /// Identifies which plan a user is on. Matches the backend `PlanCode` enum.
 ///
-/// The retired `PREMIUM_*` SKUs are intentionally absent. Decoding is
-/// resilient: an unrecognized code (e.g. a grandfathered Premium
-/// entitlement still on the server) maps to `proMonthly` instead of
-/// failing the whole snapshot decode. Feature access is driven by
-/// `subscription_state` + `feature_flags`, never by this code, so a
-/// legacy Premium account keeps full access and simply presents as Pro.
+/// Retired Premium plans retain their billing period and display as Pro.
+/// Unknown plans display as Free; access still comes from the server snapshot.
 enum PlanCode: String, Codable, CaseIterable, Sendable {
     case freeStarter = "FREE_STARTER"
     case proMonthly = "PRO_MONTHLY"
@@ -46,7 +42,11 @@ enum PlanCode: String, Codable, CaseIterable, Sendable {
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
-        self = PlanCode(rawValue: raw) ?? .proMonthly
+        switch raw {
+        case "PREMIUM_MONTHLY": self = .proMonthly
+        case "PREMIUM_ANNUAL": self = .proAnnual
+        default: self = PlanCode(rawValue: raw) ?? .freeStarter
+        }
     }
 }
 
@@ -109,6 +109,8 @@ enum BillingPeriod: String, CaseIterable, Sendable {
 enum UsageMetricCode: String, Codable, CaseIterable, Sendable {
     case aiGeneration = "AI_GENERATION"
     case quoteExport = "QUOTE_EXPORT"
+    case projectCreated = "PROJECT_CREATED"
+    case estimateGenerated = "ESTIMATE_GENERATED"
 }
 
 // MARK: - Usage Bucket
@@ -151,7 +153,8 @@ enum FeatureCode: String, CaseIterable, Sendable {
 extension EntitlementSnapshot {
     /// Check whether a specific feature is enabled.
     func hasFeature(_ feature: FeatureCode) -> Bool {
-        featureFlags[feature.rawValue] ?? false
+        if feature != .canGeneratePreview && !subscriptionState.hasProAccess { return false }
+        return featureFlags[feature.rawValue] ?? false
     }
 
     /// Remaining count for a given usage metric, or nil if not tracked.

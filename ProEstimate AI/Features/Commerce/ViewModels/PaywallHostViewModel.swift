@@ -141,10 +141,14 @@ final class PaywallHostViewModel {
             // Then try to enrich with live StoreKit pricing and eligibility.
             do {
                 let storeProducts = try await catalogService.loadProducts()
-                let isEligibleForIntro = await catalogService.isEligibleForIntroOffer(
-                    groupID: AppConstants.subscriptionGroupID
-                )
+                let isEligibleForIntro = await catalogService.isEligibleForIntroOffer()
                 isEligibleForTrial = isEligibleForIntro
+
+                let annualSavingsText: String? = {
+                    guard let monthly = storeProducts.first(where: { $0.id == AppConstants.proMonthlyProductID }),
+                          let annual = storeProducts.first(where: { $0.id == AppConstants.proAnnualProductID }) else { return nil }
+                    return StoreProductModel.annualSavingsText(monthlyPrice: monthly.price, annualPrice: annual.price)
+                }()
 
                 // Map StoreKit products and merge with backend data.
                 // Pro Monthly is the featured tile (paywall headline, where
@@ -156,7 +160,7 @@ final class PaywallHostViewModel {
                         isEligibleForIntro: isEligibleForIntro,
                         isFeatured: product.id == AppConstants.proMonthlyProductID,
                         savingsText: product.id == AppConstants.proAnnualProductID
-                            ? "Save 17%"
+                            ? annualSavingsText
                             : nil
                     )
                 }
@@ -267,6 +271,9 @@ final class PaywallHostViewModel {
                 appAccountToken: appAccountToken
             )
 
+            guard entitlementStore.hasProAccess else {
+                throw PurchaseError.deliveryPending
+            }
             purchaseSucceeded = true
             logger.info("Purchase completed successfully for product: \(selectedProduct.productId)")
         } catch let error as PurchaseError {
@@ -303,6 +310,8 @@ final class PaywallHostViewModel {
         case .pending:
             logger.info("Purchase pending approval.")
             activeAlert = PurchaseAlert(kind: .pendingApproval, context: context)
+        case .deliveryPending:
+            activeAlert = PurchaseAlert(kind: .deliveryPending, context: context)
         case .accountMismatch:
             logger.error("Purchase blocked by account mismatch.")
             activeAlert = PurchaseAlert(kind: .accountMismatch, context: context)
@@ -367,6 +376,24 @@ final class PaywallHostViewModel {
 
     // MARK: - Computed Properties
 
+    var hasProAccess: Bool { entitlementStore.hasProAccess }
+
+    var displayHeadline: String {
+        if selectedProduct?.showsTrialBadge != true,
+           decision.headline.localizedCaseInsensitiveContains("trial") {
+            return "Unlock Pro Features"
+        }
+        return decision.headline
+    }
+
+    var displaySubheadline: String {
+        if selectedProduct?.showsTrialBadge != true,
+           decision.subheadline.localizedCaseInsensitiveContains("trial") {
+            return "Choose a monthly or annual plan for AI previews, branded proposals, invoicing, and client approvals."
+        }
+        return decision.subheadline
+    }
+
     /// The monthly product, if available.
     var monthlyProduct: StoreProductModel? {
         products.first { $0.isMonthly }
@@ -397,14 +424,7 @@ final class PaywallHostViewModel {
     /// the "Start Free Trial" copy with an immediate-charge label so the user
     /// isn't surprised by a charge.
     var primaryCtaTitle: String {
-        let base = decision.primaryCtaTitle
-        // If eligibility is known-false AND the decision copy implies a trial, override.
-        if isEligibleForTrial == false,
-           base.localizedCaseInsensitiveContains("trial") || base.localizedCaseInsensitiveContains("free")
-        {
-            return "Subscribe Now"
-        }
-        return base
+        selectedProduct?.purchaseButtonTitle(fallback: decision.primaryCtaTitle) ?? "Subscribe Now"
     }
 }
 

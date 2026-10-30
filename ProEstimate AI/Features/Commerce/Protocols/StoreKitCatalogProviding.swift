@@ -15,7 +15,7 @@ protocol StoreKitCatalogProviding: Sendable {
     func product(for id: String) async throws -> Product?
 
     /// Check whether the current user is eligible for an introductory offer
-    /// in the given subscription group.
+    /// in the subscription group returned by the live product catalog.
     /// Returns `true` if the user has never subscribed to this group.
-    func isEligibleForIntroOffer(groupID: String) async -> Bool
+    func isEligibleForIntroOffer() async -> Bool
 }

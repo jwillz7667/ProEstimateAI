@@ -1,10 +1,8 @@
 import SwiftUI
 
 /// Top-of-dashboard hero card hosting a silent, gaplessly-looping promo
-/// video. Replaces the previous subscription upgrade banner — pure
-/// visual hook, no overlays or tap handlers — and is intentionally
-/// taller than the banner it replaces so the rest of the dashboard
-/// content reflows down a screen-third.
+/// video. This decorative card stays compact on tablets so the business
+/// summary and primary actions remain visible in landscape.
 ///
 /// The "curved screen" effect is built from three layers:
 /// 1. A continuous-corner clip mask shaped like a phone/tablet bezel.
@@ -14,18 +12,17 @@ import SwiftUI
 ///    off a glass display, giving the otherwise-flat video a soft
 ///    physical presence on the surface.
 ///
-/// The video aspect (1080×720 = 3:2) is enforced via `Color.clear` +
-/// `aspectRatio(.fit)` so the card height tracks whatever width the
-/// parent gives it without ever distorting the image.
+/// Phones retain the source's 3:2 aspect. Regular-width layouts crop the
+/// video into a shallow banner rather than scaling its height with width.
 struct DashboardHeroVideoCard: View {
     @State private var isPlaying = true
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let cornerRadius: CGFloat = 28
     private let videoAspect: CGFloat = 1080.0 / 720.0
 
     var body: some View {
-        Color.clear
-            .aspectRatio(videoAspect, contentMode: .fit)
+        videoSurface
             .overlay {
                 LoopingVideoPlayer(
                     resourceName: "dashboard_hero",
@@ -42,6 +39,15 @@ struct DashboardHeroVideoCard: View {
             .onDisappear { isPlaying = false }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("ProEstimate AI promo video")
+    }
+
+    @ViewBuilder
+    private var videoSurface: some View {
+        if horizontalSizeClass == .regular {
+            Color.clear.frame(height: 260)
+        } else {
+            Color.clear.aspectRatio(videoAspect, contentMode: .fit)
+        }
     }
 
     /// Soft top-leading highlight + bottom-trailing falloff that read as

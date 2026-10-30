@@ -48,20 +48,19 @@ final class StoreKitCatalogService: StoreKitCatalogProviding {
         return products.first { $0.id == id }
     }
 
-    func isEligibleForIntroOffer(groupID: String) async -> Bool {
+    func isEligibleForIntroOffer() async -> Bool {
         do {
             let products = try await loadProducts()
 
-            // Find any product in the subscription group and check eligibility.
-            guard let subscriptionProduct = products.first(where: { product in
-                product.subscription?.subscriptionGroupID == groupID
-            }) else {
-                logger.warning("No products found in subscription group: \(groupID)")
+            // App Store Connect assigns the production group identifier.
+            // The local .storekit test group name is not its identifier.
+            guard let subscription = products.first(where: { $0.subscription != nil })?.subscription else {
+                logger.warning("No subscription products available for intro offer eligibility.")
                 return false
             }
 
-            let isEligible = await subscriptionProduct.subscription?.isEligibleForIntroOffer ?? false
-            logger.info("Intro offer eligibility for group \(groupID): \(isEligible)")
+            let isEligible = await subscription.isEligibleForIntroOffer
+            logger.info("Intro offer eligibility for group \(subscription.subscriptionGroupID): \(isEligible)")
             return isEligible
         } catch {
             logger.error("Failed to check intro offer eligibility: \(error.localizedDescription)")

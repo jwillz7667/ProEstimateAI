@@ -10,6 +10,7 @@ import SwiftUI
 /// escape hatch.
 struct ProjectGeneratingStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Fires when the generation pipeline completes (or the user opts to
     /// open the project anyway after a soft failure). Carries the
@@ -49,16 +50,21 @@ struct ProjectGeneratingStep: View {
                 await viewModel.runCreationPipeline()
             }
         }
-        .task {
+        .task(id: reduceMotion) {
             // Phrase ticker — independent of the pipeline task so it
             // keeps cycling whether the pipeline is running, queued, or
             // mid-poll.
-            await runPhraseTicker()
+            if !reduceMotion { await runPhraseTicker() }
         }
         .onAppear {
-            withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
-                ringRotation = 360
+            if !reduceMotion {
+                withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+                    ringRotation = 360
+                }
             }
+        }
+        .transaction { transaction in
+            if reduceMotion { transaction.animation = nil; transaction.disablesAnimations = true }
         }
         .onChange(of: viewModel.pipelineStage) { _, newValue in
             if newValue == .completed, let project = viewModel.createdProject {
@@ -146,7 +152,7 @@ struct ProjectGeneratingStep: View {
             Image(systemName: "wand.and.stars")
                 .font(.system(size: 40, weight: .bold))
                 .foregroundStyle(.white)
-                .symbolEffect(.pulse, options: .repeating, isActive: true)
+                .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
         }
     }
 

@@ -1,0 +1,32 @@
+{
+  "purpose": "Isolated QA company data for runtime UI screenshots; one live Fal design preview, no customer notifications.",
+  "qa_email": "qa-ui-1793347743@example.invalid",
+  "photo_source": "Existing bundled modern kitchen category reference image.",
+  "fixtures": {
+    "client_id": "cmvupe5ro0016r3z8trarx1w8",
+    "project_id": "cmvupe5zi001dr3z8j5troylt",
+    "estimate_id": "cmvupe6da001ir3z8vdzlchj8",
+    "asset_id": "cmvupe67e001fr3z826nv3hvr",
+    "generation_id": "cmvupuimt002xnvgxtovyqvrd"
+  },
+  "display_profile": {
+    "full_name": "Taylor Morgan",
+    "company_name": "Summit Remodeling"
+  },
+  "generation_status": "completed",
+  "ai_material_estimate": {
+    "materials_api_count": 23,
+    "runtime_estimate_number": "EST-1001",
+    "runtime_estimate_total": 48450,
+    "runtime_material_subtotal": 28300,
+    "runtime_labor_subtotal": 20150,
+    "separate_estimate_api_reread": false
+  },
+  "cleanup": {
+    "deleted_via": "DELETE /v1/users/me",
+    "result": {
+      "deleted": true
+    },
+    "at": "2026-10-30T08:43:48.768805+00:00"
+  }
+}
