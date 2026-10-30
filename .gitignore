@@ -52,6 +52,9 @@ fastlane/test_output/
 
 /app-store-listing/
 
+# Rebuildable download bundle; editable listing assets are tracked separately.
+/artifacts/app-store-listing/*.zip
+
 # App Store preview videos — re-encoded locally, uploaded to ASC, not tracked.
 /preview-*.mp4
 /preview.mp4
