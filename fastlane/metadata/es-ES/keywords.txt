@@ -1,1 +1,1 @@
-presupuesto,fontanero,electricista,pintor,tejado,suelo,carpintero,azulejo,encimera,vivienda,obra
+construcción,contratista,obra,cocina,baño,suelos,tejados,materiales,costes,propuestas,bricolaje

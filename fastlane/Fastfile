@@ -1,5 +1,8 @@
 default_platform(:ios)
 
+require_relative "lib/listing_screenshots"
+require_relative "lib/prepared_release"
+
 XCODE_PROJECT   = "ProEstimate AI.xcodeproj"
 XCODE_SCHEME    = "ProEstimate AI"
 BUNDLE_ID       = "Res.ProEstimate-AI"
@@ -164,10 +167,26 @@ def ensure_editable_app_store_version(app)
 end
 
 platform :ios do
+  desc "Attach an explicit processed build to the current editable draft, with manual release and no review submission"
+  lane :attach_build do |options|
+    setup_spaceship_token
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+    expected = options[:build].to_s
+    UI.user_error!("Pass an explicit build number, for example build:11") unless expected.match?(/\A[1-9]\d*\z/)
+    version_id = ensure_editable_app_store_version(app)
+    api = lambda do |method, path, body = nil|
+      PreparedRelease.request(token: Spaceship::ConnectAPI.token.text, method: method, path: path, body: body)
+    end
+    result = PreparedRelease.attach(app_id: app.id, version_id: version_id, marketing_version: project_marketing_version, build_number: expected, api: api)
+    UI.success("Prepared draft: #{JSON.generate(result)}")
+  end
+
   desc "Read App Store versions, recent builds and subscription prices without modifying Apple records"
   lane :asc_status do
     require "net/http"
     require "json"
+    require "digest"
     setup_spaceship_token
     app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
     UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
@@ -181,7 +200,43 @@ platform :ios do
       parsed
     end
     versions = asc_get.call("apps/#{app.id}/appStoreVersions?filter[platform]=IOS&limit=20").fetch("data")
+    app_info = asc_get.call("apps/#{app.id}/appInfos?limit=50").fetch("data").map do |info|
+      localizations = asc_get.call("appInfos/#{info['id']}/appInfoLocalizations?limit=50").fetch("data").map do |localization|
+        attributes = localization.fetch("attributes")
+        { locale: attributes["locale"], name: attributes["name"], subtitle: attributes["subtitle"], privacy_policy_url: attributes["privacyPolicyUrl"] }
+      end
+      { id: info["id"], state: info.dig("attributes", "appStoreState"), primary_category: info.dig("relationships", "primaryCategory", "data", "id"), secondary_category: info.dig("relationships", "secondaryCategory", "data", "id"), localizations: localizations }
+    end
     builds = asc_get.call("builds?filter[app]=#{app.id}&sort=-uploadedDate&include=preReleaseVersion&limit=10")
+    uploads = begin
+      response = PreparedRelease.request(token: Spaceship::ConnectAPI.token.text, method: :get, path: "apps/#{app.id}/buildUploads?limit=10")
+      { available: true, uploads: response.fetch("data", []).map { |upload| { id: upload["id"], attributes: upload["attributes"] } } }
+    rescue StandardError => error
+      # This optional diagnostics endpoint is unavailable to older API roles.
+      # A read-only status run should still report the established build API.
+      { available: false, error: error.message }
+    end
+    draft = versions.find { |version| version.dig("attributes", "versionString") == project_marketing_version }
+    listing = if draft
+      version_id = draft.fetch("id")
+      linked = asc_get.call("appStoreVersions/#{version_id}/relationships/build")
+      localizations = asc_get.call("appStoreVersions/#{version_id}/appStoreVersionLocalizations?limit=50").fetch("data").map do |localization|
+        attributes = localization.fetch("attributes")
+        sets = asc_get.call("appStoreVersionLocalizations/#{localization['id']}/appScreenshotSets?limit=50").fetch("data").map do |set|
+          screenshots = asc_get.call("appScreenshotSets/#{set['id']}/appScreenshots?limit=50").fetch("data").map do |screenshot|
+            image = screenshot.fetch("attributes")
+            { id: screenshot["id"], filename: image["fileName"], size: image["fileSize"], delivery: image["assetDeliveryState"], width: image.dig("imageAsset", "width"), height: image.dig("imageAsset", "height") }
+          end
+          { id: set["id"], display_type: set.dig("attributes", "screenshotDisplayType"), screenshots: screenshots }
+        end
+        fields = %w[description keywords promotionalText whatsNew marketingUrl supportUrl].to_h do |field|
+          value = attributes[field]
+          [field, { value: value, utf8_bytes: value.to_s.bytesize, sha256: Digest::SHA256.hexdigest(value.to_s) }]
+        end
+        { locale: attributes["locale"], fields: fields, screenshot_sets: sets }
+      end
+      { version_id: version_id, version: project_marketing_version, build_relationship: linked["data"], localizations: localizations }
+    end
     groups = asc_get.call("apps/#{app.id}/subscriptionGroups?limit=20").fetch("data")
     subscriptions = groups.flat_map do |group|
       asc_get.call("subscriptionGroups/#{group['id']}/subscriptions?limit=50").fetch("data").map do |subscription|
@@ -189,7 +244,7 @@ platform :ios do
         { id: subscription["id"], attributes: subscription["attributes"], prices: prices }
       end
     end
-    UI.message(JSON.pretty_generate({ app_id: app.id, versions: versions.map { |v| { id: v["id"], attributes: v["attributes"] } }, builds: builds, subscriptions: subscriptions }))
+    UI.message(JSON.pretty_generate({ app_id: app.id, app_info: app_info, versions: versions.map { |v| { id: v["id"], attributes: v["attributes"] } }, builds: builds, build_uploads: uploads, listing: listing, subscriptions: subscriptions }))
   end
 
   desc "Build the project from a clean checkout and push it to TestFlight"
@@ -334,6 +389,7 @@ platform :ios do
 
   desc "Push localized metadata and screenshots to App Store Connect (no binary)"
   lane :metadata do
+    screenshot_path = ListingScreenshots.prepare(root: File.expand_path("..", __dir__))
     setup_spaceship_token
     app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
     UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
@@ -344,7 +400,10 @@ platform :ios do
       app_version:                       project_marketing_version,
       skip_binary_upload:                true,
       skip_screenshots:                  false,
+      screenshots_path:                 screenshot_path,
+      overwrite_screenshots:            true,
       skip_metadata:                     false,
+      submit_for_review:                 false,
       force:                             true,
       precheck_include_in_app_purchases: false
     )
@@ -363,6 +422,7 @@ platform :ios do
       skip_binary_upload:                true,
       skip_screenshots:                  true,
       skip_metadata:                     false,
+      submit_for_review:                 false,
       force:                             true,
       precheck_include_in_app_purchases: false
     )
@@ -370,6 +430,7 @@ platform :ios do
 
   desc "Push screenshots only (no metadata)."
   lane :metadata_screenshots do
+    screenshot_path = ListingScreenshots.prepare(root: File.expand_path("..", __dir__))
     setup_spaceship_token
     app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
     UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
@@ -380,7 +441,10 @@ platform :ios do
       app_version:                       project_marketing_version,
       skip_binary_upload:                true,
       skip_screenshots:                  false,
+      screenshots_path:                 screenshot_path,
+      overwrite_screenshots:            true,
       skip_metadata:                     true,
+      submit_for_review:                 false,
       force:                             true,
       precheck_include_in_app_purchases: false
     )

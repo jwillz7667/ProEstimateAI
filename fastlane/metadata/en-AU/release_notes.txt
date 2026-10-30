@@ -1,10 +1,9 @@
-This update improves project editing, estimates, invoices, and shared proposals.
+This update improves previews, estimates and account recovery.
 
-• Assign a client to a project before creating an invoice.
-• Record partial invoice payments and track the remaining balance.
-• Clear saved project details and validate budgets and measurements.
-• See useful error messages when an operation fails.
-• Preserve agreed tax rates when updating invoice payments.
-• Print or save shared proposals as PDF from your browser.
+• More reliable AI previews, with credit recovery when a generation fails.
+• Clearer subscription offers, usage limits and Restore Purchases handling.
+• Improved Apple and Google sign-in requests, password recovery and signup guidance.
+• Safer PDF exports when line items or file preparation fail.
+• A more usable iPad dashboard, improved accessibility and reduced-motion behavior.
 
-Includes reliability and security fixes.
+Cloud service update: The app now uses a new cloud service. If your previous login is not recognized, create an account and restore active App Store purchases. Previous cloud projects and invoices have not been transferred.

@@ -1,1 +1,1 @@
-remodeler,subcontractor,blueprint,patio,pergola,cabinet,countertop,demolition,permit,sqft,paint,reno
+builder,renovation,construction,quotation,proposal,material,labour,kitchen,bathroom,roofing,reno

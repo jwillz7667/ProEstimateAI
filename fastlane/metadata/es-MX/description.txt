@@ -1,49 +1,37 @@
-Toma una foto de cualquier espacio. La IA genera una previsualización fotorrealista de la remodelación. Después arma automáticamente la lista de materiales y mano de obra con precio para que tengas una cotización completa — con tu marca, sin marca de agua, lista para enviar — en menos de un minuto.
+Visualiza una remodelación y prepara la cotización del trabajo en un mismo lugar. ProEstimate AI combina previsualizaciones con IA, materiales, mano de obra y documentos para contratistas y negocios de servicios.
 
-Funciona para handymen ganando su próximo trabajo, contratistas que necesitan firmas de cliente más rápido, flippers calculando su próximo proyecto, y dueños de casa cotizando una cocina antes de levantar el teléfono.
+DE LA FOTO AL PLAN
+• Toma o importa una foto y describe los cambios que quieres ver.
+• Compara el antes y el después para explicar tu idea al cliente.
+• Explora cocinas, baños, pisos, pintura, techos, exteriores y proyectos personalizados.
 
-— EL FLUJO —
-1. Toma o importa una foto antes (en proyectos de jardinería puedes saltarte la foto y marcar el área directo en el mapa satelital)
-2. La IA genera el después fotorrealista
-3. Materiales y mano de obra se cargan a tu nivel Estándar, Premium o Lujo
-4. Envía un PDF con tu marca: cotización, propuesta o factura — o comparte un enlace de aprobación de un toque
+COTIZACIONES QUE PUEDES AJUSTAR
+• Revisa las sugerencias de materiales y mano de obra.
+• Edita cantidades, costos unitarios, márgenes e impuestos.
+• Agrupa partidas y prepara cotizaciones detalladas para tu alcance de trabajo.
+• Consulta enlaces a productos cuando estén disponibles.
 
-— PARA PROFESIONALES (el caso principal) —
-• Cotiza más rápido, gana más
-• Proyéctate como empresa grande aunque seas tú solo
-• Propuestas con tu marca y enlace público de aprobación de cliente
-• Facturación en un toque desde cualquier estimación aprobada
-• Medición de césped sobre mapa satelital híbrido para servicios por metro cuadrado
-• Inspección de techos con imágenes de Google Solar para cotizaciones de reemplazo
-• Inglés y español en toda la app y en cada documento que envías
+TU NEGOCIO, ORGANIZADO
+• Reúne proyectos, clientes, fotos y notas.
+• Crea propuestas con tu logo y colores, y comparte un enlace para la aprobación del cliente.
+• Genera facturas desde tus cotizaciones, registra pagos parciales y consulta saldos pendientes.
+• Exporta documentos PDF para compartirlos con tus clientes.
+• Trabaja en iPhone o iPad con una interfaz en español e inglés.
 
-— PARA DUEÑOS DE CASA, FLIPPERS Y DIY —
-• Planea cocina, baño, pisos, pintura, techos, siding, exterior, jardinería, lawn care o cualquier remodelación personalizada
-• Mira exactamente cuánto cuesta cada nivel de acabado en pesos de 2026 antes de comprometerte
-• Genera una lista de compras para la tlapalería desde el desglose de materiales de la IA
-• Usa la referencia con precio IA para mantener honestas las cotizaciones de los contratistas
+Las sugerencias de IA son editables. Revisa el alcance, las cantidades y los precios locales antes de enviar una cotización.
 
-— TIPOS DE PROYECTO INCLUIDOS —
-Cocina · Baño · Pisos · Techos · Pintura · Siding · Remodelación de habitación · Exterior / espacios al aire libre · Jardinería · Cuidado de césped (contratos recurrentes) · Personalizado
+EMPIEZA GRATIS
+La descarga incluye cinco créditos iniciales para previsualizaciones con IA y herramientas de cotización manual. Los créditos gratuitos no se renuevan. No necesitas suscribirte para empezar.
 
-— POR QUÉ LOS PROFESIONALES ELIGEN PROESTIMATE —
-• Estimaciones IA que organizan los costes de materiales y mano de obra para tu revisión
-• Propuestas con tu marca (tu logo, tus colores, tus términos) que cierran
-• Materiales con enlaces directos a productos comprables
-• Contratos recurrentes calculan precio por visita, mes y contrato automáticamente — para lawn care, snow, plagas, limpieza
-• Sign in with Apple, sincronización segura en la nube, gestión de clientes y proyectos
+PRO PARA TU FLUJO DE TRABAJO
+Pro añade cotizaciones generadas por IA, facturación, marca personalizada, PDF sin marca de agua, propuestas con aprobación del cliente y enlaces de materiales en tus documentos.
 
-— PRECIOS —
-Descarga gratis. Empieza con cinco créditos de previsualización IA para toda la vida y herramientas de estimación manual. Las suscripciones Pro añaden estimaciones generadas por IA, facturación, marca personalizada, PDFs sin marca de agua, enlaces de aprobación de clientes y enlaces a materiales.
+Elige Pro Mensual o Pro Anual con las mismas funciones. Pro incluye hasta 2 proyectos nuevos, 20 previsualizaciones con IA, 20 cotizaciones generadas por IA y 50 exportaciones PDF en cualquier periodo de 30 días. También se aplican límites diarios y semanales.
 
-• Pro Mensual — facturación mensual; los suscriptores elegibles pueden recibir una oferta introductoria
-• Pro Anual — facturación anual con las mismas funciones Pro
+Los precios en tu moneda y la elegibilidad de las ofertas se muestran en la app y en el App Store antes de comprar. El pago se carga a tu cuenta de Apple al confirmar la compra. La suscripción se renueva automáticamente, salvo que la canceles al menos 24 horas antes de que termine el periodo actual. Administra o cancela tu suscripción en los ajustes de tu cuenta de Apple.
 
-Pro incluye hasta 2 proyectos nuevos, 20 previsualizaciones IA, 20 estimaciones generadas por IA y 50 exportaciones de presupuestos por cada 30 días. También se aplican límites diarios y semanales. Los precios finales en tu moneda y la elegibilidad de las ofertas se muestran en la app y en el App Store antes de comprar.
+Política de privacidad: https://proestimateai.com/privacy
+Términos de uso: https://proestimateai.com/terms
+Ayuda: https://proestimateai.com/support
 
-El pago se cobra a tu Apple ID al confirmar la compra. Las suscripciones se renuevan automáticamente a menos que desactives la renovación automática al menos 24 horas antes del final del período actual. Gestiona o cancela en cualquier momento en los ajustes de suscripciones de tu Apple ID.
-
-Política de Privacidad: https://proestimateai.com/privacy
-Términos de Uso: https://proestimateai.com/terms
-
-ProEstimate AI es un producto de Viral Ventures LLC. ¿Preguntas o comentarios? support@proestimateai.com
+ProEstimate AI es un producto de Viral Ventures LLC.

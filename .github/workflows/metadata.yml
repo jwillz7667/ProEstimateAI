@@ -13,6 +13,11 @@ on:
           - screenshots     # screenshots only
           - all             # text + screenshots (slow, Apple-flaky)
           - status          # read-only release and subscription inspection
+          - attach          # attach a processed build to the draft; never submit
+      build_number:
+        description: "Exact existing build number (required only for attach)"
+        required: false
+        type: string
 
 concurrency:
   group: metadata-${{ github.ref }}
@@ -61,8 +66,18 @@ jobs:
             screenshots) echo "name=metadata_screenshots" >> "$GITHUB_OUTPUT" ;;
             all)         echo "name=metadata" >> "$GITHUB_OUTPUT" ;;
             status)      echo "name=asc_status" >> "$GITHUB_OUTPUT" ;;
+            attach)      echo "name=attach_build" >> "$GITHUB_OUTPUT" ;;
             *)           echo "::error::Unknown scope ${{ inputs.scope }}"; exit 1 ;;
           esac
 
       - name: Run ${{ steps.lane.outputs.name }} lane
-        run: bundle exec fastlane ${{ steps.lane.outputs.name }}
+        env:
+          ASC_BUILD_NUMBER: ${{ inputs.build_number }}
+          ASC_LANE: ${{ steps.lane.outputs.name }}
+        run: |
+          if [ "$ASC_LANE" = "attach_build" ]; then
+            [[ "$ASC_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::An explicit numeric build_number is required"; exit 1; }
+            bundle exec fastlane attach_build build:"$ASC_BUILD_NUMBER"
+          else
+            bundle exec fastlane "$ASC_LANE"
+          fi

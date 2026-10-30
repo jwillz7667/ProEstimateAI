@@ -1,49 +1,37 @@
-Snap a photo of any room. AI renders a photoreal remodel preview. Then it auto-prices every material and labor line so you have a fully-priced bid — branded, watermark-free, ready to send — in under a minute.
+Create contractor estimates, renovation quotes and AI remodel previews from project photos. ProEstimate brings your scope, material and labour costs, client approvals and invoices into one workflow on iPhone and iPad.
 
-Works for solo handymen winning their next bid, contractors scaling client approvals, flippers scoping their next project, and homeowners pricing a kitchen before they pick up a phone.
+SEE THE PLAN BEFORE THE WORK
+Import a project photo and describe the renovation. Compare the original with an AI preview, explore finishes and keep the result with your project.
 
-— THE WORKFLOW —
-1. Snap or import a before photo (skip the photo on lawn-care projects — pin the area on the satellite map instead)
-2. AI renders a photoreal after-shot
-3. Materials and labor populate at your chosen Standard, Premium, or Luxury tier
-4. Send a branded PDF estimate, proposal, or invoice — or share a one-tap client approval link
+BUILD AN ESTIMATE YOU CAN REVIEW
+Organise materials, labour and other costs into editable line items. Adjust quantities, local prices, markup and tax, then prepare an itemised estimate for the work.
 
-— FOR PROS (the headline use case) —
-• Bid faster, win more
-• Look like a major outfit even from one truck
-• Branded proposals with public client approval links
-• One-tap invoicing from any approved estimate
-• Lawn area on a hybrid satellite map for per-sq-ft service work
-• Roof scouting via Google Solar imagery for re-roof bids
-• English and Spanish throughout the app and the documents you send
+KEEP EACH JOB TOGETHER
+Save project photos, budgets, measurements, notes and client details in one place. Follow your projects from the first idea to the next document.
 
-— FOR HOMEOWNERS, FLIPPERS, AND DIYERS —
-• Plan kitchen, bath, flooring, paint, roofing, siding, exterior, lawn, landscaping, or any custom remodel
-• See exactly what each finish tier actually costs in current 2026 prices before you commit
-• Generate a hardware-store shopping list from the AI material breakdown
-• Use the AI-priced baseline to keep contractor quotes honest
+SEND A PROFESSIONAL NEXT STEP WITH PRO
+• Export branded PDF quotes with your logo and colours.
+• Share proposals through a client approval link.
+• Create invoices from approved estimates.
+• Record partial payments and track the remaining balance.
+• Include material supplier links in your documents.
 
-— PROJECT TYPES BUILT IN —
-Kitchen · Bathroom · Flooring · Roofing · Painting · Siding · Room remodel · Exterior / outdoor living · Landscaping · Lawn care (recurring contracts) · Custom
+Use ProEstimate for kitchens, bathrooms, flooring, painting, roofing, landscaping and custom renovation projects. Contractors, builders, tradespeople and homeowners can review the same project scope and costs.
 
-— WHY PROS PICK PROESTIMATE —
-• AI estimates that organize material and labor costs for your review
-• Branded proposals (your logo, your colors, your terms) that close
-• Materials linked out to purchasable products
-• Recurring service contracts price per visit, per month, and per contract automatically — built for lawn care, snow, pest, cleaning
-• Sign in with Apple, secure cloud sync, client and project management
+AI previews and cost suggestions give you a starting point. Review the design, measurements, quantities and local pricing before sharing an estimate.
 
-— PRICING —
-Free to download. Start with five lifetime AI preview credits and manual estimating tools. Pro subscriptions add AI-generated estimates, invoicing, custom branding, watermark-free PDFs, client approval links, and material purchase links.
+START WITH FIVE AI PREVIEWS
+Download the app and create an account to receive five lifetime AI preview credits. Manual estimating and project tools help you try the workflow.
 
-• Pro Monthly — monthly billing; eligible subscribers may receive an introductory offer
-• Pro Annual — annual billing with the same Pro features
+PRO MONTHLY OR ANNUAL
+Pro adds AI-generated estimates, invoicing, custom branding, watermark-free PDF quotes, client approval links and material links in exports.
 
-Pro includes up to 2 new projects, 20 AI previews, 20 AI-generated estimates, and 50 quote exports per 30 days. Daily and weekly limits also apply. Final localized prices and offer eligibility are shown in the app and App Store before purchase.
+Pro includes up to 2 new projects, 20 AI previews, 20 AI-generated estimates and 50 quote exports per rolling 30-day period. Daily and weekly limits also apply. Your local App Store price and any introductory-offer eligibility are shown before purchase.
 
-Payment is charged to your Apple ID at confirmation of purchase. Subscriptions renew automatically unless auto-renew is turned off at least 24 hours before the end of the current period. Manage or cancel anytime in your Apple ID subscription settings.
+Payment is charged to your Apple Account at confirmation. Subscriptions renew automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel in your Apple Account subscription settings.
 
 Privacy Policy: https://proestimateai.com/privacy
 Terms of Use: https://proestimateai.com/terms
+Support: https://proestimateai.com/support
 
-ProEstimate AI is a product of Viral Ventures LLC. Questions or feedback? support@proestimateai.com
+ProEstimate AI is a product of Viral Ventures LLC.

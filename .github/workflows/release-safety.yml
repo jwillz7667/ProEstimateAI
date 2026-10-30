@@ -36,5 +36,9 @@ jobs:
           bundler-cache: true
       - name: Check Fastfile syntax
         run: ruby -c fastlane/Fastfile
+      - name: Validate selected listing screenshot staging
+        run: bundle exec ruby fastlane/tests/listing_screenshots_test.rb
+      - name: Validate draft build attachment without Apple access
+        run: bundle exec ruby fastlane/tests/prepared_release_test.rb
       - name: Test release safety with mocked actions
         run: bundle exec ruby fastlane/tests/beta_safety_test.rb
