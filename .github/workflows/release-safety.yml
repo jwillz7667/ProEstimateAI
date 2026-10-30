@@ -8,6 +8,8 @@ on:
       - "Gemfile"
       - "Gemfile.lock"
       - ".github/workflows/testflight.yml"
+      - ".github/workflows/metadata.yml"
+      - ".github/workflows/submit.yml"
       - ".github/workflows/release-safety.yml"
   pull_request:
     branches: [main]
@@ -16,6 +18,8 @@ on:
       - "Gemfile"
       - "Gemfile.lock"
       - ".github/workflows/testflight.yml"
+      - ".github/workflows/metadata.yml"
+      - ".github/workflows/submit.yml"
       - ".github/workflows/release-safety.yml"
 
 permissions:
@@ -38,6 +42,8 @@ jobs:
         run: ruby -c fastlane/Fastfile
       - name: Validate selected listing screenshot staging
         run: bundle exec ruby fastlane/tests/listing_screenshots_test.rb
+      - name: Validate private App Review credentials without Apple access
+        run: bundle exec ruby fastlane/tests/app_review_credentials_test.rb
       - name: Validate draft build attachment without Apple access
         run: bundle exec ruby fastlane/tests/prepared_release_test.rb
       - name: Test release safety with mocked actions

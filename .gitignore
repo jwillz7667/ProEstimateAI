@@ -36,6 +36,7 @@ vendor/bundle/
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/test_output/
+fastlane/metadata/review_information/demo_password.txt
 
 # Xcode archives and signing artifacts
 /build/
