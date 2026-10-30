@@ -10,6 +10,7 @@ import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { aspectRatioForProjectType } from "./image-framing";
 import { generatePreviewImagePiAPI } from "./piapi-image-gen";
+import { generatePreviewImageFal, ImageSafetyError } from "./fal-image-gen";
 import { getImageEditPrompt, getImagePrompt } from "./prompts";
 import {
   PromptContext,
@@ -157,11 +158,12 @@ export interface ReferencePhoto {
  * Generate a preview image using the best available provider.
  *
  * Provider strategy:
- *   1. Google GenAI Nano Banana 2.1 when GOOGLE_AI_API_KEY is set.
- *   2. PiAPI Nano Banana 2.1 when PIAPI_API_KEY is set, with Nano Banana 2
+ *   1. Low-cost fal.ai FLUX.2 Flash when FAL_KEY is set.
+ *   2. Google GenAI Nano Banana 2.1 when GOOGLE_AI_API_KEY is set.
+ *   3. PiAPI Nano Banana 2.1 when PIAPI_API_KEY is set, with Nano Banana 2
  *      retained as a last resort if the newer model is unavailable.
  *
- * Both return GeneratedImage with the same shape; the caller is unaware
+ * All return GeneratedImage with the same shape; the caller is unaware
  * of which provider fulfilled the request.
  */
 export async function generatePreviewImage(
@@ -177,11 +179,28 @@ export async function generatePreviewImage(
     return null;
   }
 
+  if (env.FAL_KEY) {
+    try {
+      const result = await generatePreviewImageFal({
+        prompt: buildFullPrompt(userPrompt, context, !!referencePhoto),
+        projectType: context.projectType,
+        referencePhoto,
+      });
+      if (result) return result;
+    } catch (error) {
+      if (error instanceof ImageSafetyError) {
+        logger.warn({ provider: "fal" }, "Image safety rejection; generation stopped");
+        return null;
+      }
+      logger.warn({ provider: "fal" }, "FLUX.2 Flash unavailable; trying fallback provider");
+    }
+  }
+
   if (env.GOOGLE_AI_API_KEY) {
     try {
       logger.info(
         { provider: "google" },
-        "Attempting Google GenAI image generation (primary)",
+        "Attempting Google GenAI image generation",
       );
       const googleResult = await generatePreviewImageGoogle(
         userPrompt,
@@ -239,7 +258,7 @@ export async function generatePreviewImage(
   }
 
   logger.error(
-    "No image generation provider produced an image (need GOOGLE_AI_API_KEY or PIAPI_API_KEY)",
+    "No image generation provider produced an image (need FAL_KEY, GOOGLE_AI_API_KEY or PIAPI_API_KEY)",
   );
   return null;
 }
@@ -281,7 +300,7 @@ async function generatePreviewImageGoogle(
         temperature,
         topP,
       },
-      "Starting Google GenAI image generation (primary)",
+      "Starting Google GenAI image generation",
     );
 
     const contents = referencePhoto

@@ -66,9 +66,9 @@ export const appleSignInSchema = z.object({
     .string()
     .email()
     .max(255)
-    .optional()
     .nullable()
-    .transform((v) => v?.toLowerCase()),
+    .transform((v) => v?.toLowerCase())
+    .optional(),
 });
 
 export type AppleSignInInput = z.infer<typeof appleSignInSchema>;
@@ -87,9 +87,9 @@ export const googleSignInSchema = z.object({
     .string()
     .email()
     .max(255)
-    .optional()
     .nullable()
-    .transform((v) => v?.toLowerCase()),
+    .transform((v) => v?.toLowerCase())
+    .optional(),
 });
 
 export type GoogleSignInInput = z.infer<typeof googleSignInSchema>;

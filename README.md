@@ -52,7 +52,7 @@ Built as a native iOS application with a TypeScript backend. Shipping on the App
     </td>
     <td align="center" width="33%">
       <img src=".github/assets/readme/ai-preview.png" width="240" alt="Before and after remodel preview" />
-      <br /><sub><b>Before / after</b><br />Photoreal renders via Nano Banana 2.1 with provider fallback.</sub>
+      <br /><sub><b>Before / after</b><br />Photoreal renders via FLUX.2 Flash with provider fallback.</sub>
     </td>
     <td align="center" width="33%">
       <img src=".github/assets/readme/paywall.png" width="240" alt="Subscription paywall" />
@@ -71,7 +71,7 @@ Photo upload  ->  AI remodel preview  ->  Material & labor suggestions
 ```
 
 1. **Capture.** Contractor shoots one or more photos of the space on device. Assets upload to the backend and are stored as base64 in PostgreSQL with immutable cache headers.
-2. **Generate.** The backend uses Google GenAI Nano Banana 2.1 (`gemini-nano-banana-2.1`) for image generation, then PiAPI Nano Banana 2.1 (`nano-banana-2.1`) if Google is unavailable. PiAPI retains Nano Banana 2 as a last resort. Both providers preserve reference-photo framing and request 2K output. See the [Google model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1) and [PiAPI task documentation](https://piapi.ai/docs/gemini-api/nano-banana-2).
+2. **Generate.** When `FAL_KEY` is configured, the backend uses fal.ai FLUX.2 Flash for low-cost image generation and photo edits. Reference photos are oriented and resized without cropping; output preserves their aspect ratio within a 1024² pixel budget. fal lists $0.005 per megapixel for generation and $0.010 for an edit with one 1MP input and output. Operational failures can fall back to configured Google GenAI Nano Banana 2.1 and then PiAPI Nano Banana 2.1 / Nano Banana 2 (2K output). A fal moderation rejection stops the request. Provider keys stay on the backend. See [fal pricing](https://fal.ai/models/fal-ai/flux-2/flash/edit), [fal API documentation](https://fal.ai/models/fal-ai/flux-2/flash/edit/api), [Google model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1), and [PiAPI task documentation](https://piapi.ai/docs/gemini-api/nano-banana-2).
 3. **Price.** Gemini 2.5 Flash produces line-item material and labor suggestions, scaled by the project's quality tier (Standard, Premium, or Luxury).
 4. **Send.** The contractor reviews the auto-built estimate, sends a branded proposal with a shareable approval link, and converts the approved estimate into an invoice with tracking for partial payments and overdue balances.
 
@@ -178,7 +178,7 @@ Key architectural decisions:
   <tr>
     <td><b>AI</b></td>
     <td>
-      Google GenAI Nano Banana 2.1 (primary image) &middot; PiAPI Nano Banana 2.1 / Nano Banana 2 (fallback) &middot; Gemini 2.5 Flash (material + labor estimation)
+      fal.ai FLUX.2 Flash (primary image) &middot; Google / PiAPI Nano Banana 2.1 (fallback) &middot; Gemini 2.5 Flash (material + labor estimation)
     </td>
   </tr>
   <tr>
@@ -292,14 +292,15 @@ Backend variables (see `backend/.env.example`):
 | `DATABASE_URL` | yes | PostgreSQL connection string |
 | `JWT_SECRET` | yes | At least 32 characters, access-token signing |
 | `JWT_REFRESH_SECRET` | yes | At least 32 characters, refresh-token signing |
-| `PIAPI_API_KEY` | one of | PiAPI key for fallback image generation |
-| `GOOGLE_AI_API_KEY` | one of | Google GenAI key for primary image generation and materials |
+| `FAL_KEY` | one of | fal.ai key for low-cost primary image generation and photo editing |
+| `PIAPI_API_KEY` | one of | PiAPI key for optional fallback image generation |
+| `GOOGLE_AI_API_KEY` | one of | Google GenAI key for fallback image generation and materials |
 | `GOOGLE_PLACES_API_KEY` | no | Address autocomplete |
 | `REDIS_URL` | recommended | Distributed rate-limit counters; falls back to in-memory |
 | `RESEND_API_KEY` | no | Transactional email |
 | `NODE_ENV` | no | `development` / `production` |
 
-At least one of `PIAPI_API_KEY` or `GOOGLE_AI_API_KEY` must be set.
+At least one of `FAL_KEY`, `PIAPI_API_KEY`, or `GOOGLE_AI_API_KEY` must be set for image previews. Create a fal API key in the [fal dashboard](https://fal.ai/dashboard/keys), fund that account, and configure `FAL_KEY` in the backend service environment. No provider key belongs in the iOS app or web bundle. With fal configured, Google/PiAPI are optional; a failed fallback can add its own provider charge.
 
 ## Engineering conventions
 

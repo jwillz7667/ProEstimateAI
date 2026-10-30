@@ -33,12 +33,15 @@ Dates are in `YYYY-MM-DD` format.
 ## [Unreleased]
 
 ### Fixed
+- Patch backend and website dependencies, including Zod collection validation and Next.js security fixes.
 - Bootstrap fresh backend databases before creating online indexes, and resolve indexes in the configured database schema.
 - Make auth UI initialization main-actor isolated and select Xcode 26 for simulator CI.
 - Drain in-flight HTTP requests before disconnecting backend dependencies during shutdown, with a bounded timeout.
 - Replace retired API URLs in iOS, web, backend-generated links, and active setup documentation.
 
 ### Added
+- Low-cost fal.ai FLUX.2 Flash previews with reference-photo editing, bounded requests, and existing-provider fallbacks.
+- Production catalog bootstrap and Railway deployment support for the API and website.
 - Backend CI lint, unit tests, and real PostgreSQL integration coverage, including empty-database and repeated bootstrap checks.
 
 ## [1.0.0] - 2026-04-19

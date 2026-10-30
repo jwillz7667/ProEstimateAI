@@ -198,7 +198,7 @@ function toMaterialSpecs(
 }
 
 /**
- * Fire-and-forget: call Nano Banana 2.1 and update the generation record.
+ * Fire-and-forget: call the configured image providers and update the record.
  * Runs outside the request transaction so the API responds immediately
  * while the image generates in the background.
  */
@@ -267,7 +267,7 @@ async function processGeneration(
     }
 
     // Check that at least one image generation provider is configured
-    if (!env.PIAPI_API_KEY && !env.GOOGLE_AI_API_KEY) {
+    if (!env.FAL_KEY && !env.PIAPI_API_KEY && !env.GOOGLE_AI_API_KEY) {
       logger.warn(
         { generationId },
         "No image generation provider configured — marking generation as failed",
@@ -310,7 +310,7 @@ async function processGeneration(
       );
     }
 
-    // Call image generation with provider fallback (Google GenAI → PiAPI).
+    // Call image generation with provider fallback (fal → Google GenAI → PiAPI).
     const result = await generatePreviewImage(
       prompt,
       context,
