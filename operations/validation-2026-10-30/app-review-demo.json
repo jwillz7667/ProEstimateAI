@@ -51,6 +51,9 @@
     "temporarySSHKeyRemovedFromRailway": true,
     "railwayKeyRemovalReadBack": true,
     "localTemporaryKeyFilesRemoved": true,
-    "taskKnownHostsAndWrapperRemoved": true
+    "taskKnownHostsAndWrapperRemoved": true,
+    "trackedTextFilesScanned": 786,
+    "oldPublicPasswordPresentInCurrentTrackedText": false,
+    "replacementPresentInTrackedText": false
   }
 }
