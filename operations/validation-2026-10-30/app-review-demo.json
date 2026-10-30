@@ -1,0 +1,29 @@
+{
+  "validatedAt": "2026-10-30T10:11:54.389Z",
+  "accountFingerprint": "b50a12b84305c223",
+  "accountCreatedViaNormalSignup": true,
+  "existingPasswordRetained": true,
+  "loginHTTPStatus": 200,
+  "entitlementHTTPStatus": 200,
+  "subscriptionState": "ADMIN_OVERRIDE",
+  "planCode": "PRO_MONTHLY",
+  "source": "APP_REVIEW_DEMO",
+  "allPaidFeatureFlagsEnabled": true,
+  "administrativeChangeAudited": true,
+  "overrideChanged": true,
+  "appleTransactionId": null,
+  "applePurchaseCreated": false,
+  "emailsSent": 0,
+  "aiGenerationsRequested": 0,
+  "appleReviewSubmissionCreated": false,
+  "databasePublicExposureCreated": false,
+  "temporarySessions": 2,
+  "temporarySessionsRevoked": 2,
+  "temporarySSHKeyRemovedFromRailway": true,
+  "railwayKeyRemovalReadBack": true,
+  "localTemporaryKeyFilesRemoved": true,
+  "taskKnownHostsAndWrapperRemoved": true,
+  "railwaySSHHostFingerprints": [
+    "SHA256:+S1xg92FrnHz6pY3bpkmh1OGtWQGNANXilPzlxA7B1g"
+  ]
+}
