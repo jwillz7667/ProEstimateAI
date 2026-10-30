@@ -25,5 +25,10 @@
   "taskKnownHostsAndWrapperRemoved": true,
   "railwaySSHHostFingerprints": [
     "SHA256:+S1xg92FrnHz6pY3bpkmh1OGtWQGNANXilPzlxA7B1g"
-  ]
+  ],
+  "oldReviewNotesMentionedSampleData": true,
+  "reviewNotesUpdatedForFreshWorkspace": true,
+  "reviewNotesDiscloseFiniteProLimits": true,
+  "reviewCredentialsChanged": false,
+  "reviewNotesAppleUploadPending": true
 }
