@@ -20,7 +20,9 @@ on:
         type: string
 
 concurrency:
-  group: metadata-${{ github.ref }}
+  # Read-only inspection can run while Apple processes a long asset upload.
+  # All mutations keep the existing shared group and remain serialized.
+  group: metadata-${{ github.ref }}${{ inputs.scope == 'status' && '-status' || '' }}
   cancel-in-progress: false
 
 permissions:
