@@ -1,11 +1,12 @@
-import type { EntitlementStatus } from "@prisma/client";
 import { prisma } from "../../config/database";
+import type { Prisma } from '@prisma/client';
 import { PaywallError, AuthenticationError } from "../../lib/errors";
 import { invalidateCache, CacheKeys } from "../../config/redis";
 import { isAdminUser } from "../../lib/admin";
+import { hasEffectiveProAccess } from "../../lib/entitlement-access";
 import {
   checkUsageLimit,
-  readPlanLimits,
+  readEffectivePlanLimits,
   type LimitCheckResult,
   type UsageMetric,
 } from "../../lib/usage-limits";
@@ -38,21 +39,8 @@ export interface GateOptions {
   metric: UsageMetric;
 }
 
-const PRO_ACCESS_STATES: ReadonlySet<EntitlementStatus> = new Set([
-  "TRIAL_ACTIVE",
-  "PRO_ACTIVE",
-  "GRACE_PERIOD",
-  "BILLING_RETRY",
-  "CANCELED_ACTIVE",
-  "ADMIN_OVERRIDE",
-]);
-
-function hasProAccess(status: EntitlementStatus): boolean {
-  return PRO_ACCESS_STATES.has(status);
-}
-
 function isTrialEligible(args: {
-  status: EntitlementStatus;
+  status: string;
   trialEndsAt: Date | null;
 }): boolean {
   // Trial is single-use. Eligible only if the user has never had one.
@@ -203,9 +191,10 @@ export interface UsageReservation {
  * from both consuming the final credit or exceeding a rolling plan cap. */
 export async function gateAIAction(
   opts: GateOptions,
+  transaction?: Prisma.TransactionClient,
 ): Promise<UsageReservation | undefined> {
-  if (await isAdminUser(opts.userId)) return;
-  const reservation = await prisma.$transaction(async (tx) => {
+  if (await (transaction ? isAdminUser(opts.userId, transaction) : isAdminUser(opts.userId))) return;
+  const reserve = async (tx: Prisma.TransactionClient) => {
     const users = await tx.$queryRaw<
       Array<{ id: string }>
     >`SELECT id FROM "User" WHERE id = ${opts.userId} AND "companyId" = ${opts.companyId} AND "isActive" = true FOR UPDATE`;
@@ -222,11 +211,11 @@ export async function gateAIAction(
       );
     }
     let starterBucketId: string | undefined;
-    if (hasProAccess(entitlement.status)) {
+    if (hasEffectiveProAccess(entitlement)) {
       const result = await checkUsageLimit(
         opts.userId,
         opts.metric,
-        readPlanLimits(entitlement.plan.featuresJson, opts.metric),
+        readEffectivePlanLimits(entitlement.plan.featuresJson, entitlement.plan.code, opts.metric),
         tx,
       );
       if (!result.allowed)
@@ -300,8 +289,10 @@ export async function gateAIAction(
       },
     });
     return { eventId: event.id, userId: opts.userId, starterBucketId };
-  });
-  await invalidateCache(CacheKeys.entitlement(opts.userId));
+  };
+  const reservation = transaction ? await reserve(transaction) : await prisma.$transaction(reserve);
+  // A caller-owned transaction invalidates after committing its larger action.
+  if (!transaction) await invalidateCache(CacheKeys.entitlement(opts.userId));
   return reservation;
 }
 
@@ -316,7 +307,7 @@ export async function runReservedAction<T>(
     if (reservation) {
       await prisma.$transaction(async (tx) => {
         const released = await tx.usageEvent.deleteMany({
-          where: { id: reservation.eventId },
+          where: { id: reservation.eventId, quantity: { gt: 0 } },
         });
         if (released.count === 1 && reservation.starterBucketId) {
           await tx.usageBucket.updateMany({

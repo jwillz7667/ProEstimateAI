@@ -1,130 +1,30 @@
-import { UsageMetricCode } from "@prisma/client";
-import { prisma } from "../../config/database";
-import { NotFoundError, PaywallError } from "../../lib/errors";
-import { isAdminUser } from "../../lib/admin";
-import { UsageBucketDto, toUsageBucketDto } from "./usage.dto";
-import { PaywallPlacement } from "../../types/enums";
+import type { UsageMetricCode } from '@prisma/client';
+import type { UsageBucketDto } from './usage.dto';
+import { getEffectiveEntitlement } from '../commerce/commerce.service';
+import { gateAIAction, runReservedAction } from '../commerce/entitlement-gate';
 
-// Map metric codes to their paywall placements when limits are hit.
-// PROJECT_CREATED and ESTIMATE_GENERATED reuse the generic generation
-// placement — the iOS paywall sheet's copy is metric-aware via the
-// gate's `trigger_reason` field.
-const METRIC_TO_PLACEMENT: Record<UsageMetricCode, PaywallPlacement> = {
-  AI_GENERATION: "GENERATION_LIMIT_HIT",
-  QUOTE_EXPORT: "QUOTE_LIMIT_HIT",
-  PROJECT_CREATED: "GENERATION_LIMIT_HIT",
-  ESTIMATE_GENERATED: "GENERATION_LIMIT_HIT",
-};
-
-// Human-readable labels for paywall error messages
-const METRIC_LABELS: Record<UsageMetricCode, string> = {
-  AI_GENERATION: "AI generation",
-  QUOTE_EXPORT: "quote export",
-  PROJECT_CREATED: "project",
-  ESTIMATE_GENERATED: "AI estimate",
-};
-
-/**
- * Return all usage buckets for the authenticated user as DTOs.
- */
 export async function getUsageSummary(
   userId: string,
   companyId: string,
 ): Promise<UsageBucketDto[]> {
-  const buckets = await prisma.usageBucket.findMany({
-    where: { userId, companyId },
-    orderBy: { metricCode: "asc" },
-  });
-
-  return buckets.map(toUsageBucketDto);
+  return (await getEffectiveEntitlement(userId, companyId)).usage;
 }
 
-/**
- * Atomically check whether the user has remaining credits for the given
- * metric and, if so, consume one unit.
- *
- * Returns the updated bucket DTO on success.
- * Throws PaywallError when the bucket is exhausted.
- */
+/** Use the same atomic subscription and rolling-cap gate as the compute routes. */
 export async function checkAndConsume(
   userId: string,
   companyId: string,
   metricCode: UsageMetricCode,
 ): Promise<UsageBucketDto> {
-  // Admin users have unlimited access — return a synthetic unlimited bucket
-  if (await isAdminUser(userId)) {
-    return {
+  const reservation = await gateAIAction({ userId, companyId, metric: metricCode });
+  return runReservedAction(reservation, async () => {
+    const snapshot = await getEffectiveEntitlement(userId, companyId);
+    return snapshot.usage.find((bucket) => bucket.metric_code === metricCode) ?? {
       metric_code: metricCode,
-      included_quantity: 999999,
+      included_quantity: 0,
       consumed_quantity: 0,
-      remaining_quantity: 999999,
-      source: "ADMIN",
+      remaining_quantity: 0,
+      source: 'PRO_SUBSCRIPTION',
     };
-  }
-
-  // Use a Prisma transaction with serializable isolation to prevent
-  // double-spend race conditions on concurrent requests.
-  const result = await prisma.$transaction(async (tx) => {
-    // Find all buckets for this metric, prefer STARTER_CREDITS first (consume free credits before Pro)
-    const buckets = await tx.usageBucket.findMany({
-      where: { userId, metricCode },
-      orderBy: { source: "asc" }, // STARTER_CREDITS < PRO_SUBSCRIPTION alphabetically
-    });
-
-    // Find the first bucket with remaining credits
-    const bucket =
-      buckets.find((b) => b.includedQuantity - b.consumedQuantity > 0) ??
-      buckets[0];
-
-    if (!bucket) {
-      throw new NotFoundError("UsageBucket", `${userId}/${metricCode}`);
-    }
-
-    const remaining = bucket.includedQuantity - bucket.consumedQuantity;
-
-    if (remaining <= 0) {
-      const placement = METRIC_TO_PLACEMENT[metricCode];
-      const label = METRIC_LABELS[metricCode];
-
-      // Sum across all buckets for accurate reporting
-      const totalIncluded = buckets.reduce((s, b) => s + b.includedQuantity, 0);
-      const totalConsumed = buckets.reduce((s, b) => s + b.consumedQuantity, 0);
-
-      throw new PaywallError(
-        `You have used all your free ${label} credits. Upgrade to Pro for unlimited access.`,
-        {
-          placement,
-          metric_code: metricCode,
-          included_quantity: totalIncluded,
-          consumed_quantity: totalConsumed,
-          remaining_quantity: 0,
-        },
-      );
-    }
-
-    // Atomically increment consumed quantity on the chosen bucket
-    const updated = await tx.usageBucket.update({
-      where: { id: bucket.id },
-      data: { consumedQuantity: { increment: 1 } },
-    });
-
-    // Record the usage event for audit trail / analytics
-    await tx.usageEvent.create({
-      data: {
-        userId,
-        companyId,
-        metricCode,
-        quantity: 1,
-        metadata: {
-          bucket_id: bucket.id,
-          consumed_before: bucket.consumedQuantity,
-          consumed_after: bucket.consumedQuantity + 1,
-        },
-      },
-    });
-
-    return updated;
   });
-
-  return toUsageBucketDto(result);
 }

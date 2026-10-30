@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     project: { findFirst: vi.fn() },
     company: { findUnique: vi.fn() },
     asset: { findFirst: vi.fn() },
-    aIGeneration: { create: vi.fn(), update: vi.fn() },
+    aIGeneration: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     activityLogEntry: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -21,11 +21,13 @@ const mocks = vi.hoisted(() => ({
   materials: vi.fn(),
   labor: vi.fn(),
   push: vi.fn(),
+  failGeneration: vi.fn(),
 }));
 vi.mock("../../config/env", () => ({ env: mocks.env }));
 vi.mock("../../config/database", () => ({ prisma: mocks.db }));
 vi.mock("../../config/logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock("../../lib/project-quality-tier", () => ({ readProjectQualityTier: vi.fn().mockResolvedValue("STANDARD") }));
+vi.mock('../../lib/generation-usage', () => ({ failGenerationAndRefund: mocks.failGeneration, linkGenerationReservation: vi.fn() }));
 vi.mock("../../lib/usage-limits", () => ({ recordUsage: mocks.recordUsage }));
 vi.mock("../commerce/entitlement-gate", () => ({
   gateAIAction: mocks.gateAIAction,
@@ -53,6 +55,8 @@ beforeEach(() => {
   mocks.db.$transaction.mockImplementation((action: (tx: typeof mocks.db) => Promise<unknown>) => action(mocks.db));
   mocks.db.aIGeneration.create.mockResolvedValue(generation);
   mocks.db.aIGeneration.update.mockResolvedValue(generation);
+  mocks.db.aIGeneration.updateMany.mockResolvedValue({ count: 1 });
+  mocks.failGeneration.mockResolvedValue(true);
   mocks.db.activityLogEntry.create.mockResolvedValue({});
   mocks.gateAIAction.mockResolvedValue(undefined);
   mocks.recordUsage.mockResolvedValue(undefined);
@@ -76,11 +80,11 @@ describe("generation service provider configuration", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     expect(await create("project", "company", "user", { prompt: "Paint only the siding", generate_preview: true })).toEqual(generation);
-    await vi.waitFor(() => expect(mocks.db.aIGeneration.update).toHaveBeenCalledWith({
-      where: { id: "generation" },
+    await vi.waitFor(() => expect(mocks.db.aIGeneration.updateMany).toHaveBeenCalledWith({
+      where: { id: "generation", status: 'PROCESSING' },
       data: expect.objectContaining({ status: "COMPLETED", imageMimeType: "image/png", imageData: expect.any(String), previewUrl: "https://api.example.test/v1/generations/generation/preview" }),
     }));
-    expect(mocks.gateAIAction).toHaveBeenCalledWith({ userId: "user", companyId: "company", metric: "AI_GENERATION" });
+    expect(mocks.gateAIAction).toHaveBeenCalledWith({ userId: "user", companyId: "company", metric: "AI_GENERATION" }, mocks.db);
     expect(mocks.recordUsage).toHaveBeenCalledOnce();
     expect(mocks.db.aIGeneration.create).toHaveBeenCalledWith({ data: expect.objectContaining({ status: "QUEUED", projectId: "project" }) });
     expect(fetchMock.mock.calls[0][0]).toBe("https://queue.fal.run/fal-ai/flux-2/flash/edit");
@@ -96,10 +100,7 @@ describe("generation service provider configuration", () => {
   it("marks a preview failed without contacting providers when no key exists", async () => {
     mocks.env.FAL_KEY = undefined;
     await create("project", "company", "user", { prompt: "Repaint siding", generate_preview: true });
-    await vi.waitFor(() => expect(mocks.db.aIGeneration.update).toHaveBeenCalledWith({
-      where: { id: "generation" },
-      data: { status: "FAILED", errorMessage: "Image generation service is not configured. Contact support." },
-    }));
+    await vi.waitFor(() => expect(mocks.failGeneration).toHaveBeenCalledWith('generation', 'Image generation service is not configured. Contact support.'));
     expect(fetch).not.toHaveBeenCalled();
   });
 });

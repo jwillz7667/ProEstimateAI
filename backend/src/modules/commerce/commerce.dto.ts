@@ -1,5 +1,7 @@
 import { SubscriptionProduct, Plan, UserEntitlement, UsageBucket } from '@prisma/client';
-import { EntitlementStatus, PlanCode, UsageMetricCode, FeatureCode } from '../../types/enums';
+import type { PlanCode } from '../../types/enums';
+import { effectiveSubscriptionStatus, hasEffectiveProAccess } from '../../lib/entitlement-access';
+import { STARTER_CREDITS_SOURCE } from '../../lib/limits';
 
 // ─── Store Product DTO ─────────────────────────────────
 
@@ -108,8 +110,8 @@ export function deriveFeatureFlags(
   }
 
   // FREE_STARTER: credit-gated features only
-  const aiGenBucket = buckets.find((b) => b.metricCode === 'AI_GENERATION');
-  const quoteExportBucket = buckets.find((b) => b.metricCode === 'QUOTE_EXPORT');
+  const aiGenBucket = buckets.find((b) => b.metricCode === 'AI_GENERATION' && b.source === STARTER_CREDITS_SOURCE);
+  const quoteExportBucket = buckets.find((b) => b.metricCode === 'QUOTE_EXPORT' && b.source === STARTER_CREDITS_SOURCE);
 
   const aiRemaining = aiGenBucket
     ? Math.max(0, aiGenBucket.includedQuantity - aiGenBucket.consumedQuantity)
@@ -156,27 +158,41 @@ export interface EntitlementSnapshotDto {
 export function toEntitlementSnapshotDto(
   entitlement: UserEntitlement & { plan: Plan },
   buckets: UsageBucket[],
+  effectiveUsage?: UsageBucketDto[],
 ): EntitlementSnapshotDto {
   const planCode = entitlement.plan.code as PlanCode;
-  const flags = deriveFeatureFlags(planCode, buckets);
-  const usageDtos = buckets.map(toUsageBucketDto);
+  const effectiveStatus = effectiveSubscriptionStatus(entitlement);
+  const hasPaidAccess = hasEffectiveProAccess(entitlement);
+  const flags = hasPaidAccess
+    ? deriveFeatureFlags(planCode, buckets)
+    : deriveFeatureFlags('FREE_STARTER', entitlement.status === 'FREE' ? buckets : []);
+  if (hasPaidAccess && typeof entitlement.plan.featuresJson === 'object' &&
+    entitlement.plan.featuresJson !== null && !Array.isArray(entitlement.plan.featuresJson)) {
+    // Plan-specific feature restrictions apply consistently to API and UI.
+    for (const feature of Object.keys(flags) as Array<keyof FeatureFlagsDto>) {
+      if (entitlement.plan.featuresJson[feature] === false) flags[feature] = false;
+    }
+  }
+  const usageDtos = effectiveUsage ?? buckets
+    .filter((bucket) => hasPaidAccess || (entitlement.status === 'FREE' && bucket.source === STARTER_CREDITS_SOURCE))
+    .map(toUsageBucketDto);
 
   // Derive billing warning for degraded subscription states
   let billingWarning: string | null = null;
-  if (entitlement.status === 'GRACE_PERIOD') {
+  if (effectiveStatus === 'GRACE_PERIOD') {
     billingWarning = 'Your subscription payment failed. Please update your payment method to avoid losing access.';
-  } else if (entitlement.status === 'BILLING_RETRY') {
+  } else if (effectiveStatus === 'BILLING_RETRY') {
     billingWarning = 'We are retrying your subscription payment. Please ensure your payment method is up to date.';
-  } else if (entitlement.status === 'CANCELED_ACTIVE') {
+  } else if (effectiveStatus === 'CANCELED_ACTIVE') {
     billingWarning = 'Your subscription has been canceled and will expire at the end of the current billing period.';
-  } else if (entitlement.status === 'EXPIRED') {
+  } else if (effectiveStatus === 'EXPIRED') {
     billingWarning = 'Your subscription has expired. Upgrade to continue using Pro features.';
-  } else if (entitlement.status === 'REVOKED') {
+  } else if (effectiveStatus === 'REVOKED') {
     billingWarning = 'Your subscription has been revoked. Please contact support if you believe this is an error.';
   }
 
   return {
-    subscription_state: entitlement.status,
+    subscription_state: effectiveStatus,
     current_plan_code: planCode,
     feature_flags: flags,
     usage: usageDtos,

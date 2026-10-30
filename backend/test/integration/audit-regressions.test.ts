@@ -53,6 +53,7 @@ async function tenant(
       userId: user.id,
       planId: plan.id,
       status: code === "FREE_STARTER" ? "FREE" : "PRO_ACTIVE",
+      renewalDate: code === "FREE_STARTER" ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     },
   });
   const client = await prisma.client.create({

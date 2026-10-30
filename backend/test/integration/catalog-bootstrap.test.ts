@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
 describe('production commerce catalog bootstrap', () => {
-  it('creates only the sellable catalog on a fresh schema and preserves existing records on repeat', async () => {
+  it('creates the sellable and legacy restore catalog without customer records and preserves changes on repeat', async () => {
     const testUrl = process.env.TEST_DATABASE_URL;
     if (!testUrl) throw new Error('TEST_DATABASE_URL is required');
     const schema = `catalog_${randomUUID().replaceAll('-', '')}`;
@@ -30,8 +30,9 @@ describe('production commerce catalog bootstrap', () => {
 
       const plans = await database.plan.findMany({ orderBy: { code: 'asc' } });
       expect(plans.map((plan) => plan.code)).toEqual([
-        'FREE_STARTER', 'PRO_MONTHLY', 'PRO_ANNUAL',
+        'FREE_STARTER', 'PRO_MONTHLY', 'PRO_ANNUAL', 'PREMIUM_MONTHLY', 'PREMIUM_ANNUAL',
       ]);
+      expect(plans.filter((plan) => plan.code.startsWith('PREMIUM')).every((plan) => !plan.isActive)).toBe(true);
       const products = await database.subscriptionProduct.findMany({
         orderBy: { sortOrder: 'asc' },
         include: { plan: true },
@@ -44,6 +45,8 @@ describe('production commerce catalog bootstrap', () => {
       }))).toEqual([
         { productId: 'proestimate.pro.monthly', planCode: 'PRO_MONTHLY', price: '$19.99/mo', trial: true },
         { productId: 'proestimate.pro.annual', planCode: 'PRO_ANNUAL', price: '$199.99/yr', trial: false },
+        { productId: 'proestimate.premium.monthly', planCode: 'PREMIUM_MONTHLY', price: '$49.99/mo', trial: false },
+        { productId: 'proestimate.premium.annual', planCode: 'PREMIUM_ANNUAL', price: '$499.99/yr', trial: false },
       ]);
       expect(products[0].plan.featuresJson).toMatchObject({
         CAN_CREATE_INVOICE: true,

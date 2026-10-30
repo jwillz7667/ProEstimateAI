@@ -1,4 +1,5 @@
 import { PlanCode, PrismaClient } from '@prisma/client';
+import { PRO_PLAN_LIMITS, LEGACY_PREMIUM_PLAN_LIMITS } from './usage-limits';
 
 /**
  * Create the production commerce catalog without importing the development
@@ -6,13 +7,6 @@ import { PlanCode, PrismaClient } from '@prisma/client';
  * Existing catalog rows are authoritative and must survive redeploys/restores.
  */
 export async function bootstrapCatalog(database: PrismaClient): Promise<void> {
-  const proLimits = {
-    AI_GENERATION: { daily: 5, weekly: 12, monthly: 20 },
-    QUOTE_EXPORT: { daily: 10, weekly: 25, monthly: 50 },
-    PROJECT_CREATED: { daily: 1, weekly: 2, monthly: 2 },
-    ESTIMATE_GENERATED: { daily: 5, weekly: 12, monthly: 20 },
-  };
-
   const freeFeatures = {
     CAN_GENERATE_PREVIEW: false,
     CAN_EXPORT_QUOTE: false,
@@ -33,7 +27,7 @@ export async function bootstrapCatalog(database: PrismaClient): Promise<void> {
     CAN_SHARE_APPROVAL_LINK: true,
     CAN_EXPORT_MATERIAL_LINKS: true,
     CAN_USE_HIGH_RES_PREVIEW: true,
-    LIMITS: proLimits,
+    LIMITS: PRO_PLAN_LIMITS,
   };
 
   await database.$transaction(async (transaction) => {
@@ -111,5 +105,47 @@ export async function bootstrapCatalog(database: PrismaClient): Promise<void> {
         sortOrder: 2,
       },
     });
+
+    // These historical SKUs remain resolvable for signed restores/renewals on a
+    // fresh database. They stay retired from sale and purchase-attempt creation.
+    const premiumFeatures = {
+      ...proFeatures,
+      CAN_USE_PRIORITY_GENERATION: true,
+      LIMITS: LEGACY_PREMIUM_PLAN_LIMITS,
+    };
+    const legacyPremiumPlans = [
+      { code: PlanCode.PREMIUM_MONTHLY, name: 'Premium Monthly', period: 'month',
+        productId: 'proestimate.premium.monthly', price: '$49.99/mo', sortOrder: 3 },
+      { code: PlanCode.PREMIUM_ANNUAL, name: 'Premium Annual', period: 'year',
+        productId: 'proestimate.premium.annual', price: '$499.99/yr', sortOrder: 4 },
+    ];
+    for (const legacy of legacyPremiumPlans) {
+      const plan = await transaction.plan.upsert({
+        where: { code: legacy.code },
+        update: {},
+        create: {
+          code: legacy.code,
+          displayName: legacy.name,
+          description: 'Legacy Premium subscription; existing purchases only',
+          featuresJson: premiumFeatures,
+          isActive: false,
+        },
+      });
+      await transaction.subscriptionProduct.upsert({
+        where: { storeProductId: legacy.productId },
+        update: {},
+        create: {
+          planId: plan.id,
+          storeProductId: legacy.productId,
+          displayName: legacy.name,
+          description: 'Legacy Premium subscription; existing purchases only',
+          priceDisplay: legacy.price,
+          billingPeriodLabel: legacy.period,
+          hasIntroOffer: false,
+          isFeatured: false,
+          sortOrder: legacy.sortOrder,
+        },
+      });
+    }
   }, { maxWait: 10_000, timeout: 30_000 });
 }
