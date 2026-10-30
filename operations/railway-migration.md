@@ -4,7 +4,7 @@ Status recorded October 30, 2026. The replacement API, PostgreSQL 18, Redis 8.2,
 
 The original API hostname now routes to the replacement API: <https://proestimate-api-production-75e5.up.railway.app>. Released iOS clients can continue using that hostname. At 08:11 UTC, `/health` reported `healthy`, PostgreSQL `connected`, and Redis `connected`. The replacement website at <https://proestimate-web-production.up.railway.app> returned `ok` from `/api/health`.
 
-The website custom-domain cutover and the remaining integration checks below are still outstanding. The website was rebuilt successfully after a stale browser API origin was found. The proposal page's eight script files now contain the preserved `75e5` API origin and zero references to the superseded `75b9` origin.
+The branded website cutover is complete. Both <https://proestimateai.com> and <https://www.proestimateai.com> now serve the Railway website with verified ownership, propagated DNS, and valid TLS certificates. The website was rebuilt after a stale browser API origin was found; the checked proposal scripts contain the preserved `75e5` API origin and zero references to the superseded `75b9` origin. The redesigned password recovery page is live on both branded hosts and returns HTTP 200 with private/no-store caching, `no-referrer`, and `noindex, nofollow, noarchive` headers. Integration limits below remain explicit.
 
 ## Deployment record
 
@@ -18,6 +18,7 @@ The website custom-domain cutover and the remaining integration checks below are
 | Website service | `5f67e8f7-ddff-4aab-ab5c-e9a8e2df0f65` |
 | API public origin | `https://proestimate-api-production-75e5.up.railway.app` |
 | Website replacement origin | `https://proestimate-web-production.up.railway.app` |
+| Branded website origins | `https://proestimateai.com`, `https://www.proestimateai.com` |
 
 The reviewed baseline source is commit `44a4c0b34ff8ec7bc862639628f89918bb018489`. It was uploaded using the authenticated Railway CLI from separate `git archive` staging directories containing only tracked backend or website files. Local `.env` files and credentials were excluded. The destination account could not attach the GitHub repository, so GitHub automatic deployments are **not configured**.
 
@@ -30,8 +31,10 @@ The reviewed baseline source is commit `44a4c0b34ff8ec7bc862639628f89918bb018489
 | Website `473db366-8906-4ee7-b073-ca2c9fb03b95` | `SUCCESS`; rebuilt with the preserved API origin, browser bundle verified |
 | API `33228806-1753-4a53-bbf7-b7c13096da41` | `SUCCESS`; reviewed billing/refund fixes from `a2341ed` |
 | API `97a13dd4-5734-488f-9d9d-f1e0c8b78ec2` | `SUCCESS`; reviewed Apple/Google OAuth verification and first-login fixes from `7f86ea8` |
+| Website `4e868dcc-7787-4b5f-a874-822118b8808a` | `SUCCESS`; redesigned password recovery and corrected website copy from `57af10d` |
+| API `494deecd-93a8-48ac-9a59-29427480d973` | `SUCCESS` at 09:50:29 UTC; secure password recovery and production email configuration from `57af10d`; health verified afterward |
 
-The stale website origin was corrected by clearing the service watch filter and uploading the tracked website archive again. Its successful build now embeds `https://proestimate-api-production-75e5.up.railway.app/v1`; the public proposal page and scripts were checked after deployment. Backend billing/refund and OAuth fixes are deployed from `7f86ea8`. iOS source changes compile through the Build iOS Apps plugin; they still require a signed release build and distribution before existing installed apps receive them.
+The stale website origin was corrected by clearing the service watch filter and uploading the tracked website archive again. Its successful build now embeds `https://proestimate-api-production-75e5.up.railway.app/v1`; the public proposal page and scripts were checked after deployment. The website is deployed from `57af10d`. Backend billing/refund and OAuth fixes were deployed from `7f86ea8`; the password-recovery API deployment from `57af10d` is successful. At 09:50:58 UTC, the preserved API hostname returned HTTP 200 with `healthy`, PostgreSQL `connected`, and Redis `connected`. A signed iOS 1.0.8 build 11 was successfully uploaded to App Store Connect by [TestFlight workflow 41035118104](https://github.com/jwillz7667/ProEstimateAI/actions/runs/41035118104). Upload acceptance does not establish Apple processing success; a read-only App Store Connect status check at 09:50 UTC did not yet list build 11, so indexing/processing, listing upload, and build attachment are still being verified. No App Review submission or public release was requested or performed.
 
 ## Data decision and preserved source
 
@@ -70,14 +73,15 @@ All 19 observed source API variables were copied using the authorized Railway Ra
 | Database and sessions | `DATABASE_URL=${{Postgres.DATABASE_URL}}`; copied `JWT_SECRET`, `JWT_REFRESH_SECRET` |
 | Runtime | `PORT=3000`, `NODE_ENV=production`, copied `ADMIN_EMAILS` |
 | Public API origin | `API_BASE_URL=https://proestimate-api-production-75e5.up.railway.app` — no `/v1` |
-| Proposal links | `PUBLIC_PROPOSAL_BASE_URL=https://proestimate-web-production.up.railway.app/proposal` until branded-domain cutover is verified |
-| Browser origins | Copied `CORS_ORIGIN`; verify final website origins, including apex and `www` |
+| Proposal links | `PUBLIC_PROPOSAL_BASE_URL=https://proestimateai.com/proposal`; deployed and confirmed through the authenticated CLI |
+| Password recovery | `PUBLIC_WEB_BASE_URL=https://proestimateai.com`; deployed and confirmed through the authenticated CLI |
+| Browser origins | Copied `CORS_ORIGIN=*` is permissive and supports both branded website origins; this is not an origin allowlist |
 | Image generation | New `FAL_KEY`; retained `GOOGLE_AI_API_KEY` and `PIAPI_API_KEY` fallbacks |
 | Text AI | Copied `DEEPSEEK_API_KEY` |
 | Distributed cache / limits | `REDIS_URL=${{Redis.REDIS_URL}}` |
 | Maps / contractors / materials | Retained Google Maps/Places/SerpAPI values where configured |
 | Google sign-in | Retained `GOOGLE_OAUTH_IOS_CLIENT_ID`, `GOOGLE_OAUTH_WEB_CLIENT_ID` |
-| Email | `RESEND_API_KEY` was absent from the copied source variables; outbound email readiness is unverified |
+| Email | New domain-restricted, sending-only `RESEND_API_KEY`; `RESEND_FROM_EMAIL=ProEstimate AI <noreply@proestimateai.com>`; deployed and confirmed through the authenticated CLI |
 | App Store server cross-checks | `APP_STORE_ISSUER_ID`, `APP_STORE_API_KEY_ID`, and `APP_STORE_API_PRIVATE_KEY` were absent; configure them and the correct environment to enable authenticated server API checks |
 | Push | Source included APNs identifiers/production settings but lacked `APNS_PRIVATE_KEY`; actual push delivery is not configured/verified |
 
@@ -85,9 +89,9 @@ The website's `API_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` are configured to `h
 
 ## Website DNS cutover
 
-The existing `proestimateai.com` website remains on Vercel. Its authoritative nameservers are Vercel DNS. The replacement Railway website has custom domains attached, but Railway ownership/routing verification remains pending. The owning Vercel team is `js-projects-995e4cf4` (`team_zcqDaSEKB4NwoC90nc0leWKG`). Both currently connected Vercel accounts returned an empty team list during this review, so DNS access to that team is still unavailable. The user said they would reconnect the owner account; successful owner access has not been demonstrated.
+The owning Vercel account `jwillschool7667@gmail.com` approved access to team `js-projects-995e4cf4` (`team_zcqDaSEKB4NwoC90nc0leWKG`). Vercel remains the authoritative DNS provider. The original zone was captured before changes in `validation-2026-10-30/dns-before.json`. Custom apex ALIAS and `www` CNAME records now route website traffic to Railway; verification TXT records were added. Existing system CAA/ALIAS and unrelated records were preserved. Custom records override the provider's system defaults.
 
-Once the serving website bundle is rebuilt and the owner account is connected, read the full existing DNS zone, change only the website routing records, and add the Railway verification TXT records. Preserve MX, mail/authentication TXT, and all unrelated records.
+Railway reports both custom domains verified with `DNS_PROPAGATED` and `CERTIFICATE_STATUS_TYPE_VALID`. Live HTTPS requests to both branded hosts returned HTTP 200 and the Railway server header. The preserved API hostname serves existing iOS clients, so the cutover requires no iOS API URL change.
 
 | Host | Type | Railway target/challenge |
 | --- | --- | --- |
@@ -96,7 +100,15 @@ Once the serving website bundle is rebuilt and the owner account is connected, r
 | Apex | CNAME/ALIAS supported by DNS provider | `uyiu0ftl.up.railway.app` |
 | `_railway-verify` | TXT | `railway-verify=2c10ad9228bca6ca9402648abe103511c4ab427ad0cb359bd35044a3dbe79a56` |
 
-Re-read Railway's current required records immediately before the change in case the challenges changed. Verify ownership, HTTPS certificates, apex/`www` routing, proposal loading/approval, and browser API requests after propagation. Then set `PUBLIC_PROPOSAL_BASE_URL` to the verified branded origin plus `/proposal` and verify newly generated links. The preserved API hostname already serves existing iOS clients; no iOS URL change is required for this cutover.
+`PUBLIC_PROPOSAL_BASE_URL` and `PUBLIC_WEB_BASE_URL` were changed to the branded website origin, applied by the successful API deployment, and confirmed through the authenticated CLI. Public host routing and the reset page are verified; a complete customer proposal creation/approval journey and newly generated branded links still require live end-to-end verification.
+
+## Outbound email and password recovery
+
+Resend verified sending domain `proestimateai.com` (`6be524ae-b5f7-4451-8dce-da4fdd9ed7e1`). Sending is enabled; receiving, click tracking, and open tracking are disabled. The DNS changes add DKIM at `resend._domainkey`, SPF and bounce MX under `send`, a Resend routing CNAME at `rsend`, and monitoring-only DMARC (`v=DMARC1; p=none`) at `_dmarc`. Required records were checked through independent public resolvers and Resend reports them verified. No unrelated mailbox routing was replaced.
+
+A new Resend API key is restricted to sending for this domain and stored only in Railway's API environment; no key value is recorded here. The configured sender is `ProEstimate AI <noreply@proestimateai.com>`. The successful API deployment `494deecd-93a8-48ac-9a59-29427480d973` applies these variables; the authenticated CLI confirmed the branded sender and that the key is present without logging its value. No test email was sent, so provider configuration is verified but recipient delivery is not. This sending-domain setup does not provide a support inbox. Apple Hide My Email delivery also requires the sender to be registered for Apple's private email relay; that registration has not been verified.
+
+The redesigned reset form handles requesting a link, validating matching passwords, expired links, completion, and network failures. New links carry the token in the URL fragment; the page reads and removes it without sending it in the HTTP request URL or referrer. Legacy query links remain supported and are scrubbed. Backend reset tests cover single use and concurrent redemption. See [password-reset-2026-10-30.md](password-reset-2026-10-30.md) for UI and regression evidence.
 
 ## Verification evidence and remaining work
 
@@ -116,11 +128,11 @@ Direct fal.ai generation and edit checks also succeeded. The selected FLUX.2 Fla
 
 The following remain separate from the successful infrastructure/API cutover:
 
-1. **Branded DNS:** perform the scoped DNS cutover once Vercel owner access exists. The replacement website build and browser API origin have now been verified.
-2. **Frontend distribution:** backend billing/refund/OAuth changes are deployed from `7f86ea8`; 221 unit tests, 93 distinct billing/database integration cases and nine focused OAuth/auth cases were verified across the relevant runs. A baseline paid quote check returned HTTP 404 `NOT_FOUND`; its post-fix live check now returns the expected HTTP 402. iOS regression checks and plugin compilation pass, but App Store/TestFlight distribution is not performed by this migration.
+1. **Release completion:** signed iOS 1.0.8 build 11 was accepted for upload. Confirm Apple processing reaches `VALID`, upload the reviewed ASO text and selected screenshots, and attach the build to the editable 1.0.8 version. Keep manual release and do not submit for review without authorization.
+2. **Regression evidence:** backend billing/refund/OAuth fixes passed 221 unit tests, 93 distinct billing/database integration cases and nine focused OAuth/auth cases across the relevant runs; the password-reset changes passed the subsequent 226-test unit suite and focused real-PostgreSQL single-use/concurrent-reset coverage. Counts overlap and must not be summed. A baseline paid quote check returned HTTP 404 `NOT_FOUND`; its post-fix live check returns the expected HTTP 402. iOS regression checks and plugin compilation pass. The new password API deployment is successful and its public health endpoint confirms PostgreSQL and Redis are connected.
 3. **OAuth lifecycle:** Google client-ID configuration matches the iOS app, invalid-token HTTP checks pass, and automated nonce/account-creation regressions pass. Real signed-app Apple/Google logins and Apple token revocation during account deletion remain unverified/unimplemented respectively. See [oauth-audit-2026-10-30.md](oauth-audit-2026-10-30.md).
 4. **Apple purchase validation:** real sandbox/TestFlight purchase, restore, renewal, billing grace/retry, expiry, revocation/refund, original-transaction ownership, and notification delivery still need end-to-end evidence. Automated tests with mocked Apple proof and real PostgreSQL are not real StoreKit validation. Confirm App Store Connect's notification URL is `https://proestimate-api-production-75e5.up.railway.app/v1/commerce/webhooks/app-store` and configure missing server API credentials if authenticated cross-checks are required.
-5. **Other integrations and recovery:** configure missing outbound-email/APNs credentials and test delivery; check Google sign-in/API restrictions, proposal approval, PDFs/invoice totals, and website CORS. Schedule destination volume backups and verify a restore into an isolated database; backup scheduling and restoration have not been verified.
+5. **Other integrations and recovery:** verify recipient email delivery and Apple private-relay sender registration; configure missing APNs credentials and test push delivery; check Google sign-in/API restrictions, proposal approval, PDFs/invoice totals, and website CORS. Schedule destination volume backups and verify a restore into an isolated database; backup scheduling and restoration have not been verified.
 
 Starting fresh is the authorized data outcome, so an old-data restore is no longer a prerequisite. The pending items above must remain explicit when reporting overall application readiness.
 
