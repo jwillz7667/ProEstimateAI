@@ -634,8 +634,11 @@ export async function forgotPassword(
 
   // Send password reset email (graceful no-op if RESEND_API_KEY not configured)
   const { sendPasswordResetEmail } = await import("../../lib/email");
-  const resetUrl = `${env.API_BASE_URL}/reset-password?token=${resetToken}`;
-  await sendPasswordResetEmail(user.email, resetUrl);
+  const resetUrl = new URL("/reset-password", env.PUBLIC_WEB_BASE_URL);
+  // Fragments never reach the website's request URL or access logs. The
+  // browser form reads this token locally before posting it to the API.
+  resetUrl.hash = new URLSearchParams({ token: resetToken }).toString();
+  await sendPasswordResetEmail(user.email, resetUrl.toString());
 }
 
 // ─── Reset Password ─────────────────────────────────────────────────────────

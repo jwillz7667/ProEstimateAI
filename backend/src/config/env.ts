@@ -34,6 +34,16 @@ const envSchema = z.object({
   API_BASE_URL: z
     .string()
     .default("https://proestimate-api-production-75e5.up.railway.app"),
+  PUBLIC_WEB_BASE_URL: z
+    .string()
+    .url()
+    .refine((value) => {
+      if (!URL.canParse(value)) return false;
+      const url = new URL(value);
+      return (url.protocol === "https:" || url.protocol === "http:") &&
+        !url.username && !url.password;
+    }, "Public website URL must use HTTP or HTTPS without credentials")
+    .default("https://proestimateai.com"),
   PUBLIC_PROPOSAL_BASE_URL: z
     .string()
     .url()

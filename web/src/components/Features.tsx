@@ -32,7 +32,7 @@ const features: Feature[] = [
     ),
     title: "Photoreal AI previews",
     description:
-      "Powered by Nano Banana 2.1. Upload a single photo and get a preview that holds the room layout while showing your renovation choices.",
+      "Upload a single photo and get an AI preview that holds the room layout while showing your renovation choices.",
   },
   {
     icon: (
@@ -130,7 +130,7 @@ const features: Feature[] = [
     ),
     title: "Built for every trade",
     description:
-      "Kitchen, bath, roofing, siding, painting, flooring, exterior, lawn & roof scout, garages — fourteen project types with prompt presets that get the AI right the first time.",
+      "From kitchens and bathrooms to roofing, painting, and landscaping, choose project-specific prompts to guide your remodel preview.",
   },
   {
     icon: (

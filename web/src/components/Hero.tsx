@@ -245,7 +245,7 @@ export default function Hero() {
             className="mt-6 text-sm text-white/75"
             variants={fadeInUp}
           >
-            Free to start &middot; no credit card &middot; iOS 17+
+            Free to start &middot; no credit card &middot; iOS 26.4+
           </motion.p>
         </div>
 
