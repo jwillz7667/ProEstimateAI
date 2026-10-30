@@ -220,6 +220,12 @@ platform :ios do
     listing = if draft
       version_id = draft.fetch("id")
       linked = asc_get.call("appStoreVersions/#{version_id}/relationships/build")
+      # Limit fields at the API boundary so reviewer credentials are never
+      # fetched or printed by release-status diagnostics.
+      review = asc_get.call("appStoreVersions/#{version_id}/appStoreReviewDetail?fields[appStoreReviewDetails]=notes,demoAccountRequired").fetch("data").fetch("attributes")
+      review_notes = review["notes"].to_s.strip
+      source_notes = File.read(File.expand_path("metadata/review_information/notes.txt", __dir__)).strip
+      review_summary = { demo_account_required: review["demoAccountRequired"], notes_sha256: Digest::SHA256.hexdigest(review_notes), notes_match_source: review_notes == source_notes }
       localizations = asc_get.call("appStoreVersions/#{version_id}/appStoreVersionLocalizations?limit=50").fetch("data").map do |localization|
         attributes = localization.fetch("attributes")
         sets = asc_get.call("appStoreVersionLocalizations/#{localization['id']}/appScreenshotSets?limit=50").fetch("data").map do |set|
@@ -235,7 +241,7 @@ platform :ios do
         end
         { locale: attributes["locale"], fields: fields, screenshot_sets: sets }
       end
-      { version_id: version_id, version: project_marketing_version, build_relationship: linked["data"], localizations: localizations }
+      { version_id: version_id, version: project_marketing_version, build_relationship: linked["data"], review: review_summary, localizations: localizations }
     end
     groups = asc_get.call("apps/#{app.id}/subscriptionGroups?limit=20").fetch("data")
     subscriptions = groups.flat_map do |group|
