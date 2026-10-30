@@ -11,6 +11,7 @@ on:
         options:
           - copy            # fast: text only, skips screenshots
           - screenshots     # screenshots only
+          - recover_screenshots # retry stalled assets, preserve completed files
           - all             # text + screenshots (slow, Apple-flaky)
           - status          # read-only release and subscription inspection
           - attach          # attach a processed build to the draft; never submit
@@ -66,6 +67,7 @@ jobs:
           case "${{ inputs.scope }}" in
             copy)        echo "name=metadata_copy" >> "$GITHUB_OUTPUT" ;;
             screenshots) echo "name=metadata_screenshots" >> "$GITHUB_OUTPUT" ;;
+            recover_screenshots) echo "name=metadata_recover_screenshots" >> "$GITHUB_OUTPUT" ;;
             all)         echo "name=metadata" >> "$GITHUB_OUTPUT" ;;
             status)      echo "name=asc_status" >> "$GITHUB_OUTPUT" ;;
             attach)      echo "name=attach_build" >> "$GITHUB_OUTPUT" ;;

@@ -450,6 +450,32 @@ platform :ios do
     )
   end
 
+  desc "Recover stalled screenshot processing while retaining completed campaign assets"
+  lane :metadata_recover_screenshots do
+    setup_spaceship_token
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+    ensure_editable_app_store_version(app)
+    screenshot_path = ListingScreenshots.prepare(root: File.expand_path("..", __dir__))
+
+    # Fastlane's normal retry removes only non-COMPLETE assets and skips
+    # completed assets by checksum. A bounded wait lets that retry run
+    # inside CI instead of spending the full job timeout on Apple's queue.
+    deliver(
+      api_key:                           make_api_key,
+      app_version:                       project_marketing_version,
+      skip_binary_upload:                true,
+      skip_screenshots:                  false,
+      screenshots_path:                 screenshot_path,
+      overwrite_screenshots:            false,
+      screenshot_processing_timeout:    120,
+      skip_metadata:                     true,
+      submit_for_review:                 false,
+      force:                             true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
   desc "Upload the iPhone 6.9 app preview video to ASC for the editable version. " \
        "deliver doesn't handle .mov files, so this lane drives the AppPreviewSet API directly."
   lane :metadata_preview do
