@@ -132,9 +132,25 @@ The following remain separate from the successful infrastructure/API cutover:
 2. **Regression evidence:** backend billing/refund/OAuth fixes passed 221 unit tests, 93 distinct billing/database integration cases and nine focused OAuth/auth cases across the relevant runs; the password-reset changes passed the subsequent 226-test unit suite and focused real-PostgreSQL single-use/concurrent-reset coverage. Counts overlap and must not be summed. A baseline paid quote check returned HTTP 404 `NOT_FOUND`; its post-fix live check returns the expected HTTP 402. iOS regression checks and plugin compilation pass. The new password API deployment is successful and its public health endpoint confirms PostgreSQL and Redis are connected.
 3. **OAuth lifecycle:** Google client-ID configuration matches the iOS app, invalid-token HTTP checks pass, and automated nonce/account-creation regressions pass. Real signed-app Apple/Google logins and Apple token revocation during account deletion remain unverified/unimplemented respectively. See [oauth-audit-2026-10-30.md](oauth-audit-2026-10-30.md).
 4. **Apple purchase validation:** real sandbox/TestFlight purchase, restore, renewal, billing grace/retry, expiry, revocation/refund, original-transaction ownership, and notification delivery still need end-to-end evidence. Automated tests with mocked Apple proof and real PostgreSQL are not real StoreKit validation. Confirm App Store Connect's notification URL is `https://proestimate-api-production-75e5.up.railway.app/v1/commerce/webhooks/app-store` and configure missing server API credentials if authenticated cross-checks are required.
-5. **Other integrations and recovery:** verify recipient email delivery and Apple private-relay sender registration; configure missing APNs credentials and test push delivery; check Google sign-in/API restrictions, proposal approval, PDFs/invoice totals, and website CORS. Schedule destination volume backups and verify a restore into an isolated database; backup scheduling and restoration have not been verified.
+5. **Other integrations and recovery:** verify recipient email delivery and Apple private-relay sender registration; configure missing APNs credentials and test push delivery; check Google sign-in/API restrictions, proposal approval, PDFs/invoice totals, and website CORS. Daily destination volume backups are enabled and an initial snapshot is listed, as recorded below. The first automatic run and restoration into an isolated recovery environment remain unverified.
 
 Starting fresh is the authorized data outcome, so an old-data restore is no longer a prerequisite. The pending items above must remain explicit when reporting overall application readiness.
+
+## Destination backup schedule and initial snapshot
+
+The destination Postgres volume `98807ecf-30a0-4a59-b5fb-f5ccdb6ec8cd` initially had no automatic schedules and no backups. Native daily volume backups were enabled through Railway CLI 5.71.0 without a plan upgrade, service redeployment, or data changes. The subsequent schedule listing confirmed:
+
+| Setting | Verified value |
+| --- | --- |
+| Schedule ID | `29a05ee8-8383-4499-9073-24edc85895b1` |
+| Schedule | `DAILY`, cron `55 22 * * *` UTC (22:55 UTC each day) |
+| Retention | `518400` seconds (6 days) |
+| Created | `2026-10-30T09:53:18.361Z` |
+| Scope | Destination Postgres service `4094f94b-b513-4c30-9ef1-23e774231a51`, production environment `0117903d-f058-4712-a55e-3407b6d89c01` |
+
+An initial on-demand snapshot was also created rather than waiting for the first scheduled run. Railway's backup listing returned backup `ea8a531e-35a0-45c3-ae12-3bb9b9408d48`, named `post-migration-2026-10-30`, created at `2026-10-30T09:53:44.361Z`, with external snapshot ID `vs_1793354024329_99vwvm13rt8s8ev4`, `referencedMB: 867`, and `expiresAt: null`. The CLI exposed a snapshot record, but no separate `COMPLETE` state; this is evidence of backup creation/listing, not an actual recovery test. No restore, deletion, volume detach, source-volume modification, PITR enablement, or Redis backup was performed. Redis holds disposable cache/limit data.
+
+Railway documents daily backups as retained for six days and bills only incremental backup storage at ordinary volume-storage rates; no new subscription tier was selected. See [Railway backup documentation](https://docs.railway.com/volumes/backups) and [CLI schedule management](https://docs.railway.com/cli/postgres#manage-backup-schedules). Monitor the next scheduled backup and perform a deliberately isolated recovery exercise before claiming verified restoration. Railway native snapshots can only be restored within the same project and environment, and its restore operation changes volume attachments; do not test by restoring over this live destination.
 
 ## Optional future source recovery
 
