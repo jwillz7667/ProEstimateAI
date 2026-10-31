@@ -43,10 +43,22 @@ module AppStoreAgeRating
       raise "Apple age-rating declaration changed identity during preflight"
     end
     expected = attributes.merge("socialMedia" => false)
-    unless after.fetch("attributes") == expected
-      raise "Apple age-rating readback mismatch: socialMedia must be false and all other questionnaire answers must remain unchanged"
+    actual = after.fetch("attributes")
+    unless actual == expected
+      changed = (expected.keys | actual.keys).select { |key| expected[key] != actual[key] || expected.key?(key) != actual.key?(key) }
+      details = changed.sort.map do |key|
+        "#{key}: before=#{answer_summary(attributes, key)} expected=#{answer_summary(expected, key)} after=#{answer_summary(actual, key)}"
+      end.join("; ")
+      raise "Apple age-rating readback mismatch: socialMedia must be false and all other questionnaire answers must remain unchanged. Changed questionnaire answers: #{details}"
     end
     log.call("Age-rating verified appInfo=#{info_id} declaration=#{declaration_id} socialMedia=false otherAnswers=preserved")
     { app_info_id: info_id, declaration_id: declaration_id, social_media: false, updated: value.nil? }
+  end
+
+  def self.answer_summary(attributes, key)
+    return "<missing>" unless attributes.key?(key)
+    value = attributes[key]
+    return "<non-scalar #{value.class}>" if value.is_a?(Hash) || value.is_a?(Array)
+    value.inspect
   end
 end

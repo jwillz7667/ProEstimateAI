@@ -103,7 +103,12 @@ class AppStoreAgeRatingTest < ReleaseAssertions
 
   def test_other_questionnaire_change_in_readback_stops_submission
     @readback_drift = true
-    assert_raises(RuntimeError) { run_preflight }
+    begin
+      run_preflight
+      raise "Expected readback mismatch"
+    rescue RuntimeError => error
+      assert error.message.include?("userGeneratedContent: before=false expected=false after=true")
+    end
     assert_equal 2, @reads
   end
 
