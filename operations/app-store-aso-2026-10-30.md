@@ -1,5 +1,7 @@
 # App Store listing and ASO — October 30, 2026
 
+> **Historical snapshot.** Build numbers and free-credit/trial claims below describe the earlier release. The [current access and comparison report](access-and-comparison-2026-10-31.md) supersedes those policies and records the latest build: basic work stays free; AI requires an active Apple subscription or trial, with eligible three-day introductory offers.
+
 ## Prepared changes
 
 The App Store Connect 1.0.8 draft now presents ProEstimate as a contractor estimating and renovation workflow: photo preview, editable estimate, client approval and invoice. The existing updated screenshot campaign was uploaded unchanged as the user requested. Final Apple readback verifies the localized copy, categories, exact valid build attachment, reviewer notes and all 75 ordered screenshot assets. The version remains an unsubmitted manual-release draft. See [app-store-release-2026-10-30.md](app-store-release-2026-10-30.md) for workflow and readback evidence.

@@ -1,5 +1,7 @@
 # Railway account migration
 
+> **Historical snapshot.** Build numbers and free-credit/trial claims below describe the earlier release. The [current access and comparison report](access-and-comparison-2026-10-31.md) supersedes those policies and records the latest build: basic work stays free; AI requires an active Apple subscription or trial, with eligible three-day introductory offers.
+
 Status recorded October 30, 2026. The replacement API, PostgreSQL 18, Redis 8.2, and website have been deployed into the destination account, `j.williams.33.33.66@gmail.com`. The user explicitly chose **“Connect the new empty database; start fresh.”** The destination contains a new application database with the production commerce catalog; previous customer records were not restored. The old PostgreSQL volume has been preserved and its contents have not been inspected.
 
 The original API hostname now routes to the replacement API: <https://proestimate-api-production-75e5.up.railway.app>. Released iOS clients can continue using that hostname. At 08:11 UTC, `/health` reported `healthy`, PostgreSQL `connected`, and Redis `connected`. The replacement website at <https://proestimate-web-production.up.railway.app> returned `ok` from `/api/health`.

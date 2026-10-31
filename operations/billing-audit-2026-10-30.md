@@ -1,5 +1,7 @@
 # Billing and database contract audit — October 30, 2026
 
+> **Historical snapshot.** Build numbers and free-credit/trial claims below describe the earlier release. The [current access and comparison report](access-and-comparison-2026-10-31.md) supersedes those policies and records the latest build: basic work stays free; AI requires an active Apple subscription or trial, with eligible three-day introductory offers.
+
 ## Result
 
 The API and iOS contract had concrete gaps in purchase reconciliation, subscription expiry, feature authorization, usage limits, and failed-generation credit handling. The backend fixes are covered by automated regression tests with real disposable PostgreSQL. These tests do not establish successful real StoreKit purchases or App Store notification delivery.

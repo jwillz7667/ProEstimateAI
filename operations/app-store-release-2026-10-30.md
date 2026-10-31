@@ -1,5 +1,7 @@
 # App Store Connect preparation — October 30, 2026
 
+> **Historical snapshot.** Build numbers and free-credit/trial claims below describe the earlier release. The [current access and comparison report](access-and-comparison-2026-10-31.md) supersedes those policies and records the latest build: basic work stays free; AI requires an active Apple subscription or trial, with eligible three-day introductory offers.
+
 The user authorized uploading the updated iOS version and refactoring the listing with the selected updated screenshots. App Review submission and public release are separate actions and have not been requested or performed.
 
 ## Binary
