@@ -15,11 +15,17 @@ on:
           - all             # text + screenshots (slow, Apple-flaky)
           - status          # read-only release and subscription inspection
           - billing_status  # read-only subscription sale/trial inspection
+          - trial3          # explicit three-day trial configuration
           - attach          # attach a processed build to the draft; never submit
       build_number:
         description: "Exact existing build number (required only for attach)"
         required: false
         type: string
+      apply_trial_change:
+        description: "Apply the three-day introductory-offer plan (trial3 only)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   # Read-only inspection can run while Apple processes a long asset upload.
@@ -79,6 +85,7 @@ jobs:
             all)         echo "name=metadata" >> "$GITHUB_OUTPUT" ;;
             status)      echo "name=asc_status" >> "$GITHUB_OUTPUT" ;;
             billing_status) echo "name=billing_status" >> "$GITHUB_OUTPUT" ;;
+            trial3)      echo "name=billing_trial3" >> "$GITHUB_OUTPUT" ;;
             attach)      echo "name=attach_build" >> "$GITHUB_OUTPUT" ;;
             *)           echo "::error::Unknown scope ${{ inputs.scope }}"; exit 1 ;;
           esac
@@ -87,6 +94,7 @@ jobs:
         env:
           ASC_BUILD_NUMBER: ${{ inputs.build_number }}
           ASC_LANE: ${{ steps.lane.outputs.name }}
+          APPLY_THREE_DAY_TRIAL: ${{ inputs.apply_trial_change && inputs.scope == 'trial3' && 'true' || 'false' }}
         run: |
           if [ "$ASC_LANE" = "attach_build" ]; then
             [[ "$ASC_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::An explicit numeric build_number is required"; exit 1; }
