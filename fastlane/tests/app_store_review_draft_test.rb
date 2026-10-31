@@ -14,6 +14,7 @@ class AppStoreReviewDraftTest < ReleaseAssertions
     @submissions = [@draft]
     @items = { "data" => [] }
     @calls = []
+    @messages = []
   end
 
   def api
@@ -34,7 +35,7 @@ class AppStoreReviewDraftTest < ReleaseAssertions
   end
 
   def validate
-    AppStoreReviewDraft.validate(app_id: "app", platform: "IOS", version_id: "version", api: api)
+    AppStoreReviewDraft.validate(app_id: "app", platform: "IOS", version_id: "version", api: api, log: ->(message) { @messages << message })
   end
 
   def test_empty_unassigned_draft_is_preserved_and_reusable
@@ -81,9 +82,13 @@ class AppStoreReviewDraftTest < ReleaseAssertions
     assert_equal [:get, "apps/app/reviewSubmissions?filter[platform]=IOS&limit=200"], @calls.first
   end
 
-  def test_other_version_draft_is_refused
-    @draft["relationships"]["appStoreVersionForReview"]["data"] = { "type" => "appStoreVersions", "id" => "other-version" }
-    assert_raises(RuntimeError) { validate }
+  def test_empty_draft_with_informational_prior_version_link_is_reusable
+    @draft["relationships"]["appStoreVersionForReview"]["data"] = { "type" => "appStoreVersions", "id" => "prior-version", "meta" => { "informational" => true } }
+    assert_equal "draft", validate
+    assert @calls.include?([:get, "reviewSubmissions/draft/items?limit=200"])
+    assert @messages.last.include?('informationalVersionId="prior-version"')
+    assert @messages.last.include?("targetVersion=version")
+    assert @messages.last.include?("items=0")
   end
 
   def test_in_progress_unresolved_or_cancelling_submissions_are_refused

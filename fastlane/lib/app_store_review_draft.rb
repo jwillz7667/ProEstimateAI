@@ -23,18 +23,17 @@ module AppStoreReviewDraft
            draft.dig("attributes", "submittedDate").nil?
       raise "Review draft app, platform or unsubmitted state does not match this release; no changes were made"
     end
-    linked_version = draft.dig("relationships", "appStoreVersionForReview", "data")
-    if linked_version && linked_version != { "type" => "appStoreVersions", "id" => version_id }
-      raise "Review draft belongs to another App Store version; no changes were made"
-    end
-
-    # An empty draft has no version relationship when adding the version failed
-    # validation. Deliver will add only the already validated target version.
+    # Items determine what will be submitted. appStoreVersionForReview is
+    # informational and may still point at a previous version in an empty
+    # draft; pinned deliver reuses such drafts and adds the target as an item.
     items = api.call(:get, "reviewSubmissions/#{id}/items?limit=200")
     unless items.fetch("data").empty? && items.dig("links", "next").nil?
       raise "Review draft contains existing or unverified items; fastlane must not reuse it"
     end
-    log.call("Reusing empty READY_FOR_REVIEW draft=#{id} app=#{app_id} platform=#{platform} targetVersion=#{version_id}")
+    linked_version = draft.dig("relationships", "appStoreVersionForReview", "data")
+    linked_type = linked_version.is_a?(Hash) ? linked_version["type"] : nil
+    linked_id = linked_version.is_a?(Hash) ? linked_version["id"] : nil
+    log.call("Reusing empty READY_FOR_REVIEW draft=#{id} app=#{app_id} platform=#{platform} targetVersion=#{version_id} informationalVersionType=#{linked_type.inspect} informationalVersionId=#{linked_id.inspect} items=0")
     id
   end
 end
