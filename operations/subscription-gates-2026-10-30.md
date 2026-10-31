@@ -24,3 +24,9 @@ The confirmed policy is: new AI previews, AI material/labor pipelines and AI-gen
 - Existing async refund/reaper guarantees, including recovery of historical starter-backed jobs, remain covered.
 
 Deployment, App Store offer writes and real device purchase/restore checks are coordinated separately by the primary agent. Test output must distinguish mocked Apple/provider boundaries from real StoreKit evidence.
+
+## Stored PDFs and the existing upload contract
+
+Existing saved PDF metadata/binary reads remain ungated by subscription, with ownership checks for metadata and the existing unguessable file URL for binary access. The new upload endpoint now requires effective paid export access after verifying estimate ownership. Free/expired new uploads return 402 without a PDF record or quota charge.
+
+iOS renders locally, consumes `QUOTE_EXPORT` through `/usage/check`, then separately uploads the saved PDF. Storage does not charge the event again. A paid client that directly uploads while skipping its existing pre-approval can still omit that counter; full atomic cap enforcement for this path requires a receipt-bound render/upload contract. That redesign is intentionally separate from this paid-access correction, avoiding double charges for current clients.

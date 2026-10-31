@@ -1,5 +1,6 @@
 import { prisma } from '../../config/database';
-import { NotFoundError } from '../../lib/errors';
+import { NotFoundError, PaywallError } from '../../lib/errors';
+import { getEffectiveEntitlement } from '../commerce/commerce.service';
 import { CreateEstimateExportInput } from './estimate-exports.validators';
 
 /**
@@ -29,9 +30,23 @@ export async function create(
   estimateId: string,
   companyId: string,
   input: CreateEstimateExportInput,
+  userId: string,
 ) {
   const estimate = await verifyEstimateOwnership(estimateId, companyId);
-
+  const entitlement = await getEffectiveEntitlement(userId, companyId);
+  if (!entitlement.feature_flags.CAN_EXPORT_QUOTE) {
+    throw new PaywallError('Saving a new PDF quote requires an active subscription', {
+      placement: 'QUOTE_LIMIT_HIT', blocking: true,
+      trigger_reason: 'Saving a new PDF quote requires an active subscription',
+      headline: 'PDF Export Requires Pro',
+      subheadline: 'Subscribe or restore a purchase to create new PDF exports. Your saved PDFs remain available.',
+      primary_cta_title: 'View Pro Plans', secondary_cta_title: 'Restore Purchases',
+      show_continue_free: false, show_restore_purchases: true,
+      recommended_product_id: 'proestimate.pro.monthly', available_products: null,
+    });
+  }
+  // iOS already reserves QUOTE_EXPORT after rendering, before this separate
+  // persistence call. Do not double-charge that existing two-step contract.
   const fileSize = Math.floor((input.pdf_data.length * 3) / 4);
 
   const created = await prisma.estimateExport.create({
