@@ -131,7 +131,9 @@ class AppReviewCredentialsTest < ReleaseAssertions
       { data: [{ id: "offline-train" }] }
     when %r{\A/v1/builds\?filter\[preReleaseVersion\]}
       { data: [{ id: "offline-build", attributes: { version: "11", processingState: "VALID" } }] }
-    when %r{\A/v1/reviewSubmissions\?}, %r{\A/v1/builds\?filter\[app\]},
+    when %r{\A/v1/reviewSubmissions\?}, %r{\A/v1/apps/offline-app/reviewSubmissions\?}
+      { data: @review_draft ? [@review_draft] : [] }
+    when %r{\A/v1/builds\?filter\[app\]},
          %r{\A/v1/apps/offline-app/(subscriptionGroups|buildUploads)\?},
          %r{\A/v1/apps/offline-app/appInfos\?include=},
          %r{\A/v1/appStoreVersions/offline-draft/appStoreVersionLocalizations\?}
@@ -140,6 +142,10 @@ class AppReviewCredentialsTest < ReleaseAssertions
       { data: [{ id: "offline-info", attributes: { appStoreState: "PREPARE_FOR_SUBMISSION" } }] }
     when "/v1/appInfos/offline-info/ageRatingDeclaration"
       { data: { id: "offline-rating", type: "ageRatingDeclarations", attributes: { socialMedia: false, socialMediaAgeRestricted: nil } } }
+    when "/v1/reviewSubmissions/offline-review?include=appStoreVersionForReview"
+      { data: @review_draft }
+    when "/v1/reviewSubmissions/offline-review/items?limit=200"
+      { data: [] }
     when %r{\A/v1/apps/offline-app/appStoreVersions\?}
       { data: [{ id: "offline-draft", attributes: { versionString: @version, appStoreState: "PREPARE_FOR_SUBMISSION" } }] }
     when "/v1/appStoreVersions/offline-draft/relationships/build"
@@ -198,6 +204,7 @@ class AppReviewCredentialsTest < ReleaseAssertions
     assert_equal true, options.fetch(:submit_for_review)
     assert_equal false, options.fetch(:automatic_release)
     assert_equal true, options.fetch(:skip_binary_upload)
+    assert_equal "11", options.fetch(:build_number)
     assert_equal [:prepare_screenshots, ROOT], @calls.first
     rating_read = @calls.rindex([:http, "GET", "/v1/appInfos/offline-info/ageRatingDeclaration"])
     assert rating_read && rating_read < @calls.index(:deliver), "Age rating must be verified before submission"
@@ -214,6 +221,17 @@ class AppReviewCredentialsTest < ReleaseAssertions
       # Exercise the pinned loader: skip_metadata must prevent review-file reads.
       Deliver::UploadMetadata.new(options.merge(metadata_path: "/must-not-be-read")).load_from_filesystem
     end
+  end
+
+  def test_submit_preserves_empty_ready_draft_instead_of_trying_to_cancel_it
+    @review_draft = {
+      id: "offline-review", type: "reviewSubmissions",
+      attributes: { state: "READY_FOR_REVIEW", platform: "IOS", submittedDate: nil }
+    }
+    @harness.run(:submit)
+    assert @calls.include?([:http, "GET", "/v1/reviewSubmissions/offline-review/items?limit=200"])
+    assert @calls.select { |call| call.is_a?(Array) && call.first == :http }.all? { |call| call[1] == "GET" }
+    assert_equal "11", @harness.delivery.fetch(:build_number)
   end
 
   def test_status_needs_no_secret_and_limits_review_fields_at_the_api_boundary

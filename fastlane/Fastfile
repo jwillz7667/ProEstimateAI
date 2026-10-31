@@ -5,6 +5,7 @@ require_relative "lib/prepared_release"
 require_relative "lib/app_review_credentials"
 require_relative "lib/app_store_billing"
 require_relative "lib/app_store_age_rating"
+require_relative "lib/app_store_review_draft"
 
 XCODE_PROJECT   = "ProEstimate AI.xcodeproj"
 XCODE_SCHEME    = "ProEstimate AI"
@@ -730,21 +731,10 @@ platform :ios do
     UI.user_error!("No build available after polling — cannot submit") if latest.nil?
 
     # ------------------------------------------------------------------
-    # Clear any stale review submissions before calling deliver.
-    # ASC rejects `deliver(submit_for_review: true)` with
-    # "A review submission is already in progress" whenever a prior
-    # submission is still open — typically a READY_FOR_REVIEW that was
-    # never sent, a WAITING_FOR_REVIEW awaiting Apple's queue, or a
-    # submission sitting in UNRESOLVED_ISSUES after a rejection.
-    #
-    # The ASC API does NOT permit DELETE on reviewSubmissions (403
-    # "does not allow 'DELETE'"), and `state` is read-only (PATCH with
-    # state:CANCELING → 409 "attribute 'state' can not be included in a
-    # 'UPDATE'"). The supported withdrawal is PATCH `canceled: true`,
-    # which transitions the submission through CANCELING to CANCELED.
-    # We then poll until it leaves the blocking states so deliver's
-    # pre-check sees a clean slate. Submissions already IN_REVIEW cannot
-    # be cancelled via API (handled separately below).
+    # Preserve an unsubmitted READY_FOR_REVIEW draft: pinned deliver can
+    # reuse it if its items are empty, verified below before submission.
+    # Retain the existing unresolved-rejection cleanup and never withdraw
+    # a submission already waiting for review or in review.
     # ------------------------------------------------------------------
     asc_raw = lambda do |method, path, body = nil|
       uri = URI.parse("https://api.appstoreconnect.apple.com/v1/#{path}")
@@ -768,7 +758,7 @@ platform :ios do
     submissions_resp = asc_get.call("reviewSubmissions?filter[app]=#{submit_app.id}&limit=50")
     all_submissions = submissions_resp["data"] || []
     open_submissions = all_submissions.select do |s|
-      %w[READY_FOR_REVIEW UNRESOLVED_ISSUES].include?(s.dig("attributes", "state"))
+      s.dig("attributes", "state") == "UNRESOLVED_ISSUES"
     end
 
     in_review = all_submissions.select { |s| %w[WAITING_FOR_REVIEW IN_REVIEW].include?(s.dig("attributes", "state")) }
@@ -850,10 +840,12 @@ platform :ios do
     end
 
     if target_match && editable_states.include?(target_match.dig("attributes", "appStoreState"))
+      target_version_id = target_match.fetch("id")
       UI.success("Editable App Store version #{target_version} already exists (#{target_match['id']}, state: #{target_match.dig('attributes', 'appStoreState')})")
     elsif target_match
       UI.user_error!("App Store version #{target_version} exists but is in non-editable state #{target_match.dig('attributes', 'appStoreState')}. Bump CFBundleShortVersionString to a new value and re-run.")
     elsif editable_other
+      target_version_id = editable_other.fetch("id")
       other_version = editable_other.dig("attributes", "versionString")
       other_state   = editable_other.dig("attributes", "appStoreState")
       UI.message("Reusing in-flight version #{other_version} (#{editable_other['id']}, #{other_state}) → renaming to #{target_version}...")
@@ -883,15 +875,21 @@ platform :ios do
       if create_code >= 400
         UI.user_error!("Failed to create App Store version #{target_version} (#{create_code}): #{(create_body.dig('errors') || []).map { |e| e['detail'] }.join('; ')}")
       end
+      target_version_id = create_body.fetch("data").fetch("id")
       UI.success("Created App Store version #{target_version} (#{create_body.dig('data', 'id')})")
       sleep 5
     end
 
+    review_api = lambda do |method, path, body = nil|
+      AppStoreBilling.request(token: Spaceship::ConnectAPI.token.text, method: method, path: path, body: body)
+    end
+    AppStoreReviewDraft.validate(
+      app_id: submit_app.id, platform: "IOS", version_id: target_version_id,
+      api: review_api, log: ->(message) { UI.message(message) }
+    )
     AppStoreAgeRating.ensure_social_media_declaration(
       app_id: submit_app.id,
-      api: lambda do |method, path, body = nil|
-        AppStoreBilling.request(token: Spaceship::ConnectAPI.token.text, method: method, path: path, body: body)
-      end,
+      api: review_api,
       log: ->(message) { UI.message(message) }
     )
 
@@ -899,6 +897,7 @@ platform :ios do
       api_key:                           api_key,
       app_review_information:            review_information,
       app_version:                       target_version,
+      build_number:                      latest.fetch("attributes").fetch("version"),
       skip_binary_upload:                true,
       skip_screenshots:                  false,
       screenshots_path:                 screenshot_path,
