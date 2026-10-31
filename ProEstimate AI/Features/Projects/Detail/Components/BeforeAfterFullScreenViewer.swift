@@ -6,7 +6,8 @@ import SwiftUI
 /// quick-generate screen, this view presents a larger version with
 /// pinch-to-zoom and pan, plus a header showing the prompt that
 /// produced the AI preview. The interactive divider behavior is
-/// inherited from `BeforeAfterSlider`.
+/// rendered by `BeforeAfterSlider`, with one owner for drag recognition so
+/// fullscreen panning cannot interrupt the comparison halfway through a drag.
 struct BeforeAfterFullScreenViewer: View {
     let beforeImageURL: URL?
     let afterImageURL: URL?
@@ -17,28 +18,37 @@ struct BeforeAfterFullScreenViewer: View {
     var caption: String?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var zoom: CGFloat = 1.0
-    @State private var lastZoom: CGFloat = 1.0
     @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
+    @State private var comparisonPosition: CGFloat = 0.5
+    @Namespace private var viewportCoordinateSpace
+    @GestureState private var magnificationStart: CGFloat? = nil
+    @GestureState private var dragContext: ComparisonDragContext? = nil
+
+    private struct ComparisonDragContext {
+        let mode: BeforeAfterComparisonGeometry.DragMode
+        let initialOffset: CGSize
+    }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
             GeometryReader { geometry in
-                // Cap the slider's box to a 4:3-ish aspect of its
-                // available width. The previous "78% of screen height"
-                // produced a ~430×730 portrait box on iPhone 16 Pro Max,
-                // which forced `scaledToFill` to crop the photos
-                // aggressively top-to-bottom — clients lost the outer
-                // edges of the scene. Using width × 1.25 (and clamping
-                // to the available height) keeps the frame close to the
-                // source photo's native aspect so the comparison view
-                // shows the full scene.
                 let availableWidth = geometry.size.width
+                // Use the actual capped image width on iPad, rather than
+                // treating the empty margins as part of the reveal canvas.
+                let canvasWidth = min(availableWidth, BeforeAfterComparisonGeometry.maximumCanvasWidth)
                 let availableHeight = geometry.size.height * 0.85
-                let height = min(availableWidth * 1.25, availableHeight)
+                let height = min(canvasWidth * 1.25, availableHeight)
+                let canvasSize = CGSize(width: canvasWidth, height: height)
+                let comparisonGeometry = BeforeAfterComparisonGeometry(
+                    canvasWidth: canvasWidth,
+                    viewportWidth: availableWidth,
+                    scale: zoom,
+                    horizontalOffset: offset.width
+                )
                 VStack(spacing: SpacingTokens.md) {
                     Spacer(minLength: 0)
 
@@ -46,39 +56,29 @@ struct BeforeAfterFullScreenViewer: View {
                         beforeImageURL: beforeImageURL,
                         afterImageURL: afterImageURL,
                         beforeImageData: beforeImageData,
-                        height: height
+                        height: height,
+                        position: $comparisonPosition,
+                        isDragEnabled: false,
+                        isDraggingExternally: dragContext?.mode == .comparison
                     )
                     .scaleEffect(zoom)
                     .offset(offset)
-                    .gesture(
-                        SimultaneousGesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    let scaled = lastZoom * value
-                                    zoom = max(1.0, min(scaled, 4.0))
-                                }
-                                .onEnded { _ in lastZoom = zoom },
-                            DragGesture()
-                                .onChanged { value in
-                                    // Only allow panning while zoomed in,
-                                    // otherwise pan would fight the slider's
-                                    // own drag gesture.
-                                    guard zoom > 1.0 else { return }
-                                    offset = CGSize(
-                                        width: lastOffset.width + value.translation.width,
-                                        height: lastOffset.height + value.translation.height
-                                    )
-                                }
-                                .onEnded { _ in lastOffset = offset }
-                        )
+                    .gesture(comparisonDrag(geometry: comparisonGeometry, canvasSize: canvasSize))
+                    .simultaneousGesture(
+                        MagnifyGesture()
+                            .updating($magnificationStart) { _, start, _ in
+                                if start == nil { start = zoom }
+                            }
+                            .onChanged { value in
+                                zoom = min(max((magnificationStart ?? zoom) * value.magnification, 1), 4)
+                                offset = BeforeAfterComparisonGeometry.clampedOffset(offset, canvasSize: canvasSize, scale: zoom)
+                            }
                     )
                     .onTapGesture(count: 2) {
                         // Double-tap to reset zoom — common iOS convention.
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                             zoom = 1.0
-                            lastZoom = 1.0
                             offset = .zero
-                            lastOffset = .zero
                         }
                     }
 
@@ -94,6 +94,7 @@ struct BeforeAfterFullScreenViewer: View {
                     Spacer(minLength: 0)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
+                .coordinateSpace(.named(viewportCoordinateSpace))
             }
 
             VStack {
@@ -113,15 +114,50 @@ struct BeforeAfterFullScreenViewer: View {
                     .accessibilityLabel("Close before/after comparison")
                 }
                 Spacer()
-                if zoom == 1.0 {
-                    Text("Drag to slide · pinch to zoom · double-tap to reset")
-                        .font(TypographyTokens.caption2)
-                        .foregroundStyle(.white.opacity(0.55))
-                        .padding(.bottom, SpacingTokens.lg)
-                }
+                Text(zoom == 1
+                     ? "Drag to slide · pinch to zoom · double-tap to reset"
+                     : "Drag the divider to compare · drag the photo to pan · double-tap to reset")
+                    .font(TypographyTokens.caption2)
+                    .foregroundStyle(.white.opacity(0.75))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, SpacingTokens.md)
+                    .padding(.bottom, SpacingTokens.lg)
             }
         }
         .statusBarHidden()
+    }
+
+    private func comparisonDrag(geometry: BeforeAfterComparisonGeometry, canvasSize: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(viewportCoordinateSpace))
+            .updating($dragContext) { value, context, _ in
+                guard magnificationStart == nil else { return }
+                if context == nil {
+                    context = ComparisonDragContext(
+                        mode: geometry.dragMode(startViewportX: value.startLocation.x, fraction: comparisonPosition),
+                        initialOffset: offset
+                    )
+                }
+            }
+            .onChanged { value in
+                guard magnificationStart == nil else { return }
+                let context = dragContext ?? ComparisonDragContext(
+                    mode: geometry.dragMode(startViewportX: value.startLocation.x, fraction: comparisonPosition),
+                    initialOffset: offset
+                )
+                switch context.mode {
+                case .comparison:
+                    if let fraction = geometry.fraction(atViewportX: value.location.x) {
+                        comparisonPosition = fraction
+                    }
+                case .pan:
+                    offset = BeforeAfterComparisonGeometry.clampedOffset(
+                        CGSize(width: context.initialOffset.width + value.translation.width,
+                               height: context.initialOffset.height + value.translation.height),
+                        canvasSize: canvasSize,
+                        scale: zoom
+                    )
+                }
+            }
     }
 }
 

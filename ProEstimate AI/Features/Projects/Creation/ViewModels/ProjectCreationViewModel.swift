@@ -41,7 +41,7 @@ final class ProjectCreationViewModel {
     /// the AI estimate downstream reads the same `lawn_area_sq_ft`
     /// the map captures here.
     var isLawnCareFlow: Bool {
-        selectedProjectType == .lawnCare
+        selectedProjectType == .lawnCare && canUsePaidMaps && shouldGenerateAI
     }
 
     // MARK: - Step 0: Project Type
@@ -122,6 +122,11 @@ final class ProjectCreationViewModel {
     /// price/quality bounds. The picker lives on the Photos & Vision step
     /// so the contractor sets quality intent before generation runs.
     var qualityTier: Project.QualityTier? = nil
+
+    /// Manual saves never call a paid AI or mapping endpoint.
+    var shouldGenerateAI = false
+    var canUsePaidMaps = false
+    var pipelinePaywall: PaywallDecision?
 
     // MARK: - AI Preview Toggle
 
@@ -251,6 +256,7 @@ final class ProjectCreationViewModel {
             // remodel types still need at least one before-photo so the AI
             // has a surface to remodel against. A resolved prompt (either a
             // suggestion card or custom instructions) is always required.
+            if !shouldGenerateAI { return true }
             let needsPhoto = selectedProjectType?.requiresReferencePhoto ?? true
             if !needsPhoto {
                 return hasResolvedPrompt
@@ -268,6 +274,11 @@ final class ProjectCreationViewModel {
     }
 
     var detailsValidationMessage: String? {
+        if shouldGenerateAI, aiPreviewEnabled,
+           selectedProjectType?.requiresReferencePhoto == true,
+           selectedImageData.isEmpty {
+            return "Add a project photo on the previous step to create an AI design preview, or turn off AI to save manually."
+        }
         if customTitle.trimmingCharacters(in: .whitespacesAndNewlines).count > 255 {
             return "Keep the project name under 256 characters."
         }
@@ -500,6 +511,7 @@ final class ProjectCreationViewModel {
         }
 
         pipelineError = nil
+        pipelinePaywall = nil
 
         // Stage 1: create project
         pipelineStage = .creating
@@ -544,7 +556,7 @@ final class ProjectCreationViewModel {
         // `property_latitude/longitude` on the project. Failure here
         // is non-fatal: the area can be re-measured from the project
         // detail's Property Scouting card without losing the project.
-        if isLawnCare, hasValidLawnPolygon {
+        if shouldGenerateAI, canUsePaidMaps, isLawnCare, hasValidLawnPolygon {
             do {
                 _ = try await mapsService.measureLawn(
                     polygon: lawnMeasurementVM.vertices,
@@ -567,6 +579,11 @@ final class ProjectCreationViewModel {
             return
         }
 
+        guard shouldGenerateAI else {
+            pipelineStage = .completed
+            return
+        }
+
         // Stage 3: kick off generation
         pipelineStage = .startingGeneration
         let generation: AIGeneration
@@ -577,9 +594,13 @@ final class ProjectCreationViewModel {
                 materials: nil,
                 generatePreview: aiPreviewEnabled
             )
-            // One starter credit was consumed inside the backend gate.
+            // The backend atomically reserves the paid usage allowance.
             UsageMeterStore.shared.recordGenerationConsumed()
             pendingGeneration = generation
+        } catch let APIError.paywall(decision) {
+            pipelinePaywall = decision
+            pipelineStage = .failed("Your project is saved. Restore or subscribe to use AI, or open it to continue manually.")
+            return
         } catch {
             // Generation failed to start. Surface the error but treat
             // the project as created — the user can retry from detail.
@@ -724,6 +745,10 @@ final class ProjectCreationViewModel {
 
         do {
             try await uploadPhotos(projectId: project.id)
+            guard shouldGenerateAI else {
+                pipelineStage = .completed
+                return
+            }
             pipelineStage = .startingGeneration
             let generation = try await generationService.startGeneration(
                 projectId: project.id,
@@ -735,6 +760,9 @@ final class ProjectCreationViewModel {
             pendingGeneration = generation
             pipelineStage = .generating
             await pollGeneration(initial: generation)
+        } catch let APIError.paywall(decision) {
+            pipelinePaywall = decision
+            pipelineStage = .failed("Your project is saved. Restore or subscribe to use AI, or open it to continue manually.")
         } catch {
             pipelineError = error.localizedDescription
             pipelineStage = .failed(error.localizedDescription)

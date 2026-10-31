@@ -10,6 +10,7 @@ import SwiftUI
 /// escape hatch.
 struct ProjectGeneratingStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Fires when the generation pipeline completes (or the user opts to
     /// open the project anyway after a soft failure). Carries the
@@ -25,8 +26,9 @@ struct ProjectGeneratingStep: View {
             VStack(spacing: SpacingTokens.lg) {
                 hero
 
-                rotatingPhraseRow
-                    .padding(.horizontal, SpacingTokens.md)
+                if viewModel.shouldGenerateAI {
+                    rotatingPhraseRow.padding(.horizontal, SpacingTokens.md)
+                }
 
                 progressChecklist
                     .padding(.top, SpacingTokens.xs)
@@ -49,16 +51,21 @@ struct ProjectGeneratingStep: View {
                 await viewModel.runCreationPipeline()
             }
         }
-        .task {
+        .task(id: reduceMotion) {
             // Phrase ticker — independent of the pipeline task so it
             // keeps cycling whether the pipeline is running, queued, or
             // mid-poll.
-            await runPhraseTicker()
+            if !reduceMotion, viewModel.shouldGenerateAI { await runPhraseTicker() }
         }
         .onAppear {
-            withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
-                ringRotation = 360
+            if !reduceMotion {
+                withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+                    ringRotation = 360
+                }
             }
+        }
+        .transaction { transaction in
+            if reduceMotion { transaction.animation = nil; transaction.disablesAnimations = true }
         }
         .onChange(of: viewModel.pipelineStage) { _, newValue in
             if newValue == .completed, let project = viewModel.createdProject {
@@ -146,7 +153,7 @@ struct ProjectGeneratingStep: View {
             Image(systemName: "wand.and.stars")
                 .font(.system(size: 40, weight: .bold))
                 .foregroundStyle(.white)
-                .symbolEffect(.pulse, options: .repeating, isActive: true)
+                .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
         }
     }
 
@@ -157,7 +164,8 @@ struct ProjectGeneratingStep: View {
     }
 
     private var heroSubtitle: String {
-        if isFailed { return "Your project is created — you can retry the AI preview or open it anyway." }
+        if isFailed { return "Retry the unfinished step, or open your saved project to continue manually." }
+        if !viewModel.shouldGenerateAI { return "Saving your project details and photos. No AI credit or subscription is required." }
         if isComplete { return "Opening your project now…" }
         switch viewModel.pipelineStage {
         case .generatingMaterials:
@@ -255,9 +263,12 @@ struct ProjectGeneratingStep: View {
     }
 
     private var checklistItems: [ChecklistItem] {
-        [
+        let basic = [
             ChecklistItem(id: 0, title: "Creating project", subtitle: "Saving project details", stageRank: 1),
             ChecklistItem(id: 1, title: "Uploading photos", subtitle: "Securing your before-photos", stageRank: 2),
+        ]
+        guard viewModel.shouldGenerateAI else { return basic }
+        return basic + [
             ChecklistItem(id: 2, title: "Generating preview", subtitle: "AI render of the finished space", stageRank: 4),
             ChecklistItem(id: 3, title: "Calculating materials", subtitle: "Suggested finishes and quantities", stageRank: 5),
         ]

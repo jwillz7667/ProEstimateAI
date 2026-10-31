@@ -34,7 +34,7 @@ final class AuthViewModel {
     // MARK: - Validation
 
     var isLoginFormValid: Bool {
-        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        isEmailValid
             && !password.isEmpty
     }
 
@@ -43,24 +43,21 @@ final class AuthViewModel {
         // captures it after the account exists. We auto-fill a placeholder
         // ("<Full Name>'s Company") so the backend signup contract is
         // unchanged.
-        !fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && password.count >= 8
+        AuthFormValidation.isValidFullName(fullName) && isEmailValid && passwordValidationMessage == nil
     }
 
     var isEmailValid: Bool {
-        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return false }
-        // Basic email format check
-        let pattern = #"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
-        return trimmed.range(of: pattern, options: .regularExpression) != nil
+        AuthFormValidation.isValidEmail(email)
     }
+
+    var passwordValidationMessage: String? { AuthFormValidation.passwordMessage(password) }
 
     // MARK: - Actions
 
     func login(appState: AppState) async {
+        guard !isLoading else { return }
         guard isLoginFormValid else {
-            errorMessage = "Please enter your email and password."
+            errorMessage = "Please enter a valid email address and your password."
             return
         }
 
@@ -79,8 +76,9 @@ final class AuthViewModel {
     }
 
     func signUp(appState: AppState) async {
+        guard !isLoading else { return }
         guard isSignUpFormValid else {
-            errorMessage = "Please fill in all fields. Password must be at least 8 characters."
+            errorMessage = passwordValidationMessage ?? "Enter your full name (2–100 characters) and a valid email address."
             return
         }
 
@@ -113,6 +111,7 @@ final class AuthViewModel {
     }
 
     func signInWithApple(appState: AppState) async {
+        guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
 
@@ -122,7 +121,8 @@ final class AuthViewModel {
                 identityToken: appleResult.identityToken,
                 authorizationCode: appleResult.authorizationCode,
                 fullName: appleResult.fullName,
-                email: appleResult.email
+                email: appleResult.email,
+                rawNonce: appleResult.rawNonce
             )
             let response = try await authService.signInWithApple(request: request)
             applyAuthResponse(user: response.user, company: response.company, accessToken: response.accessToken, refreshToken: response.refreshToken, appState: appState)
@@ -140,6 +140,7 @@ final class AuthViewModel {
     /// backend re-verifies it against Google's JWKS, then logs in or
     /// provisions a fresh account.
     func signInWithGoogle(appState: AppState) async {
+        guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
 
@@ -148,7 +149,8 @@ final class AuthViewModel {
             let request = GoogleSignInRequest(
                 identityToken: result.identityToken,
                 fullName: result.fullName,
-                email: result.email
+                email: result.email,
+                rawNonce: result.rawNonce
             )
             let response = try await authService.signInWithGoogle(request: request)
             applyAuthResponse(
@@ -168,9 +170,10 @@ final class AuthViewModel {
     }
 
     func forgotPassword() async {
+        guard !isLoading else { return }
         let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            errorMessage = "Please enter your email address."
+        guard isEmailValid else {
+            errorMessage = "Please enter a valid email address."
             return
         }
 
@@ -230,7 +233,9 @@ extension AppleSignInError: Equatable {
         case (.invalidCredential, .invalidCredential),
              (.missingIdentityToken, .missingIdentityToken),
              (.missingAuthorizationCode, .missingAuthorizationCode),
-             (.cancelled, .cancelled):
+             (.cancelled, .cancelled),
+             (.stateMismatch, .stateMismatch),
+             (.requestInProgress, .requestInProgress):
             return true
         case (.system, .system):
             return false

@@ -55,15 +55,11 @@ final class UsageMeterStore {
 
     /// Whether the user has any AI generation credits remaining.
     var canGenerate: Bool {
-        // Pro users have unlimited credits.
-        if entitlementStore?.hasProAccess == true { return true }
         return generationsRemaining > 0
     }
 
     /// Whether the user has any quote export credits remaining.
     var canExportQuote: Bool {
-        // Pro users have unlimited credits.
-        if entitlementStore?.hasProAccess == true { return true }
         return quotesRemaining > 0
     }
 
@@ -89,12 +85,8 @@ final class UsageMeterStore {
             return
         }
 
-        // If user has Pro access, usage is unlimited — set high values.
-        if snapshot.subscriptionState.hasProAccess {
-            generationsRemaining = Int.max
-            quotesRemaining = Int.max
-            generationsTotal = Int.max
-            quotesTotal = Int.max
+        guard snapshot.subscriptionState.hasProAccess else {
+            reset()
             return
         }
 
@@ -103,8 +95,8 @@ final class UsageMeterStore {
             generationsRemaining = genBucket.remainingQuantity
             generationsTotal = genBucket.includedQuantity
         } else {
-            generationsRemaining = AppConstants.freeGenerationCredits
-            generationsTotal = AppConstants.freeGenerationCredits
+            generationsRemaining = 0
+            generationsTotal = 0
         }
 
         if let quoteBucket = snapshot.usage.first(where: { $0.metricCode == .quoteExport }) {
@@ -129,9 +121,8 @@ final class UsageMeterStore {
     /// instantly when the user spends their last credit (instead of
     /// waiting on a refresh round-trip), then kick off an entitlement
     /// refresh in the background to reconcile against the canonical
-    /// server state. Pro users (with `Int.max`) are no-ops here.
+    /// server state. Paid accounts also mirror their finite plan allowance.
     func recordGenerationConsumed() {
-        guard generationsTotal != Int.max else { return }
         if generationsRemaining > 0 {
             generationsRemaining -= 1
         }
@@ -155,7 +146,7 @@ final class UsageMeterStore {
         defer { isConsuming = false }
 
         // Optimistic local decrement.
-        if quotesRemaining > 0 && quotesRemaining != Int.max {
+        if quotesRemaining > 0 {
             quotesRemaining -= 1
         }
 
@@ -167,6 +158,7 @@ final class UsageMeterStore {
             return updatedBucket
         } catch {
             // Revert optimistic decrement on failure.
+            await entitlementStore?.refresh()
             await refresh()
             logger.error("Failed to consume quote export: \(error.localizedDescription)")
             throw error

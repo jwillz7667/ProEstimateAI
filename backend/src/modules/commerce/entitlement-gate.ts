@@ -1,35 +1,18 @@
-import type { EntitlementStatus } from "@prisma/client";
 import { prisma } from "../../config/database";
+import type { Prisma } from '@prisma/client';
 import { PaywallError, AuthenticationError } from "../../lib/errors";
 import { invalidateCache, CacheKeys } from "../../config/redis";
-import { isAdminUser } from "../../lib/admin";
+import { hasEffectiveProAccess } from "../../lib/entitlement-access";
 import {
   checkUsageLimit,
-  readPlanLimits,
+  readEffectivePlanLimits,
   type LimitCheckResult,
   type UsageMetric,
 } from "../../lib/usage-limits";
-import {
-  FREE_TIER_AI_GENERATION_CREDITS,
-  STARTER_CREDITS_SOURCE,
-} from "../../lib/limits";
 
-/**
- * Centralized AI-action gate. Used by every endpoint that triggers paid AI
- * compute (image preview generation, AI estimate generation, etc).
- *
- * Decision tree:
- *   1. Admin user → allow.
- *   2. No entitlement on record → block, treat as "never trialed" (trial offer).
- *   3. Subscription state grants access (trial, pro, grace, retry, cancelled-active,
- *      admin override) → check rolling-window usage caps from the user's plan.
- *      Cap hit → block with USAGE_LIMIT_<window> paywall and reset timestamp.
- *   4. Subscription state does NOT grant access (FREE, EXPIRED, REVOKED) →
- *      block with TRIAL_OFFER if user has never been on a trial, else
- *      SUBSCRIBE_NO_TRIAL.
- *
- * Throws PaywallError on block; returns on allow. Caller is responsible for
- * recording the UsageEvent AFTER the action succeeds.
+/** Reserve billable AI/export capacity only for a verified active entitlement.
+ * Manual project creation is free. Historical starter balances never authorize
+ * new compute; explicit review overrides still use the normal finite plan caps.
  */
 
 export interface GateOptions {
@@ -38,21 +21,8 @@ export interface GateOptions {
   metric: UsageMetric;
 }
 
-const PRO_ACCESS_STATES: ReadonlySet<EntitlementStatus> = new Set([
-  "TRIAL_ACTIVE",
-  "PRO_ACTIVE",
-  "GRACE_PERIOD",
-  "BILLING_RETRY",
-  "CANCELED_ACTIVE",
-  "ADMIN_OVERRIDE",
-]);
-
-function hasProAccess(status: EntitlementStatus): boolean {
-  return PRO_ACCESS_STATES.has(status);
-}
-
 function isTrialEligible(args: {
-  status: EntitlementStatus;
+  status: string;
   trialEndsAt: Date | null;
 }): boolean {
   // Trial is single-use. Eligible only if the user has never had one.
@@ -96,9 +66,9 @@ function buildTrialOfferPaywall(metric: UsageMetric) {
     metric,
     trigger_reason: metricTriggerReason(metric, "requires Pro"),
     blocking: true,
-    headline: "Start Your 7-Day Free Trial",
-    subheadline: `Unlock ${metricNoun(metric)} and every other Pro feature — free for 7 days.`,
-    primary_cta_title: "Start 7-Day Free Trial",
+    headline: "Try Pro Free for 3 Days",
+    subheadline: `Eligible subscribers can try ${metricNoun(metric)} and Pro features free for 3 days. Apple confirms trial eligibility before purchase.`,
+    primary_cta_title: "View Pro Plans",
     // No "Maybe Later" / dismiss path. The contractor has to either
     // start a trial, restore an existing purchase, or stay blocked on
     // this action.
@@ -110,32 +80,6 @@ function buildTrialOfferPaywall(metric: UsageMetric) {
   };
 }
 
-function buildGenerationLimitHitPaywall(args: {
-  included: number;
-  consumed: number;
-}) {
-  return {
-    placement: "GENERATION_LIMIT_HIT",
-    metric: "AI_GENERATION" as UsageMetric,
-    trigger_reason: "Free generation credits exhausted",
-    blocking: true,
-    headline: "You've Used All 5 Free Generations",
-    subheadline:
-      "Start a 7-day free trial to keep generating AI previews — unlimited while you trial, then keep going on any paid plan.",
-    primary_cta_title: "Start 7-Day Free Trial",
-    secondary_cta_title: "Restore Purchases",
-    show_continue_free: false,
-    show_restore_purchases: true,
-    recommended_product_id: "proestimate.pro.monthly",
-    available_products: null,
-    // Machine-readable counter so the iOS paywall can render
-    // "5 of 5 free generations used" without a separate API round-trip.
-    included_quantity: args.included,
-    consumed_quantity: args.consumed,
-    remaining_quantity: 0,
-  };
-}
-
 function buildSubscribeNoTrialPaywall(metric: UsageMetric) {
   return {
     placement: "SUBSCRIBE_NO_TRIAL",
@@ -143,7 +87,7 @@ function buildSubscribeNoTrialPaywall(metric: UsageMetric) {
     trigger_reason: metricTriggerReason(metric, "requires Pro"),
     blocking: true,
     headline: "Upgrade to Continue",
-    subheadline: `Your free trial has ended. Upgrade to keep using ${metricNoun(metric)} and the rest of the app.`,
+    subheadline: `Subscribe or restore an existing purchase to use ${metricNoun(metric)}. Your projects and manual tools remain available.`,
     primary_cta_title: "Upgrade",
     secondary_cta_title: "Restore Purchases",
     show_continue_free: false,
@@ -164,8 +108,7 @@ function buildUsageLimitPaywall(
       : windowLabel === "weekly"
         ? "this week"
         : "this month";
-  const isExport = metric === "QUOTE_EXPORT";
-  const noun = isExport ? "AI quote exports" : "AI generations";
+  const noun = metricNoun(metric);
 
   return {
     placement: `USAGE_LIMIT_${windowLabel.toUpperCase()}`,
@@ -200,17 +143,19 @@ export interface UsageReservation {
 }
 
 /** Reserve capacity before compute. A user-row lock prevents parallel requests
- * from both consuming the final credit or exceeding a rolling plan cap. */
+ * from exceeding the remaining rolling plan capacity. */
 export async function gateAIAction(
   opts: GateOptions,
+  transaction?: Prisma.TransactionClient,
 ): Promise<UsageReservation | undefined> {
-  if (await isAdminUser(opts.userId)) return;
-  const reservation = await prisma.$transaction(async (tx) => {
+  const reserve = async (tx: Prisma.TransactionClient) => {
     const users = await tx.$queryRaw<
       Array<{ id: string }>
     >`SELECT id FROM "User" WHERE id = ${opts.userId} AND "companyId" = ${opts.companyId} AND "isActive" = true FOR UPDATE`;
     if (users.length !== 1)
       throw new AuthenticationError("Account is unavailable");
+    // A manual save must not depend on subscription state or spend AI capacity.
+    if (opts.metric === "PROJECT_CREATED") return undefined;
     const entitlement = await tx.userEntitlement.findUnique({
       where: { userId: opts.userId },
       include: { plan: true },
@@ -221,12 +166,11 @@ export async function gateAIAction(
         buildTrialOfferPaywall(opts.metric),
       );
     }
-    let starterBucketId: string | undefined;
-    if (hasProAccess(entitlement.status)) {
+    if (hasEffectiveProAccess(entitlement)) {
       const result = await checkUsageLimit(
         opts.userId,
         opts.metric,
-        readPlanLimits(entitlement.plan.featuresJson, opts.metric),
+        readEffectivePlanLimits(entitlement.plan.featuresJson, entitlement.plan.code, opts.metric),
         tx,
       );
       if (!result.allowed)
@@ -234,47 +178,6 @@ export async function gateAIAction(
           `${result.window} ${opts.metric.toLowerCase()} limit of ${result.cap} reached.`,
           buildUsageLimitPaywall(opts.metric, result),
         );
-    } else if (
-      entitlement.status === "FREE" &&
-      opts.metric === "PROJECT_CREATED"
-    ) {
-      // Projects are needed to try the core estimating workflow.
-    } else if (
-      entitlement.status === "FREE" &&
-      opts.metric === "AI_GENERATION"
-    ) {
-      const bucket = await tx.usageBucket.upsert({
-        where: {
-          userId_companyId_metricCode_source: {
-            userId: opts.userId,
-            companyId: opts.companyId,
-            metricCode: "AI_GENERATION",
-            source: STARTER_CREDITS_SOURCE,
-          },
-        },
-        create: {
-          userId: opts.userId,
-          companyId: opts.companyId,
-          metricCode: "AI_GENERATION",
-          source: STARTER_CREDITS_SOURCE,
-          includedQuantity: FREE_TIER_AI_GENERATION_CREDITS,
-        },
-        update: {},
-      });
-      if (bucket.consumedQuantity >= bucket.includedQuantity) {
-        throw new PaywallError(
-          "You've used all your free AI generation credits.",
-          buildGenerationLimitHitPaywall({
-            included: bucket.includedQuantity,
-            consumed: bucket.consumedQuantity,
-          }),
-        );
-      }
-      await tx.usageBucket.update({
-        where: { id: bucket.id },
-        data: { consumedQuantity: { increment: 1 } },
-      });
-      starterBucketId = bucket.id;
     } else {
       throw new PaywallError(
         "AI features require an active subscription.",
@@ -289,19 +192,13 @@ export async function gateAIAction(
         companyId: opts.companyId,
         metricCode: opts.metric,
         quantity: 1,
-        ...(starterBucketId
-          ? {
-              metadata: {
-                source: STARTER_CREDITS_SOURCE,
-                bucket_id: starterBucketId,
-              },
-            }
-          : {}),
       },
     });
-    return { eventId: event.id, userId: opts.userId, starterBucketId };
-  });
-  await invalidateCache(CacheKeys.entitlement(opts.userId));
+    return { eventId: event.id, userId: opts.userId };
+  };
+  const reservation = transaction ? await reserve(transaction) : await prisma.$transaction(reserve);
+  // A caller-owned transaction invalidates after committing its larger action.
+  if (!transaction) await invalidateCache(CacheKeys.entitlement(opts.userId));
   return reservation;
 }
 
@@ -316,7 +213,7 @@ export async function runReservedAction<T>(
     if (reservation) {
       await prisma.$transaction(async (tx) => {
         const released = await tx.usageEvent.deleteMany({
-          where: { id: reservation.eventId },
+          where: { id: reservation.eventId, quantity: { gt: 0 } },
         });
         if (released.count === 1 && reservation.starterBucketId) {
           await tx.usageBucket.updateMany({

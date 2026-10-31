@@ -9,3 +9,6 @@ enum StatusBadge {
 /// The runner injects a deterministic service into every view-model test.
 /// Resolve the unused production default initializer without networking code.
 typealias LiveInvoiceService = MockInvoiceService
+
+/// The feature gate's catalog loader is not exercised against the network.
+typealias CommerceAPIClient = MockCommerceAPIClient

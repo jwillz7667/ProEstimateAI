@@ -45,6 +45,24 @@ extension StoreProductModel {
         hasIntroOffer && (isEligibleForIntroOffer ?? false)
     }
 
+    /// Trial copy is valid only for the selected product and confirmed eligibility.
+    func purchaseButtonTitle(fallback: String) -> String {
+        if showsTrialBadge, let offer = introOfferDisplayText {
+            return "Start \(offer)"
+        }
+        return "Subscribe Now"
+    }
+
+    static func annualSavingsText(monthlyPrice: Decimal, annualPrice: Decimal) -> String? {
+        let yearlyMonthlyPrice = monthlyPrice * 12
+        guard yearlyMonthlyPrice > 0, annualPrice > 0, annualPrice < yearlyMonthlyPrice else { return nil }
+        var savingsPercent = (yearlyMonthlyPrice - annualPrice) / yearlyMonthlyPrice * 100
+        var roundedPercent = Decimal()
+        NSDecimalRound(&roundedPercent, &savingsPercent, 0, .down)
+        let percent = NSDecimalNumber(decimal: roundedPercent).intValue
+        return percent > 0 ? "Save \(percent)%" : nil
+    }
+
     /// Tier (Free vs Pro). Derived from the plan code so the UI
     /// stays in sync with the backend's authoritative classification.
     var tier: PlanTier {
@@ -91,24 +109,24 @@ extension StoreProductModel {
                 planCode: .proAnnual,
                 displayName: "Pro Annual",
                 description: "Solo contractor essentials, billed yearly. Same caps as Pro Monthly.",
-                priceDisplay: "$249.99/yr",
+                priceDisplay: "$149.99",
                 billingPeriodLabel: "per year",
                 hasIntroOffer: false,
                 introOfferDisplayText: nil,
                 isEligibleForIntroOffer: nil,
                 isFeatured: false,
-                savingsText: "Save 17%"
+                savingsText: nil
             )
         }
         return StoreProductModel(
             productId: AppConstants.proMonthlyProductID,
             planCode: .proMonthly,
             displayName: "Pro Monthly",
-            description: "Solo contractor essentials. 2 projects, 20 AI previews, and 20 estimates per month.",
-            priceDisplay: "$29.99/mo",
+            description: "20 AI previews and 20 AI-generated estimates per rolling 30 days. Manual projects stay free.",
+            priceDisplay: "$19.99",
             billingPeriodLabel: "per month",
             hasIntroOffer: true,
-            introOfferDisplayText: "7-day free trial",
+            introOfferDisplayText: "3-day free trial",
             isEligibleForIntroOffer: nil,
             isFeatured: true,
             savingsText: nil
@@ -124,10 +142,10 @@ extension StoreProductModel {
         planCode: .proMonthly,
         displayName: "Pro Monthly",
         description: "Full access, billed monthly",
-        priceDisplay: "$29.99/mo",
+        priceDisplay: "$19.99",
         billingPeriodLabel: "per month",
         hasIntroOffer: true,
-        introOfferDisplayText: "7-day free trial",
+        introOfferDisplayText: "3-day free trial",
         isEligibleForIntroOffer: true,
         isFeatured: false,
         savingsText: nil
@@ -138,13 +156,13 @@ extension StoreProductModel {
         planCode: .proAnnual,
         displayName: "Pro Annual",
         description: "Full access, billed annually",
-        priceDisplay: "$249.99/yr",
+        priceDisplay: "$149.99",
         billingPeriodLabel: "per year",
-        hasIntroOffer: false,
-        introOfferDisplayText: nil,
-        isEligibleForIntroOffer: nil,
+        hasIntroOffer: true,
+        introOfferDisplayText: "3-day free trial",
+        isEligibleForIntroOffer: true,
         isFeatured: false,
-        savingsText: "Save 30%"
+        savingsText: "Save 37%"
     )
 
     /// Convenience array for previews / mocks.

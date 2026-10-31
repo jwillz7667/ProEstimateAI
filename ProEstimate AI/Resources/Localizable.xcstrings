@@ -4621,7 +4621,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "We detected a different Apple ID than the one linked to your ProEstimate account. Sign out of the other Apple ID in Settings → App Store, or tap Restore Purchases if you've already subscribed."
+            "value" : "This purchase is associated with another ProEstimate account. Sign in to that account, or restore purchases to check your subscription."
           }
         }
       }
@@ -4634,7 +4634,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Apple ID Mismatch"
+            "value" : "Subscription Account Mismatch"
           }
         }
       }
@@ -4929,7 +4929,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "We detected a different Apple ID than the one linked to your ProEstimate account. Sign out of the other Apple ID in Settings → App Store, or tap Restore Purchases if you've already subscribed."
+            "value" : "This purchase is associated with another ProEstimate account. Sign in to that account, or restore purchases to check your subscription."
           }
         }
       }

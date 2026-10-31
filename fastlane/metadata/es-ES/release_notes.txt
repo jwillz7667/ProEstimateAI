@@ -1,10 +1,8 @@
-Esta actualización mejora la edición de proyectos, presupuestos, facturas y propuestas compartidas.
+Esta actualización mejora la comparación de imágenes y el acceso a Pro.
 
-• Asigna un cliente a un proyecto antes de crear una factura.
-• Registra pagos parciales de facturas y consulta el saldo pendiente.
-• Borra detalles guardados del proyecto y valida presupuestos y medidas.
-• Recibe mensajes claros cuando una operación falla.
-• Conserva los impuestos acordados al actualizar los pagos de facturas.
-• Imprime o guarda propuestas compartidas en PDF desde el navegador.
+• Desliza la comparación antes/después de un extremo al otro, también en pantalla completa.
+• Crea proyectos manuales y consulta tu trabajo guardado sin suscribirte.
+• Las funciones de IA requieren Pro o una prueba de Apple activa; los nuevos suscriptores elegibles pueden probar Pro durante tres días.
+• Mejor recuperación de compras y reintentos cuando el App Store no responde.
 
-Incluye mejoras de fiabilidad y seguridad.
+Actualización del servicio en la nube: La app usa un nuevo servicio. Si tu acceso anterior no se reconoce, crea una cuenta y restaura tus compras activas del App Store. Los proyectos y las facturas anteriores no se han transferido.

@@ -53,6 +53,7 @@ async function tenant(
       userId: user.id,
       planId: plan.id,
       status: code === "FREE_STARTER" ? "FREE" : "PRO_ACTIVE",
+      renewalDate: code === "FREE_STARTER" ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     },
   });
   const client = await prisma.client.create({
@@ -593,7 +594,7 @@ describe("proposal decisions and shared page freshness", () => {
 });
 
 describe("usage reservations and selected quality tier", () => {
-  it("allows only one request to consume the final starter credit and records one event", async () => {
+  it("rejects parallel unpaid AI requests without spending historical starter credits", async () => {
     const t = await tenant("FREE_STARTER");
     await prisma.usageBucket.create({
       data: {
@@ -614,20 +615,20 @@ describe("usage reservations and selected quality tier", () => {
         }),
       ),
     );
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(0);
     expect(
       await prisma.usageEvent.count({ where: { userId: t.user.id } }),
-    ).toBe(1);
+    ).toBe(0);
     expect(
       (
         await prisma.usageBucket.findFirstOrThrow({
           where: { userId: t.user.id },
         })
       ).consumedQuantity,
-    ).toBe(5);
+    ).toBe(4);
   });
-  it("refunds failed actions so credits and rolling limits can be retried", async () => {
-    const t = await tenant("FREE_STARTER");
+  it("refunds failed paid actions so rolling limits can be retried", async () => {
+    const t = await tenant("PRO_MONTHLY");
     const opts = {
       userId: t.user.id,
       companyId: t.company.id,
@@ -641,13 +642,6 @@ describe("usage reservations and selected quality tier", () => {
     ).rejects.toThrow(/Database failure/);
     expect(
       await prisma.usageEvent.count({ where: { userId: t.user.id } }),
-    ).toBe(0);
-    expect(
-      (
-        await prisma.usageBucket.findFirstOrThrow({
-          where: { userId: t.user.id },
-        })
-      ).consumedQuantity,
     ).toBe(0);
     await expect(gateAIAction(opts)).resolves.toBeDefined();
   });

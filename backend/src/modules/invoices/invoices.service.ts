@@ -6,6 +6,7 @@ import {
   ConflictError,
 } from "../../lib/errors";
 import { isAdminUser } from "../../lib/admin";
+import { hasEffectiveProAccess } from "../../lib/entitlement-access";
 import {
   PaginationParams,
   paginateResults,
@@ -62,17 +63,7 @@ async function assertCanCreateInvoice(userId: string): Promise<void> {
   const canCreate = features.CAN_CREATE_INVOICE === true;
 
   // Also verify the entitlement status permits access
-  const activeStatuses = [
-    "TRIAL_ACTIVE",
-    "PRO_ACTIVE",
-    "GRACE_PERIOD",
-    "BILLING_RETRY",
-    "CANCELED_ACTIVE",
-    "ADMIN_OVERRIDE",
-  ];
-  const isActiveStatus = activeStatuses.includes(entitlement.status);
-
-  if (!canCreate || !isActiveStatus) {
+  if (!canCreate || !hasEffectiveProAccess(entitlement)) {
     throw new PaywallError(
       "Invoice creation requires Pro subscription",
       INVOICE_LOCKED_PAYWALL,

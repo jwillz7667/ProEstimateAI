@@ -53,6 +53,14 @@ struct DashboardSubscriptionCard: View {
                     .font(TypographyTokens.caption)
                     .foregroundStyle(ColorTokens.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if entitlementStore.hasProAccess,
+                   let bucket = entitlementStore.snapshot?.usage.first(where: { $0.metricCode == .aiGeneration }),
+                   bucket.source != "ADMIN" {
+                    Text("\(bucket.remainingQuantity) of \(bucket.includedQuantity) AI previews remaining in your plan window")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(ColorTokens.secondaryText)
+                }
             }
 
             Spacer(minLength: 0)
@@ -117,7 +125,7 @@ struct DashboardSubscriptionCard: View {
                     ? "Renews \(date)."
                     : "Access through \(date)."
             }
-            return "Unlimited AI previews, branded proposals, invoicing, and approvals."
+            return "AI previews, branded proposals, invoicing, and approvals."
         case .trial:
             if let date = formattedRenewalDate {
                 return "Trial converts to paid on \(date). Cancel anytime in Settings."
@@ -149,14 +157,14 @@ struct DashboardSubscriptionCard: View {
                 VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
                     Text("Get the Full ProEstimate AI")
                         .font(TypographyTokens.headline)
-                    Text("Unlock AI previews, instant estimates, branded proposals, and lawn / roof scouting. Start a 7-day free trial.")
+                    Text("Unlock AI previews, instant estimates, branded proposals, and lawn / roof scouting. A three-day trial is available to eligible Apple Accounts.")
                         .font(TypographyTokens.caption)
                         .foregroundStyle(ColorTokens.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            PrimaryCTAButton(title: "Start 7-Day Free Trial", icon: "crown") {
+            PrimaryCTAButton(title: "View Pro Plans", icon: "crown") {
                 onUpgrade?()
             }
         }

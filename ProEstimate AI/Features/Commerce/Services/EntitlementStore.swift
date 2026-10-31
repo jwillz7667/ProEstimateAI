@@ -29,6 +29,8 @@ final class EntitlementStore {
     // MARK: - Dependencies
 
     private var commerceAPI: CommerceAPIClientProtocol?
+    private var revision = 0
+    private(set) var sessionRevision = 0
     private let logger = Logger(subsystem: AppConstants.bundleID, category: "EntitlementStore")
 
     // MARK: - Init
@@ -43,7 +45,7 @@ final class EntitlementStore {
 
     // MARK: - Computed Properties
 
-    /// Whether the user currently has Pro-level access (trial, active, grace, billing retry, or canceled-active).
+    /// Whether the user currently has Pro-level access (trial, active, grace, canceled-active, or an explicit override).
     var hasProAccess: Bool {
         snapshot?.subscriptionState.hasProAccess ?? false
     }
@@ -115,29 +117,41 @@ final class EntitlementStore {
             return
         }
 
+        revision += 1
+        let requestRevision = revision
         isLoading = true
         lastError = nil
+        defer { if revision == requestRevision { isLoading = false } }
 
         do {
             let updatedSnapshot = try await commerceAPI.fetchEntitlement()
+            guard revision == requestRevision else { return }
             snapshot = updatedSnapshot
             logger.info("Entitlement refreshed. State: \(updatedSnapshot.subscriptionState.rawValue), Plan: \(updatedSnapshot.currentPlanCode.rawValue)")
         } catch {
+            guard revision == requestRevision else { return }
             lastError = error
             logger.error("Failed to refresh entitlement: \(error.localizedDescription)")
         }
 
-        isLoading = false
     }
 
     /// Update the local snapshot directly (e.g., after a purchase sync returns a new snapshot).
-    func updateFromSnapshot(_ newSnapshot: EntitlementSnapshot) async {
+    @discardableResult
+    func updateFromSnapshot(_ newSnapshot: EntitlementSnapshot, ifSessionRevision expected: Int? = nil) async -> Bool {
+        guard expected == nil || expected == sessionRevision else { return false }
+        revision += 1
         snapshot = newSnapshot
+        lastError = nil
+        isLoading = false
         logger.info("Entitlement updated from snapshot. State: \(newSnapshot.subscriptionState.rawValue)")
+        return true
     }
 
     /// Reset the store (e.g., on sign-out).
     func reset() {
+        sessionRevision += 1
+        revision += 1
         snapshot = nil
         lastError = nil
         isLoading = false

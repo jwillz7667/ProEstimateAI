@@ -1,4 +1,5 @@
 import SwiftUI
+import ImageIO
 
 /// Interactive before/after image comparison slider.
 /// The user drags a vertical divider to reveal the "before" image on the
@@ -8,26 +9,38 @@ struct BeforeAfterSlider: View {
     let afterImageURL: URL?
     let beforeImageData: Data?
     let height: CGFloat
+    private let positionBinding: Binding<CGFloat>?
+    private let isDragEnabled: Bool
+    private let isDraggingExternally: Bool
 
     @State private var sliderPosition: CGFloat = 0.5
+    @Namespace private var comparisonCoordinateSpace
     @GestureState private var isDragging: Bool = false
+    @State private var beforePreviewImage: UIImage?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         beforeImageURL: URL?,
         afterImageURL: URL?,
         beforeImageData: Data? = nil,
-        height: CGFloat = 280
+        height: CGFloat = 280,
+        position: Binding<CGFloat>? = nil,
+        isDragEnabled: Bool = true,
+        isDraggingExternally: Bool = false
     ) {
         self.beforeImageURL = beforeImageURL
         self.afterImageURL = afterImageURL
         self.beforeImageData = beforeImageData
         self.height = height
+        self.positionBinding = position
+        self.isDragEnabled = isDragEnabled
+        self.isDraggingExternally = isDraggingExternally
     }
 
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
-            let dividerX = width * sliderPosition
+            let dividerX = width * comparisonPosition
 
             ZStack(alignment: .leading) {
                 // After image (full width, underneath). Both photos use
@@ -43,13 +56,9 @@ struct BeforeAfterSlider: View {
                 beforeImage
                     .frame(width: width, height: height, alignment: .center)
                     .clipped()
-                    .mask(
-                        HStack(spacing: 0) {
-                            Rectangle()
-                                .frame(width: dividerX)
-                            Spacer(minLength: 0)
-                        }
-                    )
+                    .mask(alignment: .leading) {
+                        Rectangle().frame(width: dividerX, height: height)
+                    }
 
                 // Divider line
                 dividerView(at: dividerX, totalHeight: height)
@@ -80,34 +89,67 @@ struct BeforeAfterSlider: View {
                     Spacer()
                 }
             }
+            // The reveal mask and positioned handle must never change the
+            // gesture target's bounds or origin as the divider moves.
+            .frame(width: width, height: height)
+            .coordinateSpace(.named(comparisonCoordinateSpace))
             .contentShape(Rectangle())
             .gesture(
-                DragGesture(minimumDistance: 0)
+                DragGesture(minimumDistance: 0, coordinateSpace: .named(comparisonCoordinateSpace))
                     .updating($isDragging) { _, state, _ in
                         state = true
                     }
                     .onChanged { value in
-                        withAnimation(.interactiveSpring) {
-                            let newPosition = value.location.x / width
-                            sliderPosition = min(max(newPosition, 0.02), 0.98)
-                        }
-                    }
+                        guard isDragEnabled,
+                              let position = BeforeAfterComparisonGeometry.fraction(atCanvasX: value.location.x, width: width) else { return }
+                        setComparisonPosition(position)
+                    },
+                including: isDragEnabled ? .all : .none
             )
         }
-        .frame(maxWidth: 600)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: BeforeAfterComparisonGeometry.maximumCanvasWidth)
         .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
+        .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("before-after-comparison")
         .accessibilityLabel("Before and after comparison")
-        .accessibilityHint("Drag horizontally to reveal before or after image")
+        .accessibilityValue("\(Int(comparisonPosition * 100)) percent before")
+        .accessibilityHint("Swipe up or down to adjust the comparison")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: setComparisonPosition(comparisonPosition + 0.1)
+            case .decrement: setComparisonPosition(comparisonPosition - 0.1)
+            @unknown default: break
+            }
+        }
+        .task(id: beforeImageData) {
+            beforePreviewImage = nil
+            guard let data = beforeImageData else { return }
+            let image = await Self.makePreview(data)
+            guard !Task.isCancelled else { return }
+            beforePreviewImage = image
+        }
     }
 
     // MARK: - Subviews
 
+    private var comparisonPosition: CGFloat {
+        BeforeAfterComparisonGeometry.clampedFraction(positionBinding?.wrappedValue ?? sliderPosition)
+    }
+
+    private func setComparisonPosition(_ position: CGFloat) {
+        let clamped = BeforeAfterComparisonGeometry.clampedFraction(position)
+        if let positionBinding {
+            positionBinding.wrappedValue = clamped
+        } else {
+            sliderPosition = clamped
+        }
+    }
+
     private var beforeImage: some View {
         Group {
-            if let beforeImageData, let uiImage = UIImage(data: beforeImageData) {
+            if let uiImage = beforePreviewImage {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
@@ -164,10 +206,11 @@ struct BeforeAfterSlider: View {
                     }
                     .foregroundStyle(.gray)
                 }
-                .scaleEffect(isDragging ? 1.15 : 1.0)
-                .animation(.easeInOut(duration: 0.15), value: isDragging)
+                .scaleEffect((isDragging || isDraggingExternally) && !reduceMotion ? 1.15 : 1.0)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isDragging || isDraggingExternally)
                 .position(x: x, y: totalHeight / 2)
         }
+        .allowsHitTesting(false)
     }
 
     private func placeholderView(label: String) -> some View {
@@ -184,17 +227,18 @@ struct BeforeAfterSlider: View {
                 }
             }
     }
-}
 
-// MARK: - Clip Shape
-
-/// Custom shape that clips to a rectangle from the leading edge
-/// to a specified width.
-private struct HorizontalClipShape: Shape {
-    let width: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        Path(CGRect(x: 0, y: 0, width: width, height: rect.height))
+    private nonisolated static func makePreview(_ data: Data) async -> UIImage? {
+        await Task.detached(priority: .userInitiated) {
+            guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+                  let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceShouldCacheImmediately: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 2048,
+                  ] as CFDictionary) else { return nil }
+            return UIImage(cgImage: image)
+        }.value
     }
 }
 

@@ -1,0 +1,65 @@
+{
+  "checkedAt": "2026-10-31T04:48:00.720Z",
+  "change": "Single completed-scene image prompt; camera/framing retained; administrative image context excluded",
+  "requests": [
+    {
+      "endpoint": "fal-ai/flux-2/flash/edit",
+      "source": "/tmp/proestimate-policy-before.jpg",
+      "promptSHA256": "0cf1a432af26612cc3754440a8de83035f79abe0c060ba60609a5888e066efa5",
+      "requestId": "01a19047-273f-73f1-a973-e72ad2c2fb94",
+      "output": "/tmp/proestimate-policy-after-fixed-1.png",
+      "durationMs": 7331
+    },
+    {
+      "endpoint": "fal-ai/flux-2/flash/edit",
+      "source": "/tmp/proestimate-policy-before.jpg",
+      "promptSHA256": "0cf1a432af26612cc3754440a8de83035f79abe0c060ba60609a5888e066efa5",
+      "requestId": "01a19048-1d81-7572-8f29-56e2b031f47e",
+      "output": "/tmp/proestimate-policy-after-fixed-2.png",
+      "durationMs": 37677
+    }
+  ],
+  "images": [
+    {
+      "path": "/tmp/proestimate-policy-before.jpg",
+      "width": 1200,
+      "height": 800,
+      "centerColumnNearWhiteFraction": 0.1675,
+      "centerRegionPeakNearWhiteColumn": {
+        "fraction": 0.1825,
+        "x": 589
+      }
+    },
+    {
+      "path": "/tmp/proestimate-policy-after.png",
+      "width": 1254,
+      "height": 836,
+      "centerColumnNearWhiteFraction": 0.15669856459330145,
+      "centerRegionPeakNearWhiteColumn": {
+        "fraction": 0.7727272727272727,
+        "x": 628
+      }
+    },
+    {
+      "path": "/tmp/proestimate-policy-after-fixed-1.png",
+      "width": 1254,
+      "height": 836,
+      "centerColumnNearWhiteFraction": 0,
+      "centerRegionPeakNearWhiteColumn": {
+        "fraction": 0.01076555023923445,
+        "x": 632
+      }
+    },
+    {
+      "path": "/tmp/proestimate-policy-after-fixed-2.png",
+      "width": 1254,
+      "height": 836,
+      "centerColumnNearWhiteFraction": 0.004784688995215311,
+      "centerRegionPeakNearWhiteColumn": {
+        "fraction": 0.011961722488038277,
+        "x": 630
+      }
+    }
+  ],
+  "visualInspection": "Both new outputs are continuous single photographs with forest-green cabinetry across both sides; neither has a central divider. Source camera viewpoint and main architectural layout remain recognizable. Generative pixel alignment is approximate, not guaranteed."
+}

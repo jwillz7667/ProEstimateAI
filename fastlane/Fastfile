@@ -1,5 +1,12 @@
 default_platform(:ios)
 
+require_relative "lib/listing_screenshots"
+require_relative "lib/prepared_release"
+require_relative "lib/app_review_credentials"
+require_relative "lib/app_store_billing"
+require_relative "lib/app_store_age_rating"
+require_relative "lib/app_store_review_draft"
+
 XCODE_PROJECT   = "ProEstimate AI.xcodeproj"
 XCODE_SCHEME    = "ProEstimate AI"
 BUNDLE_ID       = "Res.ProEstimate-AI"
@@ -164,10 +171,58 @@ def ensure_editable_app_store_version(app)
 end
 
 platform :ios do
+  desc "Read sale availability, prices and introductory offers for the actual Pro subscriptions"
+  lane :billing_status do
+    setup_spaceship_token
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+    api = lambda do |method, path, body = nil|
+      AppStoreBilling.request(token: Spaceship::ConnectAPI.token.text, method: method, path: path, body: body)
+    end
+    UI.message("BILLING_SUMMARY=#{JSON.generate(AppStoreBilling.summary(report: AppStoreBilling.inspect(app_id: app.id, api: api)))}")
+  end
+
+  desc "Configure three-day Apple introductory trials on both approved Pro plans"
+  lane :billing_trial3 do
+    setup_spaceship_token
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+    api = lambda do |method, path, body = nil|
+      AppStoreBilling.request(token: Spaceship::ConnectAPI.token.text, method: method, path: path, body: body)
+    end
+    report = AppStoreBilling.inspect(app_id: app.id, api: api)
+    plan = AppStoreBilling.trial_plan(report: report, today: Time.now.utc.strftime("%Y-%m-%d"))
+    UI.message("TRIAL_PLAN=#{JSON.generate(plan)}")
+    if ENV["APPLY_THREE_DAY_TRIAL"] == "true"
+      AppStoreBilling.apply_trial(plan: plan, report: report, api: api)
+      after = AppStoreBilling.inspect(app_id: app.id, api: api)
+      remaining = AppStoreBilling.trial_plan(report: after, today: Time.now.utc.strftime("%Y-%m-%d"))
+      UI.user_error!("Three-day trial readback does not match the requested configuration") unless remaining.all? { |item| !item[:create] && item[:remove_offer_ids].empty? }
+      UI.message("BILLING_SUMMARY=#{JSON.generate(AppStoreBilling.summary(report: after))}")
+      UI.success("Three-day trials verified for both Pro subscriptions")
+    end
+  end
+
+  desc "Attach an explicit processed build to the current editable draft, with manual release and no review submission"
+  lane :attach_build do |options|
+    setup_spaceship_token
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+    expected = options[:build].to_s
+    UI.user_error!("Pass an explicit build number, for example build:11") unless expected.match?(/\A[1-9]\d*\z/)
+    version_id = ensure_editable_app_store_version(app)
+    api = lambda do |method, path, body = nil|
+      PreparedRelease.request(token: Spaceship::ConnectAPI.token.text, method: method, path: path, body: body)
+    end
+    result = PreparedRelease.attach(app_id: app.id, version_id: version_id, marketing_version: project_marketing_version, build_number: expected, api: api)
+    UI.success("Prepared draft: #{JSON.generate(result)}")
+  end
+
   desc "Read App Store versions, recent builds and subscription prices without modifying Apple records"
   lane :asc_status do
     require "net/http"
     require "json"
+    require "digest"
     setup_spaceship_token
     app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
     UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
@@ -181,7 +236,49 @@ platform :ios do
       parsed
     end
     versions = asc_get.call("apps/#{app.id}/appStoreVersions?filter[platform]=IOS&limit=20").fetch("data")
+    app_info = asc_get.call("apps/#{app.id}/appInfos?include=primaryCategory,secondaryCategory&limit=50").fetch("data").map do |info|
+      localizations = asc_get.call("appInfos/#{info['id']}/appInfoLocalizations?limit=50").fetch("data").map do |localization|
+        attributes = localization.fetch("attributes")
+        { locale: attributes["locale"], name: attributes["name"], subtitle: attributes["subtitle"], privacy_policy_url: attributes["privacyPolicyUrl"] }
+      end
+      { id: info["id"], state: info.dig("attributes", "appStoreState"), primary_category: info.dig("relationships", "primaryCategory", "data", "id"), secondary_category: info.dig("relationships", "secondaryCategory", "data", "id"), localizations: localizations }
+    end
     builds = asc_get.call("builds?filter[app]=#{app.id}&sort=-uploadedDate&include=preReleaseVersion&limit=10")
+    uploads = begin
+      response = PreparedRelease.request(token: Spaceship::ConnectAPI.token.text, method: :get, path: "apps/#{app.id}/buildUploads?limit=10")
+      { available: true, uploads: response.fetch("data", []).map { |upload| { id: upload["id"], attributes: upload["attributes"] } } }
+    rescue StandardError => error
+      # This optional diagnostics endpoint is unavailable to older API roles.
+      # A read-only status run should still report the established build API.
+      { available: false, error: error.message }
+    end
+    draft = versions.find { |version| version.dig("attributes", "versionString") == project_marketing_version }
+    listing = if draft
+      version_id = draft.fetch("id")
+      linked = asc_get.call("appStoreVersions/#{version_id}/relationships/build")
+      # Limit fields at the API boundary so reviewer credentials are never
+      # fetched or printed by release-status diagnostics.
+      review = asc_get.call("appStoreVersions/#{version_id}/appStoreReviewDetail?fields[appStoreReviewDetails]=notes,demoAccountRequired").fetch("data").fetch("attributes")
+      review_notes = review["notes"].to_s.strip
+      source_notes = File.read(File.expand_path("metadata/review_information/notes.txt", __dir__)).strip
+      review_summary = { demo_account_required: review["demoAccountRequired"], notes_sha256: Digest::SHA256.hexdigest(review_notes), notes_match_source: review_notes == source_notes }
+      localizations = asc_get.call("appStoreVersions/#{version_id}/appStoreVersionLocalizations?limit=50").fetch("data").map do |localization|
+        attributes = localization.fetch("attributes")
+        sets = asc_get.call("appStoreVersionLocalizations/#{localization['id']}/appScreenshotSets?limit=50").fetch("data").map do |set|
+          screenshots = asc_get.call("appScreenshotSets/#{set['id']}/appScreenshots?limit=50").fetch("data").map do |screenshot|
+            image = screenshot.fetch("attributes")
+            { id: screenshot["id"], filename: image["fileName"], size: image["fileSize"], delivery: image["assetDeliveryState"], width: image.dig("imageAsset", "width"), height: image.dig("imageAsset", "height") }
+          end
+          { id: set["id"], display_type: set.dig("attributes", "screenshotDisplayType"), screenshots: screenshots }
+        end
+        fields = %w[description keywords promotionalText whatsNew marketingUrl supportUrl].to_h do |field|
+          value = attributes[field]
+          [field, { value: value, utf8_bytes: value.to_s.bytesize, sha256: Digest::SHA256.hexdigest(value.to_s) }]
+        end
+        { locale: attributes["locale"], fields: fields, screenshot_sets: sets }
+      end
+      { version_id: version_id, version: project_marketing_version, build_relationship: linked["data"], review: review_summary, localizations: localizations }
+    end
     groups = asc_get.call("apps/#{app.id}/subscriptionGroups?limit=20").fetch("data")
     subscriptions = groups.flat_map do |group|
       asc_get.call("subscriptionGroups/#{group['id']}/subscriptions?limit=50").fetch("data").map do |subscription|
@@ -189,7 +286,7 @@ platform :ios do
         { id: subscription["id"], attributes: subscription["attributes"], prices: prices }
       end
     end
-    UI.message(JSON.pretty_generate({ app_id: app.id, versions: versions.map { |v| { id: v["id"], attributes: v["attributes"] } }, builds: builds, subscriptions: subscriptions }))
+    UI.message(JSON.pretty_generate({ app_id: app.id, app_info: app_info, versions: versions.map { |v| { id: v["id"], attributes: v["attributes"] } }, builds: builds, build_uploads: uploads, listing: listing, subscriptions: subscriptions }))
   end
 
   desc "Build the project from a clean checkout and push it to TestFlight"
@@ -334,6 +431,8 @@ platform :ios do
 
   desc "Push localized metadata and screenshots to App Store Connect (no binary)"
   lane :metadata do
+    review_information = AppReviewCredentials.load(root: File.expand_path("..", __dir__))
+    screenshot_path = ListingScreenshots.prepare(root: File.expand_path("..", __dir__))
     setup_spaceship_token
     app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
     UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
@@ -341,10 +440,15 @@ platform :ios do
 
     deliver(
       api_key:                           make_api_key,
+      app_review_information:            review_information,
       app_version:                       project_marketing_version,
       skip_binary_upload:                true,
       skip_screenshots:                  false,
+      screenshots_path:                 screenshot_path,
+      overwrite_screenshots:            true,
+      screenshot_processing_timeout:    180,
       skip_metadata:                     false,
+      submit_for_review:                 false,
       force:                             true,
       precheck_include_in_app_purchases: false
     )
@@ -352,6 +456,7 @@ platform :ios do
 
   desc "Push text metadata only (name/subtitle/keywords/description/promo/notes). Skips screenshots for fast ASO iteration."
   lane :metadata_copy do
+    review_information = AppReviewCredentials.load(root: File.expand_path("..", __dir__))
     setup_spaceship_token
     app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
     UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
@@ -359,10 +464,12 @@ platform :ios do
 
     deliver(
       api_key:                           make_api_key,
+      app_review_information:            review_information,
       app_version:                       project_marketing_version,
       skip_binary_upload:                true,
       skip_screenshots:                  true,
       skip_metadata:                     false,
+      submit_for_review:                 false,
       force:                             true,
       precheck_include_in_app_purchases: false
     )
@@ -370,6 +477,7 @@ platform :ios do
 
   desc "Push screenshots only (no metadata)."
   lane :metadata_screenshots do
+    screenshot_path = ListingScreenshots.prepare(root: File.expand_path("..", __dir__))
     setup_spaceship_token
     app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
     UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
@@ -380,7 +488,37 @@ platform :ios do
       app_version:                       project_marketing_version,
       skip_binary_upload:                true,
       skip_screenshots:                  false,
+      screenshots_path:                 screenshot_path,
+      overwrite_screenshots:            true,
+      screenshot_processing_timeout:    180,
       skip_metadata:                     true,
+      submit_for_review:                 false,
+      force:                             true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
+  desc "Recover stalled screenshot processing while retaining completed campaign assets"
+  lane :metadata_recover_screenshots do
+    setup_spaceship_token
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+    ensure_editable_app_store_version(app)
+    screenshot_path = ListingScreenshots.prepare(root: File.expand_path("..", __dir__))
+
+    # Fastlane's normal retry removes only non-COMPLETE assets and skips
+    # completed assets by checksum. A bounded wait lets that retry run
+    # inside CI instead of spending the full job timeout on Apple's queue.
+    deliver(
+      api_key:                           make_api_key,
+      app_version:                       project_marketing_version,
+      skip_binary_upload:                true,
+      skip_screenshots:                  false,
+      screenshots_path:                 screenshot_path,
+      overwrite_screenshots:            false,
+      screenshot_processing_timeout:    120,
+      skip_metadata:                     true,
+      submit_for_review:                 false,
       force:                             true,
       precheck_include_in_app_purchases: false
     )
@@ -471,6 +609,8 @@ platform :ios do
 
   desc "Submit the most recent build for App Store review"
   lane :submit do
+    review_information = AppReviewCredentials.load(root: File.expand_path("..", __dir__))
+    screenshot_path = ListingScreenshots.prepare(root: File.expand_path("..", __dir__))
     api_key = make_api_key
 
     # Apple typically finishes processing a freshly-uploaded build in
@@ -591,21 +731,10 @@ platform :ios do
     UI.user_error!("No build available after polling — cannot submit") if latest.nil?
 
     # ------------------------------------------------------------------
-    # Clear any stale review submissions before calling deliver.
-    # ASC rejects `deliver(submit_for_review: true)` with
-    # "A review submission is already in progress" whenever a prior
-    # submission is still open — typically a READY_FOR_REVIEW that was
-    # never sent, a WAITING_FOR_REVIEW awaiting Apple's queue, or a
-    # submission sitting in UNRESOLVED_ISSUES after a rejection.
-    #
-    # The ASC API does NOT permit DELETE on reviewSubmissions (403
-    # "does not allow 'DELETE'"), and `state` is read-only (PATCH with
-    # state:CANCELING → 409 "attribute 'state' can not be included in a
-    # 'UPDATE'"). The supported withdrawal is PATCH `canceled: true`,
-    # which transitions the submission through CANCELING to CANCELED.
-    # We then poll until it leaves the blocking states so deliver's
-    # pre-check sees a clean slate. Submissions already IN_REVIEW cannot
-    # be cancelled via API (handled separately below).
+    # Preserve an unsubmitted READY_FOR_REVIEW draft: pinned deliver can
+    # reuse it if its items are empty, verified below before submission.
+    # Retain the existing unresolved-rejection cleanup and never withdraw
+    # a submission already waiting for review or in review.
     # ------------------------------------------------------------------
     asc_raw = lambda do |method, path, body = nil|
       uri = URI.parse("https://api.appstoreconnect.apple.com/v1/#{path}")
@@ -629,7 +758,7 @@ platform :ios do
     submissions_resp = asc_get.call("reviewSubmissions?filter[app]=#{submit_app.id}&limit=50")
     all_submissions = submissions_resp["data"] || []
     open_submissions = all_submissions.select do |s|
-      %w[READY_FOR_REVIEW UNRESOLVED_ISSUES].include?(s.dig("attributes", "state"))
+      s.dig("attributes", "state") == "UNRESOLVED_ISSUES"
     end
 
     in_review = all_submissions.select { |s| %w[WAITING_FOR_REVIEW IN_REVIEW].include?(s.dig("attributes", "state")) }
@@ -711,10 +840,12 @@ platform :ios do
     end
 
     if target_match && editable_states.include?(target_match.dig("attributes", "appStoreState"))
+      target_version_id = target_match.fetch("id")
       UI.success("Editable App Store version #{target_version} already exists (#{target_match['id']}, state: #{target_match.dig('attributes', 'appStoreState')})")
     elsif target_match
       UI.user_error!("App Store version #{target_version} exists but is in non-editable state #{target_match.dig('attributes', 'appStoreState')}. Bump CFBundleShortVersionString to a new value and re-run.")
     elsif editable_other
+      target_version_id = editable_other.fetch("id")
       other_version = editable_other.dig("attributes", "versionString")
       other_state   = editable_other.dig("attributes", "appStoreState")
       UI.message("Reusing in-flight version #{other_version} (#{editable_other['id']}, #{other_state}) → renaming to #{target_version}...")
@@ -744,15 +875,34 @@ platform :ios do
       if create_code >= 400
         UI.user_error!("Failed to create App Store version #{target_version} (#{create_code}): #{(create_body.dig('errors') || []).map { |e| e['detail'] }.join('; ')}")
       end
+      target_version_id = create_body.fetch("data").fetch("id")
       UI.success("Created App Store version #{target_version} (#{create_body.dig('data', 'id')})")
       sleep 5
     end
 
+    review_api = lambda do |method, path, body = nil|
+      AppStoreBilling.request(token: Spaceship::ConnectAPI.token.text, method: method, path: path, body: body)
+    end
+    AppStoreReviewDraft.validate(
+      app_id: submit_app.id, platform: "IOS", version_id: target_version_id,
+      api: review_api, log: ->(message) { UI.message(message) }
+    )
+    AppStoreAgeRating.ensure_social_media_declaration(
+      app_id: submit_app.id,
+      api: review_api,
+      log: ->(message) { UI.message(message) }
+    )
+
     deliver(
       api_key:                           api_key,
+      app_review_information:            review_information,
       app_version:                       target_version,
+      build_number:                      latest.fetch("attributes").fetch("version"),
       skip_binary_upload:                true,
       skip_screenshots:                  false,
+      screenshots_path:                 screenshot_path,
+      overwrite_screenshots:            false,
+      screenshot_processing_timeout:    180,
       skip_metadata:                     false,
       force:                             true,
       submit_for_review:                 true,

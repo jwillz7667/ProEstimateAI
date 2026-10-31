@@ -1,0 +1,52 @@
+{
+  "checkedAt": "2026-10-31T04:40:15.316Z",
+  "deploymentId": "f8fa3f11-6dd0-4fb5-9720-8a233acf5657",
+  "free": {
+    "state": "FREE",
+    "usage": [],
+    "allPaidFlagsDenied": true,
+    "manualProjects": 3,
+    "manualEstimateCreated": true,
+    "imageAndTextGenerationHTTP": 402,
+    "aiEstimateHTTP": 402,
+    "generationJobs": 0,
+    "cleanupDeferred": true
+  },
+  "comparison": {
+    "projectId": "cmvvwwk4x000ouhg6z94b9uhf",
+    "generationId": "cmvvwwkl7000vuhg6p2t59r5c",
+    "status": "completed",
+    "sourceBytes": 143015,
+    "previewBytes": 2035358,
+    "originalStoredExactly": true,
+    "comparisonGenerationJobs": 1,
+    "reportedAIUsage": 1,
+    "remainingAI": 19,
+    "reviewGrantUnchanged": true,
+    "cleanupDeferred": true,
+    "dimensions": {
+      "original": {
+        "width": 1200,
+        "height": 800
+      },
+      "generated": {
+        "width": 1254,
+        "height": 836
+      }
+    }
+  },
+  "emailsSent": 0,
+  "applePurchasesCreated": 0,
+  "catalog": [
+    {
+      "productId": "proestimate.pro.monthly",
+      "hasIntro": true,
+      "intro": "3-day free trial"
+    },
+    {
+      "productId": "proestimate.pro.annual",
+      "hasIntro": true,
+      "intro": "3-day free trial"
+    }
+  ]
+}

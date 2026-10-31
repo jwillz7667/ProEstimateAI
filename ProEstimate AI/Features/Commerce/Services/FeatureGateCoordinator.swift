@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import os.log
 
 /// Central coordinator for feature access gating.
@@ -7,16 +8,8 @@ import os.log
 ///   - `.allowed` — the user can proceed.
 ///   - `.blocked(PaywallDecision)` — present the paywall.
 ///
-/// Free users get a small pool of starter AI generation credits
-/// (`AppConstants.freeGenerationCredits`) before the paywall fires.
-/// Project creation and photo upload ride through unconditionally —
-/// without a project there's nothing to generate against, so the
-/// generation gate is the only bottleneck. Every other Pro feature
-/// (quote export, branding, invoices, share links, AI estimates,
-/// analytics, custom pricing profiles, watermark removal, maps) hits
-/// the paywall on first tap. Pro users have backend-enforced monthly
-/// caps; the local gate just routes them to the paywall when the
-/// backend signals exhaustion.
+/// Basic project access and manual work remain free. Every billable AI or
+/// document feature is gated locally and independently enforced by the API.
 @Observable
 final class FeatureGateCoordinator {
     static let shared = FeatureGateCoordinator()
@@ -56,8 +49,8 @@ final class FeatureGateCoordinator {
 
     /// Configure the coordinator with its dependencies. Both stores are
     /// load-bearing: `entitlementStore` decides whether the user has
-    /// subscription-tier access, and `usageMeterStore` decides whether a
-    /// FREE user still has starter generation credits remaining.
+    /// subscription-tier access. Usage is displayed from the server snapshot;
+    /// a stale credit balance never substitutes for subscription access.
     func configure(
         entitlementStore: EntitlementStore,
         usageMeterStore: UsageMeterStore
@@ -68,14 +61,6 @@ final class FeatureGateCoordinator {
 
     // MARK: - Helpers
 
-    /// Whether this user qualifies for the 7-day free trial. A user is
-    /// trial-eligible when they're currently on the free tier AND have
-    /// never started a trial before (no `trialEndsAt` on the snapshot).
-    private var isTrialEligible: Bool {
-        guard let snapshot = entitlementStore?.snapshot else { return true }
-        return snapshot.subscriptionState == .free && snapshot.trialEndsAt == nil
-    }
-
     /// Block the action and present the trial-offer / upgrade paywall.
     /// Centralized so copy stays consistent across every gate.
     private func blockWithTrialOffer(
@@ -84,7 +69,7 @@ final class FeatureGateCoordinator {
         headline: String,
         subheadline: String
     ) -> FeatureGateResult {
-        let primaryTitle = isTrialEligible ? "Start 7-Day Free Trial" : "Upgrade to Continue"
+        let primaryTitle = "View Pro Plans"
         let recommendedId = AppConstants.proMonthlyProductID
 
         return .blocked(PaywallDecision(
@@ -104,26 +89,15 @@ final class FeatureGateCoordinator {
 
     // MARK: - Feature Guards
 
-    /// Check whether the user can generate an AI preview image.
-    ///
-    /// Pro / trialing users always pass through. Free users pass through
-    /// while they still have starter generation credits remaining and hit
-    /// the paywall the moment that pool is exhausted. The credit counter
-    /// is intentionally NOT surfaced in normal UI — it only appears on
-    /// the paywall sheet that fires on exhaustion (see
-    /// `PaywallHostView`'s `.generationLimitHit` branch).
+    /// Historical credits and cached paid flags cannot unlock AI for a free,
+    /// expired or revoked account. StoreKit confirms trial eligibility later.
     func guardGeneratePreview() -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.hasProAccess { return .allowed }
-        if let meter = usageMeterStore, meter.canGenerate {
-            return .allowed
-        }
-        logger.info("Generation blocked — starter credits exhausted.")
+        if entitlementStore?.hasProAccess == true { return .allowed }
         return blockWithTrialOffer(
             placement: .generationLimitHit,
-            triggerReason: "Free generation credits exhausted",
-            headline: "You've Used All 5 Free Generations",
-            subheadline: "Start a 7-day free trial to keep generating AI previews — unlimited while you trial, then continue on any paid plan."
+            triggerReason: "AI generation requires an active subscription or trial",
+            headline: "Unlock AI Remodel Previews",
+            subheadline: "Choose Pro for AI previews and estimates. Eligible Apple Accounts can start with a three-day free trial."
         )
     }
 
@@ -137,21 +111,19 @@ final class FeatureGateCoordinator {
 
     /// Check whether the user can export a quote / proposal PDF.
     func guardExportQuote() -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.hasProAccess { return .allowed }
+        if entitlementStore?.hasProAccess == true { return .allowed }
         logger.info("Quote export blocked — subscription required.")
         return blockWithTrialOffer(
             placement: .quoteLimitHit,
             triggerReason: "Quote export requires a subscription",
             headline: "Send Branded Proposals",
-            subheadline: "Export client-ready PDFs with your logo, colors, and contact details. Start a 7-day free trial."
+            subheadline: "Export client-ready PDFs with your logo, colors, and contact details. Start a 3-day free trial."
         )
     }
 
     /// Check whether the user can AI-generate a professional estimate.
     func guardGenerateAIEstimate() -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.subscriptionState.hasProAccess { return .allowed }
+        if entitlementStore?.hasProAccess == true { return .allowed }
         logger.info("AI estimate generation blocked — subscription required.")
         return blockWithTrialOffer(
             placement: .aiEstimateLocked,
@@ -167,22 +139,18 @@ final class FeatureGateCoordinator {
     /// is the client-side fast path that routes free users to the paywall
     /// before the round-trip.
     func guardCreateInvoice() -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.hasFeature(.canCreateInvoice) { return .allowed }
+        if entitlementStore?.hasFeature(.canCreateInvoice) == true { return .allowed }
         logger.info("Invoice creation blocked — subscription required.")
         return blockWithTrialOffer(
             placement: .invoiceLocked,
             triggerReason: "Invoice creation requires a subscription",
             headline: "Bill Clients with Invoices",
-            subheadline: "Turn approved estimates into professional invoices, track payments, and send branded PDFs. Start a 7-day free trial."
+            subheadline: "Turn approved estimates into professional invoices, track payments, and send branded PDFs. Start a 3-day free trial."
         )
     }
 
-    /// Project creation is always allowed locally. Free users need to
-    /// own a project to spend their starter generation credits against,
-    /// so gating creation defeats the starter pack. The bottleneck for
-    /// free users is `guardGeneratePreview()`; Pro users hit the
-    /// 2-projects-per-month cap server-side.
+    /// Manual projects remain available to free, paid and lapsed accounts.
+    /// The optional AI work has its own gate.
     func guardCreateProject() -> FeatureGateResult {
         .allowed
     }
@@ -193,8 +161,7 @@ final class FeatureGateCoordinator {
     /// Catches downgraded users who still have an inherited project but
     /// have lost their entitlement.
     func guardUseMaps() -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.hasProAccess { return .allowed }
+        if entitlementStore?.hasProAccess == true { return .allowed }
         logger.info("Property maps blocked — subscription required.")
         return blockWithTrialOffer(
             placement: .generationLimitHit,
@@ -206,8 +173,7 @@ final class FeatureGateCoordinator {
 
     /// Check whether the user can use custom branding.
     func guardUseBranding() -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.hasFeature(.canUseBranding) { return .allowed }
+        if entitlementStore?.hasFeature(.canUseBranding) == true { return .allowed }
         logger.info("Branding blocked — subscription required.")
         return blockWithTrialOffer(
             placement: .brandingLocked,
@@ -219,8 +185,7 @@ final class FeatureGateCoordinator {
 
     /// Check whether the user can share an approval link with a client.
     func guardShareApprovalLink() -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.hasFeature(.canShareApprovalLink) { return .allowed }
+        if entitlementStore?.hasFeature(.canShareApprovalLink) == true { return .allowed }
         logger.info("Approval share blocked — subscription required.")
         return blockWithTrialOffer(
             placement: .approvalShareLocked,
@@ -232,8 +197,7 @@ final class FeatureGateCoordinator {
 
     /// Check whether the user can remove watermarks from exports.
     func guardRemoveWatermark() -> FeatureGateResult {
-        guard let entitlementStore else { return .allowed }
-        if entitlementStore.hasFeature(.canRemoveWatermark) { return .allowed }
+        if entitlementStore?.hasFeature(.canRemoveWatermark) == true { return .allowed }
         logger.info("Watermark removal blocked — subscription required.")
         return blockWithTrialOffer(
             placement: .watermarkRemovalLocked,

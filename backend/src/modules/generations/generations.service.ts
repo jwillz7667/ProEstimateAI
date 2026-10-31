@@ -17,7 +17,9 @@ import {
 import { sendGenerationReady } from "../../lib/apns";
 import { readProjectQualityTier } from "../../lib/project-quality-tier";
 import { recordUsage } from "../../lib/usage-limits";
-import { gateAIAction, runReservedAction } from "../commerce/entitlement-gate";
+import { gateAIAction } from "../commerce/entitlement-gate";
+import { invalidateCache, CacheKeys } from '../../config/redis';
+import { failGenerationAndRefund, linkGenerationReservation } from '../../lib/generation-usage';
 import { env } from "../../config/env";
 import { CreateGenerationInput } from "./generations.validators";
 import * as estimatesService from "../estimates/estimates.service";
@@ -198,7 +200,7 @@ function toMaterialSpecs(
 }
 
 /**
- * Fire-and-forget: call Nano Banana 2.1 and update the generation record.
+ * Fire-and-forget: call the configured image providers and update the record.
  * Runs outside the request transaction so the API responds immediately
  * while the image generates in the background.
  */
@@ -213,19 +215,21 @@ async function processGeneration(
 ) {
   try {
     // Mark as PROCESSING
-    await prisma.aIGeneration.update({
-      where: { id: generationId },
+    const started = await prisma.aIGeneration.updateMany({
+      where: { id: generationId, status: 'QUEUED' },
       data: { status: "PROCESSING" },
     });
+    if (started.count !== 1) return;
 
     // Text-only path: skip image generation entirely (service trades, or the
     // global "no images" setting). Mark COMPLETED with no preview, still fire
     // the ready notification, and run the material/labor/estimate pipeline.
     if (!shouldGenerateImage) {
-      await prisma.aIGeneration.update({
-        where: { id: generationId },
+      const completed = await prisma.aIGeneration.updateMany({
+        where: { id: generationId, status: 'PROCESSING' },
         data: { status: "COMPLETED" },
       });
+      if (completed.count !== 1) return;
 
       logger.info(
         { generationId },
@@ -267,19 +271,12 @@ async function processGeneration(
     }
 
     // Check that at least one image generation provider is configured
-    if (!env.PIAPI_API_KEY && !env.GOOGLE_AI_API_KEY) {
+    if (!env.FAL_KEY && !env.PIAPI_API_KEY && !env.GOOGLE_AI_API_KEY) {
       logger.warn(
         { generationId },
         "No image generation provider configured — marking generation as failed",
       );
-      await prisma.aIGeneration.update({
-        where: { id: generationId },
-        data: {
-          status: "FAILED",
-          errorMessage:
-            "Image generation service is not configured. Contact support.",
-        },
-      });
+      await failGenerationAndRefund(generationId, 'Image generation service is not configured. Contact support.');
       return;
     }
 
@@ -310,7 +307,7 @@ async function processGeneration(
       );
     }
 
-    // Call image generation with provider fallback (Google GenAI → PiAPI).
+    // Call image generation with provider fallback (fal → Google GenAI → PiAPI).
     const result = await generatePreviewImage(
       prompt,
       context,
@@ -319,14 +316,7 @@ async function processGeneration(
     );
 
     if (!result) {
-      await prisma.aIGeneration.update({
-        where: { id: generationId },
-        data: {
-          status: "FAILED",
-          errorMessage:
-            "Image generation returned no result. Please try again.",
-        },
-      });
+      await failGenerationAndRefund(generationId, 'Image generation returned no result. Please try again.');
       return;
     }
 
@@ -337,8 +327,8 @@ async function processGeneration(
     // pulling the full multi-MB preview for every tile in the picker.
     const thumbnailUrl = `${previewUrl}?w=240`;
 
-    await prisma.aIGeneration.update({
-      where: { id: generationId },
+    const completed = await prisma.aIGeneration.updateMany({
+      where: { id: generationId, status: 'PROCESSING' },
       data: {
         status: "COMPLETED",
         imageData: result.base64Data,
@@ -348,6 +338,7 @@ async function processGeneration(
         generationDurationMs: result.durationMs,
       },
     });
+    if (completed.count !== 1) return;
 
     logger.info(
       { generationId, durationMs: result.durationMs },
@@ -386,13 +377,7 @@ async function processGeneration(
   } catch (err) {
     logger.error({ err, generationId }, "Generation processing failed");
     try {
-      await prisma.aIGeneration.update({
-        where: { id: generationId },
-        data: {
-          status: "FAILED",
-          errorMessage: "An unexpected error occurred during image generation.",
-        },
-      });
+      await failGenerationAndRefund(generationId, 'An unexpected error occurred during image generation.');
     } catch (updateErr) {
       logger.error(
         { updateErr, generationId },
@@ -933,10 +918,9 @@ export async function create(
   // job skips image generation and produces a text-only estimate.
   const shouldGenerateImage = data.generate_preview ?? project.aiPreviewEnabled;
 
-  // Throws PaywallError on block (admin, trial, or pro within caps → returns).
-  const reservation = await gateAIAction({ userId, companyId, metric: "AI_GENERATION" });
-
-  const generation = await runReservedAction(reservation, () => prisma.$transaction(async (tx) => {
+  // Capacity and durable job linkage commit together, including starter credits.
+  const { generation, reservation } = await prisma.$transaction(async (tx) => {
+    const reservation = await gateAIAction({ userId, companyId, metric: 'AI_GENERATION' }, tx);
     const gen = await tx.aIGeneration.create({
       data: {
         projectId,
@@ -949,16 +933,20 @@ export async function create(
           | "LUXURY",
       },
     });
+    await linkGenerationReservation(tx, reservation, gen.id, projectId, companyId, shouldGenerateImage);
     await tx.activityLogEntry.create({
       data: {
         projectId,
         userId,
         action: "GENERATION_STARTED",
         description: `AI generation started: ${data.prompt.substring(0, 100)}`,
+        metadataJson: { generation_id: gen.id, preview_required: shouldGenerateImage,
+          usage_event_id: reservation?.eventId ?? null },
       },
     });
-    return gen;
-  }));
+    return { generation: gen, reservation };
+  });
+  await invalidateCache(CacheKeys.entitlement(userId));
 
   // Record usage AFTER successful creation so a failed write doesn't burn cap.
   if (!reservation) await recordUsage(userId, companyId, "AI_GENERATION", {

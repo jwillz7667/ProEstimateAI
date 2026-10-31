@@ -1,6 +1,5 @@
 import { SignJWT, importPKCS8 } from "jose";
 import { env } from "../config/env";
-import { logger } from "../config/logger";
 import { EXPECTED_BUNDLE_ID, verifyAppleJWS, AppleTransactionInfo } from "./apple-storekit";
 
 // ─── Constants ──────────────────────────────────────────
@@ -12,8 +11,8 @@ import { EXPECTED_BUNDLE_ID, verifyAppleJWS, AppleTransactionInfo } from "./appl
  * declaring a transaction missing.
  */
 const APP_STORE_API_HOSTS = {
-  Production: "https://api.storekit.itunes.apple.com",
-  Sandbox: "https://api.storekit-sandbox.itunes.apple.com",
+  Production: "https://api.storekit.apple.com",
+  Sandbox: "https://api.storekit-sandbox.apple.com",
 } as const;
 
 /** Apple requires JWTs ≤ 1 hour. We mint short-lived ones — 5 minutes
@@ -128,6 +127,7 @@ interface TransactionHistoryResponse {
  */
 export async function fetchTransactionHistory(
   originalTransactionId: string,
+  revision?: string,
 ): Promise<TransactionHistoryResponse> {
   const token = await mintBearerToken();
   const tryOrder: Array<"Production" | "Sandbox"> =
@@ -135,10 +135,10 @@ export async function fetchTransactionHistory(
       ? ["Production", "Sandbox"]
       : ["Sandbox", "Production"];
 
-  let lastError: AppStoreServerApiError | null = null;
   for (const envName of tryOrder) {
     const host = APP_STORE_API_HOSTS[envName];
-    const url = `${host}/inApps/v1/history/${encodeURIComponent(originalTransactionId)}`;
+    const url = new URL(`/inApps/v2/history/${encodeURIComponent(originalTransactionId)}`, host);
+    if (revision) url.searchParams.set('revision', revision);
     let response: Response;
     try {
       response = await fetch(url, {
@@ -147,6 +147,7 @@ export async function fetchTransactionHistory(
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
+        signal: AbortSignal.timeout(15_000),
       });
     } catch (err) {
       // Network-level failure — don't try the other host, just bail.
@@ -160,10 +161,6 @@ export async function fetchTransactionHistory(
     if (response.status === 404) {
       // Try the alternate environment before declaring NotFound — see
       // top-of-function rationale.
-      lastError = new AppStoreServerApiError(
-        `Transaction ${originalTransactionId} not in ${envName} history`,
-        404,
-      );
       continue;
     }
 
@@ -216,11 +213,8 @@ async function decodeHistoryEntries(
 /**
  * Defense-in-depth: assert that the iOS-supplied transactionId actually
  * appears in Apple's server-side history for the given
- * `originalTransactionId`. Catches attacks where an attacker forges a
- * JWS that verifies cleanly against the static x5c chain (e.g. by
- * replaying a leaked-but-valid signed transaction) — Apple's server
- * history is the only thing that knows about revoked, refunded, or
- * never-existed transactions in real time.
+ * `originalTransactionId`. Return the current signed snapshot so callers
+ * examine revocation and expiration; refunded transactions remain in history.
  *
  * Throws `AppStoreTransactionNotFoundError` when the transaction is
  * absent from history; throws `AppStoreServerApiError` for any other
@@ -230,30 +224,22 @@ async function decodeHistoryEntries(
 export async function assertTransactionInHistory(args: {
   originalTransactionId: string;
   transactionId: string;
-}): Promise<void> {
-  const history = await fetchTransactionHistory(args.originalTransactionId);
-  const entries = await decodeHistoryEntries(history);
-
-  const match = entries.some(
-    (entry) => entry.transactionId === args.transactionId,
-  );
-  if (!match) {
-    logger.warn(
-      {
-        originalTransactionId: args.originalTransactionId,
-        transactionId: args.transactionId,
-        entriesCount: entries.length,
-      },
-      "App Store Server API: transactionId not present in Apple history",
-    );
-    throw new AppStoreTransactionNotFoundError(args.originalTransactionId);
+}): Promise<AppleTransactionInfo> {
+  let revision: string | undefined;
+  const visited = new Set<string>();
+  for (;;) {
+    const history = await fetchTransactionHistory(args.originalTransactionId, revision);
+    const entries = await decodeHistoryEntries(history);
+    const match = entries.find((entry) => entry.transactionId === args.transactionId);
+    // Return Apple's current signed snapshot, including revocationDate. Being
+    // present in history does not imply that a transaction remains entitled.
+    if (match) return match;
+    if (!history.hasMore) break;
+    if (!history.revision || visited.has(history.revision)) {
+      throw new AppStoreServerApiError('Apple history pagination did not advance');
+    }
+    visited.add(history.revision);
+    revision = history.revision;
   }
-
-  logger.debug(
-    {
-      originalTransactionId: args.originalTransactionId,
-      transactionId: args.transactionId,
-    },
-    "App Store Server API: transaction confirmed against Apple history",
-  );
+  throw new AppStoreTransactionNotFoundError(args.originalTransactionId);
 }

@@ -1,6 +1,9 @@
 import PDFDocument from 'pdfkit';
 import { prisma } from '../../config/database';
 import { NotFoundError, AuthorizationError } from '../../lib/errors';
+import { hasEffectiveProAccess } from '../../lib/entitlement-access';
+import { isAdminUser } from '../../lib/admin';
+import { gateAIAction, runReservedAction } from '../commerce/entitlement-gate';
 
 // ─── Typography ──────────────────────────────────────────
 const FONT_TITLE = 20;
@@ -105,6 +108,7 @@ function applyWatermark(doc: PDFKit.PDFDocument): void {
 
 /** Check whether the user's plan allows watermark removal. */
 async function shouldApplyWatermark(userId: string): Promise<boolean> {
+  if (await isAdminUser(userId)) return false;
   const entitlement = await prisma.userEntitlement.findUnique({
     where: { userId },
     include: { plan: { select: { featuresJson: true } } },
@@ -115,17 +119,7 @@ async function shouldApplyWatermark(userId: string): Promise<boolean> {
   const features = entitlement.plan.featuresJson as Record<string, unknown>;
   const canRemove = features.CAN_REMOVE_WATERMARK === true;
 
-  const activeStatuses = [
-    'TRIAL_ACTIVE',
-    'PRO_ACTIVE',
-    'GRACE_PERIOD',
-    'BILLING_RETRY',
-    'CANCELED_ACTIVE',
-    'ADMIN_OVERRIDE',
-  ];
-  const isActive = activeStatuses.includes(entitlement.status);
-
-  return !(canRemove && isActive);
+  return !(canRemove && hasEffectiveProAccess(entitlement));
 }
 
 // ─── Company Header (shared between proposal & invoice) ──
@@ -279,6 +273,15 @@ function drawPageFooter(doc: PDFKit.PDFDocument, text?: string): void {
 // ─── Proposal PDF ────────────────────────────────────────
 
 export async function generateProposalPDF(
+  proposalId: string,
+  companyId: string,
+  userId: string,
+): Promise<Buffer> {
+  const reservation = await gateAIAction({ userId, companyId, metric: 'QUOTE_EXPORT' });
+  return runReservedAction(reservation, () => renderProposalPDF(proposalId, companyId, userId));
+}
+
+async function renderProposalPDF(
   proposalId: string,
   companyId: string,
   userId: string,
@@ -494,6 +497,15 @@ export async function generateProposalPDF(
 // ─── Invoice PDF ─────────────────────────────────────────
 
 export async function generateInvoicePDF(
+  invoiceId: string,
+  companyId: string,
+  userId: string,
+): Promise<Buffer> {
+  const reservation = await gateAIAction({ userId, companyId, metric: 'QUOTE_EXPORT' });
+  return runReservedAction(reservation, () => renderInvoicePDF(invoiceId, companyId, userId));
+}
+
+async function renderInvoicePDF(
   invoiceId: string,
   companyId: string,
   userId: string,

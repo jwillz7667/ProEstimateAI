@@ -17,6 +17,10 @@ struct ProjectCreationFlowView: View {
     @State private var viewModel = ProjectCreationViewModel()
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
+    @Environment(EntitlementStore.self) private var entitlementStore
+    @Environment(FeatureGateCoordinator.self) private var featureGate
+    @State private var activePaywall: PaywallDecision?
+    @State private var limitNotice: PaywallDecision?
 
     var body: some View {
         NavigationStack {
@@ -34,13 +38,22 @@ struct ProjectCreationFlowView: View {
                 stepContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+                if viewModel.currentStepEnum == .details || viewModel.currentStepEnum == .photos {
+                    VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+                        Toggle("Use AI for this project", isOn: $viewModel.shouldGenerateAI)
+                        Text("AI requires an active Pro subscription or trial. Leave this off to save your project and photos and build estimates manually for free.")
+                            .font(TypographyTokens.caption)
+                            .foregroundStyle(ColorTokens.secondaryText)
+                    }
+                    .padding(.horizontal, SpacingTokens.md)
+                }
                 if viewModel.currentStepEnum != .generating {
                     navigationButtons
                         .padding(.horizontal, SpacingTokens.md)
                         .padding(.vertical, SpacingTokens.md)
                 }
             }
-            .navigationTitle(viewModel.currentStepEnum.title)
+            .navigationTitle(stepTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -52,7 +65,26 @@ struct ProjectCreationFlowView: View {
             }
             .interactiveDismissDisabled(viewModel.isPipelineRunning)
         }
+        .sheet(item: $activePaywall) { decision in
+            PaywallHostView(decision: decision) {
+                activePaywall = nil
+            }
+        }
+        .alert(limitNotice?.headline ?? "Plan Limit Reached", isPresented: Binding(
+            get: { limitNotice != nil }, set: { if !$0 { limitNotice = nil } }
+        )) {
+            Button("OK", role: .cancel) { limitNotice = nil }
+        } message: {
+            Text(limitNotice?.subheadline ?? "Try again when your allowance resets.")
+        }
+        .onChange(of: viewModel.pipelinePaywall) { _, decision in
+            guard let decision else { return }
+            present(decision)
+            viewModel.pipelinePaywall = nil
+        }
         .onAppear {
+            viewModel.shouldGenerateAI = entitlementStore.hasProAccess
+            viewModel.canUsePaidMaps = entitlementStore.hasProAccess
             // Seed the wizard's per-project AI-preview toggle from the
             // company-wide default. The VM reads this lazily for remodel
             // trades; service trades ignore it and stay off. Setting it here
@@ -65,6 +97,14 @@ struct ProjectCreationFlowView: View {
     }
 
     // MARK: - Step Content
+
+    private var stepTitle: String {
+        if !viewModel.shouldGenerateAI {
+            if viewModel.currentStepEnum == .generating { return "Saving Project" }
+            if viewModel.currentStepEnum == .photos { return "Photos & Notes" }
+        }
+        return viewModel.currentStepEnum.title
+    }
 
     @ViewBuilder
     private var stepContent: some View {
@@ -116,12 +156,17 @@ struct ProjectCreationFlowView: View {
             // .task). All earlier steps just step forward.
             if viewModel.currentStepEnum == .details {
                 PrimaryCTAButton(
-                    title: "Create Project",
+                    title: viewModel.shouldGenerateAI ? "Create with AI" : "Save Project",
                     icon: "plus.circle.fill",
                     isLoading: viewModel.isPipelineRunning,
                     isDisabled: !viewModel.canProceed || viewModel.isPipelineRunning
                 ) {
-                    viewModel.enterGeneratingStep()
+                    if viewModel.shouldGenerateAI,
+                       case let .blocked(decision) = featureGate.guardGeneratePreview() {
+                        present(decision)
+                    } else {
+                        viewModel.enterGeneratingStep()
+                    }
                 }
             } else {
                 PrimaryCTAButton(
@@ -134,6 +179,11 @@ struct ProjectCreationFlowView: View {
             }
         }
     }
+    private func present(_ decision: PaywallDecision) {
+        if decision.placement.isUsageLimit { limitNotice = decision }
+        else { activePaywall = decision }
+    }
+
 }
 
 // MARK: - Preview

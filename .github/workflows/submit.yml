@@ -31,6 +31,7 @@ jobs:
       APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
       APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
       APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+      APP_REVIEW_DEMO_PASSWORD: ${{ secrets.APP_REVIEW_DEMO_PASSWORD }}
       LC_ALL: en_US.UTF-8
       LANG: en_US.UTF-8
 
@@ -52,6 +53,7 @@ jobs:
               exit 1
             fi
           done
+          ruby -e 'abort("::error::Required secret APP_REVIEW_DEMO_PASSWORD is not set") if ENV["APP_REVIEW_DEMO_PASSWORD"].to_s.strip.empty?'
 
       - name: Run submit lane
         run: bundle exec fastlane submit

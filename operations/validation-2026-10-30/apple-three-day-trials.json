@@ -1,0 +1,36 @@
+{
+  "verifiedAt": "2026-10-31T04:55:46.420Z",
+  "mutationRun": 41169747961,
+  "readbackRun": 41170422641,
+  "app_id": "6762563132",
+  "products": [
+    {
+      "id": "6762564818",
+      "product_id": "proestimate.pro.annual",
+      "state": "APPROVED",
+      "group_id": "22041326",
+      "available_countries": 175,
+      "three_day_countries": 175,
+      "missing_countries": [],
+      "offer_count": 175,
+      "base_price_count": 175,
+      "us_prices": [
+        "149.99"
+      ]
+    },
+    {
+      "id": "6762563652",
+      "product_id": "proestimate.pro.monthly",
+      "state": "APPROVED",
+      "group_id": "22041326",
+      "available_countries": 175,
+      "three_day_countries": 175,
+      "missing_countries": [],
+      "offer_count": 175,
+      "base_price_count": 175,
+      "us_prices": [
+        "19.99"
+      ]
+    }
+  ]
+}

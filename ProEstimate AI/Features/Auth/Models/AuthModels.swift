@@ -68,12 +68,14 @@ struct AppleSignInRequest: Codable, Sendable {
     let authorizationCode: String
     let fullName: String?
     let email: String?
+    let rawNonce: String
 
     enum CodingKeys: String, CodingKey {
         case identityToken = "identity_token"
         case authorizationCode = "authorization_code"
         case fullName = "full_name"
         case email
+        case rawNonce = "raw_nonce"
     }
 }
 
@@ -83,10 +85,12 @@ struct GoogleSignInRequest: Codable, Sendable {
     let identityToken: String
     let fullName: String?
     let email: String?
+    let rawNonce: String
 
     enum CodingKeys: String, CodingKey {
         case identityToken = "identity_token"
         case fullName = "full_name"
         case email
+        case rawNonce = "raw_nonce"
     }
 }

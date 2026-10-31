@@ -124,8 +124,8 @@ export default function CTA() {
           className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-white/90 md:text-xl"
           variants={fadeInUp}
         >
-          Free to start. Five full AI previews on the house. No credit card
-          required.
+          Manual project tools are free. AI features require Pro or an eligible
+          three-day App Store trial.
         </motion.p>
 
         <motion.div

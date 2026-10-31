@@ -1,10 +1,12 @@
-ProEstimate AI turns a construction-site photo into an AI-rendered remodel preview and a priced estimate.
+ProEstimate AI helps contractors organize renovation projects, create editable estimates, preview changes with AI, share client approvals and prepare invoices/PDF quotes.
 
-- The demo account provided below has a pre-seeded project with a completed preview, materials, an estimate, and an invoice, so the reviewer can explore the flow without waiting on AI generation.
-- Pro-only features (invoicing, AI-generated estimates, watermark-free PDFs, custom branding, client approval links) are gated behind Apple StoreKit 2 in-app purchases. The 7-day free trial on the monthly subscription is disclosed on the paywall before purchase.
-- Sign in with Apple is supported on the login screen.
-- Account deletion is available via Settings → Account → Delete Account, per App Store Review Guideline 5.1.1(v).
+REVIEW ACCOUNT
+Sign in with the demo username and password supplied in the App Review login fields. The account uses a fresh workspace; it has no preloaded clients, projects, estimates or invoices. Create a project and client to explore the workflow. A project photo can be imported when trying an AI preview.
 
-If an AI preview generation takes longer than a minute, it is the PiAPI or Google GenAI provider queue — please allow 60–120 seconds for completion.
+Pro features are enabled for this designated account through an administrative App Review grant. No subscription purchase is required to inspect these features. The grant is not an Apple purchase or receipt. Manual project creation and saved-work access stay free. AI requires an active Apple trial or subscription, except for this designated review grant. Normal Pro limits still apply: up to 20 AI previews, 20 AI-generated estimates and 50 PDF quote exports per rolling 30-day period, with daily/weekly limits as shown in the app.
 
-Thank you for your review.
+Suggested review flow: sign in; create a client and project; add or generate editable material/labor line items; review quantities, markup and tax; prepare a PDF quote; share a proposal approval link; create an invoice and record payments. AI previews and suggestions are optional starting points that users must review. The current primary image provider is fal.ai.
+
+The app offers Pro monthly and annual auto-renewable subscriptions. Eligible new subscribers can start a three-day introductory trial on monthly or annual Pro, once per subscription group. Localized pricing and eligibility are shown by Apple before purchase. Restore Purchases is available in the app. Existing Premium purchases are supported for restoration; Premium is not offered as a new subscription.
+
+Use the supplied email/password login for this review account. Apple and Google sign-in are alternative account-entry options. No third-party account is required for the demo login.

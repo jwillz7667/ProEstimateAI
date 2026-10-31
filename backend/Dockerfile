@@ -31,9 +31,11 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
 # Use exec form so SIGTERM is forwarded directly to node (not shell).
 # Order matters and each step must succeed before the next (&&):
 #   1. migrate deploy: creates tables on a fresh database. The online-index
-#      migration is a no-op, so the heavy build still runs lock-free in step 2.
-#   2. pre-deploy-indexes: builds performance indexes with CREATE INDEX
+#      migration is a no-op, so the heavy build still runs lock-free in step 3.
+#   2. bootstrap-catalog: creates missing plans/products without demo records or
+#      overwriting catalog rows restored from the previous database.
+#   3. pre-deploy-indexes: builds performance indexes with CREATE INDEX
 #      CONCURRENTLY (no table-write lock), outside schema migrations.
 #      Idempotent; a no-op once indexes exist.
-#   3. server: exec so node is PID 1 and receives SIGTERM directly.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/scripts/pre-deploy-indexes.js && exec node dist/index.js"]
+#   4. server: exec so node is PID 1 and receives SIGTERM directly.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/scripts/bootstrap-catalog.js && node dist/scripts/pre-deploy-indexes.js && exec node dist/index.js"]

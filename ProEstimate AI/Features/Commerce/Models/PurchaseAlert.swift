@@ -36,6 +36,7 @@ struct PurchaseAlert: Identifiable, Sendable {
         case selectionRequired
         /// StoreKit returned `pending` (Ask to Buy / parental approval).
         case pendingApproval
+        case deliveryPending
         /// Local Apple ID does not match the ProEstimate account.
         case accountMismatch
         /// The Apple subscription is already bound to a different
@@ -95,10 +96,12 @@ struct PurchaseAlert: Identifiable, Sendable {
                 localized: "purchase.alert.pending.title",
                 defaultValue: "Approval Required"
             )
+        case .deliveryPending:
+            return "Purchase Awaiting Sync"
         case .accountMismatch:
             return String(
                 localized: "purchase.alert.account_mismatch.title",
-                defaultValue: "Apple ID Mismatch"
+                defaultValue: "Subscription Account Mismatch"
             )
         case .subscriptionBoundToOtherUser:
             return String(
@@ -164,10 +167,12 @@ struct PurchaseAlert: Identifiable, Sendable {
                 localized: "purchase.alert.pending.message",
                 defaultValue: "Your purchase is waiting for approval. We'll unlock Pro features as soon as it's approved."
             )
+        case .deliveryPending:
+            return "Apple completed your purchase, but we couldn't activate access yet. Check your connection and restore purchases to finish syncing."
         case .accountMismatch:
             return String(
                 localized: "purchase.alert.account_mismatch.message",
-                defaultValue: "We detected a different Apple ID than the one linked to your ProEstimate account. Sign out of the other Apple ID in Settings → App Store, or tap Restore Purchases if you've already subscribed."
+                defaultValue: "This purchase is associated with another ProEstimate account. Sign in to that account, or restore purchases to check your subscription."
             )
         case .subscriptionBoundToOtherUser:
             return String(
@@ -225,7 +230,7 @@ struct PurchaseAlert: Identifiable, Sendable {
              // sign into the right ProEstimate account, or contact support.
              .subscriptionBoundToOtherUser:
             return [.dismiss]
-        case .accountMismatch:
+        case .accountMismatch, .deliveryPending:
             return [.dismiss, .restorePurchases]
         case .verificationFailed,
              .networkProblem,

@@ -50,6 +50,11 @@ enum PaywallPlacement: String, Codable, CaseIterable, Sendable {
     case approvalShareLocked = "APPROVAL_SHARE_LOCKED"
     case watermarkRemovalLocked = "WATERMARK_REMOVAL_LOCKED"
     case settingsUpgrade = "SETTINGS_UPGRADE"
+    case trialOffer = "TRIAL_OFFER"
+    case subscribeNoTrial = "SUBSCRIBE_NO_TRIAL"
+    case usageLimitDaily = "USAGE_LIMIT_DAILY"
+    case usageLimitWeekly = "USAGE_LIMIT_WEEKLY"
+    case usageLimitMonthly = "USAGE_LIMIT_MONTHLY"
 }
 
 // MARK: - Identifiable
@@ -70,7 +75,8 @@ extension PaywallPlacement {
             return true
         case .generationLimitHit, .quoteLimitHit, .invoiceLocked,
              .aiEstimateLocked, .brandingLocked, .approvalShareLocked,
-             .watermarkRemovalLocked:
+             .watermarkRemovalLocked, .trialOffer, .subscribeNoTrial,
+             .usageLimitDaily, .usageLimitWeekly, .usageLimitMonthly:
             return false
         }
     }
@@ -78,6 +84,10 @@ extension PaywallPlacement {
     /// Whether this placement blocks the user from proceeding without subscribing.
     var isHardGate: Bool {
         !isSoftGate
+    }
+
+    var isUsageLimit: Bool {
+        self == .usageLimitDaily || self == .usageLimitWeekly || self == .usageLimitMonthly
     }
 }
 
@@ -105,7 +115,7 @@ extension PaywallDecision {
         triggerReason: "User tapped upgrade in settings",
         blocking: false,
         headline: "Unlock the full power of ProEstimate",
-        subheadline: "Get unlimited AI previews, branded proposals, invoicing, and more.",
+        subheadline: "Get 20 AI previews per month, branded proposals, invoicing, and more.",
         primaryCtaTitle: "Start Free Trial",
         secondaryCtaTitle: "Not Now",
         showContinueFree: true,
@@ -119,8 +129,8 @@ extension PaywallDecision {
         placement: .onboardingSoftGate,
         triggerReason: "Onboarding subscription offer",
         blocking: false,
-        headline: "Try Pro Free for 7 Days",
-        subheadline: "Unlimited AI previews, branded proposals, invoicing, and client approvals — no commitment. Cancel anytime before the trial ends.",
+        headline: "Try Pro Free for 3 Days",
+        subheadline: "20 AI previews per month, branded proposals, invoicing, and client approvals. Eligible monthly subscribers can try Pro free for 3 days.",
         primaryCtaTitle: "Start Free Trial",
         secondaryCtaTitle: "Continue with Free Plan",
         showContinueFree: true,
@@ -135,8 +145,8 @@ extension PaywallDecision {
         triggerReason: "AI preview requires a subscription",
         blocking: true,
         headline: "Unlock AI Remodel Previews",
-        subheadline: "See realistic AI-generated previews of your finished project, instantly. Start a 7-day free trial — cancel anytime.",
-        primaryCtaTitle: "Start 7-Day Free Trial",
+        subheadline: "See realistic AI-generated previews of your finished project, instantly. Start a 3-day free trial — cancel anytime.",
+        primaryCtaTitle: "Start 3-Day Free Trial",
         secondaryCtaTitle: nil,
         showContinueFree: false,
         showRestorePurchases: true,

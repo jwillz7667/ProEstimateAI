@@ -1,1 +1,1 @@
-job,takeoff,painter,roofer,drywall,siding,concrete,deck,fence,landscaping,plumber,builder,hvac,tile
+builder,renovation,construction,quotation,proposal,material,labour,kitchen,bathroom,roofing,pdf

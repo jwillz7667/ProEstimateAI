@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import { logger } from "../config/logger";
+import { failGenerationAndRefund, hasTextOnlyGenerationIntent } from './generation-usage';
 
 /**
  * Mark any AIGeneration that's been stuck in `QUEUED` / `PROCESSING`
@@ -52,23 +53,25 @@ export async function markStuckGenerationsFailed(
       return count;
     }
 
-    const result = await prisma.aIGeneration.updateMany({
-      where,
-      data: {
-        status: "FAILED",
-        errorMessage:
-          "Generation was interrupted before it could finish. Please try again.",
-      },
-    });
+    const candidates = await prisma.aIGeneration.findMany({ where, select: { id: true } });
+    let changed = 0;
+    for (const candidate of candidates) {
+      try {
+        if (await failGenerationAndRefund(candidate.id,
+          'Generation was interrupted before it could finish. Please try again.', { staleBefore: cutoff })) changed++;
+      } catch (err) {
+        logger.error({ err, generationId: candidate.id }, 'Stuck generation refund failed; leaving it for retry');
+      }
+    }
 
-    if (result.count > 0) {
+    if (changed > 0) {
       logger.warn(
-        { count: result.count, thresholdMs },
+        { count: changed, thresholdMs },
         "marked stuck AI generations as FAILED",
       );
     }
 
-    return result.count;
+    return changed;
   } catch (err) {
     // Don't let a cleanup failure block boot — the server can still
     // accept traffic; the next sweep on next deploy will pick up
@@ -117,8 +120,13 @@ export async function markImagelessCompletedGenerationsFailed(
   };
 
   try {
+    const candidates = await prisma.aIGeneration.findMany({ where, select: { id: true, projectId: true } });
+    const imageCandidates: Array<{ id: string }> = [];
+    for (const candidate of candidates) {
+      if (!await hasTextOnlyGenerationIntent(prisma, candidate.id, candidate.projectId)) imageCandidates.push(candidate);
+    }
     if (dryRun) {
-      const count = await prisma.aIGeneration.count({ where });
+      const count = imageCandidates.length;
       if (count > 0) {
         logger.warn(
           { count, thresholdMs, dryRun: true },
@@ -128,23 +136,24 @@ export async function markImagelessCompletedGenerationsFailed(
       return count;
     }
 
-    const result = await prisma.aIGeneration.updateMany({
-      where,
-      data: {
-        status: "FAILED",
-        errorMessage:
-          "Preview image was not saved. Please generate again.",
-      },
-    });
+    let changed = 0;
+    for (const candidate of imageCandidates) {
+      try {
+        if (await failGenerationAndRefund(candidate.id,
+          'Preview image was not saved. Please generate again.', { staleBefore: cutoff, allowImagelessCompleted: true })) changed++;
+      } catch (err) {
+        logger.error({ err, generationId: candidate.id }, 'Imageless generation refund failed; leaving it for retry');
+      }
+    }
 
-    if (result.count > 0) {
+    if (changed > 0) {
       logger.warn(
-        { count: result.count, thresholdMs },
+        { count: changed, thresholdMs },
         "marked imageless COMPLETED AI generations as FAILED",
       );
     }
 
-    return result.count;
+    return changed;
   } catch (err) {
     logger.error(
       { err },

@@ -5,8 +5,7 @@ import SwiftUI
 /// A Monthly / Annual segmented control drives the selection; the view
 /// picks the matching product from `products` and the host view model's
 /// `selectedTier` / `isAnnualSelected` bindings re-resolve
-/// `selectedProduct`. Pro Monthly is the default since that's where the
-/// 7-day trial lives.
+/// `selectedProduct`. Both periods display their live StoreKit offer.
 struct PlanSelectorView: View {
     let products: [StoreProductModel]
     let selectedProduct: StoreProductModel?
@@ -32,9 +31,11 @@ struct PlanSelectorView: View {
             periodButton(title: "Monthly", isSelected: !isAnnualSelected) {
                 isAnnualSelected = false
             }
+            .disabled(!products.contains { !$0.isAnnual })
             periodButton(title: "Annual", isSelected: isAnnualSelected, badge: annualSavingsBadge) {
                 isAnnualSelected = true
             }
+            .disabled(!products.contains { $0.isAnnual })
         }
         .background(Color(.tertiarySystemFill), in: Capsule())
     }

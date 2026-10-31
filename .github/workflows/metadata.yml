@@ -11,11 +11,26 @@ on:
         options:
           - copy            # fast: text only, skips screenshots
           - screenshots     # screenshots only
+          - recover_screenshots # retry stalled assets, preserve completed files
           - all             # text + screenshots (slow, Apple-flaky)
           - status          # read-only release and subscription inspection
+          - billing_status  # read-only subscription sale/trial inspection
+          - trial3          # explicit three-day trial configuration
+          - attach          # attach a processed build to the draft; never submit
+      build_number:
+        description: "Exact existing build number (required only for attach)"
+        required: false
+        type: string
+      apply_trial_change:
+        description: "Apply the three-day introductory-offer plan (trial3 only)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
-  group: metadata-${{ github.ref }}
+  # Read-only inspection can run while Apple processes a long asset upload.
+  # All mutations keep the existing shared group and remain serialized.
+  group: metadata-${{ github.ref }}${{ (inputs.scope == 'status' || inputs.scope == 'billing_status') && '-status' || '' }}
   cancel-in-progress: false
 
 permissions:
@@ -24,13 +39,16 @@ permissions:
 jobs:
   push:
     name: Upload metadata to App Store Connect
-    runs-on: macos-15
+    # API-only listing tasks do not need Xcode or Apple's upload transporter.
+    # Keep macOS runners available for the separate signed TestFlight build.
+    runs-on: ubuntu-latest
     timeout-minutes: 60
 
     env:
       APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
       APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
       APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+      APP_REVIEW_DEMO_PASSWORD: ${{ (inputs.scope == 'copy' || inputs.scope == 'all') && secrets.APP_REVIEW_DEMO_PASSWORD || '' }}
       LC_ALL: en_US.UTF-8
       LANG: en_US.UTF-8
 
@@ -53,16 +71,34 @@ jobs:
             fi
           done
 
+      - name: Check App Review secret for text updates
+        if: ${{ inputs.scope == 'copy' || inputs.scope == 'all' }}
+        run: ruby -e 'abort("::error::Required secret APP_REVIEW_DEMO_PASSWORD is not set") if ENV["APP_REVIEW_DEMO_PASSWORD"].to_s.strip.empty?'
+
       - name: Pick lane
         id: lane
         run: |
           case "${{ inputs.scope }}" in
             copy)        echo "name=metadata_copy" >> "$GITHUB_OUTPUT" ;;
             screenshots) echo "name=metadata_screenshots" >> "$GITHUB_OUTPUT" ;;
+            recover_screenshots) echo "name=metadata_recover_screenshots" >> "$GITHUB_OUTPUT" ;;
             all)         echo "name=metadata" >> "$GITHUB_OUTPUT" ;;
             status)      echo "name=asc_status" >> "$GITHUB_OUTPUT" ;;
+            billing_status) echo "name=billing_status" >> "$GITHUB_OUTPUT" ;;
+            trial3)      echo "name=billing_trial3" >> "$GITHUB_OUTPUT" ;;
+            attach)      echo "name=attach_build" >> "$GITHUB_OUTPUT" ;;
             *)           echo "::error::Unknown scope ${{ inputs.scope }}"; exit 1 ;;
           esac
 
       - name: Run ${{ steps.lane.outputs.name }} lane
-        run: bundle exec fastlane ${{ steps.lane.outputs.name }}
+        env:
+          ASC_BUILD_NUMBER: ${{ inputs.build_number }}
+          ASC_LANE: ${{ steps.lane.outputs.name }}
+          APPLY_THREE_DAY_TRIAL: ${{ inputs.apply_trial_change && inputs.scope == 'trial3' && 'true' || 'false' }}
+        run: |
+          if [ "$ASC_LANE" = "attach_build" ]; then
+            [[ "$ASC_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::An explicit numeric build_number is required"; exit 1; }
+            bundle exec fastlane attach_build build:"$ASC_BUILD_NUMBER"
+          else
+            bundle exec fastlane "$ASC_LANE"
+          fi
