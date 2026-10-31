@@ -9,8 +9,12 @@ struct BeforeAfterSlider: View {
     let afterImageURL: URL?
     let beforeImageData: Data?
     let height: CGFloat
+    private let positionBinding: Binding<CGFloat>?
+    private let isDragEnabled: Bool
+    private let isDraggingExternally: Bool
 
     @State private var sliderPosition: CGFloat = 0.5
+    @Namespace private var comparisonCoordinateSpace
     @GestureState private var isDragging: Bool = false
     @State private var beforePreviewImage: UIImage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -19,18 +23,24 @@ struct BeforeAfterSlider: View {
         beforeImageURL: URL?,
         afterImageURL: URL?,
         beforeImageData: Data? = nil,
-        height: CGFloat = 280
+        height: CGFloat = 280,
+        position: Binding<CGFloat>? = nil,
+        isDragEnabled: Bool = true,
+        isDraggingExternally: Bool = false
     ) {
         self.beforeImageURL = beforeImageURL
         self.afterImageURL = afterImageURL
         self.beforeImageData = beforeImageData
         self.height = height
+        self.positionBinding = position
+        self.isDragEnabled = isDragEnabled
+        self.isDraggingExternally = isDraggingExternally
     }
 
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
-            let dividerX = width * sliderPosition
+            let dividerX = width * comparisonPosition
 
             ZStack(alignment: .leading) {
                 // After image (full width, underneath). Both photos use
@@ -46,13 +56,9 @@ struct BeforeAfterSlider: View {
                 beforeImage
                     .frame(width: width, height: height, alignment: .center)
                     .clipped()
-                    .mask(
-                        HStack(spacing: 0) {
-                            Rectangle()
-                                .frame(width: dividerX)
-                            Spacer(minLength: 0)
-                        }
-                    )
+                    .mask(alignment: .leading) {
+                        Rectangle().frame(width: dividerX, height: height)
+                    }
 
                 // Divider line
                 dividerView(at: dividerX, totalHeight: height)
@@ -83,30 +89,37 @@ struct BeforeAfterSlider: View {
                     Spacer()
                 }
             }
+            // The reveal mask and positioned handle must never change the
+            // gesture target's bounds or origin as the divider moves.
+            .frame(width: width, height: height)
+            .coordinateSpace(.named(comparisonCoordinateSpace))
             .contentShape(Rectangle())
             .gesture(
-                DragGesture(minimumDistance: 0)
+                DragGesture(minimumDistance: 0, coordinateSpace: .named(comparisonCoordinateSpace))
                     .updating($isDragging) { _, state, _ in
                         state = true
                     }
                     .onChanged { value in
-                        guard width > 0 else { return }
-                        sliderPosition = min(max(value.location.x / width, 0), 1)
-                    }
+                        guard isDragEnabled,
+                              let position = BeforeAfterComparisonGeometry.fraction(atCanvasX: value.location.x, width: width) else { return }
+                        setComparisonPosition(position)
+                    },
+                including: isDragEnabled ? .all : .none
             )
         }
-        .frame(maxWidth: 600)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: BeforeAfterComparisonGeometry.maximumCanvasWidth)
         .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
+        .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("before-after-comparison")
         .accessibilityLabel("Before and after comparison")
-        .accessibilityValue("\(Int(sliderPosition * 100)) percent before")
+        .accessibilityValue("\(Int(comparisonPosition * 100)) percent before")
         .accessibilityHint("Swipe up or down to adjust the comparison")
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: sliderPosition = min(1, sliderPosition + 0.1)
-            case .decrement: sliderPosition = max(0, sliderPosition - 0.1)
+            case .increment: setComparisonPosition(comparisonPosition + 0.1)
+            case .decrement: setComparisonPosition(comparisonPosition - 0.1)
             @unknown default: break
             }
         }
@@ -120,6 +133,19 @@ struct BeforeAfterSlider: View {
     }
 
     // MARK: - Subviews
+
+    private var comparisonPosition: CGFloat {
+        BeforeAfterComparisonGeometry.clampedFraction(positionBinding?.wrappedValue ?? sliderPosition)
+    }
+
+    private func setComparisonPosition(_ position: CGFloat) {
+        let clamped = BeforeAfterComparisonGeometry.clampedFraction(position)
+        if let positionBinding {
+            positionBinding.wrappedValue = clamped
+        } else {
+            sliderPosition = clamped
+        }
+    }
 
     private var beforeImage: some View {
         Group {
@@ -180,10 +206,11 @@ struct BeforeAfterSlider: View {
                     }
                     .foregroundStyle(.gray)
                 }
-                .scaleEffect(isDragging && !reduceMotion ? 1.15 : 1.0)
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isDragging)
+                .scaleEffect((isDragging || isDraggingExternally) && !reduceMotion ? 1.15 : 1.0)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isDragging || isDraggingExternally)
                 .position(x: x, y: totalHeight / 2)
         }
+        .allowsHitTesting(false)
     }
 
     private func placeholderView(label: String) -> some View {
