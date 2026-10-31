@@ -3,6 +3,7 @@ default_platform(:ios)
 require_relative "lib/listing_screenshots"
 require_relative "lib/prepared_release"
 require_relative "lib/app_review_credentials"
+require_relative "lib/app_store_billing"
 
 XCODE_PROJECT   = "ProEstimate AI.xcodeproj"
 XCODE_SCHEME    = "ProEstimate AI"
@@ -168,6 +169,17 @@ def ensure_editable_app_store_version(app)
 end
 
 platform :ios do
+  desc "Read sale availability, prices and introductory offers for the actual Pro subscriptions"
+  lane :billing_status do
+    setup_spaceship_token
+    app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+    UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
+    api = lambda do |method, path, body = nil|
+      AppStoreBilling.request(token: Spaceship::ConnectAPI.token.text, method: method, path: path, body: body)
+    end
+    UI.message("BILLING_REPORT=#{JSON.generate(AppStoreBilling.inspect(app_id: app.id, api: api))}")
+  end
+
   desc "Attach an explicit processed build to the current editable draft, with manual release and no review submission"
   lane :attach_build do |options|
     setup_spaceship_token

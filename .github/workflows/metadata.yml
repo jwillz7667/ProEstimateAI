@@ -14,6 +14,7 @@ on:
           - recover_screenshots # retry stalled assets, preserve completed files
           - all             # text + screenshots (slow, Apple-flaky)
           - status          # read-only release and subscription inspection
+          - billing_status  # read-only subscription sale/trial inspection
           - attach          # attach a processed build to the draft; never submit
       build_number:
         description: "Exact existing build number (required only for attach)"
@@ -23,7 +24,7 @@ on:
 concurrency:
   # Read-only inspection can run while Apple processes a long asset upload.
   # All mutations keep the existing shared group and remain serialized.
-  group: metadata-${{ github.ref }}${{ inputs.scope == 'status' && '-status' || '' }}
+  group: metadata-${{ github.ref }}${{ (inputs.scope == 'status' || inputs.scope == 'billing_status') && '-status' || '' }}
   cancel-in-progress: false
 
 permissions:
@@ -77,6 +78,7 @@ jobs:
             recover_screenshots) echo "name=metadata_recover_screenshots" >> "$GITHUB_OUTPUT" ;;
             all)         echo "name=metadata" >> "$GITHUB_OUTPUT" ;;
             status)      echo "name=asc_status" >> "$GITHUB_OUTPUT" ;;
+            billing_status) echo "name=billing_status" >> "$GITHUB_OUTPUT" ;;
             attach)      echo "name=attach_build" >> "$GITHUB_OUTPUT" ;;
             *)           echo "::error::Unknown scope ${{ inputs.scope }}"; exit 1 ;;
           esac
