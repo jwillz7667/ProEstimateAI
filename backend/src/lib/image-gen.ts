@@ -11,7 +11,7 @@ import { logger } from "../config/logger";
 import { aspectRatioForProjectType } from "./image-framing";
 import { generatePreviewImagePiAPI } from "./piapi-image-gen";
 import { generatePreviewImageFal, ImageSafetyError } from "./fal-image-gen";
-import { getImageEditPrompt, getImagePrompt } from "./prompts";
+import { getImagePrompt, getProviderImagePrompt } from "./prompts";
 import {
   PromptContext,
   QualityTier,
@@ -115,38 +115,7 @@ function buildFullPrompt(
   context: ImageGenContext,
   hasReferencePhoto: boolean,
 ): string {
-  const promptCtx = toPromptContext(context);
-
-  if (hasReferencePhoto) {
-    const editFrame = getImageEditPrompt(promptCtx);
-    return `${editFrame}
-
-CONTRACTOR'S REQUEST (this is what to build/change in the existing scene)
-"${userPrompt}"
-
-Reinforcement — read before generating:
-- The output is the SAME photograph with the renovation completed in
-  place. It is NOT a new shot.
-- Preserve the input's camera position, focal length, height, and tilt
-  pixel-for-pixel. The before/after slider must blend the two on top of
-  each other.
-- Match the input's exposure, white balance, time of day, and shadow
-  direction.
-- Touch ONLY the surfaces, materials, plantings, and built additions
-  called out above. Leave everything else exactly as it appears in the
-  source photo.
-- Photorealistic. No text, labels, watermarks, or imagined neighbors.`;
-  }
-
-  const systemPrompt = getImagePrompt(promptCtx);
-  return `${systemPrompt}
-
-CONTRACTOR'S REQUEST
-"${userPrompt}"
-
-Photograph this completed project from the most flattering angle that
-satisfies the framing rules above. Make it look so real and aspirational
-that the client will immediately approve.`;
+  return getProviderImagePrompt(userPrompt, toPromptContext(context), hasReferencePhoto);
 }
 
 export interface ReferencePhoto {

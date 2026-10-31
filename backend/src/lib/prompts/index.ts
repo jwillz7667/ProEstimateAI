@@ -63,7 +63,16 @@ function modFor(projectType: string): PromptModule {
 }
 
 export function getImagePrompt(ctx: PromptContext): string {
-  return modFor(ctx.projectType).imagePrompt(ctx);
+  return modFor(ctx.projectType).imagePrompt(imageSceneContext(ctx));
+}
+
+/** Administrative names/notes describe app workflow, not physical pixels.
+ * The actual renovation request is supplied separately to every provider.
+ * Keeping these labels out prevents names such as a QA screen title from
+ * becoming a visual instruction while retaining material/measurement facts.
+ */
+function imageSceneContext(ctx: PromptContext): PromptContext {
+  return { ...ctx, projectTitle: "", projectDescription: null };
 }
 
 /**
@@ -77,7 +86,26 @@ export function getImagePrompt(ctx: PromptContext): string {
  * orchestrator with the full editing directive.
  */
 export function getImageEditPrompt(ctx: PromptContext): string {
-  return `${imageEditFrame(ctx)}\n\n${projectFactsBlock(ctx)}`;
+  const scene = imageSceneContext(ctx);
+  return `${imageEditFrame(scene)}\n\n${projectFactsBlock(scene)}`;
+}
+
+/** Shared by every image provider so output format and scene scope agree. */
+export function getProviderImagePrompt(
+  userPrompt: string,
+  ctx: PromptContext,
+  hasReferencePhoto: boolean,
+): string {
+  const frame = hasReferencePhoto ? getImageEditPrompt(ctx) : getImagePrompt(ctx);
+  return `${frame}
+
+CONTRACTOR'S RENOVATION REQUEST
+${userPrompt}
+
+FINAL IMAGE
+One full-frame photograph of the completed renovation, with the requested
+finishes applied throughout the visible scene. All image edges belong to
+that same continuous photograph.${hasReferencePhoto ? " Keep the source viewpoint and fixed geometry aligned." : ""}`;
 }
 
 export function getMaterialPrompt(ctx: PromptContext): string {
