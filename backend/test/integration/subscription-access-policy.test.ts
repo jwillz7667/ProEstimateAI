@@ -134,7 +134,11 @@ describe('subscription-only AI and free basic access', () => {
     const bucket = await prisma.usageBucket.create({ data: { userId: t.user.id, companyId: t.company.id, metricCode: 'AI_GENERATION', source: 'STARTER_CREDITS', includedQuantity: 5, consumedQuantity: 3 } });
     await prisma.subscriptionProduct.updateMany({ where: { storeProductId: { startsWith: 'proestimate.pro.' } }, data: { introOfferDisplayText: '7-day free trial', hasIntroOffer: false } });
     await prisma.plan.update({ where: { id: t.plan.id }, data: { featuresJson: { LIMITS: { PROJECT_CREATED: { monthly: 2 }, AI_GENERATION: { monthly: 20 } } } } });
-    execFileSync('psql', [process.env.TEST_DATABASE_URL!, '-v', 'ON_ERROR_STOP=1', '-f', resolve('prisma/migrations/20261030120000_subscription_trial_gates/migration.sql')], { stdio: 'pipe', timeout: 15_000 });
+    // libpq does not accept Prisma's schema parameter. Keep SSL and other
+    // connection options intact rather than dropping the full query string.
+    const psqlUrl = new URL(process.env.TEST_DATABASE_URL!);
+    psqlUrl.searchParams.delete('schema');
+    execFileSync('psql', [psqlUrl.toString(), '-v', 'ON_ERROR_STOP=1', '-f', resolve('prisma/migrations/20261030120000_subscription_trial_gates/migration.sql')], { stdio: 'pipe', timeout: 15_000 });
     expect(await prisma.userEntitlement.findUniqueOrThrow({ where: { userId: t.user.id } })).toEqual(before);
     expect(await prisma.usageBucket.findUniqueOrThrow({ where: { id: bucket.id } })).toEqual(bucket);
     const products = await prisma.subscriptionProduct.findMany({ where: { storeProductId: { startsWith: 'proestimate.pro.' } } });
