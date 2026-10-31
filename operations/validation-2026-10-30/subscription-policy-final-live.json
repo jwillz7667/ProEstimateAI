@@ -1,0 +1,36 @@
+{
+  "checkedAt": "2026-10-31T04:55:55.370Z",
+  "deploymentId": "15aebd27-5182-4e92-8acf-5c28a543375f",
+  "health": 200,
+  "freePdf": {
+    "uploadHTTP": 402,
+    "code": "PAYWALL_REQUIRED",
+    "savedPdfListHTTP": 200,
+    "historicalFixtures": 0,
+    "historicalReads": []
+  },
+  "comparison": {
+    "projectId": "cmvvwwk4x000ouhg6z94b9uhf",
+    "generationId": "cmvvxha9e000ansp3f7368bz7",
+    "previousGenerationId": "cmvvwwkl7000vuhg6p2t59r5c",
+    "status": "completed",
+    "previewBytes": 2114771,
+    "oneAdditionalGeneration": true,
+    "totalGenerationJobs": 2,
+    "reportedAIUsage": 2,
+    "remainingAI": 18,
+    "reviewGrantUnchanged": true,
+    "elapsedMs": 7458,
+    "cleanupDeferred": true,
+    "dimensions": {
+      "width": 1254,
+      "height": 836
+    },
+    "visualInspection": {
+      "continuousFullWidthImage": true,
+      "bakedCentralComparisonDividerVisible": false
+    }
+  },
+  "emailsSent": 0,
+  "applePurchasesCreated": 0
+}
