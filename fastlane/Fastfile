@@ -177,7 +177,7 @@ platform :ios do
     api = lambda do |method, path, body = nil|
       AppStoreBilling.request(token: Spaceship::ConnectAPI.token.text, method: method, path: path, body: body)
     end
-    UI.message("BILLING_REPORT=#{JSON.generate(AppStoreBilling.inspect(app_id: app.id, api: api))}")
+    UI.message("BILLING_SUMMARY=#{JSON.generate(AppStoreBilling.summary(report: AppStoreBilling.inspect(app_id: app.id, api: api)))}")
   end
 
   desc "Configure three-day Apple introductory trials on both approved Pro plans"
@@ -196,7 +196,7 @@ platform :ios do
       after = AppStoreBilling.inspect(app_id: app.id, api: api)
       remaining = AppStoreBilling.trial_plan(report: after, today: Time.now.utc.strftime("%Y-%m-%d"))
       UI.user_error!("Three-day trial readback does not match the requested configuration") unless remaining.all? { |item| !item[:create] && item[:remove_offer_ids].empty? }
-      UI.message("BILLING_REPORT=#{JSON.generate(after)}")
+      UI.message("BILLING_SUMMARY=#{JSON.generate(AppStoreBilling.summary(report: after))}")
       UI.success("Three-day trials verified for both Pro subscriptions")
     end
   end

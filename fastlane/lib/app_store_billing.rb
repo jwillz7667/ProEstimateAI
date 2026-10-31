@@ -111,6 +111,24 @@ module AppStoreBilling
     product.fetch(:introductory_offers).reject { |offer| offer[:attributes]["endDate"] && offer[:attributes]["endDate"] < today }
   end
 
+  def self.summary(report:, today: Time.now.utc.strftime("%Y-%m-%d"))
+    {
+      app_id: report[:app_id],
+      products: report.fetch(:products).map do |product|
+        territories = product.fetch(:availability).fetch(:territories)
+        missing = territories.reject { |territory| territory_configured?(product, territory, today) }
+        {
+          id: product[:id], product_id: product[:attributes]["productId"], state: product[:attributes]["state"],
+          group_id: product[:group_id], available_countries: territories.length,
+          three_day_countries: territories.length - missing.length, missing_countries: missing,
+          offer_count: product[:introductory_offers].length,
+          base_price_count: product.fetch(:prices, []).length,
+          us_prices: product[:us_prices].map { |price| price[:price_point] && price[:price_point]["customerPrice"] }
+        }
+      end
+    }
+  end
+
   def self.exact_trial?(offer, today)
     attributes = offer.fetch(:attributes)
     attributes["duration"] == "THREE_DAYS" && attributes["offerMode"] == "FREE_TRIAL" &&
