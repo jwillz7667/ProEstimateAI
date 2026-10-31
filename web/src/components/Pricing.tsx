@@ -8,13 +8,11 @@ import { APP_STORE_URL, PRICING } from "@/lib/constants";
 // ---------------------------------------------------------------------------
 
 const FREE_FEATURES = [
-  "5 AI preview generations (lifetime)",
   "Manual estimating tools",
   "Project, client & photo library",
 ] as const;
 
 const PRO_FEATURES = [
-  "2 new projects / month",
   "20 AI previews / month",
   "20 AI-generated estimates / month",
   "50 quote exports / month",
@@ -81,8 +79,8 @@ export default function Pricing() {
             Start free. Upgrade when you need more.
           </h2>
           <p className="mt-5 text-lg leading-8 text-pretty text-ink-500">
-            Try five AI previews free. Pro adds branded documents, AI estimates,
-            and shareable proposals with clear usage limits.
+            Keep manual project tools free. Eligible subscribers can try Pro for
+            three days, with AI previews, estimates and clear usage limits.
           </p>
         </div>
 
@@ -200,7 +198,7 @@ export default function Pricing() {
                 rel="noopener noreferrer"
                 className="block w-full rounded-xl bg-brand-500 px-6 py-3.5 text-center text-sm font-semibold text-white shadow-lg shadow-brand-500/30 transition-all duration-200 hover:bg-brand-600 hover:shadow-brand-600/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
               >
-                Start your free trial
+                See trial and pricing
               </a>
             </div>
           </motion.div>
@@ -212,7 +210,7 @@ export default function Pricing() {
           style={{ maxWidth: "28rem" }}
         >
           Subscriptions auto-renew until canceled. Manage from your Apple ID
-          settings. 7-day free trial offered to eligible new Pro subscribers.
+          settings. 3-day free trial offered to eligible new Pro subscribers.
           Daily and weekly usage limits also apply. App Store pricing is final.
         </p>
       </div>

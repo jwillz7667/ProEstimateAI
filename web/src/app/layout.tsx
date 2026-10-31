@@ -213,7 +213,7 @@ const mobileAppLd = {
       price: "0",
       priceCurrency: "USD",
       description:
-        "Five lifetime AI preview generations and manual estimating tools. No credit card required.",
+        "Manual estimating and project tools are free. AI features require an active Pro subscription or eligible App Store trial.",
     },
     {
       "@type": "Offer",

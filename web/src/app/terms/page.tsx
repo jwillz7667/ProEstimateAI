@@ -127,24 +127,24 @@ export default function TermsOfService() {
 
           <h3>4.1 Free Tier</h3>
           <p>
-            The free tier includes five AI preview generations for the lifetime of
-            your account and manual estimating tools. Starter preview credits
-            do not reset. AI estimate generation and quote exports require Pro.
+            The free tier includes manual estimating, project creation, and access
+            to saved work. AI previews, AI-generated estimates and suggestions,
+            and quote exports require an active Pro subscription or Apple trial.
           </p>
 
           <h3>4.2 Pro Subscription</h3>
           <p>
             Pro subscriptions are available as monthly or annual plans, billed
             through the Apple App Store at the price shown before purchase.
-            Pro includes 2 AI project creations, 20 AI previews, 20 AI-generated
-            estimates, and 50 quote exports per month, plus branded PDFs,
+            Pro includes 20 AI previews, 20 AI-generated
+            estimates, and 50 quote exports per rolling 30-day period, plus branded PDFs,
             proposals, and invoicing. Daily and weekly limits also apply;
             limits and reset times are shown in the app.
           </p>
 
           <h3>4.3 Free Trial</h3>
           <p>
-            New Pro subscribers may be eligible for a 7-day free trial. The trial
+            New Pro subscribers may be eligible for a 3-day free trial. The trial
             is an Apple App Store introductory offer. If you do not cancel before
             the trial ends, your subscription will automatically convert to a
             paid subscription at the applicable rate.

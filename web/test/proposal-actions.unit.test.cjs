@@ -70,12 +70,12 @@ test('contractor message has a programmatically associated accessible label', ()
   const form = h.render();
   assert.equal(find(form, n => n.type === 'label').props.htmlFor, find(form, n => n.type === 'textarea').props.id);
 });
-test('free-preview CTA matches pricing and backend starter allowance', () => {
+test('public pricing requires a trial or subscription for AI while manual tools stay free', () => {
   const root = path.resolve(__dirname, '../..');
   const limits = fs.readFileSync(path.join(root, 'backend/src/lib/limits.ts'), 'utf8');
   const pricing = fs.readFileSync(path.join(root, 'web/src/components/Pricing.tsx'), 'utf8');
   const cta = fs.readFileSync(path.join(root, 'web/src/components/CTA.tsx'), 'utf8');
-  assert.match(limits, /FREE_TIER_AI_GENERATION_CREDITS\s*=\s*5/);
-  assert.match(pricing, /5 AI preview generations \(lifetime\)/);
-  assert.match(cta, /Five full AI previews/);
+  assert.match(limits, /FREE_TIER_AI_GENERATION_CREDITS\s*=\s*0/);
+  assert.match(pricing, /Keep manual project tools free/);
+  assert.match(cta, /AI features require Pro/);
 });

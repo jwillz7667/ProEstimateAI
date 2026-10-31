@@ -1,10 +1,8 @@
-Usamos un nuevo servicio en la nube. Si tu cuenta anterior no se reconoce, crea una cuenta y usa Restaurar compras para recuperar una suscripción activa. Los proyectos y las facturas del servicio anterior no se transfirieron.
+Esta actualización mejora la comparación de imágenes y el acceso a Pro.
 
-Esta versión mejora las previsualizaciones, los documentos y la recuperación de compras.
+• Desliza la comparación antes/después de un extremo al otro, también en pantalla completa.
+• Crea proyectos manuales y consulta tu trabajo guardado sin suscribirte.
+• Las funciones de IA requieren Pro o una prueba de Apple activa; los nuevos suscriptores elegibles pueden probar Pro durante tres días.
+• Mejor recuperación de compras y reintentos cuando el App Store no responde.
 
-• Previsualizaciones con IA más fiables y recuperación de créditos cuando una generación falla.
-• Mejoras en la restauración de compras y la actualización de suscripciones.
-• Límites de uso y mensajes de cuenta más claros.
-• Exportaciones PDF más fiables cuando faltan datos o falla la conexión.
-• Validación de registro y protecciones de inicio de sesión mejoradas.
-• Panel más claro en iPad y mejoras de accesibilidad.
+Actualización del servicio en la nube: La app usa un nuevo servicio. Si tu acceso anterior no se reconoce, crea una cuenta y restaura tus compras activas del App Store. Los proyectos y las facturas anteriores no se han transferido.
