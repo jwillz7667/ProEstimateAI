@@ -4,6 +4,7 @@ require_relative "lib/listing_screenshots"
 require_relative "lib/prepared_release"
 require_relative "lib/app_review_credentials"
 require_relative "lib/app_store_billing"
+require_relative "lib/app_store_age_rating"
 
 XCODE_PROJECT   = "ProEstimate AI.xcodeproj"
 XCODE_SCHEME    = "ProEstimate AI"
@@ -885,6 +886,14 @@ platform :ios do
       UI.success("Created App Store version #{target_version} (#{create_body.dig('data', 'id')})")
       sleep 5
     end
+
+    AppStoreAgeRating.ensure_social_media_declaration(
+      app_id: submit_app.id,
+      api: lambda do |method, path, body = nil|
+        AppStoreBilling.request(token: Spaceship::ConnectAPI.token.text, method: method, path: path, body: body)
+      end,
+      log: ->(message) { UI.message(message) }
+    )
 
     deliver(
       api_key:                           api_key,

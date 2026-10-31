@@ -48,5 +48,7 @@ jobs:
         run: bundle exec ruby fastlane/tests/prepared_release_test.rb
       - name: Validate subscription trial configuration without Apple access
         run: bundle exec ruby fastlane/tests/app_store_billing_test.rb
+      - name: Validate narrow age-rating preflight without Apple access
+        run: bundle exec ruby fastlane/tests/app_store_age_rating_test.rb
       - name: Test release safety with mocked actions
         run: bundle exec ruby fastlane/tests/beta_safety_test.rb

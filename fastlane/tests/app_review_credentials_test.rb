@@ -132,9 +132,14 @@ class AppReviewCredentialsTest < ReleaseAssertions
     when %r{\A/v1/builds\?filter\[preReleaseVersion\]}
       { data: [{ id: "offline-build", attributes: { version: "11", processingState: "VALID" } }] }
     when %r{\A/v1/reviewSubmissions\?}, %r{\A/v1/builds\?filter\[app\]},
-         %r{\A/v1/apps/offline-app/(appInfos|subscriptionGroups|buildUploads)\?},
+         %r{\A/v1/apps/offline-app/(subscriptionGroups|buildUploads)\?},
+         %r{\A/v1/apps/offline-app/appInfos\?include=},
          %r{\A/v1/appStoreVersions/offline-draft/appStoreVersionLocalizations\?}
       { data: [] }
+    when "/v1/apps/offline-app/appInfos?limit=200"
+      { data: [{ id: "offline-info", attributes: { appStoreState: "PREPARE_FOR_SUBMISSION" } }] }
+    when "/v1/appInfos/offline-info/ageRatingDeclaration"
+      { data: { id: "offline-rating", type: "ageRatingDeclarations", attributes: { socialMedia: false, socialMediaAgeRestricted: nil } } }
     when %r{\A/v1/apps/offline-app/appStoreVersions\?}
       { data: [{ id: "offline-draft", attributes: { versionString: @version, appStoreState: "PREPARE_FOR_SUBMISSION" } }] }
     when "/v1/appStoreVersions/offline-draft/relationships/build"
@@ -194,6 +199,8 @@ class AppReviewCredentialsTest < ReleaseAssertions
     assert_equal false, options.fetch(:automatic_release)
     assert_equal true, options.fetch(:skip_binary_upload)
     assert_equal [:prepare_screenshots, ROOT], @calls.first
+    rating_read = @calls.rindex([:http, "GET", "/v1/appInfos/offline-info/ageRatingDeclaration"])
+    assert rating_read && rating_read < @calls.index(:deliver), "Age rating must be verified before submission"
   end
 
   def test_screenshot_lanes_need_no_secret_and_pass_no_review_credentials
