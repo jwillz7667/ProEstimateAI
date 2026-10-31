@@ -132,7 +132,24 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
             throw PurchaseError.storeKitError(error.localizedDescription)
         }
 
-        // 2. Iterate every verified current entitlement and post to the backend.
+        try await restoreCurrentEntitlements()
+    }
+
+    /// Current entitlements include finished purchases that an unfinished-only
+    /// retry cannot recover after the backend's purchase records were migrated.
+    func reconcileCurrentEntitlements() async {
+        do {
+            try await restoreCurrentEntitlements()
+        } catch {
+            // A quiet login reconciliation never blocks basic account access.
+            // The explicit Restore Purchases action surfaces recovery errors.
+            logger.warning("Existing subscription reconciliation pending: \(error.localizedDescription)")
+        }
+    }
+
+    private func restoreCurrentEntitlements() async throws {
+        // Iterate verified current receipts without requesting AppStore.sync.
+
         var items: [RestoreTransactionItem] = []
         var verifiedTransactions: [Transaction] = []
         for await result in Transaction.currentEntitlements {

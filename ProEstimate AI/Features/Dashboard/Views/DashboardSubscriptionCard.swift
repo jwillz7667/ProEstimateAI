@@ -157,14 +157,14 @@ struct DashboardSubscriptionCard: View {
                 VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
                     Text("Get the Full ProEstimate AI")
                         .font(TypographyTokens.headline)
-                    Text("Unlock AI previews, instant estimates, branded proposals, and lawn / roof scouting. Start a 7-day free trial.")
+                    Text("Unlock AI previews, instant estimates, branded proposals, and lawn / roof scouting. A three-day trial is available to eligible Apple Accounts.")
                         .font(TypographyTokens.caption)
                         .foregroundStyle(ColorTokens.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            PrimaryCTAButton(title: "Start 7-Day Free Trial", icon: "crown") {
+            PrimaryCTAButton(title: "View Pro Plans", icon: "crown") {
                 onUpgrade?()
             }
         }

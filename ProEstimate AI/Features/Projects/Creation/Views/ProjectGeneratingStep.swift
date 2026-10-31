@@ -26,8 +26,9 @@ struct ProjectGeneratingStep: View {
             VStack(spacing: SpacingTokens.lg) {
                 hero
 
-                rotatingPhraseRow
-                    .padding(.horizontal, SpacingTokens.md)
+                if viewModel.shouldGenerateAI {
+                    rotatingPhraseRow.padding(.horizontal, SpacingTokens.md)
+                }
 
                 progressChecklist
                     .padding(.top, SpacingTokens.xs)
@@ -54,7 +55,7 @@ struct ProjectGeneratingStep: View {
             // Phrase ticker — independent of the pipeline task so it
             // keeps cycling whether the pipeline is running, queued, or
             // mid-poll.
-            if !reduceMotion { await runPhraseTicker() }
+            if !reduceMotion, viewModel.shouldGenerateAI { await runPhraseTicker() }
         }
         .onAppear {
             if !reduceMotion {
@@ -163,7 +164,8 @@ struct ProjectGeneratingStep: View {
     }
 
     private var heroSubtitle: String {
-        if isFailed { return "Your project is created — you can retry the AI preview or open it anyway." }
+        if isFailed { return "Retry the unfinished step, or open your saved project to continue manually." }
+        if !viewModel.shouldGenerateAI { return "Saving your project details and photos. No AI credit or subscription is required." }
         if isComplete { return "Opening your project now…" }
         switch viewModel.pipelineStage {
         case .generatingMaterials:
@@ -261,9 +263,12 @@ struct ProjectGeneratingStep: View {
     }
 
     private var checklistItems: [ChecklistItem] {
-        [
+        let basic = [
             ChecklistItem(id: 0, title: "Creating project", subtitle: "Saving project details", stageRank: 1),
             ChecklistItem(id: 1, title: "Uploading photos", subtitle: "Securing your before-photos", stageRank: 2),
+        ]
+        guard viewModel.shouldGenerateAI else { return basic }
+        return basic + [
             ChecklistItem(id: 2, title: "Generating preview", subtitle: "AI render of the finished space", stageRank: 4),
             ChecklistItem(id: 3, title: "Calculating materials", subtitle: "Suggested finishes and quantities", stageRank: 5),
         ]

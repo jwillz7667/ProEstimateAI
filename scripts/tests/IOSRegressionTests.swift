@@ -30,6 +30,8 @@ struct IOSRegressionTests {
         try commerceContracts()
         try await transactionDelivery()
         try await paidUsageLimits()
+        try await paidFeatureBoundaries()
+        try await staleEntitlementResponses()
         try authFormValidation()
         try oauthProofEncoding()
         print("PASS: \(checks) iOS regression checks (numeric validation, nullable edits, invoice payments, pagination, commerce contracts, purchase recovery, paid usage limits).")
@@ -158,8 +160,13 @@ struct IOSRegressionTests {
         try expect(unknown == .freeStarter, "An unknown plan must not be represented as a paid plan")
         let metrics = try JSONDecoder().decode([UsageMetricCode].self, from: Data(#"["AI_GENERATION","QUOTE_EXPORT","PROJECT_CREATED","ESTIMATE_GENERATED"]"#.utf8))
         try expect(metrics.count == 4, "All metrics in the canonical backend snapshot must decode")
-        try expect(StoreProductModel.sampleMonthly.purchaseButtonTitle(fallback: "Start Free Trial") == "Start Free Trial", "Eligible monthly buyers should see the trial CTA")
-        try expect(StoreProductModel.sampleAnnual.purchaseButtonTitle(fallback: "Start Free Trial") == "Subscribe Now", "Annual without an introductory offer must not advertise a trial")
+        try expect(StoreProductModel.sampleMonthly.purchaseButtonTitle(fallback: "Start Free Trial") == "Start 3-day free trial", "Eligible monthly buyers must see the actual selected offer duration")
+        try expect(StoreProductModel.sampleAnnual.purchaseButtonTitle(fallback: "Start Free Trial") == "Start 3-day free trial", "Eligible annual buyers must see their selected three-day offer")
+        let returningAnnual = StoreProductModel(productId: AppConstants.proAnnualProductID, planCode: .proAnnual,
+            displayName: "Pro Annual", description: "Annual", priceDisplay: "$149.99", billingPeriodLabel: "per year",
+            hasIntroOffer: true, introOfferDisplayText: "3-day free trial", isEligibleForIntroOffer: false,
+            isFeatured: false, savingsText: nil)
+        try expect(returningAnnual.purchaseButtonTitle(fallback: "Start 7-Day Free Trial") == "Subscribe Now", "Returning subscribers must never see a reused trial offer")
         try expect(StoreProductModel.canonicalFallback(tier: .pro, isAnnual: false).purchaseButtonTitle(fallback: "Start Free Trial") == "Subscribe Now", "Unknown eligibility must not promise a trial")
         try expect(StoreProductModel.annualSavingsText(monthlyPrice: Decimal(string: "29.99")!, annualPrice: Decimal(string: "249.99")!) == "Save 30%", "Savings must match actual StoreKit prices")
         try expect(StoreProductModel.annualSavingsText(monthlyPrice: 10, annualPrice: 120) == nil, "Equal annual pricing must not advertise savings")
@@ -276,6 +283,74 @@ struct IOSRegressionTests {
         try expect(!revoked.hasFeature(.canUseBranding) && !revoked.hasFeature(.canCreateInvoice), "Terminal subscriptions must not trust stale paid feature flags")
     }
 
+    static func paidFeatureBoundaries() async throws {
+        let unknown = FeatureGateCoordinator()
+        try expect(!unknown.guardGeneratePreview().isAllowed && !unknown.guardExportQuote().isAllowed,
+                   "An unconfigured commerce store must fail closed for paid operations")
+        try expect(unknown.guardCreateProject().isAllowed, "Basic manual projects remain available before commerce loads")
+        let historical = UsageBucket(metricCode: .aiGeneration, includedQuantity: 5, consumedQuantity: 0, remainingQuantity: 5, source: "STARTER_CREDITS")
+        for state in [SubscriptionState.free, .expired, .revoked, .billingRetry] {
+            let snapshot = EntitlementSnapshot(subscriptionState: state, currentPlanCode: .proMonthly,
+                featureFlags: EntitlementSnapshot.samplePro.featureFlags, usage: [historical], renewalDate: nil,
+                trialEndsAt: nil, gracePeriodEndsAt: nil, isAutoRenewEnabled: false, billingWarning: nil)
+            let store = EntitlementStore.preview(snapshot: snapshot)
+            let meter = UsageMeterStore.preview(generationsRemaining: 5)
+            meter.configure(commerceAPI: MockCommerceAPIClient(), entitlementStore: store)
+            await meter.refresh()
+            let gate = FeatureGateCoordinator.preview(entitlementStore: store, usageMeterStore: meter)
+            try expect(!gate.guardGeneratePreview().isAllowed && !gate.guardGenerateAIEstimate().isAllowed,
+                       "State \(state) must not spend historical free credits or stale paid flags")
+            try expect(gate.guardCreateProject().isAllowed, "Lapsed and free users must retain manual project access")
+            try expect(!snapshot.hasFeature(.canGeneratePreview) && !snapshot.hasGenerationCredits && !meter.canGenerate,
+                       "Unpaid AI flags, credits and usage meters must all remain locked")
+        }
+        for state in [SubscriptionState.trialActive, .proActive, .canceledActive, .gracePeriod, .adminOverride] {
+            let snapshot = EntitlementSnapshot(subscriptionState: state, currentPlanCode: .proMonthly,
+                featureFlags: EntitlementSnapshot.samplePro.featureFlags, usage: [], renewalDate: nil,
+                trialEndsAt: nil, gracePeriodEndsAt: nil, isAutoRenewEnabled: true, billingWarning: nil)
+            let gate = FeatureGateCoordinator.preview(entitlementStore: .preview(snapshot: snapshot))
+            try expect(gate.guardGeneratePreview().isAllowed && gate.guardCreateProject().isAllowed,
+                       "Effective paid/trial state \(state) must retain AI and manual access")
+        }
+    }
+
+    static func staleEntitlementResponses() async throws {
+        let api = PendingEntitlementAPI()
+        let store = EntitlementStore()
+        store.configure(commerceAPI: api)
+        let oldAccountFetch = Task { await store.refresh() }
+        await api.waitUntilRequested()
+        store.reset()
+        api.resolve(.samplePro)
+        await oldAccountFetch.value
+        try expect(store.snapshot == nil && !store.hasProAccess && !store.isLoading,
+                   "A signed-out account's late Pro response must not unlock the next user's workspace")
+
+        let pendingFreeFetch = Task { await store.refresh() }
+        await api.waitUntilRequested()
+        await store.updateFromSnapshot(.samplePro)
+        api.resolve(.sampleFree)
+        await pendingFreeFetch.value
+        try expect(store.hasProAccess && !store.isLoading,
+                   "A pending pre-purchase refresh must not downgrade an acknowledged Pro purchase")
+        let delivery = CommerceTransactionDelivery(commerceAPI: api, entitlementStore: store)
+        let request = SyncTransactionRequest(purchaseAttemptId: "attempt", storeProductId: AppConstants.proMonthlyProductID,
+            transactionId: "transaction", originalTransactionId: "original", appAccountToken: UUID().uuidString,
+            environment: "sandbox", signedTransaction: "fixture")
+        var finished = false
+        let oldPurchase = Task { try await delivery.sync(request) { finished = true } }
+        await api.waitUntilSyncRequested()
+        store.reset()
+        await store.updateFromSnapshot(.sampleFree)
+        api.resolveSync(.samplePro)
+        switch await oldPurchase.result {
+        case .success: throw Failure(description: "An old account's purchase delivery must not update a new session")
+        case .failure(let error): try expect((error as? APIError) == .unauthorized, "Session switches must stop stale transaction acknowledgement")
+        }
+        try expect(!store.hasProAccess && !finished, "An old account response must neither unlock the new account nor finish its pending receipt")
+
+    }
+
     static func authFormValidation() throws {
         try expect(AuthFormValidation.isValidEmail("  O'Neil+work@example.com \n"), "Email validation must support backend-accepted addresses and surrounding whitespace")
         for email in ["not-an-email", "a..b@example.com", ".a@example.com", "a@example", "a@example..com"] {
@@ -328,4 +403,32 @@ actor PaymentTestService: InvoiceServiceProtocol {
     func deleteInvoice(id: String) async throws { throw error }
     func convertEstimate(estimateId: String, request: ConvertEstimateRequest) async throws -> Invoice { throw error }
     func exportPDF(id: String) async throws -> Data { throw error }
+}
+
+/// Suspends only entitlement reads so reset/purchase ordering is deterministic.
+final class PendingEntitlementAPI: CommerceAPIClientProtocol {
+    private var continuation: CheckedContinuation<EntitlementSnapshot, Never>?
+    private var syncContinuation: CheckedContinuation<EntitlementSnapshot, Never>?
+    func fetchEntitlement() async throws -> EntitlementSnapshot {
+        await withCheckedContinuation { continuation = $0 }
+    }
+    func waitUntilRequested() async { while continuation == nil { await Task.yield() } }
+    func resolve(_ snapshot: EntitlementSnapshot) {
+        let pending = continuation
+        continuation = nil
+        pending?.resume(returning: snapshot)
+    }
+    func fetchProducts() async throws -> [StoreProductModel] { throw APIError.unknown("Unused fixture method") }
+    func createPurchaseAttempt(productId: String, placement: PaywallPlacement?) async throws -> PurchaseAttemptResponse { throw APIError.unknown("Unused fixture method") }
+    func syncTransaction(request: SyncTransactionRequest) async throws -> EntitlementSnapshot {
+        await withCheckedContinuation { syncContinuation = $0 }
+    }
+    func waitUntilSyncRequested() async { while syncContinuation == nil { await Task.yield() } }
+    func resolveSync(_ snapshot: EntitlementSnapshot) {
+        let pending = syncContinuation
+        syncContinuation = nil
+        pending?.resume(returning: snapshot)
+    }
+    func restoreTransactions(_ transactions: [RestoreTransactionItem]) async throws -> EntitlementSnapshot { throw APIError.unknown("Unused fixture method") }
+    func consumeUsage(metric: UsageMetricCode) async throws -> UsageBucket { throw APIError.unknown("Unused fixture method") }
 }

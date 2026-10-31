@@ -41,10 +41,8 @@ struct PaywallHostView: View {
                     PaywallHeroSection(decision: viewModel.decision, headline: viewModel.displayHeadline, subheadline: viewModel.displaySubheadline)
 
                     VStack(spacing: SpacingTokens.xl) {
-                        // Free-tier counter — only rendered when the
-                        // paywall fired because starter credits ran out.
-                        // Hidden everywhere else so the rest of the app
-                        // reads as "fully open" until exhaustion.
+                        // Explain the AI subscription boundary while keeping
+                        // free workspace access available outside this action.
                         StarterCreditsExhaustedCard(
                             isVisible: viewModel.decision.placement == .generationLimitHit
                         )

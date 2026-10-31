@@ -153,7 +153,7 @@ enum FeatureCode: String, CaseIterable, Sendable {
 extension EntitlementSnapshot {
     /// Check whether a specific feature is enabled.
     func hasFeature(_ feature: FeatureCode) -> Bool {
-        if feature != .canGeneratePreview && !subscriptionState.hasProAccess { return false }
+        if !subscriptionState.hasProAccess { return false }
         return featureFlags[feature.rawValue] ?? false
     }
 
@@ -171,7 +171,7 @@ extension EntitlementSnapshot {
 
     /// Whether the user has any remaining free generation credits.
     var hasGenerationCredits: Bool {
-        (remaining(for: .aiGeneration) ?? 0) > 0
+        subscriptionState.hasProAccess && (remaining(for: .aiGeneration) ?? 0) > 0
     }
 
     /// Whether the user has any remaining free quote export credits.
@@ -183,29 +183,12 @@ extension EntitlementSnapshot {
 // MARK: - Sample Data
 
 extension EntitlementSnapshot {
-    /// Sample free-tier snapshot with starter credits.
+    /// A free workspace has no paid AI or export allowance.
     static let sampleFree = EntitlementSnapshot(
         subscriptionState: .free,
         currentPlanCode: .freeStarter,
-        featureFlags: [
-            FeatureCode.canGeneratePreview.rawValue: true,
-            FeatureCode.canExportQuote.rawValue: true,
-            FeatureCode.canRemoveWatermark.rawValue: false,
-            FeatureCode.canUseBranding.rawValue: false,
-            FeatureCode.canCreateInvoice.rawValue: false,
-            FeatureCode.canShareApprovalLink.rawValue: false,
-            FeatureCode.canExportMaterialLinks.rawValue: false,
-            FeatureCode.canUseHighResPreview.rawValue: false,
-        ],
-        usage: [
-            UsageBucket(
-                metricCode: .aiGeneration,
-                includedQuantity: 5,
-                consumedQuantity: 2,
-                remainingQuantity: 3,
-                source: "STARTER_CREDITS"
-            ),
-        ],
+        featureFlags: [:],
+        usage: [],
         renewalDate: nil,
         trialEndsAt: nil,
         gracePeriodEndsAt: nil,

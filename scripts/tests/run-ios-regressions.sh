@@ -25,6 +25,8 @@ xcrun swiftc -swift-version 5 -parse-as-library \
   "$repo_root/ProEstimate AI/Features/Commerce/Protocols/CommerceAPIClientProtocol.swift" \
   "$repo_root/ProEstimate AI/Features/Commerce/Services/EntitlementStore.swift" \
   "$repo_root/ProEstimate AI/Features/Commerce/Services/UsageMeterStore.swift" \
+  "$repo_root/ProEstimate AI/Features/Commerce/Services/FeatureGateCoordinator.swift" \
+  "$repo_root/ProEstimate AI/Features/Commerce/Models/FeatureGateResult.swift" \
   "$repo_root/ProEstimate AI/Features/Commerce/Services/CommerceTransactionDelivery.swift" \
   "$repo_root/ProEstimate AI/Features/Commerce/Mocks/MockCommerceAPIClient.swift" \
   "$repo_root/ProEstimate AI/App/PaywallPresenter.swift" \

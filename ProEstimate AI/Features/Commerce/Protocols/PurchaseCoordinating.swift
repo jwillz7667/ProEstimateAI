@@ -24,6 +24,10 @@ protocol PurchaseCoordinating: Sendable {
 
     /// Retry unfinished deliveries after authentication or connectivity recovers.
     func reconcileUnfinishedTransactions() async
+
+    /// Reconcile an existing active subscription without an App Store sign-in
+    /// prompt. Used after app-account login or migration, not to start a trial.
+    func reconcileCurrentEntitlements() async
 }
 
 // MARK: - Purchase Errors

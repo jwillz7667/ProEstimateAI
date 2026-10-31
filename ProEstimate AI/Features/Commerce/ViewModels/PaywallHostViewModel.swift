@@ -28,29 +28,19 @@ final class PaywallHostViewModel {
         didSet { resyncSelectedProduct() }
     }
 
-    /// Whether the annual period toggle is selected. Defaults off so the
-    /// Pro Monthly entry-point (where the 7-day trial lives) is the
-    /// visible price first.
+    /// Monthly is the initial selection. Both periods can show an actual
+    /// introductory offer when StoreKit confirms Apple Account eligibility.
     var isAnnualSelected: Bool = false {
         didSet { resyncSelectedProduct() }
     }
 
-    /// Resolve the (tier, period) intersection from the current product
-    /// catalog and assign it to `selectedProduct`. When the catalog
-    /// hasn't shipped the exact match yet (e.g. StoreKit still resolving),
-    /// substitute the canonical fallback so the rendered price +
-    /// description always match the user's stated period. The purchase
-    /// flow validates against the real StoreKit catalog separately, so a
-    /// fallback never silently completes a checkout against a price that
-    /// isn't live.
+    /// Keep the selection within the products actually returned by StoreKit.
+    /// An unavailable period has no selected product and cannot be purchased.
     private func resyncSelectedProduct() {
         let exact = products.first {
             $0.tier == selectedTier && $0.isAnnual == isAnnualSelected
         }
-        selectedProduct = exact ?? .canonicalFallback(
-            tier: selectedTier,
-            isAnnual: isAnnualSelected
-        )
+        selectedProduct = exact
     }
 
     /// Whether products are loading.
@@ -66,9 +56,8 @@ final class PaywallHostViewModel {
     /// offer on the subscription group. `nil` until products have been loaded.
     private(set) var isEligibleForTrial: Bool?
 
-    /// Inline notice for non-fatal issues (catalog load failure with fallback
-    /// available). Purchase / restore outcomes go through `activeAlert`
-    /// instead so the user can't miss the result of their tap.
+    /// A retryable catalog error. Purchases stay disabled without live plans;
+    /// restore and free workspace access remain available.
     var errorMessage: String?
 
     /// Modal alert for purchase, restore, and other transactional outcomes.
@@ -118,82 +107,47 @@ final class PaywallHostViewModel {
             )
         }
 
-        // Default selection: Pro Monthly — the entry-point where the
-        // 7-day trial lives. The period toggle is one tap from Annual.
+        // Start with monthly; both periods use their live StoreKit offer.
         selectedTier = .pro
         isAnnualSelected = false
     }
 
     // MARK: - Product Loading
 
-    /// Load products from the backend catalog, enriched with live StoreKit pricing.
-    /// Falls back to the backend-provided products if StoreKit is unavailable.
+    /// Only Apple's live products can supply checkout prices and offers.
+    /// A catalog outage must remain retryable, not turn fallback text into a sale.
     func loadProducts() async {
         guard !isLoading else { return }
-
         isLoading = true
         errorMessage = nil
+        isEligibleForTrial = nil
+        defer { isLoading = false }
 
         do {
-            // First, try to load from backend for enriched catalog data.
-            var backendProducts = try await commerceAPI.fetchProducts()
-
-            // Then try to enrich with live StoreKit pricing and eligibility.
-            do {
-                let storeProducts = try await catalogService.loadProducts()
-                let isEligibleForIntro = await catalogService.isEligibleForIntroOffer()
-                isEligibleForTrial = isEligibleForIntro
-
-                let annualSavingsText: String? = {
-                    guard let monthly = storeProducts.first(where: { $0.id == AppConstants.proMonthlyProductID }),
-                          let annual = storeProducts.first(where: { $0.id == AppConstants.proAnnualProductID }) else { return nil }
-                    return StoreProductModel.annualSavingsText(monthlyPrice: monthly.price, annualPrice: annual.price)
-                }()
-
-                // Map StoreKit products and merge with backend data.
-                // Pro Monthly is the featured tile (paywall headline, where
-                // the 7-day trial lives); the Annual product surfaces a
-                // savings tag.
-                let storeModels = storeProducts.map { product in
-                    StoreKitCatalogService.mapToStoreProductModel(
-                        product,
-                        isEligibleForIntro: isEligibleForIntro,
-                        isFeatured: product.id == AppConstants.proMonthlyProductID,
-                        savingsText: product.id == AppConstants.proAnnualProductID
-                            ? annualSavingsText
-                            : nil
-                    )
-                }
-
-                // Prefer StoreKit pricing over backend pricing if available.
-                if !storeModels.isEmpty {
-                    backendProducts = storeModels
-                }
-            } catch {
-                // StoreKit unavailable (e.g., simulator without StoreKit config).
-                // Fall through to use backend products.
-                logger.warning("StoreKit products unavailable: \(error.localizedDescription). Using backend catalog.")
+            let storeProducts = try await catalogService.loadProducts()
+            guard !storeProducts.isEmpty else { throw PurchaseError.productNotFound }
+            let eligible = await catalogService.isEligibleForIntroOffer()
+            isEligibleForTrial = eligible
+            let monthly = storeProducts.first { $0.id == AppConstants.proMonthlyProductID }
+            let annual = storeProducts.first { $0.id == AppConstants.proAnnualProductID }
+            let savings = monthly.flatMap { monthly in
+                annual.flatMap { StoreProductModel.annualSavingsText(monthlyPrice: monthly.price, annualPrice: $0.price) }
             }
-
-            products = backendProducts
-
+            products = storeProducts.map { product in
+                StoreKitCatalogService.mapToStoreProductModel(
+                    product,
+                    isEligibleForIntro: eligible,
+                    isFeatured: product.id == AppConstants.proMonthlyProductID,
+                    savingsText: product.id == AppConstants.proAnnualProductID ? savings : nil
+                )
+            }
             applyInitialSelection()
-
-            let loadedCount = products.count
-            logger.info("Loaded \(loadedCount) products for paywall.")
         } catch {
-            // If backend also fails, use decision's embedded products as last resort.
-            if let decisionProducts = decision.availableProducts, !decisionProducts.isEmpty {
-                products = decisionProducts
-                applyInitialSelection()
-                logger.warning("Using PaywallDecision fallback products.")
-            } else {
-                errorMessage = "Unable to load subscription plans. Please try again."
-                logger.error("Failed to load products: \(error.localizedDescription)")
-            }
+            products = []
+            selectedProduct = nil
+            errorMessage = "The App Store couldn't load subscription plans. Check your connection and App Store account, then try again. You can still restore purchases or close this screen to use your basic workspace."
+            logger.warning("StoreKit catalog unavailable: \(error.localizedDescription)")
         }
-
-        isLoading = false
     }
 
     // MARK: - Plan Selection
@@ -209,7 +163,7 @@ final class PaywallHostViewModel {
     /// Pick the initial product after products load. Order of preference:
     ///   1. The decision's `recommendedProductId` (e.g. backend hinting at
     ///      Pro Monthly for a trial offer).
-    ///   2. Pro Monthly — the headline tile where the 7-day trial lives.
+    ///   2. Pro Monthly, if Apple returned it.
     ///   3. Whatever the catalog's first entry is.
     private func applyInitialSelection() {
         if let recommendedId = decision.recommendedProductId,
@@ -237,7 +191,7 @@ final class PaywallHostViewModel {
             return
         }
 
-        guard !isPurchasing else { return }
+        guard !isPurchasing, !isRestoring else { return }
 
         // Set the in-flight flag BEFORE any async work so a rapid double-tap
         // is rejected by the guard above even while the first
@@ -249,19 +203,17 @@ final class PaywallHostViewModel {
         errorMessage = nil
 
         do {
-            // Step 1: Create purchase attempt on backend to get appAccountToken.
-            let attempt = try await commerceAPI.createPurchaseAttempt(
-                productId: selectedProduct.productId,
-                placement: placement
-            )
-
-            guard let appAccountToken = UUID(uuidString: attempt.appAccountToken) else {
-                throw PurchaseError.storeKitError("Invalid app account token from server")
-            }
-
-            // Step 2: Get the StoreKit product.
+            // Resolve Apple's actual product before creating an attempt. Never
+            // initiate checkout using a backend or cached display-only fallback.
             guard let storeProduct = try await catalogService.product(for: selectedProduct.productId) else {
                 throw PurchaseError.productNotFound
+            }
+            let attempt = try await commerceAPI.createPurchaseAttempt(
+                productId: storeProduct.id,
+                placement: placement
+            )
+            guard let appAccountToken = UUID(uuidString: attempt.appAccountToken) else {
+                throw PurchaseError.storeKitError("Invalid app account token from server")
             }
 
             // Step 3: Initiate StoreKit purchase.
@@ -343,7 +295,7 @@ final class PaywallHostViewModel {
 
     /// Restore previously purchased subscriptions.
     func restorePurchases() async {
-        guard !isRestoring else { return }
+        guard !isRestoring, !isPurchasing else { return }
 
         isRestoring = true
         activeAlert = nil
@@ -379,17 +331,21 @@ final class PaywallHostViewModel {
     var hasProAccess: Bool { entitlementStore.hasProAccess }
 
     var displayHeadline: String {
-        if selectedProduct?.showsTrialBadge != true,
-           decision.headline.localizedCaseInsensitiveContains("trial") {
+        if decision.headline.localizedCaseInsensitiveContains("trial") ||
+           decision.headline.localizedCaseInsensitiveContains("free for") {
+            if let product = selectedProduct, product.showsTrialBadge,
+               let offer = product.introOfferDisplayText {
+                return "Try Pro with a \(offer)"
+            }
             return "Unlock Pro Features"
         }
         return decision.headline
     }
 
     var displaySubheadline: String {
-        if selectedProduct?.showsTrialBadge != true,
-           decision.subheadline.localizedCaseInsensitiveContains("trial") {
-            return "Choose a monthly or annual plan for AI previews, branded proposals, invoicing, and client approvals."
+        if decision.subheadline.localizedCaseInsensitiveContains("trial") ||
+           decision.subheadline.localizedCaseInsensitiveContains("free for") {
+            return "Choose a monthly or annual plan for AI previews, branded proposals, invoicing, and client approvals. Trial eligibility and renewal pricing are shown below."
         }
         return decision.subheadline
     }

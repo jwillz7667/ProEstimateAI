@@ -199,6 +199,11 @@ struct ProjectDetailView: View {
                 }
             }
         }
+        .onChange(of: viewModel.generationPaywall) { _, decision in
+            guard let decision else { return }
+            paywallPresenter.present(decision)
+            viewModel.generationPaywall = nil
+        }
         .alert(
             "Error",
             isPresented: Binding(

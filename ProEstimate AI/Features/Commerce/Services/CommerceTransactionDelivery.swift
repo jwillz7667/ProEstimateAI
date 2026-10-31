@@ -13,6 +13,7 @@ final class CommerceTransactionDelivery {
     }
 
     func sync(_ request: SyncTransactionRequest, finish: () async -> Void) async throws {
+        let sessionRevision = entitlementStore.sessionRevision
         let snapshot: EntitlementSnapshot
         do {
             snapshot = try await commerceAPI.syncTransaction(request: request)
@@ -31,13 +32,18 @@ final class CommerceTransactionDelivery {
                 )
             ])
         }
-        await entitlementStore.updateFromSnapshot(snapshot)
+        guard await entitlementStore.updateFromSnapshot(snapshot, ifSessionRevision: sessionRevision) else {
+            throw APIError.unauthorized
+        }
         await finish()
     }
 
     func restore(_ transactions: [RestoreTransactionItem], finish: () async -> Void) async throws {
+        let sessionRevision = entitlementStore.sessionRevision
         let snapshot = try await commerceAPI.restoreTransactions(transactions)
-        await entitlementStore.updateFromSnapshot(snapshot)
+        guard await entitlementStore.updateFromSnapshot(snapshot, ifSessionRevision: sessionRevision) else {
+            throw APIError.unauthorized
+        }
         await finish()
     }
 }

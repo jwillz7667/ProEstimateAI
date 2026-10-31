@@ -85,6 +85,11 @@ final class UsageMeterStore {
             return
         }
 
+        guard snapshot.subscriptionState.hasProAccess else {
+            reset()
+            return
+        }
+
         // Extract usage from entitlement snapshot.
         if let genBucket = snapshot.usage.first(where: { $0.metricCode == .aiGeneration }) {
             generationsRemaining = genBucket.remainingQuantity

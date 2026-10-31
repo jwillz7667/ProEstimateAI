@@ -8,7 +8,7 @@ enum AppConstants {
     // MARK: - StoreKit Product IDs
 
     static let subscriptionGroupID = "proestimate_pro"
-    /// Pro Monthly — capped at 2 projects / 20 image gens / 20 estimates per month.
+    /// Pro Monthly — includes 20 AI previews and 20 AI estimates per rolling 30 days.
     static let proMonthlyProductID = "proestimate.pro.monthly"
     /// Pro Annual — same caps as Pro Monthly, billed yearly.
     static let proAnnualProductID = "proestimate.pro.annual"
@@ -27,13 +27,9 @@ enum AppConstants {
 
     // MARK: - Free Tier
 
-    /// Number of AI preview generations a brand-new free account gets
-    /// before the paywall fires. Must match the backend's
-    /// `FREE_TIER_AI_GENERATION_CREDITS` (`backend/src/lib/limits.ts`) —
-    /// the backend is the source of truth for actual consumption; this
-    /// constant only drives local fallback when an entitlement snapshot
-    /// arrives without an `AI_GENERATION` bucket.
-    static let freeGenerationCredits = 5
+    /// AI generation requires an active App Store subscription or trial.
+    /// Historical starter credits never unlock a paid generation request.
+    static let freeGenerationCredits = 0
 
     /// Quote / proposal exports remain Pro-gated. Free users hit the
     /// paywall on the first export attempt — no starter pack here.

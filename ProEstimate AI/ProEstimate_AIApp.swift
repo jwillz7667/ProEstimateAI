@@ -23,6 +23,7 @@ struct ProEstimate_AIApp: App {
     @State private var usageMeterStore = UsageMeterStore.shared
     @State private var featureGateCoordinator = FeatureGateCoordinator.shared
     @State private var paywallPresenter = PaywallPresenter()
+    @State private var isReconcilingPurchases = false
     @State private var appearanceStore = AppearanceStore()
     @State private var onboardingStore = OnboardingStore.shared
     @State private var networkMonitor = NetworkMonitor.shared
@@ -268,9 +269,12 @@ struct ProEstimate_AIApp: App {
     }
 
     private func reconcilePurchases() async {
-        guard appState.isAuthenticated else { return }
+        guard appState.isAuthenticated, !isReconcilingPurchases else { return }
+        isReconcilingPurchases = true
+        defer { isReconcilingPurchases = false }
         let coordinator = StoreKitPurchaseCoordinator(commerceAPI: CommerceAPIClient(), entitlementStore: entitlementStore)
         await coordinator.reconcileUnfinishedTransactions()
+        await coordinator.reconcileCurrentEntitlements()
     }
 
     /// Translate a generation notification tap into navigation. Routes
