@@ -38,6 +38,8 @@ API deployment `15aebd27-5182-4e92-8acf-5c28a543375f` is successful, including t
 
 Source/evidence: `subscription-gates-2026-10-30.md`, `validation-2026-10-30/subscription-policy-final-live.json`, `image-prompt-verification.json`, `comparison-source.jpg` and `comparison-complete-photo.png` in that validation directory.
 
+Normal-API cleanup removed the complete temporary Free tenancy, including its fourth project saved through the UI; prior access, refresh and login all return 401. Only the temporary comparison project was deleted from the reviewer workspace; both generations and its source asset now return 404. The reviewer account, grant and usage **2 / 20** remain unchanged. The known test refresh session was revoked (401 on reuse). Its stateless access JWT retains its normal expiry (`2026-10-31T05:37:13Z`); local credential/context/script copies were removed. No blanket immediate access-JWT revocation is claimed. No emails or Apple purchases were created. See `validation-2026-10-30/subscription-policy-cleanup.json`.
+
 ## Release and remaining boundaries
 
 Version 1.0.8 remains an editable **manual-release draft**. Build 13 contains the final manual-mode copy correction (source `6c1514c`), was signed/uploaded by workflow `41171240188`, and independently read back as **VALID** (`22faba99-5116-4a64-8cab-c00eb82faed7`) by workflow `41171998512`. Attachment workflow `41172071414` succeeded. No App Review submission or public release was performed; existing public app installations need the released update to receive client-side fixes.
