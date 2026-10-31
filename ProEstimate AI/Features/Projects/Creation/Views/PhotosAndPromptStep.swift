@@ -24,9 +24,13 @@ struct PhotosAndPromptStep: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
                 photosSection
-                aiPreviewSection
+                if viewModel.shouldGenerateAI {
+                    aiPreviewSection
+                }
                 qualityTierSection
-                promptSuggestionsSection
+                if viewModel.shouldGenerateAI {
+                    promptSuggestionsSection
+                }
                 customInstructionsSection
             }
             .padding(.vertical, SpacingTokens.sm)
@@ -114,10 +118,10 @@ struct PhotosAndPromptStep: View {
     /// captures the lawn polygon on the next step (the load-bearing input);
     /// home-service trades (plumbing, cleaning, repairs) aren't redesigning
     /// anything, so the before-photo is documentation, not a precondition.
-    /// Every visual remodel type still requires at least one before-photo
-    /// for the AI preview. Mirrors `ProjectType.requiresReferencePhoto`.
+    /// Manual projects never require an upload. AI remodel flows follow
+    /// the same reference-photo rule as the view model's Next-button gate.
     private var photosOptional: Bool {
-        !(viewModel.selectedProjectType?.requiresReferencePhoto ?? true)
+        !viewModel.shouldGenerateAI || !(viewModel.selectedProjectType?.requiresReferencePhoto ?? true)
     }
 
     private var isServiceTradeFlow: Bool {
@@ -129,22 +133,32 @@ struct PhotosAndPromptStep: View {
     }
 
     private var photosHeaderSubtitle: String {
+        if !viewModel.shouldGenerateAI {
+            return "Add photos to document the job, or continue without them. You can build estimates manually for free."
+        }
         if viewModel.isLawnCareFlow {
             return "Drop a photo of the property if you have one — otherwise just pick a service style below and we'll measure the lawn next."
         }
         if isServiceTradeFlow {
             return "Photos are optional for service calls. Add one to document the job if it helps — otherwise just describe the work below."
         }
+        if photosOptional {
+            return "Add a photo if it helps describe the work. Photos are optional for this project."
+        }
         return "More photos produce better AI previews. At least one is required."
     }
 
     private var photoEmptyStatusText: String {
+        if !viewModel.shouldGenerateAI {
+            return "Photos are optional for your manual project."
+        }
         if viewModel.isLawnCareFlow {
             return "Photos are optional — we'll measure the lawn on the next step."
         }
         if isServiceTradeFlow {
             return "Photos are optional for this service."
         }
+        if photosOptional { return "Photos are optional for this project." }
         return "At least 1 photo required"
     }
 
@@ -335,8 +349,8 @@ struct PhotosAndPromptStep: View {
 
     private var aiPreviewToggleSubtitle: String {
         viewModel.aiPreviewEnabled
-            ? "We'll generate a before/after design image with your estimate."
-            : "Skipped — you'll still get an itemized materials and labor estimate, just no design image. Best for repairs and service calls."
+            ? "We'll generate a completed-project design preview with your estimate."
+            : "We'll generate an itemized materials and labor estimate without a design image. Best for repairs and service calls."
     }
 
     // MARK: - Quality Tier
@@ -350,9 +364,11 @@ struct PhotosAndPromptStep: View {
     private var qualityTierSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.sm) {
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                Text("Quality tier")
+                Text(viewModel.shouldGenerateAI ? "Quality tier" : "Finish level (optional)")
                     .font(TypographyTokens.title3)
-                Text("Sets the price band for materials, labor, and the AI design's finish quality. Skip and we'll choose sensible defaults from the project type.")
+                Text(viewModel.shouldGenerateAI
+                     ? "Sets the price band for materials, labor, and the AI design's finish quality. Skip and we'll choose sensible defaults from the project type."
+                     : "Record the intended material and finish quality. You can set prices while building your estimate.")
                     .font(TypographyTokens.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -360,9 +376,9 @@ struct PhotosAndPromptStep: View {
 
             VStack(spacing: SpacingTokens.xs) {
                 tierRow(
-                    title: "Auto",
-                    subtitle: "Let the AI pick tier-neutral defaults from the project type",
-                    icon: "wand.and.stars",
+                    title: viewModel.shouldGenerateAI ? "Auto" : "Not specified",
+                    subtitle: viewModel.shouldGenerateAI ? "Let the AI pick tier-neutral defaults from the project type" : "Choose a finish level later if needed",
+                    icon: viewModel.shouldGenerateAI ? "wand.and.stars" : "circle.dashed",
                     isSelected: viewModel.qualityTier == nil,
                     action: { viewModel.qualityTier = nil }
                 )
@@ -488,7 +504,7 @@ struct PhotosAndPromptStep: View {
     private var customInstructionsSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.sm) {
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                Text("Custom instructions")
+                Text(viewModel.shouldGenerateAI ? "Custom instructions" : "Project notes")
                     .font(TypographyTokens.title3)
                 HStack(spacing: SpacingTokens.xxs) {
                     Text("Optional")
@@ -497,7 +513,7 @@ struct PhotosAndPromptStep: View {
                         .padding(.horizontal, SpacingTokens.xs)
                         .padding(.vertical, 1)
                         .background(ColorTokens.inputBackground, in: Capsule())
-                    Text("Layer specifics on top of your selection above.")
+                    Text(viewModel.shouldGenerateAI ? "Layer specifics on top of your selection above." : "Keep the scope of work and job details with this project.")
                         .font(TypographyTokens.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -520,7 +536,9 @@ struct PhotosAndPromptStep: View {
                     )
 
                 if viewModel.customInstructions.isEmpty {
-                    Text("e.g. keep the existing window, swap brass hardware for matte black, add a pot filler over the range")
+                    Text(viewModel.shouldGenerateAI
+                         ? "e.g. keep the existing window, swap brass hardware for matte black, add a pot filler over the range"
+                         : "e.g. replace cabinet hardware, keep the countertops, and check measurements before ordering")
                         .font(TypographyTokens.body)
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, SpacingTokens.sm)

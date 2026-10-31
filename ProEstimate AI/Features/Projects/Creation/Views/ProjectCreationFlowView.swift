@@ -53,7 +53,7 @@ struct ProjectCreationFlowView: View {
                         .padding(.vertical, SpacingTokens.md)
                 }
             }
-            .navigationTitle(viewModel.currentStepEnum == .generating && !viewModel.shouldGenerateAI ? "Saving Project" : viewModel.currentStepEnum.title)
+            .navigationTitle(stepTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -97,6 +97,14 @@ struct ProjectCreationFlowView: View {
     }
 
     // MARK: - Step Content
+
+    private var stepTitle: String {
+        if !viewModel.shouldGenerateAI {
+            if viewModel.currentStepEnum == .generating { return "Saving Project" }
+            if viewModel.currentStepEnum == .photos { return "Photos & Notes" }
+        }
+        return viewModel.currentStepEnum.title
+    }
 
     @ViewBuilder
     private var stepContent: some View {

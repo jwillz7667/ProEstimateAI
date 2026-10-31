@@ -99,7 +99,9 @@ struct ProjectDetailsStep: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
 
-            Text("These help the AI tailor material quantities and cost estimates. Skip them and we'll use sensible defaults.")
+            Text(viewModel.shouldGenerateAI
+                 ? "These help the AI tailor material quantities and cost estimates. Skip them and we'll use sensible defaults."
+                 : "Save measurements and a budget for reference while you prepare the estimate. You can leave these blank.")
                 .font(TypographyTokens.caption)
                 .foregroundStyle(.secondary)
         }
