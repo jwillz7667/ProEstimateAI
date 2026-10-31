@@ -59,7 +59,7 @@ module AppStoreBilling
         availability = api.call(:get, "subscriptions/#{id}/subscriptionAvailability").fetch("data")
         territories = pages("subscriptionAvailabilities/#{availability.fetch('id')}/availableTerritories?limit=200", api: api).map { |territory| territory.fetch("id") }.sort
         prices = api.call(:get, "subscriptions/#{id}/prices?filter[territory]=USA&include=subscriptionPricePoint&limit=200")
-        all_prices = pages("subscriptions/#{id}/prices?limit=200", api: api).map do |price|
+        all_prices = pages("subscriptions/#{id}/prices?include=subscriptionPricePoint&limit=200", api: api).map do |price|
           { id: price.fetch("id"), attributes: price.fetch("attributes"), price_point: price.dig("relationships", "subscriptionPricePoint", "data") }
         end.sort_by { |price| price[:id] }
         points = prices.fetch("included", []).select { |record| record["type"] == "subscriptionPricePoints" }.to_h { |record| [record.fetch("id"), record.fetch("attributes")] }
