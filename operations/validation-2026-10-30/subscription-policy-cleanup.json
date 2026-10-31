@@ -1,0 +1,54 @@
+{
+  "checkedAt": "2026-10-31T05:22:16.439Z",
+  "normalApisOnly": true,
+  "free": {
+    "identityAndCompanyVerified": true,
+    "ownedProjectsObserved": 4,
+    "includesUiCreatedFourthProject": true,
+    "accountDeletionHTTP": 200,
+    "accessAfterDeletionHTTP": 401,
+    "refreshAfterDeletionHTTP": 401,
+    "loginAfterDeletionHTTP": 401,
+    "oldProjectAccessHTTP": [
+      401,
+      401,
+      401,
+      401
+    ]
+  },
+  "comparison": {
+    "deletedOnlyProjectId": "cmvvwwk4x000ouhg6z94b9uhf",
+    "projectAfterDeletionHTTP": 404,
+    "generationAfterDeletionHTTP": [
+      404,
+      404
+    ],
+    "sourceAssetAfterDeletionHTTP": 404,
+    "reviewerAccountPreserved": true,
+    "reviewerGrantAndUsageUnchanged": true,
+    "aiConsumed": 2,
+    "aiRemaining": 18,
+    "knownTestRefreshRevokedHTTP": 401,
+    "accessAfterLogoutHTTP": 200,
+    "accessTokenExpiresAt": "2026-10-31T05:37:13.000Z",
+    "accessTokenNote": "Logout revokes the known refresh session. Stateless access JWT remains valid until its normal expiry; its local copies are removed."
+  },
+  "simulatorTouched": false,
+  "designatedReviewCredentialSourcePreserved": true,
+  "comparisonEvidenceHashesVerified": true,
+  "emailsSent": 0,
+  "applePurchasesCreated": 0,
+  "temporaryFilesRemoved": [
+    "/tmp/proestimate-policy-free-qa.json",
+    "/tmp/proestimate-policy-comparison-qa.json",
+    "/tmp/proestimate-policy-image-context.json",
+    "/tmp/proestimate-policy-live-qa.cjs",
+    "/tmp/proestimate-policy-resume-qa.cjs",
+    "/tmp/proestimate-policy-fixed-live-qa.cjs",
+    "/tmp/proestimate-policy-before.jpg",
+    "/tmp/proestimate-policy-after.png",
+    "/tmp/proestimate-policy-after-live-fixed.png",
+    "/private/tmp/proestimate-policy-cleanup.cjs"
+  ],
+  "knownTemporaryCredentialFilesAbsent": true
+}
