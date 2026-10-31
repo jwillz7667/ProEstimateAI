@@ -33,7 +33,7 @@ for (const provider of providers) describe(`${provider.name} account persistence
     expect(entitlement.status).toBe('FREE');
     expect(entitlement.plan.code).toBe('FREE_STARTER');
     expect(await prisma.usageBucket.findFirst({ where: { userId: first.user.id } })).toMatchObject({
-      includedQuantity: 5, consumedQuantity: 0, source: 'STARTER_CREDITS',
+      includedQuantity: 0, consumedQuantity: 0, source: 'STARTER_CREDITS',
     });
     provider.mock.mockResolvedValue({ sub: provider.verified.sub });
     const returning = await provider.signIn();

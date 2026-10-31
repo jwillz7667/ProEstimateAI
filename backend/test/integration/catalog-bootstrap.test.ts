@@ -44,13 +44,13 @@ describe('production commerce catalog bootstrap', () => {
         trial: product.hasIntroOffer,
       }))).toEqual([
         { productId: 'proestimate.pro.monthly', planCode: 'PRO_MONTHLY', price: '$19.99/mo', trial: true },
-        { productId: 'proestimate.pro.annual', planCode: 'PRO_ANNUAL', price: '$199.99/yr', trial: false },
+        { productId: 'proestimate.pro.annual', planCode: 'PRO_ANNUAL', price: '$199.99/yr', trial: true },
         { productId: 'proestimate.premium.monthly', planCode: 'PREMIUM_MONTHLY', price: '$49.99/mo', trial: false },
         { productId: 'proestimate.premium.annual', planCode: 'PREMIUM_ANNUAL', price: '$499.99/yr', trial: false },
       ]);
       expect(products[0].plan.featuresJson).toMatchObject({
         CAN_CREATE_INVOICE: true,
-        LIMITS: { PROJECT_CREATED: { daily: 1, weekly: 2, monthly: 2 } },
+        LIMITS: { AI_GENERATION: { monthly: 20 } },
       });
 
       // Inspect every application table rather than only checking demo emails:

@@ -1,7 +1,6 @@
 import { SubscriptionProduct, Plan, UserEntitlement, UsageBucket } from '@prisma/client';
 import type { PlanCode } from '../../types/enums';
 import { effectiveSubscriptionStatus, hasEffectiveProAccess } from '../../lib/entitlement-access';
-import { STARTER_CREDITS_SOURCE } from '../../lib/limits';
 
 // ─── Store Product DTO ─────────────────────────────────
 
@@ -72,17 +71,10 @@ export interface FeatureFlagsDto {
   CAN_USE_HIGH_RES_PREVIEW: boolean;
 }
 
-/**
- * Derive feature flags from the plan code and current usage buckets.
- *
- * All paid plans (Pro and grandfathered Premium) unlock everything
- * unconditionally. FREE_STARTER gates CAN_GENERATE_PREVIEW and
- * CAN_EXPORT_QUOTE behind remaining starter credits; all other paid-only
- * flags stay false.
- */
+/** Paid flags require an effective subscription; historical credits do not grant access. */
 export function deriveFeatureFlags(
   planCode: PlanCode,
-  buckets: UsageBucket[],
+  _buckets: UsageBucket[],
 ): FeatureFlagsDto {
   // Premium is retired and is no longer offered or served (the products
   // endpoint filters it out), but any legacy/sandbox Premium entitlement
@@ -109,20 +101,9 @@ export function deriveFeatureFlags(
     };
   }
 
-  // FREE_STARTER: credit-gated features only
-  const aiGenBucket = buckets.find((b) => b.metricCode === 'AI_GENERATION' && b.source === STARTER_CREDITS_SOURCE);
-  const quoteExportBucket = buckets.find((b) => b.metricCode === 'QUOTE_EXPORT' && b.source === STARTER_CREDITS_SOURCE);
-
-  const aiRemaining = aiGenBucket
-    ? Math.max(0, aiGenBucket.includedQuantity - aiGenBucket.consumedQuantity)
-    : 0;
-  const quoteRemaining = quoteExportBucket
-    ? Math.max(0, quoteExportBucket.includedQuantity - quoteExportBucket.consumedQuantity)
-    : 0;
-
   return {
-    CAN_GENERATE_PREVIEW: aiRemaining > 0,
-    CAN_EXPORT_QUOTE: quoteRemaining > 0,
+    CAN_GENERATE_PREVIEW: false,
+    CAN_EXPORT_QUOTE: false,
     CAN_REMOVE_WATERMARK: false,
     CAN_USE_BRANDING: false,
     CAN_CREATE_INVOICE: false,
@@ -165,7 +146,7 @@ export function toEntitlementSnapshotDto(
   const hasPaidAccess = hasEffectiveProAccess(entitlement);
   const flags = hasPaidAccess
     ? deriveFeatureFlags(planCode, buckets)
-    : deriveFeatureFlags('FREE_STARTER', entitlement.status === 'FREE' ? buckets : []);
+    : deriveFeatureFlags('FREE_STARTER', []);
   if (hasPaidAccess && typeof entitlement.plan.featuresJson === 'object' &&
     entitlement.plan.featuresJson !== null && !Array.isArray(entitlement.plan.featuresJson)) {
     // Plan-specific feature restrictions apply consistently to API and UI.
@@ -174,7 +155,7 @@ export function toEntitlementSnapshotDto(
     }
   }
   const usageDtos = effectiveUsage ?? buckets
-    .filter((bucket) => hasPaidAccess || (entitlement.status === 'FREE' && bucket.source === STARTER_CREDITS_SOURCE))
+    .filter(() => hasPaidAccess)
     .map(toUsageBucketDto);
 
   // Derive billing warning for degraded subscription states
@@ -208,41 +189,6 @@ export function toEntitlementSnapshotDto(
     environment: entitlement.environment ?? null,
   };
 }
-
-// ─── Admin Entitlement ────────────────────────────────
-
-/**
- * Hardcoded PRO entitlement returned for admin users.
- * All features unlocked, unlimited usage, no billing state.
- */
-export const ADMIN_ENTITLEMENT_SNAPSHOT: EntitlementSnapshotDto = {
-  subscription_state: 'PRO_ACTIVE',
-  current_plan_code: 'PRO_ANNUAL',
-  feature_flags: {
-    CAN_GENERATE_PREVIEW: true,
-    CAN_EXPORT_QUOTE: true,
-    CAN_REMOVE_WATERMARK: true,
-    CAN_USE_BRANDING: true,
-    CAN_CREATE_INVOICE: true,
-    CAN_SHARE_APPROVAL_LINK: true,
-    CAN_EXPORT_MATERIAL_LINKS: true,
-    CAN_USE_HIGH_RES_PREVIEW: true,
-  },
-  usage: [
-    { metric_code: 'AI_GENERATION', included_quantity: 999999, consumed_quantity: 0, remaining_quantity: 999999, source: 'ADMIN' },
-    { metric_code: 'QUOTE_EXPORT', included_quantity: 999999, consumed_quantity: 0, remaining_quantity: 999999, source: 'ADMIN' },
-  ],
-  renewal_date: null,
-  trial_ends_at: null,
-  grace_period_ends_at: null,
-  is_auto_renew_enabled: null,
-  billing_warning: null,
-  starts_at: null,
-  ends_at: null,
-  source: 'ADMIN',
-  latest_transaction_id: null,
-  environment: null,
-};
 
 // ─── Purchase Attempt Response ─────────────────────────
 

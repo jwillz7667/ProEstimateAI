@@ -17,7 +17,7 @@ import type { UsageMetricCode, Prisma, PlanCode } from "@prisma/client";
  *
  *   - AI_GENERATION:      one image preview generation. Pro caps at 20/mo.
  *   - QUOTE_EXPORT:       one PDF export of an estimate / proposal.
- *   - PROJECT_CREATED:    one new project. Pro caps at 2/mo.
+ *   - PROJECT_CREATED:    retained as a historical metric; manual projects are free.
  *   - ESTIMATE_GENERATED: one AI-generated estimate. Pro caps at 20/mo.
  *
  * Premium plans configure generous caps under the same code path so the
@@ -38,16 +38,14 @@ export interface UsageLimits {
 export const PRO_PLAN_LIMITS = {
   AI_GENERATION: { daily: 5, weekly: 12, monthly: 20 },
   QUOTE_EXPORT: { daily: 10, weekly: 25, monthly: 50 },
-  PROJECT_CREATED: { daily: 1, weekly: 2, monthly: 2 },
   ESTIMATE_GENERATED: { daily: 5, weekly: 12, monthly: 20 },
-} satisfies Record<UsageMetric, UsageLimits>;
+} satisfies Partial<Record<UsageMetric, UsageLimits>>;
 
 export const LEGACY_PREMIUM_PLAN_LIMITS = {
   AI_GENERATION: { daily: 200, weekly: 800, monthly: 2_000 },
   QUOTE_EXPORT: { daily: 200, weekly: 800, monthly: 2_000 },
-  PROJECT_CREATED: { daily: 50, weekly: 200, monthly: 500 },
   ESTIMATE_GENERATED: { daily: 100, weekly: 400, monthly: 1_000 },
-} satisfies Record<UsageMetric, UsageLimits>;
+} satisfies Partial<Record<UsageMetric, UsageLimits>>;
 
 export interface UsageWindow {
   daily: number;
@@ -109,6 +107,7 @@ export function readEffectivePlanLimits(
   planCode: PlanCode,
   metric: UsageMetric,
 ): UsageLimits {
+  if (metric === 'PROJECT_CREATED') return {};
   const defaults = planCode === 'PREMIUM_MONTHLY' || planCode === 'PREMIUM_ANNUAL'
     ? LEGACY_PREMIUM_PLAN_LIMITS[metric]
     : PRO_PLAN_LIMITS[metric];

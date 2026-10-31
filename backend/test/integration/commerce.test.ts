@@ -337,7 +337,7 @@ describe("commerce service — integration", () => {
       expect(originalEntitlement.status).toBe("PRO_ACTIVE");
     });
 
-    it("releases the originalTransactionId from a terminal prior owner before claiming", async () => {
+    it("preserves a terminal prior owner instead of reassigning the original transaction", async () => {
       const previous = await createUserWithFreeEntitlement({ freePlanId });
       const newOwner = await createUserWithFreeEntitlement({
         freePlanId,
@@ -346,8 +346,7 @@ describe("commerce service — integration", () => {
 
       const sharedOriginalTxnId = `otxn_${randomUUID()}`;
 
-      // Previous owner is EXPIRED, so the originalTransactionId is up
-      // for grabs but the row still has a stale FK on it.
+      // Expiration ends service but must not transfer purchase ownership.
       await prisma.userEntitlement.update({
         where: { userId: previous.user.id },
         data: {
@@ -377,7 +376,7 @@ describe("commerce service — integration", () => {
       });
       verifyJWSMock.mockResolvedValueOnce(txn);
 
-      await syncTransaction(newOwner.user.id, newOwner.company.id, {
+      await expect(syncTransaction(newOwner.user.id, newOwner.company.id, {
         purchase_attempt_id: attempt.id,
         store_product_id: STORE_PRODUCT_IDS.proMonthly,
         transaction_id: txn.transactionId,
@@ -385,18 +384,18 @@ describe("commerce service — integration", () => {
         app_account_token: attempt.appAccountToken,
         environment: "Sandbox",
         signed_transaction: "stub-jws",
-      });
+      })).rejects.toMatchObject({ code: "SUBSCRIPTION_BOUND_TO_OTHER_USER" });
 
       const previousEnt = await prisma.userEntitlement.findUniqueOrThrow({
         where: { userId: previous.user.id },
       });
-      expect(previousEnt.originalTransactionId).toBeNull();
+      expect(previousEnt.originalTransactionId).toBe(sharedOriginalTxnId);
 
       const newOwnerEnt = await prisma.userEntitlement.findUniqueOrThrow({
         where: { userId: newOwner.user.id },
       });
-      expect(newOwnerEnt.originalTransactionId).toBe(sharedOriginalTxnId);
-      expect(newOwnerEnt.status).toBe("PRO_ACTIVE");
+      expect(newOwnerEnt.originalTransactionId).toBeNull();
+      expect(newOwnerEnt.status).toBe("FREE");
     });
 
     it("is idempotent — calling sync twice on the same attempt returns the existing snapshot", async () => {

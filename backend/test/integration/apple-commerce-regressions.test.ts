@@ -141,7 +141,7 @@ describe('Apple subscription reconciliation regressions', () => {
   it('allows exactly one account to claim the same unbound subscription concurrently', async () => {
     const first = await createUserWithFreeEntitlement({ freePlanId });
     const second = await createUserWithFreeEntitlement({ freePlanId });
-    const payload = receipt();
+    const payload = receipt({ appAccountToken: randomUUID() });
     const claims = await Promise.allSettled([
       restore(first.user.id, first.company.id, payload),
       restore(second.user.id, second.company.id, payload),
@@ -152,6 +152,35 @@ describe('Apple subscription reconciliation regressions', () => {
     expect(await prisma.userEntitlement.count({
       where: { originalTransactionId: payload.originalTransactionId, status: 'PRO_ACTIVE' },
     })).toBe(1);
+  });
+
+  it('restores a migrated unknown signed account token once and preserves ownership after expiry', async () => {
+    const owner = await createUserWithFreeEntitlement({ freePlanId });
+    const other = await createUserWithFreeEntitlement({ freePlanId });
+    const historicalToken = randomUUID();
+    const payload = receipt({ appAccountToken: historicalToken });
+    expect(await prisma.purchaseAttempt.findUnique({ where: { appAccountToken: historicalToken } })).toBeNull();
+    const restored = await restore(owner.user.id, owner.company.id, payload);
+    expect(restored.subscription_state).toBe('PRO_ACTIVE');
+    expect(restored.feature_flags.CAN_GENERATE_PREVIEW).toBe(true);
+    expect((await restore(owner.user.id, owner.company.id, payload)).subscription_state).toBe('PRO_ACTIVE');
+    await prisma.userEntitlement.update({ where: { userId: owner.user.id }, data: { status: 'EXPIRED', endsAt: new Date(Date.now() - 1) } });
+    await expect(restore(other.user.id, other.company.id, payload)).rejects.toMatchObject({ code: 'SUBSCRIPTION_BOUND_TO_OTHER_USER' });
+    expect((await prisma.userEntitlement.findUniqueOrThrow({ where: { userId: owner.user.id } })).originalTransactionId).toBe(payload.originalTransactionId);
+    expect((await prisma.userEntitlement.findUniqueOrThrow({ where: { userId: other.user.id } })).status).toBe('FREE');
+  });
+
+  it.each(['Production', 'Sandbox'])('accepts %s only after the Apple signature boundary verifies it', async (environment) => {
+    const owner = await createUserWithFreeEntitlement({ freePlanId });
+    const snapshot = await restore(owner.user.id, owner.company.id, receipt({ environment }));
+    expect(snapshot.environment).toBe(environment);
+    expect(snapshot.subscription_state).toBe('PRO_ACTIVE');
+  });
+
+  it('rejects local Xcode environment data even if a verification boundary is stubbed', async () => {
+    const owner = await createUserWithFreeEntitlement({ freePlanId });
+    await expect(restore(owner.user.id, owner.company.id, receipt({ environment: 'Xcode' }))).rejects.toMatchObject({ statusCode: 400 });
+    expect((await prisma.userEntitlement.findUniqueOrThrow({ where: { userId: owner.user.id } })).status).toBe('FREE');
   });
 
   it('reserves an unbound receipt for the known signed-token purchaser before initial sync', async () => {

@@ -16,10 +16,11 @@ describe('effective subscription access', () => {
     expect(hasEffectiveProAccess(entitlement, now)).toBe(false);
   });
 
-  it('requires a deadline for paid states and permits admin override without one', () => {
+  it('requires a signed deadline or an explicit reviewer grant', () => {
     const undated = record('PRO_ACTIVE', { endsAt: null, renewalDate: null });
     expect(hasEffectiveProAccess(undated, now)).toBe(false);
-    expect(hasEffectiveProAccess({ ...undated, status: 'ADMIN_OVERRIDE' }, now)).toBe(true);
+    expect(hasEffectiveProAccess({ ...undated, status: 'ADMIN_OVERRIDE' }, now)).toBe(false);
+    expect(hasEffectiveProAccess({ ...undated, status: 'ADMIN_OVERRIDE', source: 'APP_REVIEW_DEMO' }, now)).toBe(true);
   });
 
   it('grants a real grace period and denies billing retry without one', () => {

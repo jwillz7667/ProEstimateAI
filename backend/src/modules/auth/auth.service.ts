@@ -99,8 +99,8 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
       },
     });
 
-    // Seed AI generation starter credits. Lets the user try the core
-    // product loop a fixed number of times before the paywall fires.
+    // Empty historical-balance row; new AI requires a verified Apple
+    // subscription or eligible introductory trial.
     await tx.usageBucket.create({
       data: {
         userId: createdUser.id,
@@ -315,8 +315,7 @@ async function appleSignInOnce(input: AppleSignInInput): Promise<AuthResult> {
       },
     });
 
-    // Seed AI generation starter credits — same allowance as the
-    // email-signup path so first-tap parity holds across providers.
+    // Match email signup: an empty historical balance does not unlock AI.
     await tx.usageBucket.create({
       data: {
         userId: createdUser.id,

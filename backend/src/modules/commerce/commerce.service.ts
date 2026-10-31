@@ -3,12 +3,12 @@ import { getEntitlementUsageSnapshot } from "../../lib/entitlement-usage";
 import { prisma } from "../../config/database";
 import {
   AccountMismatchError,
+  AuthenticationError,
   NotFoundError,
   SubscriptionOwnedByOtherUserError,
   ValidationError,
 } from "../../lib/errors";
 import { v4 as uuidv4 } from "uuid";
-import { isAdminUser } from "../../lib/admin";
 import { logger } from "../../config/logger";
 import {
   cached,
@@ -37,7 +37,6 @@ import {
   EntitlementSnapshotDto,
   toEntitlementSnapshotDto,
   PurchaseAttemptResponseDto,
-  ADMIN_ENTITLEMENT_SNAPSHOT,
 } from "./commerce.dto";
 import {
   SyncTransactionInput,
@@ -50,18 +49,31 @@ export async function getEffectiveEntitlement(
   userId: string,
   companyId: string,
 ): Promise<EntitlementSnapshotDto> {
-  // Admin users get full Pro access without a real subscription
-  if (await isAdminUser(userId)) {
-    return ADMIN_ENTITLEMENT_SNAPSHOT;
-  }
-
   // Rebuild effective status and rolling counters on every read. Caching the
   // final DTO can grant access past a signed deadline or show stale usage.
-  const entitlement = await prisma.userEntitlement.findUnique({
+  let entitlement = await prisma.userEntitlement.findUnique({
     where: { userId },
     include: { plan: true },
   });
-  if (!entitlement) throw new NotFoundError("UserEntitlement");
+  if (!entitlement) {
+    // Accounts predating commerce still retain basic app access. Backfill only
+    // a missing Free row; a concurrent signed purchase is never overwritten.
+    const user = await prisma.user.findFirst({
+      where: { id: userId, companyId, isActive: true }, select: { id: true },
+    });
+    if (!user) throw new AuthenticationError("Account is unavailable");
+    const freePlan = await prisma.plan.findUniqueOrThrow({ where: { code: "FREE_STARTER" } });
+    // INSERT ... ON CONFLICT DO NOTHING avoids the find/create race of an
+    // empty-update Prisma upsert, without overwriting a concurrent purchase.
+    await prisma.userEntitlement.createMany({
+      data: [{ userId, companyId, planId: freePlan.id, status: "FREE" }],
+      skipDuplicates: true,
+    });
+    entitlement = await prisma.userEntitlement.findUniqueOrThrow({
+      where: { userId }, include: { plan: true },
+    });
+  }
+  if (entitlement.companyId !== companyId) throw new AuthenticationError("Account is unavailable");
   const buckets = await prisma.usageBucket.findMany({ where: { userId, companyId } });
   return toEntitlementSnapshotDto(
     entitlement, buckets,
@@ -161,11 +173,6 @@ export async function createPurchaseAttempt(
 
 // ─── Verified Apple subscription reconciliation ─────────────────────────────
 
-const LIVE_CLAIM_STATUSES: EntitlementStatus[] = [
-  "TRIAL_ACTIVE", "PRO_ACTIVE", "GRACE_PERIOD", "BILLING_RETRY",
-  "CANCELED_ACTIVE", "ADMIN_OVERRIDE",
-];
-
 function signedTimestamp(payload: AppleTransactionInfo): number {
   return payload.signedDate ?? payload.purchaseDate;
 }
@@ -174,6 +181,7 @@ function validateAppleTransaction(payload: AppleTransactionInfo): void {
   if (payload.bundleId !== EXPECTED_BUNDLE_ID ||
       payload.type !== "Auto-Renewable Subscription" ||
       !payload.transactionId || !payload.originalTransactionId || !payload.productId ||
+      !["Production", "Sandbox"].includes(payload.environment) ||
       !Number.isFinite(payload.purchaseDate) ||
       !Number.isFinite(payload.expiresDate) ||
       !Number.isFinite(signedTimestamp(payload)) ||
@@ -320,7 +328,7 @@ async function lockAccount(transaction: Prisma.TransactionClient, userId: string
   `;
 }
 
-async function assertAndReleasePriorClaim(
+async function assertSubscriptionOwnership(
   transaction: Prisma.TransactionClient,
   userId: string,
   originalTransactionId: string,
@@ -328,17 +336,9 @@ async function assertAndReleasePriorClaim(
   const otherClaims = await transaction.userEntitlement.findMany({
     where: { originalTransactionId, userId: { not: userId } },
   });
-  if (otherClaims.some((claim) => LIVE_CLAIM_STATUSES.includes(claim.status))) {
-    throw new SubscriptionOwnedByOtherUserError();
-  }
-  await transaction.userEntitlement.updateMany({
-    where: {
-      originalTransactionId,
-      userId: { not: userId },
-      status: { notIn: LIVE_CLAIM_STATUSES },
-    },
-    data: { originalTransactionId: null },
-  });
+  // Expiration/refund removes access, not account ownership. Never silently
+  // transfer an already-bound Apple subscription to another destination user.
+  if (otherClaims.length > 0) throw new SubscriptionOwnedByOtherUserError();
 }
 
 interface ApplyTransactionOptions {
@@ -417,7 +417,7 @@ async function applyVerifiedTransaction(
     payload.transactionId !== current.latestTransactionId;
   const stale = Boolean(previousPeriod || appleSignedDate < latestDate || payload.isUpgraded);
   const state = deriveSignedState(payload, notification, current?.isAutoRenewEnabled);
-  if (!stale) await assertAndReleasePriorClaim(transaction, userId, payload.originalTransactionId);
+  if (!stale) await assertSubscriptionOwnership(transaction, userId, payload.originalTransactionId);
 
   const entitlement = stale && current ? current : await transaction.userEntitlement.upsert({
     where: { userId },

@@ -2,7 +2,7 @@ import type { EntitlementStatus, UserEntitlement } from '@prisma/client';
 
 export type EntitlementAccessRecord = Pick<UserEntitlement,
   'status' | 'trialEndsAt' | 'renewalDate' | 'endsAt' | 'gracePeriodEndsAt'
->;
+> & Partial<Pick<UserEntitlement, 'source'>>;
 
 /** Interpret persisted state against its signed deadline, even if a webhook is delayed. */
 export function effectiveSubscriptionStatus(
@@ -10,7 +10,9 @@ export function effectiveSubscriptionStatus(
   now: Date = new Date(),
 ): EntitlementStatus {
   const { status } = entitlement;
-  if (status === 'ADMIN_OVERRIDE' || status === 'FREE' || status === 'REVOKED' || status === 'EXPIRED') {
+  // Only the explicitly provisioned reviewer grant bypasses an Apple purchase.
+  if (status === 'ADMIN_OVERRIDE') return entitlement.source === 'APP_REVIEW_DEMO' ? 'ADMIN_OVERRIDE' : 'EXPIRED';
+  if (status === 'FREE' || status === 'REVOKED' || status === 'EXPIRED') {
     return status;
   }
   if (status === 'GRACE_PERIOD' || status === 'BILLING_RETRY') {

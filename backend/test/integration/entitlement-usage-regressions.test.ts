@@ -86,7 +86,7 @@ describe('authoritative subscription access and quotas', () => {
     expect(snapshot.usage.find((bucket) => bucket.metric_code === 'AI_GENERATION')).toEqual({
       metric_code: 'AI_GENERATION', included_quantity: 20, consumed_quantity: 2, remaining_quantity: 18, source: 'PRO_SUBSCRIPTION',
     });
-    expect(snapshot.usage.map((bucket) => bucket.metric_code)).toEqual(['AI_GENERATION', 'QUOTE_EXPORT', 'PROJECT_CREATED', 'ESTIMATE_GENERATED']);
+    expect(snapshot.usage.map((bucket) => bucket.metric_code)).toEqual(['AI_GENERATION', 'QUOTE_EXPORT', 'ESTIMATE_GENERATED']);
   });
 
   it('refunds server PDF export capacity on render/ownership failure', async () => {

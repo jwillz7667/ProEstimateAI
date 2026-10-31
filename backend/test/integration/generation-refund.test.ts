@@ -30,7 +30,7 @@ beforeEach(async () => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-async function account(paid = false) {
+async function account(paid = true) {
   const company = await prisma.company.create({ data: { name: 'Generation refunds' } });
   const user = await prisma.user.create({ data: { companyId: company.id, email: `${randomUUID()}@example.test`, fullName: 'Refund tester' } });
   const plan = await prisma.plan.findUniqueOrThrow({ where: { code: paid ? 'PRO_MONTHLY' : 'FREE_STARTER' } });
@@ -81,7 +81,7 @@ describe('durable asynchronous generation refunds', () => {
     expect(await prisma.aIGeneration.count()).toBe(1);
   });
   it.each(['provider returned no image', 'missing reference', 'safety rejection', 'processing exception', 'provider not configured'])(
-    'returns the exact starter credit when %s terminates the job', async (failure) => {
+    'returns the paid reservation when %s terminates the job', async (failure) => {
       const t = await account();
       if (failure === 'processing exception' || failure === 'safety rejection') mocks.provider.mockRejectedValue(new Error(failure));
       if (failure === 'provider not configured') env.FAL_KEY = undefined;
@@ -89,8 +89,7 @@ describe('durable asynchronous generation refunds', () => {
       await status(generation.id, 'FAILED');
       const event = await linkedEvent(generation.id);
       expect(event.quantity).toBe(0);
-      expect(event.metadata).toMatchObject({ source: 'STARTER_CREDITS', bucket_id: t.bucket.id,
-        generation_reservation: { event_id: event.id, generation_id: generation.id, user_id: t.user.id },
+      expect(event.metadata).toMatchObject({ generation_reservation: { event_id: event.id, generation_id: generation.id, user_id: t.user.id },
         generation_refund: { reason: expect.any(String) } });
       expect((await prisma.usageBucket.findUniqueOrThrow({ where: { id: t.bucket.id } })).consumedQuantity).toBe(0);
       if (failure === 'missing reference') expect(mocks.provider.mock.calls[0][2]).toBeUndefined();
@@ -175,13 +174,15 @@ describe('durable asynchronous generation refunds', () => {
     expect(await markImagelessCompletedGenerationsFailed()).toBe(0);
     expect((await linkedEvent(rendered.id)).quantity).toBe(1);
     expect((await linkedEvent(text.id)).quantity).toBe(1);
-    expect((await prisma.usageBucket.findUniqueOrThrow({ where: { id: t.bucket.id } })).consumedQuantity).toBe(2);
+    expect((await prisma.usageBucket.findUniqueOrThrow({ where: { id: t.bucket.id } })).consumedQuantity).toBe(0);
   });
 
   it('rolls failure and refund back together, then lets the reaper retry from persisted linkage', async () => {
     const t = await account();
     const generation = await prisma.$transaction(async (transaction) => {
-      const reservation = await gateAIAction({ userId: t.user.id, companyId: t.company.id, metric: 'AI_GENERATION' }, transaction);
+      await transaction.usageBucket.update({ where: { id: t.bucket.id }, data: { consumedQuantity: 1 } });
+      const event = await transaction.usageEvent.create({ data: { userId: t.user.id, companyId: t.company.id, metricCode: 'AI_GENERATION', quantity: 1, metadata: { source: 'STARTER_CREDITS', bucket_id: t.bucket.id } } });
+      const reservation = { eventId: event.id, userId: t.user.id, starterBucketId: t.bucket.id };
       const job = await transaction.aIGeneration.create({ data: { projectId: t.project.id, prompt: 'orphan', createdAt: old } });
       await linkGenerationReservation(transaction, reservation, job.id, t.project.id, t.company.id, true);
       return job;
@@ -204,7 +205,7 @@ describe('durable asynchronous generation refunds', () => {
     const generation = await prisma.aIGeneration.create({ data: { projectId: t.project.id, prompt: 'legacy', createdAt: old } });
     expect(await markStuckGenerationsFailed()).toBe(1);
     expect((await prisma.usageEvent.findUniqueOrThrow({ where: { id: reservation!.eventId } })).quantity).toBe(1);
-    expect((await prisma.usageBucket.findUniqueOrThrow({ where: { id: t.bucket.id } })).consumedQuantity).toBe(1);
+    expect((await prisma.usageBucket.findUniqueOrThrow({ where: { id: t.bucket.id } })).consumedQuantity).toBe(0);
     expect((await prisma.aIGeneration.findUniqueOrThrow({ where: { id: generation.id } })).status).toBe('FAILED');
   });
 });
