@@ -91,23 +91,29 @@ struct ProjectDetailView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        Group {
-            if viewModel.isLoading && viewModel.project == nil {
-                LoadingStateView(message: "Loading project...")
-            } else if let error = viewModel.errorMessage, viewModel.project == nil {
-                RetryStateView(message: error) {
-                    Task { await viewModel.loadProject(id: projectId) }
-                }
-            } else if let project = viewModel.project {
-                projectContent(project)
-            } else {
-                // Fallback: if task didn't fire, show loading and trigger load
-                LoadingStateView(message: "Loading project...")
-                    .onAppear {
-                        Task { await viewModel.loadProject(id: projectId) }
-                    }
+        toolPresentations
+        .onChange(of: viewModel.generationPaywall) { _, decision in
+            guard let decision else { return }
+            paywallPresenter.present(decision)
+            viewModel.generationPaywall = nil
+        }
+        .alert(
+            "Error",
+            isPresented: Binding(
+                get: { viewModel.project != nil && viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
+            Button("OK") { viewModel.errorMessage = nil }
+        } message: {
+            if let message = viewModel.errorMessage {
+                Text(message)
             }
         }
+    }
+
+    private var projectNavigationContent: some View {
+        projectStateContent
         .navigationTitle(viewModel.project?.title ?? "Project")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -168,6 +174,12 @@ struct ProjectDetailView: View {
         }
         .onChange(of: viewModel.estimates.map(\.id)) { _, _ in openRequestedDocument() }
         .onChange(of: viewModel.proposals.map(\.id)) { _, _ in openRequestedDocument() }
+    }
+
+    // Separate presentation layers keep the compiler from solving every
+    // conditional sheet and the project content in one SwiftUI expression.
+    private var documentPresentations: some View {
+        projectNavigationContent
         .sheet(isPresented: $showEditSheet) {
             if let project = viewModel.project {
                 ProjectEditSheet(project: project) { updated in
@@ -194,6 +206,10 @@ struct ProjectDetailView: View {
                 InvoiceDetailView(invoiceId: invoice.id, isPresentedInSheet: true)
             }
         }
+    }
+
+    private var toolPresentations: some View {
+        documentPresentations
         .sheet(isPresented: $showChangeOrders) {
             NavigationStack {
                 ChangeOrderListView(projectId: projectId)
@@ -236,22 +252,24 @@ struct ProjectDetailView: View {
                 }
             }
         }
-        .onChange(of: viewModel.generationPaywall) { _, decision in
-            guard let decision else { return }
-            paywallPresenter.present(decision)
-            viewModel.generationPaywall = nil
-        }
-        .alert(
-            "Error",
-            isPresented: Binding(
-                get: { viewModel.project != nil && viewModel.errorMessage != nil },
-                set: { if !$0 { viewModel.errorMessage = nil } }
-            )
-        ) {
-            Button("OK") { viewModel.errorMessage = nil }
-        } message: {
-            if let message = viewModel.errorMessage {
-                Text(message)
+    }
+
+    private var projectStateContent: some View {
+        Group {
+            if viewModel.isLoading && viewModel.project == nil {
+                LoadingStateView(message: "Loading project...")
+            } else if let error = viewModel.errorMessage, viewModel.project == nil {
+                RetryStateView(message: error) {
+                    Task { await viewModel.loadProject(id: projectId) }
+                }
+            } else if let project = viewModel.project {
+                projectContent(project)
+            } else {
+                // Fallback: if task didn't fire, show loading and trigger load
+                LoadingStateView(message: "Loading project...")
+                    .onAppear {
+                        Task { await viewModel.loadProject(id: projectId) }
+                    }
             }
         }
     }
