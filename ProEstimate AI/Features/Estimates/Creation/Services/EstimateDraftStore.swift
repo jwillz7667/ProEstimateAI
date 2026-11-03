@@ -89,6 +89,51 @@ actor EstimateDraftStore: EstimateDraftPersisting {
         if FileManager.default.fileExists(atPath: folder.path) { try FileManager.default.removeItem(at: folder) }
     }
 
+    /// Small account-scoped journals share the same protection and sign-out
+    /// revocation as estimate drafts. Namespace and record IDs are hashed.
+    func loadJournal(scope: EstimateDraftScope, namespace: String, recordId: String) async throws -> Data? {
+        try Task.checkCancellation()
+        let file = try journalURL(scope: scope, namespace: namespace, recordId: recordId)
+        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
+        let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
+        guard ((attributes[.size] as? NSNumber)?.intValue ?? 0) <= 1_000_000 else { throw EstimateDraftStoreError.invalidCheckpoint }
+        return try Data(contentsOf: file)
+    }
+
+    func saveJournal(_ data: Data, scope: EstimateDraftScope, namespace: String, recordId: String, sessionId: UUID) async throws {
+        try Task.checkCancellation()
+        guard sessions[scope]?.contains(sessionId) == true, data.count <= 1_000_000 else { throw EstimateDraftStoreError.invalidCheckpoint }
+        let file = try journalURL(scope: scope, namespace: namespace, recordId: recordId)
+        var folder = file.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try folder.setResourceValues(values)
+        #if os(iOS)
+        try data.write(to: file, options: [.atomic, .completeFileProtection])
+        #else
+        try data.write(to: file, options: .atomic)
+        #endif
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+    }
+
+    func removeJournal(scope: EstimateDraftScope, namespace: String, recordId: String, sessionId: UUID) async throws {
+        try Task.checkCancellation()
+        guard sessions[scope]?.contains(sessionId) == true else { throw EstimateDraftStoreError.invalidCheckpoint }
+        let file = try journalURL(scope: scope, namespace: namespace, recordId: recordId)
+        if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+    }
+
+    private func journalURL(scope: EstimateDraftScope, namespace: String, recordId: String) throws -> URL {
+        guard !scope.userId.isEmpty, !scope.companyId.isEmpty, !namespace.isEmpty, !recordId.isEmpty else {
+            throw EstimateDraftStoreError.invalidCheckpoint
+        }
+        return directory.appendingPathComponent(digest(scope.userId), isDirectory: true)
+            .appendingPathComponent(digest(scope.companyId), isDirectory: true)
+            .appendingPathComponent(digest(namespace), isDirectory: true)
+            .appendingPathComponent(digest(recordId)).appendingPathExtension("json")
+    }
+
     private func fileURL(scope: EstimateDraftScope) throws -> URL {
         guard !scope.userId.isEmpty, !scope.companyId.isEmpty else { throw EstimateDraftStoreError.invalidCheckpoint }
         return directory.appendingPathComponent(digest(scope.userId), isDirectory: true)

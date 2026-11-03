@@ -2,9 +2,11 @@ import Foundation
 
 struct EstimateCreationService: EstimateCreationServing {
     private let apiClient: any APIClientProtocol
+    private let sessionId: UUID
 
     init(apiClient: any APIClientProtocol = APIClient.shared) {
         self.apiClient = apiClient
+        sessionId = TokenStore.shared.sessionIdentifier
     }
 
     func listClients() async throws -> [Client] {
@@ -12,10 +14,12 @@ struct EstimateCreationService: EstimateCreationServing {
     }
 
     func createProject(request: ProjectCreationRequest) async throws -> Project {
-        try await apiClient.request(.createProject(body: request))
+        try requireSession()
+        return try await apiClient.request(.createProject(body: request))
     }
 
     func createEstimate(projectId: String, title: String, method: EstimateCreationMethod) async throws -> Estimate {
+        try requireSession()
         let body = EstimateCreationBody(projectId: projectId, title: method == .manual ? title : nil)
         switch method {
         case .manual: return try await apiClient.request(.createEstimate(body: body))
@@ -25,8 +29,14 @@ struct EstimateCreationService: EstimateCreationServing {
     }
 
     func createEstimateFromTemplate(projectId: String, title: String, templateId: String, requestId: String) async throws -> Estimate {
-        try await apiClient.request(.instantiateEstimateTemplate(id: templateId,
+        try requireSession()
+        return try await apiClient.request(.instantiateEstimateTemplate(id: templateId,
             body: EstimateTemplateCreationBody(projectId: projectId, title: title, requestId: requestId)))
+    }
+
+    private func requireSession() throws {
+        try Task.checkCancellation()
+        guard TokenStore.shared.sessionIdentifier == sessionId else { throw APIError.unauthorized }
     }
 
     func listEstimates(projectId: String) async throws -> [Estimate] {
