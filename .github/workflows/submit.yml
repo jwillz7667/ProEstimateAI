@@ -23,7 +23,9 @@ permissions:
 jobs:
   submit:
     name: Submit latest build for App Store review
-    runs-on: macos-15
+    # Submission uses only App Store Connect APIs and already uploaded builds.
+    # Keep Mac runners available for the separate signed archive workflow.
+    runs-on: ubuntu-latest
     timeout-minutes: 75
     if: ${{ inputs.confirm == 'ship' }}
 
