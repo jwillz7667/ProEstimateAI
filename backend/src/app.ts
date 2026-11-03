@@ -64,6 +64,7 @@ import estimateExportsRoutes from "./modules/estimate-exports/estimate-exports.r
 import proposalsRoutes from "./modules/proposals/proposals.routes";
 import proposalsShareRoutes from "./modules/proposals/proposals-share.routes";
 import invoicesRoutes from "./modules/invoices/invoices.routes";
+import { invoiceShareRoutes } from "./modules/invoice-finance/invoice-finance.routes";
 import invoiceLineItemsRoutes from "./modules/invoice-line-items/invoice-line-items.routes";
 import pricingProfilesRoutes from "./modules/pricing-profiles/pricing-profiles.routes";
 import laborRatesRoutes from "./modules/labor-rates/labor-rates.routes";
@@ -75,6 +76,7 @@ import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 import contractorsRoutes from "./modules/contractors/contractors.routes";
 import materialsPricingRoutes from "./modules/materials-pricing/materials-pricing.routes";
 import adminRoutes from "./modules/admin/admin.routes";
+import estimateLibraryRoutes from "./modules/estimate-library/estimate-library.routes";
 
 export function createApp() {
   const app = express();
@@ -115,6 +117,7 @@ export function createApp() {
   // V1 routes
   const v1 = express.Router();
   v1.use("/auth", authRoutes);
+  v1.use("/invoice-share", invoiceShareRoutes);
 
   // Public image endpoints (no auth — served to AsyncImage / <img> tags)
   v1.get("/generations/:id/preview", async (req, res, next) => {
@@ -240,6 +243,7 @@ export function createApp() {
   v1.use("/generations", requireAuth, generationsRoutes);
   v1.use("/materials", requireAuth, materialsRoutes);
   v1.use("/estimates", requireAuth, estimatesRoutes);
+  v1.use("/estimate-library", requireAuth, estimateLibraryRoutes);
   v1.use("/estimate-line-items", requireAuth, estimateLineItemsRoutes);
   v1.use("/estimate-exports", requireAuth, estimateExportsRoutes);
   v1.use("/proposals", requireAuth, proposalsRoutes);

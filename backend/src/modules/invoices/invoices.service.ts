@@ -19,6 +19,7 @@ import {
 } from "./invoices.validators";
 import { computeInvoiceTotals } from "../invoice-line-items/invoice-line-items.service";
 import { InvoiceStatus, Prisma } from "@prisma/client";
+import { recordLegacyBalanceChange } from "../invoice-finance/invoice-finance.service";
 
 /**
  * Paywall decision for INVOICE_LOCKED placement.
@@ -460,6 +461,7 @@ export async function update(
       updateData.paidAt = existing.paidAt ?? new Date();
     else if (data.status !== undefined || financialChange)
       updateData.paidAt = null;
+    await recordLegacyBalanceChange(tx, existing, new Prisma.Decimal(amountPaid));
     return tx.invoice.update({ where: { id }, data: updateData });
   });
 }
@@ -517,7 +519,8 @@ export async function send(
           ).generateInvoicePDF(updated.id, companyId, userId),
         }
       : undefined;
-    await sendInvoiceEmail(client.email, "", company.name, amount, invoicePdf);
+    const invoiceUrl = `${env.PUBLIC_WEB_BASE_URL.replace(/\/$/, "")}/invoice/${encodeURIComponent(updated.shareToken)}`;
+    await sendInvoiceEmail(client.email, invoiceUrl, company.name, amount, invoicePdf);
   }
 
   return updated;
