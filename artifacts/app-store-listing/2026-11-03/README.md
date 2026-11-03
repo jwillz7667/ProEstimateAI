@@ -57,9 +57,24 @@ The user’s latest instruction was **keep simulators closed**. No simulator was
 ```sh
 node scripts/render-app-store-listing.cjs
 node scripts/verify-app-store-listing.cjs
+python3 scripts/verify-uploaded-app-store-listing.py --self-test
 /opt/homebrew/opt/ruby/bin/ruby fastlane/tests/listing_screenshots_test.rb
 ```
 
 The renderer uses the existing backend `sharp` dependency. It preserves the original gradient stops and normalized curve profile, renders a single virtual panorama, then exports exact crops. Update `gallery-geometry.json` to calibrate a different measured reference; `--gap-ratio=NUMBER` overrides the reference ratio. Staging rejects a three-panel regression, missing/duplicate order, incorrect dimensions, alpha and paths escaping the campaign.
 
 This package contains artwork and staging changes. It does not itself upload assets, change a live listing, withdraw an App Review submission or publish a release.
+
+
+## Independent Apple readback
+
+After the listing upload and asset sorting finish, download the read-only `asc_status` workflow log and verify every locale and bucket independently:
+
+```sh
+python3 scripts/verify-uploaded-app-store-listing.py /path/to/asc-status.log \
+  --version 1.0.9 --status-run RUN_ID --out /path/to/verified-assets.json
+```
+
+The verifier resolves the repository/campaign from its own location and makes **no Apple API requests or writes**. It requires exactly 125 complete assets: five locales, five selected nonempty display buckets per locale, five images in 01–05 source order per bucket. It compares every Apple-reported upload filename/file size and image dimensions with the corresponding local PNG. Source SHA-256 values identify local files; they are not presented as hashes of Apple's recompressed CDN images.
+
+A successful upload job alone is insufficient: Fastlane can deduplicate checksums across locales, while a locale may still be missing its own screenshot resource. The verifier checks each actual locale/bucket resource rather than a global checksum set. Pending delivery, missing assets, incorrect order, unexpected nonempty buckets and mismatched source sizes/dimensions fail verification. `--self-test` exercises nine offline positive/negative controls and never produces real upload evidence.
