@@ -15,7 +15,7 @@ export interface DashboardAttentionTarget {
 }
 
 export interface DashboardAttentionGroup {
-  kind: 'overdue_invoice' | 'approved_estimate' | 'unanswered_proposal' | 'draft_estimate';
+  kind: 'overdue_invoice' | 'changes_requested' | 'approved_estimate' | 'unanswered_proposal' | 'draft_estimate';
   count: number;
   amounts: DashboardMoney[];
   target: DashboardAttentionTarget;
@@ -70,6 +70,20 @@ export async function getAttention(companyId: string, now = new Date()) {
         AND i.status IN ('SENT', 'VIEWED', 'OVERDUE', 'PARTIALLY_PAID')
         AND i."amountDue" > 0 AND i."dueDate" < ${nowUTC}::timestamp
     `);
+    const requestedChanges = await summarize(tx, Prisma.sql`
+      SELECT q.id AS document_id, q."projectId" AS project_id,
+        COALESCE(q."proposalNumber", e."estimateNumber") AS document_number,
+        p.title AS project_title, c.name AS client_name,
+        e."totalAmount" AS amount, 'USD'::text AS currency_code,
+        q."changesRequestedAt" AS action_at
+      FROM "Proposal" q
+      JOIN "Estimate" e ON e.id = q."estimateId" AND e."companyId" = ${companyId}
+      JOIN "Project" p ON p.id = q."projectId" AND p."companyId" = ${companyId}
+      LEFT JOIN "Client" c ON c.id = p."clientId" AND c."companyId" = ${companyId}
+      WHERE q."companyId" = ${companyId} AND q.status IN ('SENT', 'VIEWED')
+        AND e.status IN ('DRAFT', 'SENT') AND q."respondedAt" IS NULL
+        AND q."changesRequestedAt" IS NOT NULL AND p.status <> 'ARCHIVED'
+    `);
     const approved = await summarize(tx, Prisma.sql`
       SELECT e.id AS document_id, e."projectId" AS project_id,
         e."estimateNumber" AS document_number, p.title AS project_title,
@@ -95,6 +109,7 @@ export async function getAttention(companyId: string, now = new Date()) {
       WHERE q."companyId" = ${companyId} AND q.status IN ('SENT', 'VIEWED')
         AND e.status IN ('DRAFT', 'SENT')
         AND q."respondedAt" IS NULL AND q."sentAt" <= ${followUpBeforeUTC}::timestamp
+        AND q."changesRequestedAt" IS NULL
         AND (q."expiresAt" IS NULL OR q."expiresAt" > ${nowUTC}::timestamp)
         AND p.status <> 'ARCHIVED'
     `);
@@ -110,9 +125,9 @@ export async function getAttention(companyId: string, now = new Date()) {
         AND NOT EXISTS (SELECT 1 FROM "Proposal" q WHERE q."estimateId" = e.id
           AND q."companyId" = ${companyId} AND q.status <> 'DRAFT')
     `);
-    const kinds = ['overdue_invoice', 'approved_estimate', 'unanswered_proposal', 'draft_estimate'] as const;
+    const kinds = ['overdue_invoice', 'changes_requested', 'approved_estimate', 'unanswered_proposal', 'draft_estimate'] as const;
     const groups: DashboardAttentionGroup[] = [];
-    for (const [index, result] of [overdue, approved, unanswered, drafts].entries()) {
+    for (const [index, result] of [overdue, requestedChanges, approved, unanswered, drafts].entries()) {
       if (result.count > 0 && result.target) groups.push({ kind: kinds[index], ...result, target: result.target });
     }
     return { generated_at: now.toISOString(), follow_up_after_days: 3, groups };

@@ -24,7 +24,7 @@ struct DashboardAttentionSection: View {
                         .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
                 } else {
                     VStack(spacing: SpacingTokens.sm) {
-                        ForEach(attention.groups.prefix(4)) { group in
+                        ForEach(attention.groups.prefix(5)) { group in
                             attentionRow(group)
                         }
                     }

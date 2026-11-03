@@ -273,7 +273,7 @@ struct DashboardView: View {
             router.dashboardPath.append(AppDestination.projectDetail(
                 id: group.target.projectId, highlightEstimateId: group.target.documentId
             ))
-        case .unansweredProposal:
+        case .unansweredProposal, .changesRequested:
             router.dashboardPath.append(AppDestination.projectDetail(
                 id: group.target.projectId, highlightProposalId: group.target.documentId
             ))

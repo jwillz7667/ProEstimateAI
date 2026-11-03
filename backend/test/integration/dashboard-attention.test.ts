@@ -141,6 +141,18 @@ describe('Home next actions', () => {
     expect(result.groups[0].amounts).toEqual([{ currency_code: 'USD', amount: '25.50' }]);
   });
 
+  it('shows a client change request immediately and excludes it from stale unanswered proposals', async () => {
+    const t = await fixture();
+    const request = await proposal(t, { age: 1 });
+    await prisma.proposal.update({ where: { id: request.id }, data: { changesRequestedAt: now, requestedChangesMessage: 'Please revise the cabinets' } });
+    const staleRequest = await proposal(t, { age: 6 });
+    await prisma.proposal.update({ where: { id: staleRequest.id }, data: { changesRequestedAt: daysAgo(1) } });
+    const result = await getAttention(t.company.id, now);
+    expect(result.groups.map(g => g.kind)).toEqual(['changes_requested']);
+    expect(result.groups[0].count).toBe(2);
+    expect(result.groups[0].target.document_id).toBe(staleRequest.id);
+  });
+
   it('uses exact UTC date boundaries independently of the database session time zone', async () => {
     const t = await fixture();
     const overdue = await invoice(t, { dueDate: new Date(now.getTime() - 1) });

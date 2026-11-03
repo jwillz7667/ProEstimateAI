@@ -55,6 +55,7 @@ struct DashboardMoney: Codable, Hashable, Sendable {
 struct DashboardAttentionGroup: Codable, Identifiable, Sendable {
     enum Kind: String, Codable, Sendable {
         case overdueInvoice = "overdue_invoice"
+        case changesRequested = "changes_requested"
         case approvedEstimate = "approved_estimate"
         case unansweredProposal = "unanswered_proposal"
         case draftEstimate = "draft_estimate"
@@ -62,6 +63,7 @@ struct DashboardAttentionGroup: Codable, Identifiable, Sendable {
         var title: String {
             switch self {
             case .overdueInvoice: "Follow up overdue payment"
+            case .changesRequested: "Review requested changes"
             case .approvedEstimate: "Invoice approved work"
             case .unansweredProposal: "Follow up a proposal"
             case .draftEstimate: "Finish an estimate"
@@ -71,6 +73,7 @@ struct DashboardAttentionGroup: Codable, Identifiable, Sendable {
         var icon: String {
             switch self {
             case .overdueInvoice: "exclamationmark.circle"
+            case .changesRequested: "text.bubble"
             case .approvedEstimate: "checkmark.seal"
             case .unansweredProposal: "paperplane"
             case .draftEstimate: "square.and.pencil"
@@ -80,6 +83,7 @@ struct DashboardAttentionGroup: Codable, Identifiable, Sendable {
         var countLabel: String {
             switch self {
             case .overdueInvoice: "overdue"
+            case .changesRequested: "need a revision"
             case .approvedEstimate: "ready to invoice"
             case .unansweredProposal: "awaiting a reply"
             case .draftEstimate: "drafts"
