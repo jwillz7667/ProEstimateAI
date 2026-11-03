@@ -127,5 +127,8 @@ jobs:
       - name: Run proposal and follow-up regressions
         run: scripts/tests/run-proposal-followup-regressions.sh
 
+      - name: Run approved change-order regressions
+        run: scripts/tests/run-change-order-regressions.sh
+
       - name: Run job cost and receipt regressions
         run: scripts/tests/run-job-cost-regressions.sh
