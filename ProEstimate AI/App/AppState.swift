@@ -21,6 +21,10 @@ final class AppState {
         let email: String
         let fullName: String
         let avatarURL: URL?
+        let role: User.Role
+
+        var canEdit: Bool { role != .viewer }
+        var isAdmin: Bool { role == .owner || role == .admin }
     }
 
     /// Lightweight branding snapshot used wherever the full `Company` model

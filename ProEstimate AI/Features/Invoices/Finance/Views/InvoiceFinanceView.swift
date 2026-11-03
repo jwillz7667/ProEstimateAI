@@ -19,59 +19,7 @@ struct InvoiceFinanceView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                if let snapshot = model.snapshot {
-                    summary(snapshot.invoice)
-                    pendingSection
-                    checkoutSection(snapshot)
-                    if !snapshot.installments.isEmpty {
-                        Section("Payment schedule") {
-                            ForEach(snapshot.installments) { installment in
-                                VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-                                    HStack { Text(installment.title).font(TypographyTokens.headline); Spacer(); CurrencyText(amount: installment.amount) }
-                                    if let dueDate = installment.dueDate {
-                                        Text("Due \(dueDate.formatted(date: .abbreviated, time: .omitted))")
-                                            .font(TypographyTokens.caption).foregroundStyle(ColorTokens.secondaryText)
-                                    }
-                                    HStack { Text("Outstanding").font(TypographyTokens.caption); Spacer(); CurrencyText(amount: installment.amountDue) }
-                                }
-                                .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                    Section("Receipts and adjustments") {
-                        if snapshot.payments.isEmpty {
-                            Text("No payment receipts recorded yet.").foregroundStyle(ColorTokens.secondaryText)
-                        }
-                        ForEach(snapshot.payments) { receipt in
-                            InvoicePaymentReceiptRow(receipt: receipt)
-                        }
-                    }
-                    Section {
-                        if snapshot.invoice.status == .draft {
-                            Button("Set deposit & payment schedule") { route = .schedule(snapshot) }
-                                .disabled(!model.canEditSchedule || appState.currentUser?.canEdit != true)
-                            Text("Set the requested payments before sending the invoice.")
-                                .font(TypographyTokens.footnote).foregroundStyle(ColorTokens.secondaryText)
-                        } else if snapshot.invoice.status != .void {
-                            Button("Record received payment") { route = .payment }
-                                .disabled(!model.canRecordNewPayment || appState.currentUser?.canEdit != true)
-                        }
-                        if let url = snapshot.shareURL {
-                            ShareLink(item: url) { Label("Share client invoice", systemImage: "square.and.arrow.up") }
-                        }
-                    }
-                } else if model.isLoading {
-                    ProgressView("Loading payment history…")
-                }
-                if let message = model.errorMessage {
-                    Section {
-                        Text(message).fixedSize(horizontal: false, vertical: true)
-                        Button("Refresh payment history") { Task { await reload() } }
-                            .disabled(model.isLoading || model.isWorking)
-                    }
-                }
-            }
+            financeForm
             .navigationTitle("Payments & receipts")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -107,6 +55,62 @@ struct InvoiceFinanceView: View {
             .onChange(of: model.savedRevision) { _, _ in
                 AppEventBus.shared.notePaymentChange()
                 AppEventBus.shared.noteProjectChange()
+            }
+        }
+    }
+
+    private var financeForm: some View {
+        Form {
+            if let snapshot = model.snapshot {
+                summary(snapshot.invoice)
+                pendingSection
+                checkoutSection(snapshot)
+                if !snapshot.installments.isEmpty {
+                    Section("Payment schedule") {
+                        ForEach(snapshot.installments) { installment in
+                            VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+                                HStack { Text(installment.title).font(TypographyTokens.headline); Spacer(); CurrencyText(amount: installment.amount) }
+                                if let dueDate = installment.dueDate {
+                                    Text("Due \(dueDate.formatted(date: .abbreviated, time: .omitted))")
+                                        .font(TypographyTokens.caption).foregroundStyle(ColorTokens.secondaryText)
+                                }
+                                HStack { Text("Outstanding").font(TypographyTokens.caption); Spacer(); CurrencyText(amount: installment.amountDue) }
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                Section("Receipts and adjustments") {
+                    if snapshot.payments.isEmpty {
+                        Text("No payment receipts recorded yet.").foregroundStyle(ColorTokens.secondaryText)
+                    }
+                    ForEach(snapshot.payments) { receipt in
+                        InvoicePaymentReceiptRow(receipt: receipt)
+                    }
+                }
+                Section {
+                    if snapshot.invoice.status == .draft {
+                        Button("Set deposit & payment schedule") { route = .schedule(snapshot) }
+                            .disabled(!model.canEditSchedule || appState.currentUser?.canEdit != true)
+                        Text("Set the requested payments before sending the invoice.")
+                            .font(TypographyTokens.footnote).foregroundStyle(ColorTokens.secondaryText)
+                    } else if snapshot.invoice.status != .void {
+                        Button("Record received payment") { route = .payment }
+                            .disabled(!model.canRecordNewPayment || appState.currentUser?.canEdit != true)
+                    }
+                    if let url = snapshot.shareURL {
+                        ShareLink(item: url) { Label("Share client invoice", systemImage: "square.and.arrow.up") }
+                    }
+                }
+            } else if model.isLoading {
+                ProgressView("Loading payment history…")
+            }
+            if let message = model.errorMessage {
+                Section {
+                    Text(message).fixedSize(horizontal: false, vertical: true)
+                    Button("Refresh payment history") { Task { await reload() } }
+                        .disabled(model.isLoading || model.isWorking)
+                }
             }
         }
     }

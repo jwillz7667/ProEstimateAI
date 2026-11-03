@@ -218,7 +218,8 @@ final class AuthViewModel {
             id: user.id,
             email: user.email,
             fullName: user.fullName,
-            avatarURL: user.avatarURL
+            avatarURL: user.avatarURL,
+            role: user.role
         )
         appState.currentCompany = AppState.CurrentCompany.from(company)
         appState.isAuthenticated = true
