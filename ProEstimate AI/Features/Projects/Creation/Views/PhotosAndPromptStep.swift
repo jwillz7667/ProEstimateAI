@@ -249,27 +249,7 @@ struct PhotosAndPromptStep: View {
             matching: .images,
             photoLibrary: .shared()
         ) {
-            HStack(spacing: SpacingTokens.sm) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.title2)
-                    .foregroundStyle(ColorTokens.primaryOrange)
-
-                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("Choose from Library")
-                        .font(TypographyTokens.headline)
-                    Text("Select up to 10 photos")
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(SpacingTokens.md)
-            .glassCard(cornerRadius: RadiusTokens.card)
+            PhotoLibraryPickerLabel()
         }
         .buttonStyle(.plain)
         .onChange(of: viewModel.selectedPhotosItems) { _, _ in
@@ -616,6 +596,38 @@ struct PhotosAndPromptStep: View {
             }
         }
         .padding(.horizontal, SpacingTokens.md)
+    }
+}
+
+// PhotosPicker evaluates its label through a nonisolated Sendable closure.
+// Construct only this stateless value there; its body renders design-system
+// colors, fonts and card styling on the main actor.
+@MainActor
+private struct PhotoLibraryPickerLabel: View {
+    nonisolated init() {}
+
+    var body: some View {
+        HStack(spacing: SpacingTokens.sm) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.title2)
+                .foregroundStyle(ColorTokens.primaryOrange)
+
+            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                Text("Choose from Library")
+                    .font(TypographyTokens.headline)
+                Text("Select up to 10 photos")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(SpacingTokens.md)
+        .glassCard(cornerRadius: RadiusTokens.card)
     }
 }
 
