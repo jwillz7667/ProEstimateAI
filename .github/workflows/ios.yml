@@ -115,6 +115,9 @@ jobs:
       - name: Run invoice finance regressions
         run: scripts/tests/run-invoice-finance-regressions.sh
 
+      - name: Run invoice currency regressions
+        run: scripts/tests/run-invoice-currency-regressions.sh
+
       - name: Run saved estimate library regressions
         run: scripts/tests/run-estimate-library-regressions.sh
 
