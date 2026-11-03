@@ -280,6 +280,7 @@ model Company {
   proposals       Proposal[]
   invoices        Invoice[]
   pricingProfiles PricingProfile[]
+  jobCostEntries JobCostEntry[]
   invoicePayments InvoicePayment[]
   estimateTemplates EstimateTemplate[]
   savedEstimateItems SavedEstimateItem[]
@@ -457,6 +458,7 @@ model Project {
   proposals       Proposal[]
   invoices        Invoice[]
   activityLogs    ActivityLogEntry[]
+  jobCostEntries  JobCostEntry[]
 
   @@index([companyId])
   @@index([clientId])
@@ -751,6 +753,32 @@ model InvoiceInstallment {
 }
 
 // ─── SETTINGS ────────────────────────────────────────────
+
+model JobCostEntry {
+  id String @id @default(cuid())
+  companyId String
+  projectId String
+  requestId String
+  payloadHash String
+  category LineItemCategory
+  description String
+  amount Decimal @db.Decimal(12, 2)
+  currencyCode String @default("USD")
+  laborHours Decimal? @db.Decimal(10, 2)
+  hourlyRate Decimal? @db.Decimal(12, 2)
+  recordedAt DateTime
+  createdByUserId String
+  createdAt DateTime @default(now())
+  voidedAt DateTime?
+  receiptData String? @db.Text
+  receiptMimeType String?
+  receiptFilename String?
+  receiptHash String?
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([companyId, requestId])
+  @@index([companyId, projectId, createdAt, id])
+}
 
 model PricingProfile {
   id                   String   @id @default(cuid())

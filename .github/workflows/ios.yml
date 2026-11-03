@@ -109,5 +109,14 @@ jobs:
       - name: Run estimate delivery regressions
         run: scripts/tests/run-estimate-delivery-regressions.sh
 
-      - name: Run estimate library regressions
+      - name: Run protected draft recovery regressions
+        run: scripts/tests/run-estimate-draft-recovery.sh
+
+      - name: Run invoice finance regressions
+        run: scripts/tests/run-invoice-finance-regressions.sh
+
+      - name: Run saved estimate library regressions
         run: scripts/tests/run-estimate-library-regressions.sh
+
+      - name: Run job cost and receipt regressions
+        run: scripts/tests/run-job-cost-regressions.sh

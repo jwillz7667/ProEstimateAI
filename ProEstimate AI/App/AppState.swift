@@ -101,7 +101,10 @@ final class AppState {
         usageMeterStore: UsageMeterStore? = nil
     ) {
         if let userId = currentUser?.id {
-            Task { try? await EstimateDraftStore.shared.purge(userId: userId) }
+            Task {
+                try? await EstimateDraftStore.shared.purge(userId: userId)
+                await JobCostReceiptFiles.shared.removeAllPreviews()
+            }
         }
         let refreshToken = TokenStore.shared.clearTokens()
         if let refreshToken {

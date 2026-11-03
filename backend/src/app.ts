@@ -77,6 +77,8 @@ import contractorsRoutes from "./modules/contractors/contractors.routes";
 import materialsPricingRoutes from "./modules/materials-pricing/materials-pricing.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 import estimateLibraryRoutes from "./modules/estimate-library/estimate-library.routes";
+import { jobCostRoutes } from "./modules/job-costs/job-costs.routes";
+import { requireWriteAccess } from "./middleware/write-access.middleware";
 
 export function createApp() {
   const app = express();
@@ -238,12 +240,13 @@ export function createApp() {
   v1.use("/devices", requireAuth, devicesRoutes);
   v1.use("/companies", requireAuth, companiesRoutes);
   v1.use("/clients", requireAuth, clientsRoutes);
-  v1.use("/projects", requireAuth, projectsRoutes);
+  v1.use("/projects", requireAuth, requireWriteAccess, projectsRoutes);
   v1.use("/assets", requireAuth, assetsRoutes);
   v1.use("/generations", requireAuth, generationsRoutes);
   v1.use("/materials", requireAuth, materialsRoutes);
   v1.use("/estimates", requireAuth, estimatesRoutes);
   v1.use("/estimate-library", requireAuth, estimateLibraryRoutes);
+  v1.use("/job-costs", requireAuth, requireWriteAccess, jobCostRoutes);
   v1.use("/estimate-line-items", requireAuth, estimateLineItemsRoutes);
   v1.use("/estimate-exports", requireAuth, estimateExportsRoutes);
   v1.use("/proposals", requireAuth, proposalsRoutes);

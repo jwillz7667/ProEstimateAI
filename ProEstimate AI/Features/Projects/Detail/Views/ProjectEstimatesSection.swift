@@ -101,7 +101,7 @@ struct ProjectEstimatesSection: View {
                     Button { onExportEstimate?(estimate.id) } label: {
                         Label("Export branded PDF", systemImage: "arrow.down.doc")
                     }
-                    if onCreateProposal != nil {
+                    if onCreateProposal != nil && estimate.isEditable {
                         Button { onCreateProposal?(estimate.id) } label: {
                             Label("Create proposal", systemImage: "doc.richtext")
                         }

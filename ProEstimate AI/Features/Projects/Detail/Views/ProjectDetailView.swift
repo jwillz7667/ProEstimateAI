@@ -32,6 +32,7 @@ struct ProjectDetailView: View {
     @State private var presentedEstimate: EstimateEditorSelection?
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
+    @State private var costProject: CostProjectSelection?
 
     /// Get-paid loop sheet state. `presentedProposal` drives the
     /// proposal-preview sheet; `isCreatingProposal` surfaces the progress
@@ -67,6 +68,11 @@ struct ProjectDetailView: View {
     private struct EstimateEditorSelection: Identifiable {
         let id: String
         var notice: String? = nil
+    }
+
+    private struct CostProjectSelection: Identifiable {
+        let id: String
+        let title: String
     }
 
     /// Map measurement sheets. Presenting these as full-screen covers
@@ -147,7 +153,7 @@ struct ProjectDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will permanently delete the project and all linked photos, AI previews, materials, estimates, and proposals. This cannot be undone.")
+            Text("This will permanently delete the project and its linked photos, AI previews, materials, estimates, proposals, invoices, recorded costs and receipts. This cannot be undone.")
         }
         .refreshable {
             await viewModel.loadProject(id: projectId)
@@ -186,6 +192,11 @@ struct ProjectDetailView: View {
             NavigationStack {
                 InvoiceDetailView(invoiceId: invoice.id, isPresentedInSheet: true)
             }
+        }
+        .sheet(item: $costProject, onDismiss: {
+            Task { await viewModel.loadProject(id: projectId) }
+        }) { project in
+            JobCostView(projectId: project.id, projectTitle: project.title)
         }
         .fullScreenCover(isPresented: $showLawnMeasurement, onDismiss: {
             // Project may have a fresh lawn_area / lat-lng after the user
@@ -267,6 +278,28 @@ struct ProjectDetailView: View {
                     }
                 )
                 .padding(.horizontal, SpacingTokens.md)
+
+                Button {
+                    costProject = CostProjectSelection(id: project.id, title: project.title)
+                } label: {
+                    HStack(spacing: SpacingTokens.md) {
+                        Image(systemName: "banknote").font(.title2).foregroundStyle(ColorTokens.primaryOrange)
+                        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                            Text("Costs & receipts").font(TypographyTokens.headline)
+                            Text("Track the materials and labor recorded for this job.")
+                                .font(TypographyTokens.subheadline).foregroundStyle(ColorTokens.secondaryText)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "chevron.right").font(.footnote).foregroundStyle(ColorTokens.secondaryText)
+                    }
+                    .padding(SpacingTokens.md)
+                    .glassCard()
+                    .foregroundStyle(ColorTokens.primaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, SpacingTokens.md)
+                .accessibilityHint("Review recorded costs, attach receipts and compare costs with the quote")
 
                 // Property scouting tools — surfaced for project types
                 // where measured area materially changes the bid. Tapping
