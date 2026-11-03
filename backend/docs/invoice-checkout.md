@@ -22,6 +22,8 @@ Before every checkout the backend retrieves `configuration.merchant.capabilities
 
 Configure a connected-account snapshot event destination at `https://<API-host>/v1/payments/stripe/webhook`, with API version `2026-10-28.endive`. Choose **Connected accounts** as the source for these v1 payment events, even though merchant onboarding uses Accounts v2. Use that destination's signing secret, which is separate from the API key. This route must receive the raw JSON bytes before Express JSON parsing. Signature verification, payment environment, connected account, saved attempt, session, PaymentIntent, currency and exact server amount are checked before a receipt is written.
 
+The currently provisioned Viral Ventures LLC destination instead uses `2026-08-26.dahlia`: Stripe rejected another unique live event version, and unrelated destinations were preserved. The SDK still performs fresh resource reads with `2026-10-28.endive`. Before enabling this deployment, prove the older event envelope against actual sandbox Checkout and refund events pinned to Dahlia; a local signature test or a generic CLI fixture does not establish that compatibility.
+
 Events handled:
 
 - `checkout.session.completed`
