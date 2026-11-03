@@ -69,12 +69,15 @@ struct InvoiceFinanceView: View {
                     Section("Payment schedule") {
                         ForEach(snapshot.installments) { installment in
                             VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-                                HStack { Text(installment.title).font(TypographyTokens.headline); Spacer(); CurrencyText(amount: installment.amount) }
+                                HStack { Text(installment.title).font(TypographyTokens.headline); Spacer(); CurrencyText(amount: installment.amount, currencyCode: snapshot.invoice.currencyCode ?? "USD") }
                                 if let dueDate = installment.dueDate {
                                     Text("Due \(dueDate.formatted(date: .abbreviated, time: .omitted))")
                                         .font(TypographyTokens.caption).foregroundStyle(ColorTokens.secondaryText)
                                 }
-                                HStack { Text("Outstanding").font(TypographyTokens.caption); Spacer(); CurrencyText(amount: installment.amountDue) }
+                                if (installment.creditAmount ?? 0) > 0 {
+                                    HStack { Text("Credit applied").font(TypographyTokens.caption); Spacer(); CurrencyText(amount: installment.creditAmount ?? 0, currencyCode: snapshot.invoice.currencyCode ?? "USD") }
+                                }
+                                HStack { Text("Outstanding").font(TypographyTokens.caption); Spacer(); CurrencyText(amount: installment.amountDue, currencyCode: snapshot.invoice.currencyCode ?? "USD") }
                             }
                             .fixedSize(horizontal: false, vertical: true)
                         }
@@ -85,7 +88,7 @@ struct InvoiceFinanceView: View {
                         Text("No payment receipts recorded yet.").foregroundStyle(ColorTokens.secondaryText)
                     }
                     ForEach(snapshot.payments) { receipt in
-                        InvoicePaymentReceiptRow(receipt: receipt)
+                        InvoicePaymentReceiptRow(receipt: receipt, currencyCode: snapshot.invoice.currencyCode ?? "USD")
                     }
                 }
                 Section {
@@ -119,7 +122,7 @@ struct InvoiceFinanceView: View {
         if let checkout = snapshot.checkout {
             if let attempt = checkout.activeAttempt {
                 Section("Client checkout in progress") {
-                    LabeledContent("Payment") { CurrencyText(amount: attempt.amount) }
+                    LabeledContent("Payment") { CurrencyText(amount: attempt.amount, currencyCode: attempt.currencyCode) }
                     Text(attempt.state.uppercased() == "PROCESSING"
                          ? "The client's payment is processing. Refresh to confirm its result before recording another payment."
                          : "A client checkout is open. Close it before recording payment received another way.")
@@ -145,9 +148,10 @@ struct InvoiceFinanceView: View {
 
     private func summary(_ invoice: Invoice) -> some View {
         Section(invoice.invoiceNumber) {
-            LabeledContent("Invoice total") { CurrencyText(amount: invoice.totalAmount) }
-            LabeledContent("Recorded paid") { CurrencyText(amount: invoice.amountPaid) }
-            LabeledContent("Outstanding") { CurrencyText(amount: invoice.amountDue) }.fontWeight(.semibold)
+            LabeledContent("Invoice total") { CurrencyText(amount: invoice.totalAmount, currencyCode: invoice.currencyCode ?? "USD") }
+            LabeledContent("Cash received") { CurrencyText(amount: invoice.amountPaid, currencyCode: invoice.currencyCode ?? "USD") }
+            if (invoice.creditAmount ?? 0) > 0 { LabeledContent("Contract credit applied") { CurrencyText(amount: invoice.creditAmount ?? 0, currencyCode: invoice.currencyCode ?? "USD") } }
+            LabeledContent("Outstanding") { CurrencyText(amount: invoice.amountDue, currencyCode: invoice.currencyCode ?? "USD") }.fontWeight(.semibold)
         }
     }
 
@@ -156,7 +160,7 @@ struct InvoiceFinanceView: View {
             Section("Pending confirmation") {
                 Text("A payment record wasn't confirmed. Review its locked details and check the receipt history before entering another payment.")
                     .fixedSize(horizontal: false, vertical: true)
-                LabeledContent("Payment") { CurrencyText(amount: pending.request.amount) }
+                LabeledContent("Payment") { CurrencyText(amount: pending.request.amount, currencyCode: model.snapshot?.invoice.currencyCode ?? "USD") }
                 LabeledContent("Method", value: pending.request.method.title)
                 Button("Review pending payment") { route = .payment }.disabled(model.isWorking)
                 Button("Check receipt history") { Task { await reload() } }.disabled(model.isLoading || model.isWorking)
@@ -187,13 +191,14 @@ private enum FinanceSheet: Identifiable {
 
 private struct InvoicePaymentReceiptRow: View {
     let receipt: InvoicePaymentReceipt
+    let currencyCode: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
             HStack(alignment: .firstTextBaseline) {
                 Text(receipt.methodTitle).font(TypographyTokens.headline)
                 Spacer(minLength: SpacingTokens.xs)
-                CurrencyText(amount: receipt.amount)
+                CurrencyText(amount: receipt.amount, currencyCode: currencyCode)
                     .foregroundStyle(receipt.amount < 0 ? ColorTokens.error : ColorTokens.primaryText)
             }
             if let date = receipt.recordedAt {

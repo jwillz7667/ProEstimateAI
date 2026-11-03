@@ -32,6 +32,7 @@ struct ProjectDetailView: View {
     @State private var presentedEstimate: EstimateEditorSelection?
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
+    @State private var showChangeOrders = false
     @State private var costProject: CostProjectSelection?
 
     /// Get-paid loop sheet state. `presentedProposal` drives the
@@ -193,6 +194,12 @@ struct ProjectDetailView: View {
                 InvoiceDetailView(invoiceId: invoice.id, isPresentedInSheet: true)
             }
         }
+        .sheet(isPresented: $showChangeOrders) {
+            NavigationStack {
+                ChangeOrderListView(projectId: projectId)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showChangeOrders = false } } }
+            }
+        }
         .sheet(item: $costProject, onDismiss: {
             Task { await viewModel.loadProject(id: projectId) }
         }) { project in
@@ -278,6 +285,12 @@ struct ProjectDetailView: View {
                     }
                 )
                 .padding(.horizontal, SpacingTokens.md)
+
+                Button { showChangeOrders = true } label: {
+                    Label("Change orders & contract credits", systemImage: "doc.badge.plus")
+                        .font(TypographyTokens.headline).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(SpacingTokens.md).glassCard()
+                }.padding(.horizontal, SpacingTokens.md)
 
                 Button {
                     costProject = CostProjectSelection(id: project.id, title: project.title)

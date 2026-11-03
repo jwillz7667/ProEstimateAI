@@ -8,6 +8,7 @@ export interface EstimateDto {
   title: string | null;
   version: number;
   revises_estimate_id: string | null;
+  change_order_id: string | null;
   status: string;
   pricing_profile_id: string | null;
   created_by_user_id: string | null;
@@ -26,9 +27,10 @@ export interface EstimateDto {
   updated_at: string;
 }
 
-export function toEstimateDto(estimate: Estimate): EstimateDto {
+export function toEstimateDto(estimate: Estimate & { changeOrder?: { id: string } | null }): EstimateDto {
   return {
     id: estimate.id,
+    change_order_id: estimate.changeOrder?.id ?? null,
     project_id: estimate.projectId,
     company_id: estimate.companyId,
     estimate_number: estimate.estimateNumber,

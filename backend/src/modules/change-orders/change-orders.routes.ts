@@ -1,0 +1,15 @@
+import { Router, Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
+import { validate } from '../../middleware/validate.middleware';
+import { parsePagination } from '../../lib/pagination';
+import { sendSuccess } from '../../lib/envelope';
+import * as service from './change-orders.service';
+const wrap=(handler:(req:Request,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>handler(req,res).catch(next);
+const createSchema=z.object({request_id:z.string().uuid().transform(v=>v.toLowerCase()),base_estimate_id:z.string().min(1),title:z.string().trim().min(1).max(200),reason:z.string().trim().min(1).max(10000)}).strict();
+const applySchema=z.object({request_id:z.string().uuid().transform(v=>v.toLowerCase())}).strict();
+export const changeOrderRoutes=Router();
+changeOrderRoutes.post('/',validate(createSchema),wrap(async(req,res)=>{sendSuccess(res,await service.create(req.companyId!,req.userId!,req.body),{statusCode:201});}));
+changeOrderRoutes.get('/:id',wrap(async(req,res)=>{sendSuccess(res,await service.get(req.params.id as string,req.companyId!));}));
+changeOrderRoutes.post('/:id/apply',validate(applySchema),wrap(async(req,res)=>{sendSuccess(res,await service.apply(req.params.id as string,req.companyId!,req.userId!,req.body.request_id));}));
+export const projectChangeOrderRoutes=Router({mergeParams:true});
+projectChangeOrderRoutes.get('/',wrap(async(req,res)=>{sendSuccess(res,await service.list(req.params.projectId as string,req.companyId!,parsePagination(req.query as {cursor?:string;page_size?:string})));}));

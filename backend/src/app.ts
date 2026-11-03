@@ -78,6 +78,7 @@ import contractorsRoutes from "./modules/contractors/contractors.routes";
 import materialsPricingRoutes from "./modules/materials-pricing/materials-pricing.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 import estimateLibraryRoutes from "./modules/estimate-library/estimate-library.routes";
+import { changeOrderRoutes } from "./modules/change-orders/change-orders.routes";
 import { jobCostRoutes } from "./modules/job-costs/job-costs.routes";
 import { requireWriteAccess } from "./middleware/write-access.middleware";
 import { followUpRoutes, followUpPreferenceRoutes } from "./modules/follow-ups/follow-ups.routes";
@@ -252,6 +253,7 @@ export function createApp() {
   v1.use("/materials", requireAuth, requireWriteAccess, materialsRoutes);
   v1.use("/estimates", requireAuth, requireWriteAccess, estimatesRoutes);
   v1.use("/estimate-library", requireAuth, requireWriteAccess, estimateLibraryRoutes);
+  v1.use("/change-orders", requireAuth, requireWriteAccess, changeOrderRoutes);
   v1.use("/job-costs", requireAuth, requireWriteAccess, jobCostRoutes);
   v1.use("/follow-ups", requireAuth, requireWriteAccess, followUpRoutes);
   v1.use("/payment-settings", requireAuth, requireWriteAccess, merchantPaymentRoutes);

@@ -54,6 +54,8 @@ struct EstimateEditorView: View {
             .sheet(item: $destination, onDismiss: destinationDismissed) { target in
                 switch target {
                 case let .line(selection): EstimateLineEditorSheet(model: viewModel, selection: selection)
+                case let .changeOrder(id): NavigationStack { ChangeOrderDetailView(orderId: id) }
+                case let .newChangeOrder(estimate): CreateChangeOrderView(estimate: estimate)
                 case let .document(estimate): EstimateDocumentFormView(model: viewModel, estimate: estimate)
                 case .client:
                     EstimateCreationClientPicker(model: clientPicker, allowsNoClient: false) { client in pendingClient = client }
@@ -300,7 +302,10 @@ struct EstimateEditorView: View {
                 Text("Quantities checked: \(checkedQuantities) of \(viewModel.lineItems.count)")
                     .font(TypographyTokens.footnote).foregroundStyle(ColorTokens.secondaryText)
             }
-            if estimate.status == .approved && appState.currentUser?.canEdit == true {
+            if let changeOrderId = estimate.changeOrderId {
+                Button("Review change order & billing") { destination = .changeOrder(changeOrderId) }
+            }
+            if estimate.status == .approved && estimate.changeOrderId == nil && appState.currentUser?.canEdit == true {
                 Button(delivery.needsInvoiceReconciliation ? "Check saved invoice" : "Create invoice") {
                     Task { await invoice() }
                 }
@@ -315,7 +320,10 @@ struct EstimateEditorView: View {
             }
             .disabled((estimate.isEditable && viewModel.lineItems.isEmpty) || viewModel.requiresRefresh || (estimate.isEditable && appState.currentUser?.canEdit != true))
             if !estimate.isEditable && appState.currentUser?.canEdit == true {
-                Button("Create revision") { confirmRevision = true }
+                if estimate.status == .approved {
+                    Button("Create change order") { destination = .newChangeOrder(estimate) }
+                }
+                if estimate.changeOrderId == nil { Button("Create revision") { confirmRevision = true } }
             }
             if delivery.isWorking { ProgressView("Preparing next step…") }
             if let message = delivery.errorMessage {
@@ -424,6 +432,8 @@ struct EstimateEditorView: View {
 private enum EstimateEditorDestination: Identifiable {
     case line(LineEditorSelection)
     case document(Estimate)
+    case changeOrder(String)
+    case newChangeOrder(Estimate)
     case client
     case proposal(Proposal)
     case revision(Estimate)
@@ -437,6 +447,8 @@ private enum EstimateEditorDestination: Identifiable {
     var id: String {
         switch self {
         case let .line(selection): "line-\(selection.id)"
+        case let .changeOrder(id): "change-order-\(id)"
+        case let .newChangeOrder(estimate): "new-change-order-\(estimate.id)"
         case let .document(estimate): "document-\(estimate.id)"
         case .client: "client"
         case let .proposal(proposal): "proposal-\(proposal.id)"

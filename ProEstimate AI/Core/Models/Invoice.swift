@@ -18,6 +18,10 @@ struct Invoice: Codable, Identifiable, Hashable, Sendable {
     let taxAmount: Decimal
     let discountAmount: Decimal
     let totalAmount: Decimal
+    var creditAmount: Decimal? = nil
+    var rootInvoiceId: String? = nil
+    var sourceChangeOrderId: String? = nil
+    var financialBasisLocked: Bool? = nil
     let amountPaid: Decimal
     let amountDue: Decimal
     let issuedDate: Date?
@@ -57,6 +61,10 @@ struct Invoice: Codable, Identifiable, Hashable, Sendable {
         case taxAmount = "tax_amount"
         case discountAmount = "discount_amount"
         case totalAmount = "total_amount"
+        case creditAmount = "credit_amount"
+        case rootInvoiceId = "root_invoice_id"
+        case sourceChangeOrderId = "source_change_order_id"
+        case financialBasisLocked = "financial_basis_locked"
         case amountPaid = "amount_paid"
         case amountDue = "amount_due"
         case issuedDate = "issued_date"
@@ -77,7 +85,7 @@ extension Invoice {
     /// Whether the invoice can still be edited / its line items changed.
     /// Only DRAFT invoices are mutable; once sent the document is locked.
     var isEditable: Bool {
-        status == .draft
+        status == .draft && financialBasisLocked != true && (creditAmount ?? 0) == 0
     }
 
     /// Whether the balance has been fully settled.
@@ -106,7 +114,7 @@ extension Invoice {
         case .sent: return "Sent"
         case .viewed: return "Viewed"
         case .partiallyPaid: return "Partially Paid"
-        case .paid: return "Paid"
+        case .paid: return (creditAmount ?? 0) > 0 ? "Settled" : "Paid"
         case .overdue: return "Overdue"
         case .void: return "Void"
         }

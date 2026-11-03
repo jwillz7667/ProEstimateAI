@@ -185,6 +185,10 @@ struct InvoiceDetailView: View {
                 }
             }
 
+            if invoice.financialBasisLocked == true {
+                Text("The approved financial basis is locked. Use a customer-approved change order for scope or price changes.")
+                    .font(TypographyTokens.footnote).foregroundStyle(ColorTokens.secondaryText)
+            }
             if invoice.isPastDue {
                 Label("Past due", systemImage: "exclamationmark.triangle.fill")
                     .font(TypographyTokens.caption)
@@ -212,17 +216,18 @@ struct InvoiceDetailView: View {
     /// settled total once paid.
     private func amountCard(_ invoice: Invoice) -> some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            Text(invoice.isPaid ? "Total Paid" : "Balance Due")
+            Text(invoice.isPaid ? "Settled invoice" : "Balance Due")
                 .font(TypographyTokens.caption)
                 .foregroundStyle(.secondary)
             CurrencyText(
                 amount: invoice.isPaid ? invoice.totalAmount : invoice.amountDue,
-                font: TypographyTokens.moneyLarge
+                font: TypographyTokens.moneyLarge,
+                currencyCode: invoice.currencyCode ?? "USD"
             )
             .foregroundStyle(invoice.isPastDue ? ColorTokens.error : ColorTokens.primaryText)
 
             if invoice.isPartiallyPaid, !invoice.isPaid {
-                Text("\(currency(invoice.amountPaid)) paid of \(currency(invoice.totalAmount))")
+                Text("\(currency(invoice.amountPaid)) cash received · \(currency(invoice.creditAmount ?? 0)) credit applied")
                     .font(TypographyTokens.caption)
                     .foregroundStyle(.secondary)
             }
@@ -238,8 +243,8 @@ struct InvoiceDetailView: View {
         VStack(spacing: SpacingTokens.xs) {
             totalRow(label: "Subtotal", amount: invoice.subtotal)
 
-            if invoice.discountAmount > 0 {
-                totalRow(label: "Discount", amount: -invoice.discountAmount)
+            if invoice.discountAmount != 0 {
+                totalRow(label: invoice.sourceChangeOrderId == nil ? "Discount" : "Discount change", amount: -invoice.discountAmount)
             }
 
             totalRow(label: "Tax", amount: invoice.taxAmount)
@@ -248,9 +253,12 @@ struct InvoiceDetailView: View {
 
             totalRow(label: "Total", amount: invoice.totalAmount, emphasized: true)
 
+            if (invoice.creditAmount ?? 0) > 0 { totalRow(label: "Credit applied", amount: -(invoice.creditAmount ?? 0)) }
             if invoice.amountPaid > 0 {
-                totalRow(label: "Amount Paid", amount: -invoice.amountPaid)
+                totalRow(label: "Cash received", amount: -invoice.amountPaid)
                 Divider()
+                totalRow(label: "Balance Due", amount: invoice.amountDue, emphasized: true)
+            } else if (invoice.creditAmount ?? 0) > 0 {
                 totalRow(label: "Balance Due", amount: invoice.amountDue, emphasized: true)
             }
         }
@@ -266,7 +274,8 @@ struct InvoiceDetailView: View {
             Spacer()
             CurrencyText(
                 amount: amount,
-                font: emphasized ? TypographyTokens.moneyMedium : TypographyTokens.moneySmall
+                font: emphasized ? TypographyTokens.moneyMedium : TypographyTokens.moneySmall,
+                currencyCode: viewModel.invoice?.currencyCode ?? "USD"
             )
         }
     }
@@ -303,7 +312,7 @@ struct InvoiceDetailView: View {
 
                 HStack(spacing: SpacingTokens.xxs) {
                     Text("\(formattedQuantity(item.quantity)) \(item.unit) ×")
-                    CurrencyText(amount: item.unitCost, font: TypographyTokens.caption)
+                    CurrencyText(amount: item.unitCost, font: TypographyTokens.caption, currencyCode: viewModel.invoice?.currencyCode ?? "USD")
                 }
                 .font(TypographyTokens.caption)
                 .foregroundStyle(.tertiary)
@@ -311,7 +320,7 @@ struct InvoiceDetailView: View {
 
             Spacer(minLength: SpacingTokens.sm)
 
-            CurrencyText(amount: item.lineTotal, font: TypographyTokens.moneySmall)
+            CurrencyText(amount: item.lineTotal, font: TypographyTokens.moneySmall, currencyCode: viewModel.invoice?.currencyCode ?? "USD")
         }
         .padding(SpacingTokens.md)
         .glassCard()
@@ -399,7 +408,7 @@ struct InvoiceDetailView: View {
                 }
             }
 
-            if invoice.status == .draft {
+            if invoice.status == .draft && invoice.financialBasisLocked != true && (invoice.creditAmount ?? 0) == 0 {
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
@@ -453,6 +462,7 @@ struct InvoiceDetailView: View {
     private func currency(_ value: Decimal) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
+        formatter.currencyCode = viewModel.invoice?.currencyCode ?? "USD"
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "\(value)"
     }

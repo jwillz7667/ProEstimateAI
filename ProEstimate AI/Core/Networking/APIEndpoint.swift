@@ -87,6 +87,11 @@ enum APIEndpoint: Sendable {
     case reviseEstimate(id: String, body: Encodable & Sendable)
     case deleteEstimate(id: String)
 
+    case listChangeOrders(projectId: String, cursor: String?)
+    case getChangeOrder(id: String)
+    case createChangeOrder(body: Encodable & Sendable)
+    case applyChangeOrder(id: String, body: Encodable & Sendable)
+
     // MARK: - Estimate Library
 
     case listEstimateTemplates(query: String?, cursor: String?)
@@ -256,6 +261,10 @@ extension APIEndpoint {
         case .createProject: return "/projects"
         case let .updateProject(id, _): return "/projects/\(id)"
         case let .deleteProject(id): return "/projects/\(id)"
+        case let .listChangeOrders(projectId, _): return "/projects/\(projectId)/change-orders"
+        case let .getChangeOrder(id): return "/change-orders/\(id)"
+        case .createChangeOrder: return "/change-orders"
+        case let .applyChangeOrder(id, _): return "/change-orders/\(id)/apply"
         case let .listJobCosts(projectId, _, _), let .createJobCost(projectId, _): return "/projects/\(projectId)/costs"
         case let .voidJobCost(id): return "/job-costs/\(id)"
         case let .uploadJobCostReceipt(id, _), let .getJobCostReceipt(id): return "/job-costs/\(id)/receipt"
@@ -373,7 +382,7 @@ extension APIEndpoint {
              .createEstimate, .generateAIEstimate, .reviseEstimate, .createEstimateLineItem, .batchCreateEstimateLineItems,
              .saveEstimateTemplate, .instantiateEstimateTemplate, .duplicateEstimate, .saveEstimateLibraryItem, .applyEstimateLibraryItem,
              .startMerchantPaymentOnboarding,
-             .createEstimateExport, .reviewEstimatePrice,
+             .createEstimateExport, .reviewEstimatePrice, .createChangeOrder, .applyChangeOrder,
              .createProposal, .sendProposal, .queueFollowUp,
              .sendInvoice, .convertEstimateToInvoice, .recordInvoicePayment, .cancelInvoiceCheckout, .reviewInvoiceRefund,
              .createPricingProfile, .createLaborRateRule,
@@ -435,6 +444,8 @@ extension APIEndpoint {
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
         case let .listProjects(cursor):
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
+        case let .listChangeOrders(_, cursor):
+            return cursor.map { [URLQueryItem(name: "cursor", value: $0)] } ?? []
         case let .listJobCosts(_, cursor, includeVoided):
             var items: [URLQueryItem] = []
             if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }
@@ -491,6 +502,7 @@ extension APIEndpoint {
              let .createJobCost(_, body), let .uploadJobCostReceipt(_, body),
              let .uploadAsset(_, body),
              let .createGeneration(_, body),
+             let .createChangeOrder(body), let .applyChangeOrder(_, body),
              let .createEstimate(body), let .generateAIEstimate(body),
              let .updateEstimate(_, body), let .reviseEstimate(_, body),
              let .saveEstimateTemplate(body), let .instantiateEstimateTemplate(_, body), let .duplicateEstimate(_, body),

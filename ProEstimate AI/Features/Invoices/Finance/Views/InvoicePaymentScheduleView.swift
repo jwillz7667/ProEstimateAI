@@ -15,7 +15,7 @@ struct InvoicePaymentScheduleView: View {
         NavigationStack {
             Form {
                 Section {
-                    LabeledContent("Invoice total") { CurrencyText(amount: form.expectedTotal) }
+                    LabeledContent("Invoice total") { CurrencyText(amount: form.expectedTotal, currencyCode: model.snapshot?.invoice.currencyCode ?? "USD") }
                     Text("Break the total into a deposit and later payments. Saving a schedule requests payments; it does not record money received.")
                         .font(TypographyTokens.footnote).fixedSize(horizontal: false, vertical: true)
                     Menu("Use a deposit split") {

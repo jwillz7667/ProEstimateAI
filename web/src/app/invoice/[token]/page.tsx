@@ -29,7 +29,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
   const credit = invoice.credit_amount ?? 0;
   const status = isVoid ? "Void" : isPaid ? (credit > 0 ? "Settled" : "Paid") : invoice.amount_paid > 0 ? "Partially paid" : "Awaiting payment";
   const totals: Array<[string, number]> = [["Subtotal", invoice.subtotal], ["Tax", invoice.tax_amount]];
-  if (invoice.discount_amount > 0) totals.push(["Discount", -invoice.discount_amount]);
+  if (invoice.discount_amount !== 0) totals.push([invoice.discount_amount < 0 ? "Discount reduction" : "Discount", -invoice.discount_amount]);
   totals.push(["Invoice total", invoice.total_amount], ["Recorded payments", invoice.amount_paid]);
   if (credit > 0) totals.push(["Contract credits applied", -credit]);
 

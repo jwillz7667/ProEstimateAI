@@ -99,6 +99,7 @@ struct InvoiceInstallment: Decodable, Identifiable, Sendable {
     let id: String
     let title: String
     let amount: Decimal
+    var creditAmount: Decimal? = nil
     let paidAmount: Decimal
     let amountDue: Decimal
     let dueDate: Date?
@@ -106,6 +107,7 @@ struct InvoiceInstallment: Decodable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, amount
+        case creditAmount = "credit_amount"
         case paidAmount = "paid_amount"
         case amountDue = "amount_due"
         case dueDate = "due_date"

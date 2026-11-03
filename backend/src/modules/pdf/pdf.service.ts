@@ -677,8 +677,8 @@ async function renderInvoicePDF(
     y = drawSummaryRow(doc, 'Tax', formatCurrency(invoice.taxAmount), y);
   }
 
-  if (toNumber(invoice.discountAmount) > 0) {
-    y = drawSummaryRow(doc, 'Discount', `-${formatCurrency(invoice.discountAmount)}`, y);
+  if (toNumber(invoice.discountAmount) !== 0) {
+    y = drawSummaryRow(doc, toNumber(invoice.discountAmount) < 0 ? 'Discount reduction' : 'Discount', formatCurrency(-toNumber(invoice.discountAmount)), y);
   }
 
   y += 2;

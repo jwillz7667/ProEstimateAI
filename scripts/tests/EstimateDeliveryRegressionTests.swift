@@ -31,8 +31,10 @@ struct EstimateDeliveryRegressionTests {
     static func shareAndVersionSerialization() throws {
         let draft = try changing(Proposal.sample, ["status": "draft"])
         try expect(draft.shareURL == nil && draft.canSend, "Draft tokens must stay unshareable until sending captures their document")
-        let viewed = try changing(Proposal.sample, ["status": "viewed"])
+        let viewed = try changing(Proposal.sample, ["status": "viewed", "recipient_client_id": Client.sample.id, "recipient_name": Client.sample.name, "recipient_email": "client@example.test", "recipient_matches_current": true])
         try expect(viewed.shareURL != nil && viewed.canSend, "Viewed proposals can be followed up without creating a new proposal")
+        let unknownRecipient = try changing(viewed, ["recipient_matches_current": false])
+        try expect(!unknownRecipient.canSend, "A sent offer cannot be resent to a changed or unverified customer destination")
         let approved = try changing(Proposal.sample, ["status": "approved"])
         try expect(approved.shareURL != nil && !approved.canSend, "Decided proposals stay readable without another approval request")
         let formatter = ISO8601DateFormatter()

@@ -19,7 +19,7 @@ struct InvoiceReceivedPaymentFormView: View {
                     Text("Record money you have already received. This does not charge your client.")
                         .font(TypographyTokens.subheadline).fixedSize(horizontal: false, vertical: true)
                     if let invoice = model.snapshot?.invoice {
-                        LabeledContent("Outstanding") { CurrencyText(amount: invoice.amountDue) }
+                        LabeledContent("Outstanding") { CurrencyText(amount: invoice.amountDue, currencyCode: invoice.currencyCode ?? "USD") }
                     }
                 }
                 Section("Payment received") {
