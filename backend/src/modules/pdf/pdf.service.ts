@@ -4,6 +4,8 @@ import { NotFoundError, AuthorizationError } from '../../lib/errors';
 import { hasEffectiveProAccess } from '../../lib/entitlement-access';
 import { isAdminUser } from '../../lib/admin';
 import { gateAIAction, runReservedAction } from '../commerce/entitlement-gate';
+import { getForRendering } from '../proposals/proposals.service';
+import { toSharedProposalDto } from '../proposals/proposals.share-dto';
 
 // ─── Typography ──────────────────────────────────────────
 const FONT_TITLE = 20;
@@ -286,22 +288,9 @@ async function renderProposalPDF(
   companyId: string,
   userId: string,
 ): Promise<Buffer> {
-  const proposal = await prisma.proposal.findFirst({
-    where: { id: proposalId },
-    include: {
-      estimate: { include: { lineItems: { orderBy: { sortOrder: 'asc' } } } },
-      project: true,
-      company: true,
-    },
-  });
-
-  if (!proposal) {
-    throw new NotFoundError('Proposal', proposalId);
-  }
-
-  if (proposal.companyId !== companyId) {
-    throw new AuthorizationError('You do not have access to this proposal');
-  }
+  const source = await getForRendering(proposalId, companyId);
+  const document = toSharedProposalDto(source);
+  const proposal = document.proposal;
 
   const needsWatermark = await shouldApplyWatermark(userId);
 
@@ -313,10 +302,10 @@ async function renderProposalPDF(
   });
 
   // ── Page 1: Company header + Proposal info ──
-  let y = drawCompanyHeader(doc, proposal.company);
+  let y = drawCompanyHeader(doc, { ...document.company, websiteUrl: document.company.website_url });
 
   // Proposal title
-  const proposalTitle = proposal.title || `Proposal ${proposal.proposalNumber || ''}`;
+  const proposalTitle = proposal.title || `Proposal ${proposal.proposal_number || ''}`;
   doc.fontSize(FONT_TITLE).fillColor(COLOR_TEXT).font('Helvetica-Bold')
     .text(proposalTitle, PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN });
   y += 30;
@@ -324,19 +313,19 @@ async function renderProposalPDF(
   // Proposal metadata
   doc.fontSize(FONT_BODY).fillColor(COLOR_MUTED).font('Helvetica');
 
-  if (proposal.proposalNumber) {
-    doc.text(`Proposal #: ${proposal.proposalNumber}`, PAGE_MARGIN, y);
+  if (proposal.proposal_number) {
+    doc.text(`Proposal #: ${proposal.proposal_number}`, PAGE_MARGIN, y);
     y += 14;
   }
 
-  doc.text(`Project: ${proposal.project.title}`, PAGE_MARGIN, y);
+  doc.text(`Project: ${document.project.title}`, PAGE_MARGIN, y);
   y += 14;
 
-  doc.text(`Date: ${formatDate(proposal.createdAt)}`, PAGE_MARGIN, y);
+  doc.text(`Date: ${formatDate(source.createdAt)}`, PAGE_MARGIN, y);
   y += 14;
 
-  if (proposal.expiresAt) {
-    doc.text(`Valid Until: ${formatDate(proposal.expiresAt)}`, PAGE_MARGIN, y);
+  if (proposal.expires_at) {
+    doc.text(`Valid Until: ${formatDate(proposal.expires_at ? new Date(proposal.expires_at) : null)}`, PAGE_MARGIN, y);
     y += 14;
   }
 
@@ -345,14 +334,14 @@ async function renderProposalPDF(
   y += 16;
 
   // ── Intro Text ──
-  if (proposal.introText) {
+  if (proposal.intro_text) {
     y = ensureSpace(doc, 60, y);
     doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold')
       .text('Introduction', PAGE_MARGIN, y);
     y += 20;
 
     doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica')
-      .text(proposal.introText, PAGE_MARGIN, y, {
+      .text(proposal.intro_text, PAGE_MARGIN, y, {
         width: TABLE_RIGHT_EDGE - PAGE_MARGIN,
         lineGap: 3,
       });
@@ -360,14 +349,14 @@ async function renderProposalPDF(
   }
 
   // ── Scope of Work ──
-  if (proposal.scopeOfWork) {
+  if (proposal.scope_of_work) {
     y = ensureSpace(doc, 60, y);
     doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold')
       .text('Scope of Work', PAGE_MARGIN, y);
     y += 20;
 
     doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica')
-      .text(proposal.scopeOfWork, PAGE_MARGIN, y, {
+      .text(proposal.scope_of_work, PAGE_MARGIN, y, {
         width: TABLE_RIGHT_EDGE - PAGE_MARGIN,
         lineGap: 3,
       });
@@ -375,14 +364,14 @@ async function renderProposalPDF(
   }
 
   // ── Timeline ──
-  if (proposal.timelineText) {
+  if (proposal.timeline_text) {
     y = ensureSpace(doc, 60, y);
     doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold')
       .text('Timeline', PAGE_MARGIN, y);
     y += 20;
 
     doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica')
-      .text(proposal.timelineText, PAGE_MARGIN, y, {
+      .text(proposal.timeline_text, PAGE_MARGIN, y, {
         width: TABLE_RIGHT_EDGE - PAGE_MARGIN,
         lineGap: 3,
       });
@@ -390,19 +379,19 @@ async function renderProposalPDF(
   }
 
   // ── Estimate Table ──
-  if (proposal.estimate) {
+  if (document.estimate) {
     y = ensureSpace(doc, 80, y);
     doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold')
       .text('Cost Estimate', PAGE_MARGIN, y);
     y += 22;
 
-    const lineItems = proposal.estimate.lineItems;
+    const lineItems = document.estimate.line_items;
 
     // Group by category
     const categories: Array<{ label: string; key: string }> = [
-      { label: 'Materials', key: 'MATERIALS' },
-      { label: 'Labor', key: 'LABOR' },
-      { label: 'Other', key: 'OTHER' },
+      { label: 'Materials', key: 'materials' },
+      { label: 'Labor', key: 'labor' },
+      { label: 'Other', key: 'other' },
     ];
 
     for (const cat of categories) {
@@ -422,8 +411,8 @@ async function renderProposalPDF(
           description: item.description,
           quantity: item.quantity,
           unit: item.unit,
-          unitCost: item.unitCost,
-          lineTotal: item.lineTotal,
+          unitCost: item.unit_cost,
+          lineTotal: item.line_total,
         }, y);
       }
 
@@ -436,45 +425,45 @@ async function renderProposalPDF(
     drawHR(doc, y);
     y += 10;
 
-    const estimate = proposal.estimate;
+    const estimate = document.estimate;
 
-    if (toNumber(estimate.subtotalMaterials) > 0) {
-      y = drawSummaryRow(doc, 'Materials Subtotal', formatCurrency(estimate.subtotalMaterials), y);
+    if (toNumber(estimate.subtotal_materials) > 0) {
+      y = drawSummaryRow(doc, 'Materials Subtotal', formatCurrency(estimate.subtotal_materials), y);
     }
-    if (toNumber(estimate.subtotalLabor) > 0) {
-      y = drawSummaryRow(doc, 'Labor Subtotal', formatCurrency(estimate.subtotalLabor), y);
+    if (toNumber(estimate.subtotal_labor) > 0) {
+      y = drawSummaryRow(doc, 'Labor Subtotal', formatCurrency(estimate.subtotal_labor), y);
     }
-    if (toNumber(estimate.subtotalOther) > 0) {
-      y = drawSummaryRow(doc, 'Other Subtotal', formatCurrency(estimate.subtotalOther), y);
-    }
-
-    if (toNumber(estimate.taxAmount) > 0) {
-      y = drawSummaryRow(doc, 'Tax', formatCurrency(estimate.taxAmount), y);
+    if (toNumber(estimate.subtotal_other) > 0) {
+      y = drawSummaryRow(doc, 'Other Subtotal', formatCurrency(estimate.subtotal_other), y);
     }
 
-    if (toNumber(estimate.discountAmount) > 0) {
-      y = drawSummaryRow(doc, 'Discount', `-${formatCurrency(estimate.discountAmount)}`, y);
+    if (toNumber(estimate.tax_amount) > 0) {
+      y = drawSummaryRow(doc, 'Tax', formatCurrency(estimate.tax_amount), y);
+    }
+
+    if (toNumber(estimate.discount_amount) > 0) {
+      y = drawSummaryRow(doc, 'Discount', `-${formatCurrency(estimate.discount_amount)}`, y);
     }
 
     y += 4;
     drawHR(doc, y);
     y += 8;
 
-    y = drawSummaryRow(doc, 'Total', formatCurrency(estimate.totalAmount), y, {
+    y = drawSummaryRow(doc, 'Total', formatCurrency(estimate.total_amount), y, {
       bold: true,
       fontSize: FONT_HEADER,
     });
   }
 
   // ── Terms and Conditions ──
-  if (proposal.termsAndConditions) {
+  if (proposal.terms_and_conditions) {
     y = ensureSpace(doc, 60, y + 16);
     doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold')
       .text('Terms & Conditions', PAGE_MARGIN, y);
     y += 20;
 
     doc.fontSize(FONT_SMALL).fillColor(COLOR_MUTED).font('Helvetica')
-      .text(proposal.termsAndConditions, PAGE_MARGIN, y, {
+      .text(proposal.terms_and_conditions, PAGE_MARGIN, y, {
         width: TABLE_RIGHT_EDGE - PAGE_MARGIN,
         lineGap: 2,
       });
@@ -482,7 +471,7 @@ async function renderProposalPDF(
   }
 
   // ── Footer text ──
-  const footerText = proposal.footerText || undefined;
+  const footerText = proposal.footer_text || undefined;
 
   // Apply watermark + page footer before finalizing
   if (needsWatermark) {

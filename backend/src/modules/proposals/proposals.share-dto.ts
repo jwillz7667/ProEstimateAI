@@ -4,15 +4,17 @@ import {
   Estimate,
   EstimateLineItem,
   Asset,
+  ProjectType,
 } from '@prisma/client';
+import { readProposalSnapshot } from './proposal-document-snapshot';
 
-interface ProposalWithRelations extends Proposal {
+export interface ProposalWithRelations extends Proposal {
   company: Company;
   project: {
     id: string;
     title: string;
     description: string | null;
-    projectType: string;
+    projectType: ProjectType;
     assets: Asset[];
   };
   estimate: Estimate & {
@@ -89,9 +91,31 @@ export interface SharedProposalPageDto {
   estimate: SharedEstimateDto;
   proposal: SharedProposalDto;
   before_after_images: SharedBeforeAfterImageDto[];
+  document_captured_at?: string;
+  document_capture_reason?: 'sent' | 'legacy_backfill';
 }
 
 export function toSharedProposalDto(proposal: ProposalWithRelations): SharedProposalPageDto {
+  if (proposal.sentSnapshot !== null && proposal.sentSnapshot !== undefined) {
+    const snapshot = readProposalSnapshot(proposal.sentSnapshot);
+    return {
+      ...snapshot.content,
+      proposal: {
+        ...snapshot.content.proposal,
+        status: proposal.status.toLowerCase(),
+        sent_at: proposal.sentAt?.toISOString() ?? null,
+        viewed_at: proposal.viewedAt?.toISOString() ?? null,
+        responded_at: proposal.respondedAt?.toISOString() ?? null,
+      },
+      document_captured_at: snapshot.captured_at,
+      document_capture_reason: snapshot.capture_reason,
+    };
+  }
+  return toLiveSharedProposalDto(proposal);
+}
+
+/** Used only before first send, while the parent estimate is locked. */
+export function toLiveSharedProposalDto(proposal: ProposalWithRelations): SharedProposalPageDto {
   const { company, project, estimate } = proposal;
 
   const lineItems: SharedLineItemDto[] = estimate.lineItems.map((item) => ({

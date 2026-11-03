@@ -12,6 +12,7 @@ export const createProposalSchema = z.object({
 
 export const sendProposalSchema = z.object({
   client_message: z.string().max(10000).nullable().optional(),
+  expected_estimate_updated_at: z.string().datetime().optional(),
 });
 
 export const respondToProposalSchema = z.object({

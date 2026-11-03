@@ -1,6 +1,7 @@
 import { Prisma, LineItemCategory } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors";
+import { NotFoundError, ValidationError } from "../../lib/errors";
+import { assertEditableEstimate } from "../estimates/estimates.lifecycle";
 import {
   CreateEstimateLineItemInput,
   UpdateEstimateLineItemInput,
@@ -21,9 +22,7 @@ async function lockEstimate(
   const estimate = await tx.estimate.findUniqueOrThrow({ where: { id: estimateId } });
   // The status check shares the parent row lock with every item mutation.
   // A client with an older draft cannot alter a quote after it was sent or approved.
-  if (estimate.status !== "DRAFT") {
-    throw new ConflictError("Only draft estimates can be edited. Create a new estimate for revisions.");
-  }
+  await assertEditableEstimate(tx, estimate);
   return estimate;
 }
 

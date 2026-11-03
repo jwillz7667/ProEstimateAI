@@ -7,6 +7,7 @@ export interface EstimateDto {
   estimate_number: string;
   title: string | null;
   version: number;
+  revises_estimate_id: string | null;
   status: string;
   pricing_profile_id: string | null;
   created_by_user_id: string | null;
@@ -33,6 +34,7 @@ export function toEstimateDto(estimate: Estimate): EstimateDto {
     estimate_number: estimate.estimateNumber,
     title: estimate.title ?? null,
     version: estimate.version,
+    revises_estimate_id: estimate.revisesEstimateId ?? null,
     status: estimate.status.toLowerCase(),
     pricing_profile_id: estimate.pricingProfileId ?? null,
     created_by_user_id: estimate.createdByUserId ?? null,

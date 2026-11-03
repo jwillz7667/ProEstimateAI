@@ -531,7 +531,7 @@ describe("proposal decisions and shared page freshness", () => {
       ).status,
     ).toBe(results[0].status);
   });
-  it("keeps Date values serializable and reflects updates and deletion immediately", async () => {
+  it("keeps Date values serializable and preserves the sent document against edits or deletion", async () => {
     const t = await tenant();
     const proposal = await proposals.create(t.company.id, {
       estimate_id: t.estimate.id,
@@ -551,16 +551,12 @@ describe("proposal decisions and shared page freshness", () => {
         where: { projectId: t.project.id, action: "PROPOSAL_VIEWED" },
       }),
     ).toBe(1);
-    await proposals.update(proposal.id, t.company.id, {
+    await expect(proposals.update(proposal.id, t.company.id, {
       title: "Revised proposal",
-    });
-    expect((await proposals.getByShareToken(proposal.shareToken!)).title).toBe(
-      "Revised proposal",
-    );
-    await proposals.remove(proposal.id, t.company.id);
-    await expect(
-      proposals.getByShareToken(proposal.shareToken!),
-    ).rejects.toThrow(/Proposal/);
+    })).rejects.toMatchObject({ statusCode: 409 });
+    expect((await proposals.getByShareToken(proposal.shareToken!)).title).toBeNull();
+    await expect(proposals.remove(proposal.id, t.company.id)).rejects.toMatchObject({ statusCode: 409 });
+    expect((await proposals.getByShareToken(proposal.shareToken!)).status).toBe("VIEWED");
   });
   it("does not reopen finished projects and rejects resend after a client decision", async () => {
     const t = await tenant();

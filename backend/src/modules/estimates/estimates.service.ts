@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database";
-import { NotFoundError } from "../../lib/errors";
+import { ConflictError, NotFoundError } from "../../lib/errors";
+import { assertEditableEstimate } from "./estimates.lifecycle";
 import {
   PaginationParams,
   paginateResults,
@@ -174,6 +175,8 @@ export async function update(
       throw new NotFoundError("Estimate", id);
     }
 
+    await assertEditableEstimate(tx, existing);
+
     await verifyPricingProfileOwnership(data.pricing_profile_id, companyId, tx);
 
     const updateData: any = {};
@@ -264,24 +267,77 @@ export async function update(
 }
 
 export async function remove(id: string, companyId: string) {
-  const existing = await prisma.estimate.findFirst({
-    where: { id, companyId },
-    select: { id: true },
+  await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "Estimate" WHERE id = ${id} AND "companyId" = ${companyId} FOR UPDATE
+    `;
+    if (!rows.length) throw new NotFoundError("Estimate", id);
+    const existing = await tx.estimate.findUniqueOrThrow({ where: { id } });
+    await assertEditableEstimate(tx, existing);
+    await tx.proposal.deleteMany({ where: { estimateId: id } });
+    await tx.estimate.delete({ where: { id } });
   });
+}
 
-  if (!existing) {
-    throw new NotFoundError("Estimate", id);
-  }
-
-  // Proposal FK-references Estimate with ON DELETE RESTRICT, so a bare
-  // `estimate.delete` throws a foreign-key violation (surfaced as a 500) for
-  // any estimate that already has a proposal. Remove dependent proposals
-  // first inside one transaction; the estimate delete then cascades its line
-  // items and exports (both ON DELETE CASCADE).
-  await prisma.$transaction([
-    prisma.proposal.deleteMany({ where: { estimateId: id } }),
-    prisma.estimate.delete({ where: { id } }),
-  ]);
+/** A durable retry key prevents a lost response from creating two revisions. */
+export async function revise(id: string, companyId: string, userId: string, requestId: string) {
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "Estimate" WHERE id = ${id} AND "companyId" = ${companyId} FOR UPDATE
+    `;
+    if (!rows.length) throw new NotFoundError("Estimate", id);
+    const previous = await tx.estimate.findFirst({ where: { companyId, revisionRequestId: requestId } });
+    if (previous) {
+      if (previous.revisesEstimateId !== id) throw new ConflictError("This revision request was already used for another estimate.");
+      return previous;
+    }
+    const source = await tx.estimate.findUniqueOrThrow({
+      where: { id }, include: { lineItems: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] } },
+    });
+    if (source.status === "DRAFT") throw new ConflictError("This estimate is still a draft. Continue editing it before creating a revision.");
+    const company = await tx.company.update({
+      where: { id: companyId }, data: { nextEstimateNumber: { increment: 1 } },
+      select: { estimatePrefix: true, nextEstimateNumber: true },
+    });
+    // Requests for different source rows can race before the company lock.
+    // Recheck after that lock, returning a domain conflict instead of a unique-key 500.
+    const claimedRequest = await tx.estimate.findFirst({ where: { companyId, revisionRequestId: requestId } });
+    if (claimedRequest) throw new ConflictError("This revision request was already used for another estimate.");
+    const revision = await tx.estimate.create({
+      data: {
+        companyId, projectId: source.projectId, createdByUserId: userId,
+        revisesEstimateId: source.id, revisionRequestId: requestId,
+        estimateNumber: `${company.estimatePrefix || "EST"}-${company.nextEstimateNumber - 1}`,
+        version: source.version + 1, title: source.title, pricingProfileId: source.pricingProfileId,
+        qualityTier: source.qualityTier, subtotalMaterials: source.subtotalMaterials,
+        subtotalLabor: source.subtotalLabor, subtotalOther: source.subtotalOther,
+        taxAmount: source.taxAmount, discountAmount: source.discountAmount,
+        contingencyAmount: source.contingencyAmount, totalAmount: source.totalAmount,
+        assumptions: source.assumptions, exclusions: source.exclusions,
+        notes: source.notes, validUntil: source.validUntil,
+      },
+    });
+    const copiedIds = new Map<string, string>();
+    // First copy without parents, then restore hierarchy using the NEW IDs.
+    for (const item of source.lineItems) {
+      const { id: oldId, estimateId: _estimateId, parentLineItemId: _parent, ...fields } = item;
+      const copy = await tx.estimateLineItem.create({ data: { ...fields, estimateId: revision.id } });
+      copiedIds.set(oldId, copy.id);
+    }
+    for (const item of source.lineItems) {
+      if (!item.parentLineItemId) continue;
+      const parentId = copiedIds.get(item.parentLineItemId);
+      if (!parentId) throw new ConflictError("The estimate contains an invalid item hierarchy. Contact support before revising it.");
+      await tx.estimateLineItem.update({ where: { id: copiedIds.get(item.id)! }, data: { parentLineItemId: parentId } });
+    }
+    await tx.activityLogEntry.create({
+      data: {
+        projectId: source.projectId, userId, action: "ESTIMATE_CREATED",
+        description: `Revision ${revision.estimateNumber} created from ${source.estimateNumber} (version ${source.version})`,
+      },
+    });
+    return revision;
+  });
 }
 
 /**

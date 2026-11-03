@@ -32,6 +32,8 @@ export const generateEstimateSchema = z.object({
   project_id: z.string().min(1, 'project_id is required'),
 });
 
+export const reviseEstimateSchema = z.object({ request_id: z.string().uuid() }).strict();
+
 export type CreateEstimateInput = z.infer<typeof createEstimateSchema>;
 export type UpdateEstimateInput = z.infer<typeof updateEstimateSchema>;
 export type GenerateEstimateInput = z.infer<typeof generateEstimateSchema>;

@@ -502,6 +502,9 @@ model Estimate {
   exclusions        String?        @db.Text
   notes             String?
   validUntil        DateTime?
+  /// A revision is a separate draft; the previously sent document is never reopened.
+  revisesEstimateId String?
+  revisionRequestId String?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
@@ -510,8 +513,12 @@ model Estimate {
   lineItems EstimateLineItem[]
   proposals Proposal[]
   exports   EstimateExport[]
+  revisesEstimate Estimate? @relation("EstimateRevisions", fields: [revisesEstimateId], references: [id], onDelete: SetNull)
+  revisions Estimate[] @relation("EstimateRevisions")
 
   @@unique([companyId, estimateNumber])
+  @@unique([companyId, revisionRequestId])
+  @@index([revisesEstimateId])
   @@index([projectId])
   @@index([companyId])
 }
@@ -585,6 +592,9 @@ model Proposal {
   viewedAt           DateTime?
   respondedAt        DateTime?
   expiresAt          DateTime?
+  /// Customer-facing content frozen at first send. Lifecycle timestamps remain live.
+  sentSnapshot       Json?
+  sentSnapshotCapturedAt DateTime?
   createdAt          DateTime       @default(now())
 
   estimate Estimate @relation(fields: [estimateId], references: [id])
