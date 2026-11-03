@@ -3,8 +3,14 @@ import SwiftUI
 struct EstimateEditorView: View {
     let initialNotice: String?
     @Environment(\.dismiss) private var dismiss
+    @Environment(FeatureGateCoordinator.self) private var featureGate
+    @Environment(PaywallPresenter.self) private var paywall
     @State private var viewModel: EstimateEditorViewModel
-    @State private var lineEditor: LineEditorSelection?
+    @State private var delivery = EstimateDeliveryViewModel(service: EstimateDeliveryService())
+    @State private var clientPicker = EstimateCreationViewModel(service: EstimateCreationService())
+    @State private var destination: EstimateEditorDestination?
+    @State private var pendingClient: Client?
+    @State private var confirmRevision = false
 
     init(estimateId: String, initialNotice: String? = nil) {
         self.initialNotice = initialNotice
@@ -16,6 +22,7 @@ struct EstimateEditorView: View {
             Form {
                 if let estimate = viewModel.estimate {
                     documentSection(estimate)
+                    clientSection(estimate)
                     if let initialNotice {
                         Section { Text(initialNotice).font(TypographyTokens.subheadline) }
                     }
@@ -23,6 +30,7 @@ struct EstimateEditorView: View {
                     itemsSection
                     totalsSection(estimate)
                     documentNotes(estimate)
+                    nextActionsSection(estimate)
                 } else if viewModel.isLoading {
                     ProgressView("Loading estimate…")
                 } else {
@@ -34,15 +42,31 @@ struct EstimateEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
-                        .disabled(viewModel.isSaving)
+                        .disabled(viewModel.isSaving || delivery.isWorking)
                 }
             }
-            .refreshable { await viewModel.load() }
-            .task { await viewModel.load() }
-            .sheet(item: $lineEditor) { selection in
-                EstimateLineEditorSheet(model: viewModel, selection: selection)
+            .refreshable { await refresh() }
+            .task { await refresh() }
+            .sheet(item: $destination, onDismiss: destinationDismissed) { target in
+                switch target {
+                case let .line(selection): EstimateLineEditorSheet(model: viewModel, selection: selection)
+                case .client:
+                    EstimateCreationClientPicker(model: clientPicker, allowsNoClient: false) { client in pendingClient = client }
+                case let .proposal(proposal):
+                    ProposalPreviewView(proposal: proposal, reviewedEstimate: viewModel.estimate,
+                                        client: proposal.status == .draft ? delivery.client : nil)
+                case let .revision(estimate): EstimateEditorView(estimateId: estimate.id, initialNotice: "This is a new draft revision. The previously sent version stays unchanged.")
+                case let .invoice(invoice):
+                    NavigationStack { InvoiceDetailView(invoiceId: invoice.id, isPresentedInSheet: true) }
+                }
             }
-            .interactiveDismissDisabled(viewModel.isSaving)
+            .interactiveDismissDisabled(viewModel.isSaving || delivery.isWorking)
+            .confirmationDialog("Create a new draft revision?", isPresented: $confirmRevision, titleVisibility: .visible) {
+                Button("Create revision") { Task { await revise() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The sent version and its approval history stay unchanged. Review and send the new version separately.")
+            }
         }
     }
 
@@ -90,7 +114,7 @@ struct EstimateEditorView: View {
             ForEach(viewModel.lineItems) { item in
                 if viewModel.canEdit {
                     Button {
-                        lineEditor = LineEditorSelection(itemId: item.id, form: EstimateLineItemForm(item: item))
+                        destination = .line(LineEditorSelection(itemId: item.id, form: EstimateLineItemForm(item: item)))
                     } label: {
                         lineItemRow(item, editable: true)
                     }
@@ -102,7 +126,7 @@ struct EstimateEditorView: View {
             }
             if viewModel.estimate?.isEditable == true {
                 Button {
-                    lineEditor = LineEditorSelection(itemId: nil, form: viewModel.newItemForm())
+                    destination = .line(LineEditorSelection(itemId: nil, form: viewModel.newItemForm()))
                 } label: {
                     Label("Add line item", systemImage: "plus.circle")
                 }
@@ -182,6 +206,120 @@ struct EstimateEditorView: View {
         LabeledContent(title) { CurrencyText(amount: value) }
     }
 
+    private func clientSection(_ estimate: Estimate) -> some View {
+        Section("Client") {
+            if let client = delivery.client {
+                Text(client.name).font(TypographyTokens.headline)
+                if let contact = client.email ?? client.phone {
+                    Text(contact).font(TypographyTokens.subheadline).foregroundStyle(ColorTokens.secondaryText)
+                }
+            } else {
+                Text(delivery.isLoading ? "Loading client…" : "Choose a client before sending.")
+                    .foregroundStyle(ColorTokens.secondaryText)
+            }
+            if estimate.isEditable || (estimate.status == .approved && delivery.client == nil) {
+                Button(delivery.client == nil ? "Choose or add client" : "Change client") {
+                    Task {
+                        await clientPicker.loadClients(companyId: estimate.companyId)
+                        clientPicker.selectClient(delivery.client)
+                        destination = .client
+                    }
+                }
+                .disabled(delivery.isWorking || delivery.isLoading || viewModel.isSaving || delivery.needsClientRefresh)
+            }
+            if delivery.needsClientRefresh {
+                Button("Refresh client details") { Task { await delivery.load(for: estimate) } }
+                    .disabled(delivery.isWorking || delivery.isLoading)
+            }
+        }
+    }
+
+    private func nextActionsSection(_ estimate: Estimate) -> some View {
+        Section {
+            if estimate.status == .approved {
+                Button(delivery.needsInvoiceReconciliation ? "Check saved invoice" : "Create invoice") {
+                    Task { await invoice() }
+                }
+                .font(TypographyTokens.headline)
+            }
+            Button {
+                Task { await reviewAndSend() }
+            } label: {
+                Label(delivery.needsProposalReconciliation ? "Check saved proposal" : (estimate.isEditable ? "Review & send" : "View sent proposal"),
+                      systemImage: estimate.isEditable ? "paperplane" : "doc.text.magnifyingglass")
+                    .font(estimate.isEditable ? TypographyTokens.headline : TypographyTokens.subheadline)
+            }
+            .disabled(viewModel.lineItems.isEmpty || viewModel.requiresRefresh)
+            if !estimate.isEditable {
+                Button("Create revision") { confirmRevision = true }
+            }
+            if delivery.isWorking { ProgressView("Preparing next step…") }
+            if let message = delivery.errorMessage {
+                Text(message).font(TypographyTokens.footnote).fixedSize(horizontal: false, vertical: true)
+            }
+        } header: {
+            Text("Next step")
+        } footer: {
+            if estimate.isEditable {
+                Text("Review the client, line items and total before sending. Sending preserves this version; future changes use a new revision.")
+            }
+        }
+        .disabled(delivery.isWorking || delivery.isLoading || viewModel.isSaving || viewModel.isLoading)
+    }
+
+    private func refresh() async {
+        await viewModel.load()
+        if let estimate = viewModel.estimate { await delivery.load(for: estimate) }
+    }
+
+    private func destinationDismissed() {
+        Task {
+            if let client = pendingClient, let estimate = viewModel.estimate {
+                pendingClient = nil
+                _ = await delivery.assign(client: client, estimate: estimate)
+            }
+            await refresh()
+            AppEventBus.shared.noteProjectChange()
+        }
+    }
+
+    private func reviewAndSend() async {
+        guard let estimate = viewModel.estimate else { return }
+        if estimate.isEditable {
+            switch featureGate.guardShareApprovalLink() {
+            case .allowed: break
+            case let .blocked(decision): paywall.present(decision); return
+            }
+        }
+        if let proposal = await delivery.prepareProposal(estimate: estimate, hasLineItems: !viewModel.lineItems.isEmpty) {
+            destination = .proposal(proposal)
+        } else { showServerPaywall() }
+    }
+
+    private func revise() async {
+        guard let estimate = viewModel.estimate else { return }
+        if let revised = await delivery.revise(estimate: estimate) {
+            AppEventBus.shared.noteProjectChange()
+            destination = .revision(revised)
+        } else { showServerPaywall() }
+    }
+
+    private func invoice() async {
+        guard let estimate = viewModel.estimate else { return }
+        switch featureGate.guardCreateInvoice() {
+        case .allowed: break
+        case let .blocked(decision): paywall.present(decision); return
+        }
+        if let invoice = await delivery.convertToInvoice(estimate: estimate) {
+            AppEventBus.shared.noteProjectChange()
+            destination = .invoice(invoice)
+        } else { showServerPaywall() }
+    }
+
+    private func showServerPaywall() {
+        if let error = delivery.lastError as? APIError, case let .paywall(decision) = error { paywall.present(decision) }
+    }
+
     @ViewBuilder
     private func documentNotes(_ estimate: Estimate) -> some View {
         if let assumptions = estimate.assumptions, !assumptions.isEmpty {
@@ -192,6 +330,24 @@ struct EstimateEditorView: View {
         }
         if let notes = estimate.notes, !notes.isEmpty {
             Section("Notes") { Text(notes) }
+        }
+    }
+}
+
+private enum EstimateEditorDestination: Identifiable {
+    case line(LineEditorSelection)
+    case client
+    case proposal(Proposal)
+    case revision(Estimate)
+    case invoice(Invoice)
+
+    var id: String {
+        switch self {
+        case let .line(selection): "line-\(selection.id)"
+        case .client: "client"
+        case let .proposal(proposal): "proposal-\(proposal.id)"
+        case let .revision(estimate): "revision-\(estimate.id)"
+        case let .invoice(invoice): "invoice-\(invoice.id)"
         }
     }
 }

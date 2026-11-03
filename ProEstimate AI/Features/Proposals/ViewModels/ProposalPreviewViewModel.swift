@@ -15,41 +15,84 @@ final class ProposalPreviewViewModel {
     var isSending = false
     var errorMessage: String?
     var didCopyShareLink = false
+    private(set) var reviewedEstimate: Estimate?
+    private(set) var reviewedLineItems: [EstimateLineItem] = []
+    private(set) var reviewNeedsRefresh = true
+    private(set) var failureRevision = 0
+    private(set) var lastError: (any Error)?
 
     // MARK: - Dependencies
 
     private let service: ProposalServiceProtocol
+    private let estimateService: any EstimateServiceProtocol
 
     // MARK: - Init
 
-    init(proposal: Proposal, service: ProposalServiceProtocol = LiveProposalService()) {
+    init(proposal: Proposal, reviewedEstimate: Estimate? = nil,
+         service: ProposalServiceProtocol = LiveProposalService(),
+         estimateService: any EstimateServiceProtocol = LiveEstimateService()) {
         self.proposal = proposal
         self.service = service
+        self.reviewedEstimate = reviewedEstimate
+        self.estimateService = estimateService
     }
 
     // MARK: - Derived
 
     var shareURL: URL? { proposal.shareURL }
+    var canSend: Bool {
+        proposal.canSend && !isLoading && !isSending
+            && (proposal.status != .draft || (!reviewNeedsRefresh && !reviewedLineItems.isEmpty))
+    }
 
     // MARK: - Loading
 
     func load() async {
+        guard !isLoading, !isSending else { return }
         isLoading = true
         defer { isLoading = false }
-        if let refreshed = try? await service.getProposal(id: proposal.id) {
+        do {
+            let refreshed = try await service.getProposal(id: proposal.id)
+            guard refreshed.id == proposal.id, refreshed.companyId == proposal.companyId else { return }
             proposal = refreshed
+            async let document = estimateService.getEstimate(id: proposal.estimateId)
+            async let items = estimateService.getLineItems(estimateId: proposal.estimateId)
+            let (estimate, lineItems) = try await (document, items)
+            try Task.checkCancellation()
+            guard estimate.id == proposal.estimateId, estimate.companyId == proposal.companyId,
+                  lineItems.allSatisfy({ $0.estimateId == estimate.id }) else {
+                reviewNeedsRefresh = true
+                errorMessage = "The saved estimate couldn't be matched to this proposal. Refresh before sending."
+                return
+            }
+            reviewedEstimate = estimate
+            reviewedLineItems = lineItems.sorted { $0.sortOrder < $1.sortOrder }
+            reviewNeedsRefresh = false
+            errorMessage = nil
+        } catch {
+            if !Task.isCancelled {
+                reviewNeedsRefresh = true
+                errorMessage = "The proposal review couldn't be refreshed. \(error.localizedDescription)"
+            }
         }
     }
 
     // MARK: - Actions
 
     func send() async {
-        guard !isSending else { return }
+        guard canSend else { return }
         isSending = true
         defer { isSending = false }
         do {
-            proposal = try await service.sendProposal(id: proposal.id, clientMessage: nil)
+            proposal = try await service.sendProposal(
+                id: proposal.id, clientMessage: nil,
+                expectedEstimateUpdatedAt: proposal.status == .draft ? reviewedEstimate?.updatedAt : nil
+            )
+            AppEventBus.shared.noteProjectChange()
         } catch {
+            lastError = error
+            failureRevision += 1
+            reviewNeedsRefresh = true
             errorMessage = error.localizedDescription
         }
     }

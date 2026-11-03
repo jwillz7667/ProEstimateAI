@@ -11,8 +11,14 @@ protocol ProposalServiceProtocol: Sendable {
     /// project, copies branding/defaults, and mints a share token.
     func createFromEstimate(estimateId: String, title: String?, clientMessage: String?) async throws -> Proposal
     /// Send the proposal to the client (status → sent, emails the client).
-    func sendProposal(id: String, clientMessage: String?) async throws -> Proposal
+    func sendProposal(id: String, clientMessage: String?, expectedEstimateUpdatedAt: Date?) async throws -> Proposal
     func deleteProposal(id: String) async throws
+}
+
+extension ProposalServiceProtocol {
+    func sendProposal(id: String, clientMessage: String?) async throws -> Proposal {
+        try await sendProposal(id: id, clientMessage: clientMessage, expectedEstimateUpdatedAt: nil)
+    }
 }
 
 // MARK: - Request Bodies
@@ -41,14 +47,23 @@ struct CreateProposalBody: Encodable, Sendable {
 /// Send-proposal body. Optional message override delivered to the client.
 struct SendProposalBody: Encodable, Sendable {
     let clientMessage: String?
+    var expectedEstimateUpdatedAt: Date? = nil
 
     enum CodingKeys: String, CodingKey {
         case clientMessage = "client_message"
+        case expectedEstimateUpdatedAt = "expected_estimate_updated_at"
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encodeIfPresent(clientMessage, forKey: .clientMessage)
+        if let expectedEstimateUpdatedAt {
+            // The API's default ISO encoder drops milliseconds. Preserve them
+            // for the server's exact review-version comparison.
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            try c.encode(formatter.string(from: expectedEstimateUpdatedAt), forKey: .expectedEstimateUpdatedAt)
+        }
     }
 }
 
@@ -113,7 +128,7 @@ final class MockProposalService: ProposalServiceProtocol {
         return sample
     }
 
-    func sendProposal(id _: String, clientMessage _: String?) async throws -> Proposal {
+    func sendProposal(id _: String, clientMessage _: String?, expectedEstimateUpdatedAt _: Date?) async throws -> Proposal {
         try await Task.sleep(nanoseconds: simulatedDelay)
         return .sample
     }

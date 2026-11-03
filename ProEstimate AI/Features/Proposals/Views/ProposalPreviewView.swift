@@ -6,9 +6,12 @@ import SwiftUI
 struct ProposalPreviewView: View {
     @State private var viewModel: ProposalPreviewViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(PaywallPresenter.self) private var paywall
+    private let client: Client?
 
-    init(proposal: Proposal) {
-        _viewModel = State(initialValue: ProposalPreviewViewModel(proposal: proposal))
+    init(proposal: Proposal, reviewedEstimate: Estimate? = nil, client: Client? = nil) {
+        self.client = client
+        _viewModel = State(initialValue: ProposalPreviewViewModel(proposal: proposal, reviewedEstimate: reviewedEstimate))
     }
 
     var body: some View {
@@ -16,6 +19,7 @@ struct ProposalPreviewView: View {
             ScrollView {
                 VStack(spacing: SpacingTokens.lg) {
                     heroCard
+                    estimateReviewCard
                     if hasNarrative {
                         narrativeCard
                     }
@@ -23,6 +27,10 @@ struct ProposalPreviewView: View {
                         shareCard
                     }
                     actions
+                    if viewModel.reviewNeedsRefresh {
+                        Button("Refresh review") { Task { await viewModel.load() } }
+                            .disabled(viewModel.isLoading || viewModel.isSending)
+                    }
                     Spacer(minLength: SpacingTokens.lg)
                 }
                 .padding(SpacingTokens.md)
@@ -57,10 +65,55 @@ struct ProposalPreviewView: View {
                 if let message = viewModel.errorMessage { Text(message) }
             }
             .task { await viewModel.load() }
+            .refreshable { await viewModel.load() }
+            .interactiveDismissDisabled(viewModel.isSending)
+            .onChange(of: viewModel.failureRevision) { _, _ in
+                if let error = viewModel.lastError as? APIError, case let .paywall(decision) = error {
+                    paywall.present(decision)
+                }
+            }
         }
     }
 
     // MARK: - Hero
+
+    @ViewBuilder
+    private var estimateReviewCard: some View {
+        if let estimate = viewModel.reviewedEstimate {
+            GlassCard {
+                VStack(alignment: .leading, spacing: SpacingTokens.md) {
+                    Text("Review estimate").font(TypographyTokens.headline)
+                    if let client {
+                        Text(client.name).font(TypographyTokens.subheadline.weight(.semibold))
+                        Text(client.email ?? "Send first, then share the approval link with this client.")
+                            .font(TypographyTokens.caption)
+                            .foregroundStyle(ColorTokens.secondaryText)
+                    }
+                    ForEach(viewModel.reviewedLineItems) { item in
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(item.name).font(TypographyTokens.subheadline)
+                            Spacer(minLength: SpacingTokens.sm)
+                            CurrencyText(amount: item.lineTotal)
+                        }
+                    }
+                    Divider()
+                    HStack {
+                        Text("Total").font(TypographyTokens.headline)
+                        Spacer()
+                        CurrencyText(amount: estimate.totalAmount)
+                    }
+                    if viewModel.proposal.status == .draft {
+                        Text("Sending locks this version and activates the approval link. Changes after sending require a revision.")
+                            .font(TypographyTokens.footnote)
+                            .foregroundStyle(ColorTokens.secondaryText)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        } else if viewModel.isLoading {
+            ProgressView("Loading estimate review…")
+        }
+    }
 
     private var heroCard: some View {
         GlassCard {
@@ -204,12 +257,13 @@ struct ProposalPreviewView: View {
     private var actions: some View {
         if viewModel.proposal.canSend {
             PrimaryCTAButton(
-                title: viewModel.proposal.status == .sent ? "Resend Proposal" : "Send Proposal to Client",
+                title: viewModel.proposal.status == .draft ? "Send & lock this version" : "Resend proposal",
                 icon: "paperplane.fill",
                 isLoading: viewModel.isSending
             ) {
                 Task { await viewModel.send() }
             }
+            .disabled(!viewModel.canSend)
         } else if viewModel.proposal.hasResponse {
             HStack(spacing: SpacingTokens.xs) {
                 Image(systemName: viewModel.proposal.status == .approved ? "checkmark.seal.fill" : "xmark.seal.fill")

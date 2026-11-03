@@ -22,8 +22,8 @@ final class LiveProposalService: ProposalServiceProtocol, Sendable {
         return try await apiClient.request(.createProposal(body: body))
     }
 
-    func sendProposal(id: String, clientMessage: String?) async throws -> Proposal {
-        let body = SendProposalBody(clientMessage: clientMessage)
+    func sendProposal(id: String, clientMessage: String?, expectedEstimateUpdatedAt: Date?) async throws -> Proposal {
+        let body = SendProposalBody(clientMessage: clientMessage, expectedEstimateUpdatedAt: expectedEstimateUpdatedAt)
         return try await apiClient.request(.sendProposal(id: id, body: body))
     }
 

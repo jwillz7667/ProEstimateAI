@@ -69,9 +69,9 @@ struct Proposal: Codable, Identifiable, Hashable, Sendable {
 
 extension Proposal {
     /// The client-facing approval URL, assembled from the share token. `nil`
-    /// until the proposal has been persisted with a token (i.e. created).
+    /// until sending captures the immutable document and activates its token.
     var shareURL: URL? {
-        guard let shareToken, !shareToken.isEmpty else { return nil }
+        guard status != .draft, let shareToken, !shareToken.isEmpty else { return nil }
         return AppConstants.proposalShareBaseURL.appendingPathComponent(shareToken)
     }
 
@@ -83,7 +83,7 @@ extension Proposal {
 
     /// Whether the proposal can still be sent to the client.
     var canSend: Bool {
-        status == .draft || status == .sent
+        status == .draft || status == .sent || status == .viewed
     }
 
     /// Whether the client has acted on the proposal (approved or declined).
