@@ -80,7 +80,10 @@ final class ProposalPreviewViewModel {
 
     // MARK: - Actions
 
-    func saveDocument(_ form: ProposalDocumentForm) async throws {
+    func saveDocument(_ form: ProposalDocumentForm, currentCompanyId: String?, canEdit: Bool) async throws {
+        guard proposal.permitsChanges(currentCompanyId: currentCompanyId, canEdit: canEdit) else {
+            throw ProposalDocumentError.permissionDenied
+        }
         guard proposal.isEditableDraft, !isSending, !isLoading, !isSavingDocument else {
             throw ProposalDocumentError.readOnly
         }
@@ -98,8 +101,8 @@ final class ProposalPreviewViewModel {
         AppEventBus.shared.noteProjectChange()
     }
 
-    func send() async {
-        guard canSend else { return }
+    func send(currentCompanyId: String?, canEdit: Bool) async {
+        guard proposal.permitsChanges(currentCompanyId: currentCompanyId, canEdit: canEdit), canSend else { return }
         isSending = true
         defer { isSending = false }
         do {

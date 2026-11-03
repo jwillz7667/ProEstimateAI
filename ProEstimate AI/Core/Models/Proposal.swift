@@ -112,6 +112,10 @@ extension Proposal {
 
     var isEditableDraft: Bool { status == .draft && sentAt == nil && documentHash == nil }
 
+    func permitsChanges(currentCompanyId: String?, canEdit: Bool) -> Bool {
+        canEdit && currentCompanyId == companyId
+    }
+
     /// Whether the client has acted on the proposal (approved or declined).
     var hasResponse: Bool {
         status == .approved || status == .declined

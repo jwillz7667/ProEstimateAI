@@ -2,14 +2,17 @@ import SwiftUI
 
 struct ProposalDocumentEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
     @State private var form: ProposalDocumentForm
     @State private var saving = false
     @State private var errorMessage: String?
     let onSave: (ProposalDocumentForm) async throws -> Void
+    private let companyId: String
 
     init(proposal: Proposal, onSave: @escaping (ProposalDocumentForm) async throws -> Void) {
         _form = State(initialValue: ProposalDocumentForm(proposal: proposal))
         self.onSave = onSave
+        self.companyId = proposal.companyId
     }
 
     var body: some View {
@@ -40,14 +43,14 @@ struct ProposalDocumentEditorSheet: View {
                     if let errorMessage { Text(errorMessage).foregroundStyle(ColorTokens.error).accessibilityIdentifier("proposal.document.error") }
                 }
             }
-            .disabled(saving)
+            .disabled(saving || !canEditDocument)
             .navigationTitle("Scope & terms")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(saving ? "Saving…" : "Save") { Task { await save() } }
-                        .disabled(saving)
+                        .disabled(saving || !canEditDocument)
                 }
             }
             .interactiveDismissDisabled(saving)
@@ -62,7 +65,7 @@ struct ProposalDocumentEditorSheet: View {
     }
 
     private func save() async {
-        guard !saving else { return }
+        guard !saving, canEditDocument else { return }
         if let validation = form.validationMessage() { errorMessage = validation; return }
         saving = true
         defer { saving = false }
@@ -72,5 +75,9 @@ struct ProposalDocumentEditorSheet: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private var canEditDocument: Bool {
+        appState.currentUser?.canEdit == true && appState.currentCompany?.id == companyId
     }
 }

@@ -7,6 +7,7 @@ struct ProposalPreviewView: View {
     @State private var viewModel: ProposalPreviewViewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(PaywallPresenter.self) private var paywall
+    @Environment(AppState.self) private var appState
     @State private var destination: ProposalPreviewDestination?
     @State private var revisionDelivery = EstimateDeliveryViewModel(service: EstimateDeliveryService())
     private let client: Client?
@@ -22,7 +23,7 @@ struct ProposalPreviewView: View {
                 VStack(spacing: SpacingTokens.lg) {
                     heroCard
                     if viewModel.proposal.changesRequestedAt != nil { requestedChangesCard }
-                    if viewModel.proposal.isEditableDraft {
+                    if viewModel.proposal.isEditableDraft && canManageProposal {
                         Button { destination = .document(viewModel.proposal) } label: {
                             Label("Edit scope & terms", systemImage: "square.and.pencil")
                                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -92,7 +93,7 @@ struct ProposalPreviewView: View {
                 switch target {
                 case let .document(proposal):
                     ProposalDocumentEditorSheet(proposal: proposal) { form in
-                        try await viewModel.saveDocument(form)
+                        try await viewModel.saveDocument(form, currentCompanyId: appState.currentCompany?.id, canEdit: appState.currentUser?.canEdit == true)
                     }
                 case let .revision(estimate):
                     EstimateEditorView(estimateId: estimate.id, initialNotice: "Revise this draft, then send the updated proposal. The previous version stays available for reference.")
@@ -110,6 +111,10 @@ struct ProposalPreviewView: View {
 
     // MARK: - Hero
 
+    private var canManageProposal: Bool {
+        viewModel.proposal.permitsChanges(currentCompanyId: appState.currentCompany?.id, canEdit: appState.currentUser?.canEdit == true)
+    }
+
     private var requestedChangesCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: SpacingTokens.sm) {
@@ -125,11 +130,13 @@ struct ProposalPreviewView: View {
                 } else {
                     Text("Keep this sent version for reference. Create a revision from the estimate to update the offer.")
                         .font(TypographyTokens.footnote).foregroundStyle(.secondary)
-                    Button(revisionDelivery.isWorking ? "Creating revision…" : "Create revision") {
-                        Task { await createRevision() }
+                    if canManageProposal {
+                        Button(revisionDelivery.isWorking ? "Creating revision…" : "Create revision") {
+                            Task { await createRevision() }
+                        }
+                        .frame(minHeight: 44)
+                        .disabled(viewModel.isLoading || viewModel.isSending || revisionDelivery.isWorking)
                     }
-                    .frame(minHeight: 44)
-                    .disabled(viewModel.isLoading || viewModel.isSending || revisionDelivery.isWorking)
                 }
                 if let error = revisionDelivery.errorMessage { Text(error).font(TypographyTokens.footnote).foregroundStyle(ColorTokens.error) }
             }
@@ -137,7 +144,9 @@ struct ProposalPreviewView: View {
     }
 
     private func createRevision() async {
+        guard canManageProposal else { return }
         await viewModel.load()
+        guard canManageProposal else { return }
         guard let estimate = viewModel.reviewedEstimate, !estimate.isEditable else {
             viewModel.errorMessage = "Refresh the estimate before creating its revision."
             return
@@ -421,13 +430,13 @@ struct ProposalPreviewView: View {
 
     @ViewBuilder
     private var actions: some View {
-        if viewModel.proposal.canSend {
+        if viewModel.proposal.canSend && canManageProposal {
             PrimaryCTAButton(
                 title: viewModel.proposal.status == .draft ? "Send & lock this version" : "Resend proposal",
                 icon: "paperplane.fill",
                 isLoading: viewModel.isSending
             ) {
-                Task { await viewModel.send() }
+                Task { await viewModel.send(currentCompanyId: appState.currentCompany?.id, canEdit: appState.currentUser?.canEdit == true) }
             }
             .disabled(!viewModel.canSend)
         } else if viewModel.proposal.hasResponse {

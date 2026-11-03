@@ -3,10 +3,12 @@ import Foundation
 enum ProposalDocumentError: LocalizedError {
     case readOnly
     case invalidResponse
+    case permissionDenied
     var errorDescription: String? {
         switch self {
         case .readOnly: "This proposal has already been sent. Create a revision to change its scope or terms."
         case .invalidResponse: "The saved document couldn't be matched to this proposal. Refresh before continuing."
+        case .permissionDenied: "Your account can view this proposal but cannot make changes."
         }
     }
 }

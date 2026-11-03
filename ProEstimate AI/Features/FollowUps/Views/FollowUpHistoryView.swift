@@ -23,7 +23,7 @@ struct FollowUpHistoryView: View {
                         Label(model.isWorking ? "Queuing follow-up…" : "Send follow-up email", systemImage: "paperplane")
                             .frame(minHeight: 44)
                     }
-                    .disabled(!model.canSend)
+                    .disabled(!model.canSend || appState.currentUser?.canEdit != true)
                 }
                 Section("History") {
                     if history.messages.isEmpty { Text("No follow-up emails yet.").foregroundStyle(.secondary) }
@@ -50,7 +50,10 @@ struct FollowUpHistoryView: View {
             }
         }
         .confirmationDialog("Send follow-up email?", isPresented: $confirmSend, titleVisibility: .visible) {
-            Button("Send email") { Task { await model.send() } }
+            Button("Send email") {
+                guard appState.currentUser?.canEdit == true else { return }
+                Task { await model.send() }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The client will receive a reminder with a link to this document. It will be checked again before sending.")

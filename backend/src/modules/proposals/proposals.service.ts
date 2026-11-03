@@ -334,7 +334,7 @@ const sharedProposalInclude = {
   estimate: {
     include: { lineItems: { orderBy: [{ sortOrder: "asc" as const }, { id: "asc" as const }] }, changeOrder: true },
   },
-} as const;
+} satisfies Prisma.ProposalInclude;
 
 /** Authenticated preview/PDF access also uses the frozen sent document. */
 export async function getForRendering(id: string, companyId: string) {

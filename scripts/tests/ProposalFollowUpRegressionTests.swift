@@ -30,6 +30,10 @@ struct ProposalFollowUpRegressionTests {
         for key in ["changes_requested_at", "requested_changes_message", "document_hash", "draft_review_token", "acceptance"] { object.removeValue(forKey: key) }
         let legacy = try JSONDecoder().decode(Proposal.self, from: JSONSerialization.data(withJSONObject: object))
         try expect(legacy.acceptance == nil && legacy.changesRequestedAt == nil, "Old proposal responses must decode without new fields")
+        try expect(!legacy.permitsChanges(currentCompanyId: legacy.companyId, canEdit: false), "View-only users cannot edit, revise or send a proposal")
+        try expect(!legacy.permitsChanges(currentCompanyId: "another-company", canEdit: true), "An editable role must not grant write controls for another company")
+        try expect(!legacy.permitsChanges(currentCompanyId: nil, canEdit: true), "Missing account context must fail closed")
+        try expect(legacy.permitsChanges(currentCompanyId: legacy.companyId, canEdit: true), "An authorized company member can use document write actions")
         try expect(!legacy.canSend, "An older sent document with an unknown recipient must not be emailed to a mutable project client")
         var bound = legacy
         bound.recipientName = "Original customer"
