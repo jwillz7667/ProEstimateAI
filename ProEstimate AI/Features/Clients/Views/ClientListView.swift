@@ -3,6 +3,7 @@ import SwiftUI
 /// Client history is the primary destination; editing stays available in the context menu.
 struct ClientListView: View {
     @Environment(AppRouter.self) private var router
+    @Environment(AppState.self) private var appState
     @State private var viewModel = ClientListViewModel()
     @State private var showingNewClient = false
     @State private var clientToEdit: Client?
@@ -19,6 +20,7 @@ struct ClientListView: View {
                         SubscriptionBadge()
                     }
                     ToolbarItem(placement: .primaryAction) {
+                      if appState.currentUser?.canEdit == true {
                         Button {
                             showingNewClient = true
                         } label: {
@@ -27,6 +29,7 @@ struct ClientListView: View {
                         .tint(ColorTokens.primaryOrange)
                         .accessibilityLabel("New client")
                         .accessibilityHint("Add a new client")
+                      }
                     }
                 }
                 .searchable(text: $viewModel.searchText, prompt: "Search clients")
@@ -82,7 +85,7 @@ struct ClientListView: View {
                 icon: "person.2",
                 title: "No Clients Yet",
                 subtitle: "Add your first client to start creating estimates and invoices.",
-                ctaTitle: "Add Client",
+                ctaTitle: appState.currentUser?.canEdit == true ? "Add Client" : nil,
                 ctaAction: { showingNewClient = true }
             )
         } else {
@@ -115,6 +118,7 @@ struct ClientListView: View {
                         } label: {
                             Label("Edit", systemImage: "pencil")
                         }
+                        .disabled(appState.currentUser?.canEdit != true)
 
                         Button(role: .destructive) {
                             clientToDelete = client
@@ -122,6 +126,7 @@ struct ClientListView: View {
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                        .disabled(appState.currentUser?.canEdit != true)
                     }
                 }
             }

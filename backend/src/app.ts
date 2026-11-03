@@ -8,6 +8,7 @@ import { requestIdMiddleware } from "./middleware/request-id.middleware";
 import { globalRateLimit } from "./middleware/rate-limit.middleware";
 import { errorHandler } from "./middleware/error-handler.middleware";
 import { requireAuth } from "./middleware/auth.middleware";
+import { requestLogUrl } from "./lib/request-log-url";
 import { resizeImage, parseWidthParam } from "./lib/image-resize";
 
 interface PublicImage {
@@ -79,6 +80,8 @@ import adminRoutes from "./modules/admin/admin.routes";
 import estimateLibraryRoutes from "./modules/estimate-library/estimate-library.routes";
 import { jobCostRoutes } from "./modules/job-costs/job-costs.routes";
 import { requireWriteAccess } from "./middleware/write-access.middleware";
+import { followUpRoutes, followUpPreferenceRoutes } from "./modules/follow-ups/follow-ups.routes";
+import { stripePaymentWebhookHandler, merchantPaymentRoutes, invoiceCheckoutPublicRoutes } from "./modules/invoice-checkout/invoice-checkout.routes";
 
 export function createApp() {
   const app = express();
@@ -89,6 +92,7 @@ export function createApp() {
   // Global middleware
   app.use(cors(corsOptions));
   app.use(compression()); // gzip responses — reduces bandwidth 60-80%
+  app.post("/v1/payments/stripe/webhook", express.raw({ type: "application/json", limit: "2mb" }), stripePaymentWebhookHandler);
   app.use(express.json({ limit: "10mb" }));
   app.use(requestIdMiddleware);
   app.use(globalRateLimit);
@@ -102,11 +106,11 @@ export function createApp() {
           ignore: (req) => req.url === "/health", // Don't log health checks
         },
         customSuccessMessage: (req, res) =>
-          `${req.method} ${req.url} ${res.statusCode}`,
+          `${req.method} ${requestLogUrl(req.url)} ${res.statusCode}`,
         customErrorMessage: (req, res) =>
-          `${req.method} ${req.url} ${res.statusCode}`,
+          `${req.method} ${requestLogUrl(req.url)} ${res.statusCode}`,
         serializers: {
-          req: (req) => ({ method: req.method, url: req.url, id: req.id }),
+          req: (req) => ({ method: req.method, url: requestLogUrl(req.url), id: req.id }),
           res: (res) => ({ statusCode: res.statusCode }),
         },
       }),
@@ -120,6 +124,8 @@ export function createApp() {
   const v1 = express.Router();
   v1.use("/auth", authRoutes);
   v1.use("/invoice-share", invoiceShareRoutes);
+  v1.use("/invoice-share", invoiceCheckoutPublicRoutes);
+  v1.use("/follow-up-preferences", followUpPreferenceRoutes);
 
   // Public image endpoints (no auth — served to AsyncImage / <img> tags)
   v1.get("/generations/:id/preview", async (req, res, next) => {
@@ -238,22 +244,24 @@ export function createApp() {
 
   v1.use("/users", requireAuth, usersRoutes);
   v1.use("/devices", requireAuth, devicesRoutes);
-  v1.use("/companies", requireAuth, companiesRoutes);
-  v1.use("/clients", requireAuth, clientsRoutes);
+  v1.use("/companies", requireAuth, requireWriteAccess, companiesRoutes);
+  v1.use("/clients", requireAuth, requireWriteAccess, clientsRoutes);
   v1.use("/projects", requireAuth, requireWriteAccess, projectsRoutes);
-  v1.use("/assets", requireAuth, assetsRoutes);
-  v1.use("/generations", requireAuth, generationsRoutes);
-  v1.use("/materials", requireAuth, materialsRoutes);
-  v1.use("/estimates", requireAuth, estimatesRoutes);
-  v1.use("/estimate-library", requireAuth, estimateLibraryRoutes);
+  v1.use("/assets", requireAuth, requireWriteAccess, assetsRoutes);
+  v1.use("/generations", requireAuth, requireWriteAccess, generationsRoutes);
+  v1.use("/materials", requireAuth, requireWriteAccess, materialsRoutes);
+  v1.use("/estimates", requireAuth, requireWriteAccess, estimatesRoutes);
+  v1.use("/estimate-library", requireAuth, requireWriteAccess, estimateLibraryRoutes);
   v1.use("/job-costs", requireAuth, requireWriteAccess, jobCostRoutes);
-  v1.use("/estimate-line-items", requireAuth, estimateLineItemsRoutes);
-  v1.use("/estimate-exports", requireAuth, estimateExportsRoutes);
-  v1.use("/proposals", requireAuth, proposalsRoutes);
-  v1.use("/invoices", requireAuth, invoicesRoutes);
-  v1.use("/invoice-line-items", requireAuth, invoiceLineItemsRoutes);
-  v1.use("/pricing-profiles", requireAuth, pricingProfilesRoutes);
-  v1.use("/labor-rates", requireAuth, laborRatesRoutes);
+  v1.use("/follow-ups", requireAuth, requireWriteAccess, followUpRoutes);
+  v1.use("/payment-settings", requireAuth, requireWriteAccess, merchantPaymentRoutes);
+  v1.use("/estimate-line-items", requireAuth, requireWriteAccess, estimateLineItemsRoutes);
+  v1.use("/estimate-exports", requireAuth, requireWriteAccess, estimateExportsRoutes);
+  v1.use("/proposals", requireAuth, requireWriteAccess, proposalsRoutes);
+  v1.use("/invoices", requireAuth, requireWriteAccess, invoicesRoutes);
+  v1.use("/invoice-line-items", requireAuth, requireWriteAccess, invoiceLineItemsRoutes);
+  v1.use("/pricing-profiles", requireAuth, requireWriteAccess, pricingProfilesRoutes);
+  v1.use("/labor-rates", requireAuth, requireWriteAccess, laborRatesRoutes);
   v1.use("/activity", requireAuth, activityRoutes);
   v1.use("/commerce", requireAuth, commerceRoutes);
   v1.use("/usage", requireAuth, usageRoutes);
@@ -263,7 +271,7 @@ export function createApp() {
   // Property maps: address geocoding, lawn polygon area, roof scouting via
   // Solar API, and a static-map proxy so GOOGLE_MAPS_API_KEY stays server
   // side. Auth required — these calls hit billable Google APIs.
-  v1.use("/maps", requireAuth, mapsRoutes);
+  v1.use("/maps", requireAuth, requireWriteAccess, mapsRoutes);
   // Admin-only operations (generation reaper, etc.). requireAuth populates the
   // user; requireAdmin (inside the router) enforces the ADMIN_EMAILS allowlist.
   v1.use("/admin", requireAuth, adminRoutes);

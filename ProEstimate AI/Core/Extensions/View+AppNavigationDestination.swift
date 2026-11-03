@@ -19,6 +19,8 @@ extension View {
                 )
             case let .invoiceDetail(id):
                 InvoiceDetailView(invoiceId: id)
+            case let .clientDetail(id):
+                ClientDetailView(clientId: id)
             default:
                 EmptyView()
             }

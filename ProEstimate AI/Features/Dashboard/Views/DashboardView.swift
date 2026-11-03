@@ -112,6 +112,7 @@ struct DashboardView: View {
 
     private var creationActions: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            if appState.currentUser?.canEdit == true {
             newEstimateButton
             Button(action: handleCreateProject) {
                 Label("New project", systemImage: "folder.badge.plus")
@@ -122,6 +123,11 @@ struct DashboardView: View {
             .buttonStyle(.plain)
             .accessibilityHint("Organize a project with photos and optional AI previews")
             .accessibilityIdentifier("home.newProject")
+            } else {
+            Label("Read-only workspace", systemImage: "eye")
+                .font(TypographyTokens.subheadline)
+                .foregroundStyle(ColorTokens.secondaryText)
+            }
         }
     }
 
@@ -259,6 +265,7 @@ struct DashboardView: View {
     }
 
     private func handleCreateProject() {
+        guard appState.currentUser?.canEdit == true else { return }
         switch featureGateCoordinator.guardCreateProject() {
         case .allowed: showProjectCreation = true
         case let .blocked(decision): paywallPresenter.present(decision)

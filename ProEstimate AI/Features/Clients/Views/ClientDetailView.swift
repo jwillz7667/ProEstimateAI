@@ -6,6 +6,7 @@ struct ClientDetailView: View {
     var onClientDeleted: ((String) -> Void)?
 
     @Environment(AppRouter.self) private var router
+    @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var client: Client?
     @State private var isLoading = true
@@ -41,6 +42,7 @@ struct ClientDetailView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
+              if appState.currentUser?.canEdit == true {
                 Menu {
                     Button {
                         showingEditSheet = true
@@ -62,6 +64,7 @@ struct ClientDetailView: View {
                 .accessibilityLabel("More options")
                 .accessibilityHint("Edit or delete this client")
                 .disabled(client == nil || isDeleting)
+              }
             }
         }
         .task(id: clientId) {
@@ -75,6 +78,7 @@ struct ClientDetailView: View {
                 ClientFormView(client: client) { updatedClient in
                     self.client = updatedClient
                     onClientUpdated?(updatedClient)
+                    AppEventBus.shared.noteProjectChange()
                 }
             }
         }
@@ -454,6 +458,7 @@ struct ClientDetailView: View {
         do {
             try await clientService.deleteClient(id: clientId)
             onClientDeleted?(clientId)
+            AppEventBus.shared.noteProjectChange()
             isDeleting = false
             dismiss()
         } catch {
