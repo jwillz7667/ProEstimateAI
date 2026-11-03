@@ -1,4 +1,7 @@
 import Foundation
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
 
 @main
 @MainActor
@@ -149,6 +152,11 @@ struct JobCostRegressionTests {
         await model.loadMore(); await model.loadMore()
         try expect(model.entries.count == 3 && model.entries.contains(where: { $0.voidedAt != nil }), "The history toggle must expose retained voided rows")
         try expect(model.summary?.costsByCurrency.count == 2 && model.summary?.recordedCost == Decimal(string: "33.33"), "Per-currency summaries are authoritative and must not sum currencies together")
+        let voided = await model.voidEntry(model.entries.first(where: { $0.voidedAt == nil })!)
+        try expect(voided && service.entries.count == 3, "Voiding must preserve the original stored row")
+        await model.load(scope: scope, canEdit: true, includeVoided: true)
+        await model.loadMore(); await model.loadMore()
+        try expect(model.entries.filter({ $0.voidedAt != nil }).count == 2, "Voided history must remain browsable after a mutation")
     }
 
     static func actualFilesAndProtectedJournal() async throws {
@@ -169,6 +177,15 @@ struct JobCostRegressionTests {
         try pdf.write(to: source)
         let imported = try await files.importFile(source)
         try expect(imported.data == pdf && imported.mimeType == "application/pdf", "Private file import must retain valid bounded PDFs")
+        let pixels = CGContext(data: nil, width: 2, height: 2, bitsPerComponent: 8, bytesPerRow: 8,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        let image = pixels.makeImage()!
+        let png = NSMutableData()
+        let destination = CGImageDestinationCreateWithData(png, UTType.png.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(destination, image, nil)
+        try expect(CGImageDestinationFinalize(destination), "The codec fixture must be a real PNG")
+        let photo = try await files.photo(png as Data)
+        try expect(photo.mimeType == "image/jpeg" && photo.validationMessage == nil, "Photo import must produce a bounded real JPEG")
         let preview = try await files.preview(data: pdf, filename: "../untrusted.pdf", mimeType: "application/pdf")
         try expect(FileManager.default.fileExists(atPath: preview.path) && preview.lastPathComponent == "Receipt.pdf", "Private preview paths must not trust a remote filename")
         let attributes = try FileManager.default.attributesOfItem(atPath: preview.path)
@@ -236,7 +253,14 @@ private final class CostFakeService: JobCostServing {
         if commitThenFail { commitThenFail = false; throw CostFakeError.uncertain }
         return entry
     }
-    func voidEntry(id: String) async throws {}
+    func voidEntry(id: String) async throws {
+        entries = try entries.map { entry in
+            guard entry.id == id else { return entry }
+            var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(entry)) as! [String: Any]
+            object["voided_at"] = Date().timeIntervalSinceReferenceDate
+            return try JSONDecoder().decode(JobCostEntry.self, from: JSONSerialization.data(withJSONObject: object))
+        }
+    }
     func attachReceipt(id: String, data: Data, mimeType: String, filename: String) async throws {
         attachmentCalls += 1
         if failAttachment { throw CostFakeError.uncertain }

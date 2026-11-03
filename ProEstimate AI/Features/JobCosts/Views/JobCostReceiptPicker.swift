@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
+import AVFoundation
 
 struct JobCostReceiptPicker: View {
     @Binding var attachment: JobCostReceiptAttachment?
@@ -9,6 +10,8 @@ struct JobCostReceiptPicker: View {
     @State private var showCamera = false
     @State private var showFiles = false
     @State private var errorMessage: String?
+    @State private var cameraAccessDenied = false
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         Section("Receipt (optional)") {
@@ -20,7 +23,7 @@ struct JobCostReceiptPicker: View {
                     .disabled(isPreparing)
             }
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Button { showCamera = true } label: { Label("Take receipt photo", systemImage: "camera") }
+                Button { Task { await openCamera() } } label: { Label("Take receipt photo", systemImage: "camera") }
                     .disabled(isPreparing)
             }
             PhotosPicker(selection: $photo, matching: .images) { JobCostPhotoPickerLabel() }
@@ -29,6 +32,11 @@ struct JobCostReceiptPicker: View {
                 .disabled(isPreparing)
             if isPreparing { ProgressView("Preparing receipt…") }
             if let errorMessage { Text(errorMessage).font(TypographyTokens.footnote).foregroundStyle(ColorTokens.error) }
+            if cameraAccessDenied {
+                Button("Open camera settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+            }
             Text("JPEG, PNG or PDF, up to 5 MB. The receipt is attached after the cost is saved.")
                 .font(TypographyTokens.footnote).foregroundStyle(ColorTokens.secondaryText)
         }
@@ -71,6 +79,22 @@ struct JobCostReceiptPicker: View {
                     errorMessage = nil
                 } catch { errorMessage = error.localizedDescription }
             }
+        }
+    }
+
+    private func openCamera() async {
+        let allowed: Bool
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: allowed = true
+        case .notDetermined: allowed = await AVCaptureDevice.requestAccess(for: .video)
+        default: allowed = false
+        }
+        cameraAccessDenied = !allowed
+        if allowed {
+            errorMessage = nil
+            showCamera = true
+        } else {
+            errorMessage = "Camera access is off. Choose a photo or file, or enable camera access in Settings."
         }
     }
 }
