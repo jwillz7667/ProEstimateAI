@@ -1,10 +1,13 @@
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
+import { calculateEstimateTotals, estimateTotalsMatch } from "../../lib/estimate-money";
 import { prisma } from "../../config/database";
 import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors";
 import { toLiveSharedProposalDto, type ProposalWithRelations } from "./proposals.share-dto";
-import { readProposalSnapshot, sharedProposalContentSchema } from "./proposal-document-snapshot";
+import { ACCEPTANCE_CONSENT_TEXT, ACCEPTANCE_CONSENT_VERSION, hashCanonicalValue, proposalDocumentHash, readProposalSnapshot, sharedProposalContentSchema } from "./proposal-document-snapshot";
 import { invalidateCache, CacheKeys } from "../../config/redis";
+import { getTemplateProposalDefaults } from "../estimate-library/estimate-library.service";
+import { currentProposalRecipient, lockProposalRecipient, proposalRecipientMatches } from "./proposal-recipient";
 import {
   PaginationParams,
   paginateResults,
@@ -22,6 +25,7 @@ import {
 async function lockProposal(
   tx: Prisma.TransactionClient,
   selector: { id: string; companyId: string } | { shareToken: string },
+  lockRecipient = false,
 ) {
   const found = await tx.proposal.findFirst({ where: selector, select: { id: true, estimateId: true } });
   if (!found) throw new NotFoundError("Proposal");
@@ -36,6 +40,10 @@ async function lockProposal(
     SELECT id FROM "Proposal" WHERE id = ${found.id} FOR UPDATE
   `;
   if (!rows.length) throw new NotFoundError("Proposal");
+  if (lockRecipient) {
+    const target = await tx.proposal.findUniqueOrThrow({ where: { id: found.id }, select: { projectId: true, companyId: true } });
+    await lockProposalRecipient(tx, target.projectId, target.companyId);
+  }
   const proposal = await tx.proposal.findFirst({ where: selector, include: sharedProposalInclude });
   if (!proposal) throw new NotFoundError("Proposal");
   return proposal;
@@ -55,7 +63,8 @@ function documentSnapshot(proposal: ProposalWithRelations, capturedAt: Date, rea
 /** Covers pre-migration/test/imported sent rows without inventing past prices. */
 async function ensureSentSnapshot(tx: Prisma.TransactionClient, proposal: ProposalWithRelations) {
   if (proposal.sentSnapshot !== null) {
-    readProposalSnapshot(proposal.sentSnapshot);
+    const snapshot = readProposalSnapshot(proposal.sentSnapshot);
+    if (snapshot.estimate_id !== proposal.estimateId) throw new ConflictError("The saved proposal version does not match its estimate. Contact support before responding.");
     return proposal;
   }
   if (proposal.status === "DRAFT" && !proposal.sentAt && !proposal.respondedAt) return proposal;
@@ -104,13 +113,18 @@ export async function list(
 export async function getById(id: string, companyId: string) {
   const proposal = await prisma.proposal.findFirst({
     where: { id, companyId },
+    include: sharedProposalInclude,
   });
 
   if (!proposal) {
     throw new NotFoundError("Proposal", id);
   }
 
-  return proposal;
+  return { ...proposal, draftReviewToken: proposal.status === "DRAFT" ? draftReviewToken(proposal) : null };
+}
+
+function draftReviewToken(proposal: ProposalWithRelations) {
+  return hashCanonicalValue({ estimate_id: proposal.estimateId, estimate_version: proposal.estimate.version, content: toLiveSharedProposalDto(proposal), private_recipient: currentProposalRecipient(proposal.project) });
 }
 
 export async function create(companyId: string, data: CreateProposalInput) {
@@ -127,13 +141,19 @@ export async function create(companyId: string, data: CreateProposalInput) {
     if (projectId !== estimate.projectId) throw new ValidationError("project_id does not match the estimate's project");
     const project = await tx.project.findFirst({ where: { id: projectId, companyId }, select: { id: true } });
     if (!project) throw new NotFoundError("Project", projectId);
+    const defaults = await getTemplateProposalDefaults(tx, estimate.id, companyId);
     return tx.proposal.create({
       data: {
         estimateId: data.estimate_id, projectId, companyId, shareToken: randomUUID(),
         heroImageUrl: data.hero_image_url ?? null,
-        termsAndConditions: data.terms_and_conditions ?? null,
+        title: data.title !== undefined ? data.title : defaults?.title ?? null,
+        introText: data.intro_text !== undefined ? data.intro_text : defaults?.intro_text ?? null,
+        scopeOfWork: data.scope_of_work !== undefined ? data.scope_of_work : defaults?.scope_of_work ?? null,
+        timelineText: data.timeline_text !== undefined ? data.timeline_text : defaults?.timeline_text ?? null,
+        footerText: data.footer_text !== undefined ? data.footer_text : defaults?.footer_text ?? null,
+        termsAndConditions: data.terms_and_conditions !== undefined ? data.terms_and_conditions : defaults?.terms_and_conditions ?? null,
         clientMessage: data.client_message ?? null,
-        expiresAt: data.expires_at ? new Date(data.expires_at) : null,
+        expiresAt: data.expires_at !== undefined ? (data.expires_at ? new Date(data.expires_at) : null) : estimate.validUntil,
       },
     });
   });
@@ -146,18 +166,31 @@ export async function send(
   data?: SendProposalInput,
 ) {
   const updated = await prisma.$transaction(async (tx) => {
-    let proposal = await lockProposal(tx, { id: proposalId, companyId });
+    let proposal = await lockProposal(tx, { id: proposalId, companyId }, true);
     if (proposal.respondedAt || !["DRAFT", "SENT", "VIEWED"].includes(proposal.status)) {
       throw new ValidationError("Create a new proposal to request another client decision");
     }
+    if (proposal.changesRequestedAt) throw new ConflictError("The client requested changes. Create and send an estimate revision.");
     if (proposal.expiresAt && proposal.expiresAt <= new Date()) throw new ValidationError("This proposal has expired");
     if (proposal.status === "DRAFT") {
       if (proposal.sentSnapshot || proposal.sentAt) throw new ConflictError("This proposal already has a sent version. Create a new estimate revision.");
       if (proposal.estimate.status !== "DRAFT") {
         throw new ConflictError("This estimate has already been sent. Create a new estimate revision.");
       }
+      if (!proposal.estimate.lineItems.length) throw new ValidationError("Add at least one line item before sending this estimate.");
+      const canonicalTotals = calculateEstimateTotals(proposal.estimate.lineItems, proposal.estimate.discountAmount);
+      if (!estimateTotalsMatch(proposal.estimate, canonicalTotals)) {
+        if (!proposal.estimate.lineItems.length) throw new ValidationError("Add priced line items before sending this header-only estimate.");
+        // Repair only the editable draft, then stop BEFORE publishing. A caller
+        // must see the repaired totals and explicitly send the reviewed offer.
+        await tx.estimate.update({ where: { id: proposal.estimateId }, data: { ...canonicalTotals, updatedAt: new Date(Math.max(Date.now(), proposal.estimate.updatedAt.getTime() + 1)) } });
+        return null;
+      }
       if (data?.expected_estimate_updated_at && new Date(data.expected_estimate_updated_at).getTime() !== proposal.estimate.updatedAt.getTime()) {
         throw new ConflictError("This estimate changed after you reviewed it. Refresh and review the latest prices before sending.");
+      }
+      if (data?.draft_review_token && data.draft_review_token !== draftReviewToken(proposal)) {
+        throw new ConflictError("The proposal scope, terms, price or recipient changed after your review. Refresh before sending.");
       }
       if (proposal.estimate.revisesEstimateId) {
         const newer = await tx.estimate.findFirst({
@@ -174,6 +207,7 @@ export async function send(
         await tx.estimate.updateMany({ where: { id: proposal.estimate.revisesEstimateId, status: "SENT" }, data: { status: "EXPIRED" } });
       }
       const sentAt = new Date();
+      const recipient = currentProposalRecipient(proposal.project);
       proposal = {
         ...proposal, status: "SENT", sentAt,
         clientMessage: data?.client_message !== undefined ? data.client_message : proposal.clientMessage,
@@ -183,6 +217,7 @@ export async function send(
         data: {
           status: "SENT", sentAt, clientMessage: proposal.clientMessage,
           sentSnapshot: documentSnapshot(proposal, sentAt, "sent"), sentSnapshotCapturedAt: sentAt,
+          sentRecipientClientId: recipient.clientId, sentRecipientEmail: recipient.email, sentRecipientName: recipient.name,
         },
         include: sharedProposalInclude,
       });
@@ -193,6 +228,7 @@ export async function send(
       });
     } else {
       proposal = await ensureSentSnapshot(tx, proposal);
+      if (!proposalRecipientMatches(proposal)) throw new ConflictError("The original recipient is unknown or has changed. Create and send a reviewed revision to this recipient.");
       if (data?.client_message !== undefined && data.client_message !== proposal.clientMessage) {
         throw new ConflictError("Resending preserves the original proposal. Create a revision to change its message.");
       }
@@ -205,30 +241,22 @@ export async function send(
     });
     return proposal;
   });
+  if (!updated) throw new ConflictError("The draft totals were recalculated from its line items. Refresh and review the updated price before sending.");
   if (updated.shareToken)
     await invalidateCache(CacheKeys.proposalShare(updated.shareToken));
 
-  // Send email to client if project has a client with email
-  if (updated.shareToken) {
-    const project = await prisma.project.findUnique({
-      where: { id: updated.projectId },
-      select: {
-        id: true,
-        client: true,
-        company: true,
-      },
-    });
-    if (project?.client?.email && project.company) {
+  // Use the destination committed with the sent version. A later project/client
+  // reassignment must never redirect this bearer link to another customer.
+  if (updated.shareToken && updated.sentRecipientEmail) {
       const { sendProposalEmail } = await import("../../lib/email");
       const { env: envConfig } = await import("../../config/env");
       const proposalUrl = `${envConfig.PUBLIC_PROPOSAL_BASE_URL.replace(/\/$/, "")}/${encodeURIComponent(updated.shareToken)}`;
       await sendProposalEmail(
-        project.client.email,
+        updated.sentRecipientEmail,
         proposalUrl,
-        project.company.name,
+        readProposalSnapshot(updated.sentSnapshot).content.company.name,
         updated.clientMessage ?? undefined,
       );
-    }
   }
 
   return updated;
@@ -284,6 +312,7 @@ export async function remove(proposalId: string, companyId: string) {
 // Shared content contains Dates and Decimal values. Fetch it fresh instead of
 // caching ORM objects as JSON, which loses their types and serves obsolete prices.
 const sharedProposalInclude = {
+  acceptance: true,
   company: true,
   project: {
     select: {
@@ -291,6 +320,8 @@ const sharedProposalInclude = {
       title: true,
       description: true,
       projectType: true,
+      clientId: true,
+      client: { select: { id: true, name: true, email: true } },
       assets: { orderBy: { sortOrder: "asc" as const } },
     },
   },
@@ -335,6 +366,10 @@ export async function respondToProposal(
     // Once recorded, the first decision remains authoritative even when
     // conflicting requests arrive together or the connection retries later.
     if (proposal.respondedAt) return proposal;
+    if (proposal.changesRequestedAt) {
+      if (data.decision === "changes_requested") return proposal;
+      throw new ConflictError("Changes have been requested. Ask the contractor to send an updated proposal before approving.");
+    }
     const priorDecision = await tx.proposal.findFirst({
       where: { estimateId: proposal.estimateId, id: { not: proposal.id }, respondedAt: { not: null } },
       select: { id: true },
@@ -347,13 +382,43 @@ export async function respondToProposal(
     }
     if (proposal.expiresAt && proposal.expiresAt <= new Date())
       throw new ValidationError("This proposal has expired");
+    const documentHash = proposalDocumentHash(proposal.sentSnapshot);
+    if (data.document_hash && data.document_hash !== documentHash) {
+      throw new ConflictError("This is not the proposal version you reviewed. Refresh before responding.");
+    }
+    if (data.decision === "changes_requested") {
+      if (!data.message?.trim()) throw new ValidationError("Describe the changes you would like.");
+      const changed = await tx.proposal.update({
+        where: { id: proposal.id },
+        data: { status: "VIEWED", changesRequestedAt: new Date(), requestedChangesMessage: data.message.trim() },
+        include: sharedProposalInclude,
+      });
+      await tx.activityLogEntry.create({
+        data: { projectId: proposal.projectId, action: "UPDATED", description: `Client requested proposal changes: ${data.message.trim()}` },
+      });
+      return changed;
+    }
+    const acceptedAt = new Date();
+    if (data.signer_name !== undefined || data.acceptance_consent !== undefined) {
+      if (data.decision !== "approved" || !data.signer_name?.trim() || data.acceptance_consent !== true || !data.document_hash || data.consent_version !== ACCEPTANCE_CONSENT_VERSION) {
+        throw new ValidationError("Approval requires your name, explicit consent and the proposal version you reviewed.");
+      }
+      await tx.proposalAcceptance.create({
+        data: {
+          proposalId: proposal.id, companyId: proposal.companyId, estimateId: proposal.estimateId,
+          estimateVersion: readProposalSnapshot(proposal.sentSnapshot).estimate_version, documentHash, signerName: data.signer_name.trim(),
+          consentText: ACCEPTANCE_CONSENT_TEXT, consentVersion: ACCEPTANCE_CONSENT_VERSION, acceptedAt,
+        },
+      });
+    }
     const status = data.decision === "approved" ? "APPROVED" : "DECLINED";
     const result = await tx.proposal.update({
       where: { id: proposal.id },
       data: {
         status,
-        respondedAt: new Date(),
+        respondedAt: acceptedAt,
         clientMessage: data.message ?? proposal.clientMessage,
+        responseMessage: data.message ?? null,
       },
       include: sharedProposalInclude,
     });

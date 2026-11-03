@@ -19,6 +19,7 @@ export interface SharedLineItem {
   quantity: number;
   unit: string;
   unit_cost: number;
+  unit_price?: number;
   line_total: number;
 }
 
@@ -49,6 +50,8 @@ export interface SharedEstimate {
   discount_amount: number;
   total_amount: number;
   line_items: SharedLineItem[];
+  assumptions?: string | null;
+  exclusions?: string | null;
 }
 
 export interface SharedProposalMeta {
@@ -66,6 +69,19 @@ export interface SharedProposalMeta {
   sent_at: string | null;
   viewed_at: string | null;
   responded_at: string | null;
+  changes_requested_at?: string | null;
+  requested_changes_message?: string | null;
+  response_message?: string | null;
+}
+
+export interface ProposalAcceptance {
+  signer_name: string;
+  accepted_at: string;
+  document_hash: string;
+  estimate_version: number;
+  consent_text: string;
+  consent_version: string;
+  identity_assurance: "self_attested";
 }
 
 export interface SharedBeforeAfterImage {
@@ -81,6 +97,12 @@ export interface SharedProposalPage {
   estimate: SharedEstimate;
   proposal: SharedProposalMeta;
   before_after_images: SharedBeforeAfterImage[];
+  document_hash?: string | null;
+  document_captured_at?: string;
+  document_capture_reason?: "sent" | "legacy_backfill";
+  approval_consent_text?: string;
+  approval_consent_version?: string;
+  acceptance?: ProposalAcceptance | null;
 }
 
 export async function getSharedProposal(
@@ -91,12 +113,14 @@ export async function getSharedProposal(
   );
 }
 
-export type ProposalDecision = "approved" | "declined";
+export type ProposalDecision = "approved" | "declined" | "changes_requested";
 
 export async function respondToSharedProposal(
   token: string,
   decision: ProposalDecision,
   message?: string,
+  acknowledgement?: { signer_name: string; acceptance_consent: true; consent_version: string; document_hash: string },
+  documentHash?: string,
 ): Promise<SharedProposalPage> {
   return fetchAPI<SharedProposalPage>(
     `/proposals/share/${encodeURIComponent(token)}/respond`,
@@ -105,6 +129,8 @@ export async function respondToSharedProposal(
       body: JSON.stringify({
         decision,
         message: message && message.length > 0 ? message : null,
+        ...(acknowledgement ?? {}),
+        ...(documentHash ? { document_hash: documentHash } : {}),
       }),
     },
   );
@@ -130,6 +156,15 @@ export function formatQuantity(value: number): string {
       });
 }
 
+/** Never display the private unit_cost field from older servers/snapshots. */
+export function customerUnitPriceLabel(item: SharedLineItem): string | null {
+  if (!Number.isFinite(item.quantity) || !Number.isFinite(item.line_total) || item.quantity <= 0) return null;
+  const effective = item.line_total / item.quantity;
+  const cents = Math.round(effective * 100);
+  if (BigInt(cents) * BigInt(Math.round(item.quantity * 100)) !== BigInt(Math.round(item.line_total * 100)) * BigInt(100)) return null;
+  return formatCurrency(cents / 100);
+}
+
 export function formatDate(iso: string | null): string | null {
   if (!iso) return null;
   const date = new Date(iso);
@@ -140,7 +175,7 @@ export function formatDate(iso: string | null): string | null {
 }
 
 export function isProposalOpen(proposal: SharedProposalMeta): boolean {
-  return proposal.status === "sent" || proposal.status === "viewed";
+  return !proposal.changes_requested_at && (proposal.status === "sent" || proposal.status === "viewed");
 }
 
 export function isProposalExpired(proposal: SharedProposalMeta): boolean {

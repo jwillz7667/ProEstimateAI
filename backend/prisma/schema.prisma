@@ -287,6 +287,10 @@ model Company {
   estimateLibraryOperations EstimateLibraryOperation[]
   stripeMerchant StripeMerchant?
   stripePaymentEvents StripePaymentEvent[]
+  followUpSettings FollowUpSettings?
+  followUpMessages FollowUpMessage[]
+  followUpSuppressions FollowUpSuppression[]
+  estimateRevisionRequests EstimateRevisionRequest[]
 }
 
 /// Reusable company-owned scope and pricing, independent of the original job.
@@ -461,6 +465,8 @@ model Project {
   invoices        Invoice[]
   activityLogs    ActivityLogEntry[]
   jobCostEntries  JobCostEntry[]
+  followUpMessages FollowUpMessage[]
+  followUpSuppressions FollowUpSuppression[]
 
   @@index([companyId])
   @@index([clientId])
@@ -573,12 +579,31 @@ model Estimate {
   exports   EstimateExport[]
   revisesEstimate Estimate? @relation("EstimateRevisions", fields: [revisesEstimateId], references: [id], onDelete: SetNull)
   revisions Estimate[] @relation("EstimateRevisions")
+  revisionSourceRequests EstimateRevisionRequest[] @relation("RevisionRequestSource")
+  revisionResultRequests EstimateRevisionRequest[] @relation("RevisionRequestResult")
 
   @@unique([companyId, estimateNumber])
   @@unique([companyId, revisionRequestId])
   @@index([revisesEstimateId])
   @@index([projectId])
   @@index([companyId])
+}
+
+/// Multiple retry UUIDs can resume the same pending revision. Null references
+/// are deliberate tombstones after document deletion; a key is never reused.
+model EstimateRevisionRequest {
+  id String @id @default(cuid())
+  companyId String
+  requestId String
+  sourceEstimateId String?
+  revisionEstimateId String?
+  createdAt DateTime @default(now())
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  source Estimate? @relation("RevisionRequestSource", fields: [sourceEstimateId], references: [id], onDelete: SetNull)
+  result Estimate? @relation("RevisionRequestResult", fields: [revisionEstimateId], references: [id], onDelete: SetNull)
+  @@unique([companyId, requestId])
+  @@index([sourceEstimateId])
+  @@index([revisionEstimateId])
 }
 
 /// Snapshot of a rendered estimate PDF. Stored as base64 in `pdfData` so it
@@ -660,14 +685,95 @@ model Proposal {
   /// Customer-facing content frozen at first send. Lifecycle timestamps remain live.
   sentSnapshot       Json?
   sentSnapshotCapturedAt DateTime?
+  /// Private delivery destination reviewed at first send; never in public JSON.
+  sentRecipientClientId String?
+  sentRecipientEmail String?
+  sentRecipientName String?
+  changesRequestedAt DateTime?
+  requestedChangesMessage String? @db.Text
+  responseMessage String? @db.Text
   createdAt          DateTime       @default(now())
 
   estimate Estimate @relation(fields: [estimateId], references: [id])
   project  Project  @relation(fields: [projectId], references: [id])
   company  Company  @relation(fields: [companyId], references: [id])
+  acceptance ProposalAcceptance?
 
   @@index([projectId])
   @@index([companyId])
+}
+
+/// A typed acknowledgement of one immutable offer. The signer is self-attested,
+/// not an authenticated or independently verified identity.
+model ProposalAcceptance {
+  id String @id @default(cuid())
+  proposalId String @unique
+  companyId String
+  estimateId String
+  estimateVersion Int
+  documentHash String
+  signerName String
+  consentText String @db.Text
+  consentVersion String
+  identityAssurance String @default("SELF_ATTESTED")
+  acceptedAt DateTime @default(now())
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  @@index([companyId, acceptedAt])
+}
+
+model FollowUpSettings {
+  companyId String @id
+  enabled Boolean @default(false)
+  quoteDays Int @default(3)
+  invoiceDays Int @default(7)
+  enabledAt DateTime?
+  updatedByUserId String?
+  lastCheckedAt DateTime?
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+/// Durable, bounded email queue. Provider acceptance is not a delivery receipt.
+model FollowUpMessage {
+  id String @id @default(cuid())
+  companyId String
+  projectId String
+  entityKind String
+  entityId String
+  dedupeKey String @unique
+  source String
+  status String @default("QUEUED")
+  attempts Int @default(0)
+  runAt DateTime @default(now())
+  claimedUntil DateTime?
+  attemptToken String?
+  firstAttemptAt DateTime?
+  acceptedAt DateTime?
+  deliveredAt DateTime?
+  providerMessageId String? @unique
+  recipientEmail String?
+  payloadJson Json?
+  lastError String?
+  unsubscribeToken String @unique @default(uuid())
+  createdByUserId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@index([status, runAt])
+  @@index([companyId, entityKind, entityId, createdAt])
+}
+
+model FollowUpSuppression {
+  id String @id @default(cuid())
+  companyId String
+  projectId String
+  entityKind String
+  entityId String
+  createdAt DateTime @default(now())
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([companyId, entityKind, entityId])
 }
 
 // ─── INVOICES ────────────────────────────────────────────

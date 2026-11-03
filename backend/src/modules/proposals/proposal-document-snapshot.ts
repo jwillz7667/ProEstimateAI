@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { ConflictError } from "../../lib/errors";
 
 const nullableText = z.string().nullable();
@@ -19,7 +20,9 @@ export const sharedProposalContentSchema = z.object({
     line_items: z.array(z.object({
       name: z.string(), description: nullableText, category: z.string(),
       quantity: money, unit: z.string(), unit_cost: money, line_total: money,
+      unit_price: money.optional(),
     })),
+    assumptions: nullableText.optional(), exclusions: nullableText.optional(),
   }),
   proposal: z.object({
     title: nullableText, proposal_number: nullableText, status: z.string(),
@@ -52,3 +55,33 @@ export function readProposalSnapshot(value: unknown): ProposalDocumentSnapshot {
   }
   return parsed.data;
 }
+
+export function canonicalJSON(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJSON).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJSON(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export function hashCanonicalValue(value: unknown): string {
+  return createHash("sha256").update(canonicalJSON(value)).digest("hex");
+}
+
+/** Includes the exact frozen version and capture timestamp, independent of JSON key order. */
+export function proposalDocumentHash(value: unknown): string {
+  return hashCanonicalValue(readProposalSnapshot(value));
+}
+
+/** Public unit prices are markup-inclusive; private cost is never a fallback. */
+export function customerUnitPrice(quantity: number, lineTotal: number) { return quantity > 0 ? lineTotal / quantity : 0; }
+
+export function canShowCustomerUnitPrice(quantity: number, lineTotal: number): boolean {
+  if (!Number.isFinite(quantity) || !Number.isFinite(lineTotal) || quantity <= 0) return false;
+  const rateCents = BigInt(Math.round(customerUnitPrice(quantity, lineTotal) * 100));
+  return rateCents * BigInt(Math.round(quantity * 100)) === BigInt(Math.round(lineTotal * 100)) * 100n;
+}
+
+export const ACCEPTANCE_CONSENT_VERSION = "quote-acceptance-v1";
+export const ACCEPTANCE_CONSENT_TEXT = "I have reviewed this proposal, including its scope, price and terms. By typing my name and approving, I agree to this version and intend my typed name to be my electronic acknowledgement.";

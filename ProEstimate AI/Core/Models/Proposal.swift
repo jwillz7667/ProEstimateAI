@@ -26,6 +26,16 @@ struct Proposal: Codable, Identifiable, Hashable, Sendable {
     let respondedAt: Date?
     let expiresAt: Date?
     let createdAt: Date
+    var changesRequestedAt: Date? = nil
+    var requestedChangesMessage: String? = nil
+    var responseMessage: String? = nil
+    var documentHash: String? = nil
+    var draftReviewToken: String? = nil
+    var acceptance: ProposalAcceptance? = nil
+    var recipientClientId: String? = nil
+    var recipientName: String? = nil
+    var recipientEmail: String? = nil
+    var recipientMatchesCurrent: Bool? = nil
 
     // MARK: - Nested Enums
 
@@ -62,6 +72,16 @@ struct Proposal: Codable, Identifiable, Hashable, Sendable {
         case respondedAt = "responded_at"
         case expiresAt = "expires_at"
         case createdAt = "created_at"
+        case changesRequestedAt = "changes_requested_at"
+        case requestedChangesMessage = "requested_changes_message"
+        case responseMessage = "response_message"
+        case documentHash = "document_hash"
+        case draftReviewToken = "draft_review_token"
+        case acceptance
+        case recipientClientId = "recipient_client_id"
+        case recipientName = "recipient_name"
+        case recipientEmail = "recipient_email"
+        case recipientMatchesCurrent = "recipient_matches_current"
     }
 }
 
@@ -83,8 +103,12 @@ extension Proposal {
 
     /// Whether the proposal can still be sent to the client.
     var canSend: Bool {
-        status == .draft || status == .sent || status == .viewed
+        guard changesRequestedAt == nil else { return false }
+        if status == .draft { return true }
+        return (status == .sent || status == .viewed) && recipientMatchesCurrent == true
     }
+
+    var isEditableDraft: Bool { status == .draft && sentAt == nil && documentHash == nil }
 
     /// Whether the client has acted on the proposal (approved or declined).
     var hasResponse: Bool {
@@ -96,6 +120,26 @@ extension Proposal {
         if let title, !title.isEmpty { return title }
         if let proposalNumber, !proposalNumber.isEmpty { return proposalNumber }
         return "Proposal"
+    }
+}
+
+struct ProposalAcceptance: Codable, Hashable, Sendable {
+    let signerName: String
+    let acceptedAt: Date
+    let documentHash: String
+    let estimateVersion: Int
+    let consentText: String
+    let consentVersion: String
+    let identityAssurance: String
+
+    enum CodingKeys: String, CodingKey {
+        case signerName = "signer_name"
+        case acceptedAt = "accepted_at"
+        case documentHash = "document_hash"
+        case estimateVersion = "estimate_version"
+        case consentText = "consent_text"
+        case consentVersion = "consent_version"
+        case identityAssurance = "identity_assurance"
     }
 }
 

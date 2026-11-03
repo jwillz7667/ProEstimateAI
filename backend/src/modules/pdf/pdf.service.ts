@@ -6,6 +6,7 @@ import { isAdminUser } from '../../lib/admin';
 import { gateAIAction, runReservedAction } from '../commerce/entitlement-gate';
 import { getForRendering } from '../proposals/proposals.service';
 import { toSharedProposalDto } from '../proposals/proposals.share-dto';
+import { canShowCustomerUnitPrice } from '../proposals/proposal-document-snapshot';
 
 // ─── Typography ──────────────────────────────────────────
 const FONT_TITLE = 20;
@@ -179,6 +180,7 @@ interface TableLineItem {
   unit: string;
   unitCost: number | string | { toNumber?: () => number };
   lineTotal: number | string | { toNumber?: () => number };
+  hideUnitCost?: boolean;
 }
 
 function drawTableHeader(doc: PDFKit.PDFDocument, y: number): number {
@@ -204,7 +206,7 @@ function drawTableRow(doc: PDFKit.PDFDocument, item: TableLineItem, y: number): 
   doc.text(item.name, TABLE_COL_ITEM + 6, y, { width: 250 });
   doc.text(toNumber(item.quantity).toString(), TABLE_COL_QTY, y, { width: 45, align: 'right' });
   doc.text(item.unit, TABLE_COL_UNIT, y, { width: 45, align: 'center' });
-  doc.text(formatCurrency(item.unitCost), TABLE_COL_RATE, y, { width: 60, align: 'right' });
+  doc.text(item.hideUnitCost ? '—' : formatCurrency(item.unitCost), TABLE_COL_RATE, y, { width: 60, align: 'right' });
   doc.text(formatCurrency(item.lineTotal), TABLE_COL_TOTAL, y, { width: 70, align: 'right' });
 
   let rowHeight = 16;
@@ -413,6 +415,7 @@ async function renderProposalPDF(
           unit: item.unit,
           unitCost: item.unit_cost,
           lineTotal: item.line_total,
+          hideUnitCost: !canShowCustomerUnitPrice(item.quantity, item.line_total),
         }, y);
       }
 
@@ -456,6 +459,14 @@ async function renderProposalPDF(
   }
 
   // ── Terms and Conditions ──
+  for (const [heading, text] of [['Assumptions', document.estimate.assumptions], ['Exclusions', document.estimate.exclusions]]) {
+    if (!text) continue;
+    y = ensureSpace(doc, 60, y + 16);
+    doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold').text(heading!, PAGE_MARGIN, y);
+    y += 20;
+    doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica').text(text, PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN, lineGap: 3 });
+    y = doc.y + 12;
+  }
   if (proposal.terms_and_conditions) {
     y = ensureSpace(doc, 60, y + 16);
     doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold')
@@ -471,6 +482,15 @@ async function renderProposalPDF(
   }
 
   // ── Footer text ──
+  if (document.acceptance) {
+    y = ensureSpace(doc, 105, y + 16);
+    doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold').text('Approval record', PAGE_MARGIN, y);
+    y += 20;
+    doc.fontSize(FONT_SMALL).fillColor(COLOR_TEXT).font('Helvetica').text(
+      `Acknowledged by ${document.acceptance.signer_name} on ${formatDate(new Date(document.acceptance.accepted_at))}.\n${document.acceptance.consent_text}\nThe entered name is self-attested; identity was not independently verified.\nDocument reference: ${document.acceptance.document_hash}`,
+      PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN, lineGap: 3 },
+    );
+  }
   const footerText = proposal.footer_text || undefined;
 
   // Apply watermark + page footer before finalizing

@@ -15,7 +15,8 @@ const itemInput = {
 async function fixture() {
   const company = await prisma.company.create({ data: { name: `Quote ${randomUUID()}` } });
   const user = await prisma.user.create({ data: { companyId: company.id, fullName: "Estimator", email: `${randomUUID()}@example.test` } });
-  const project = await prisma.project.create({ data: { companyId: company.id, title: "Kitchen", projectType: "KITCHEN" } });
+  const client = await prisma.client.create({ data: { companyId: company.id, name: "Kitchen owner" } });
+  const project = await prisma.project.create({ data: { companyId: company.id, clientId: client.id, title: "Kitchen", projectType: "KITCHEN" } });
   const estimate = await estimates.create(company.id, user.id, {
     project_id: project.id, title: "Kitchen quote", assumptions: "Existing framing is sound", exclusions: "Permits", notes: "Agreed scope",
   });
@@ -223,20 +224,27 @@ describe("linked estimate revisions", () => {
     expect((await estimates.getById(t.estimate.id, t.company.id)).status).toBe("APPROVED");
   });
 
-  it("serializes sibling revision sends so only the first replaces the pending version", async () => {
+  it("resumes one pending revision across concurrent new UUIDs and preserves every alias", async () => {
     const t = await fixture();
     await send(t);
-    const first = await estimates.revise(t.estimate.id, t.company.id, t.user.id, randomUUID());
-    const second = await estimates.revise(t.estimate.id, t.company.id, t.user.id, randomUUID());
-    const a = await proposals.create(t.company.id, { estimate_id: first.id });
-    const b = await proposals.create(t.company.id, { estimate_id: second.id });
-    const results = await Promise.allSettled([
-      proposals.send(a.id, t.company.id, t.user.id), proposals.send(b.id, t.company.id, t.user.id),
+    const a = randomUUID(), b = randomUUID();
+    const [first, second] = await Promise.all([
+      estimates.revise(t.estimate.id, t.company.id, t.user.id, a),
+      estimates.revise(t.estimate.id, t.company.id, t.user.id, b),
     ]);
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-    const rejected = results.find((result) => result.status === "rejected");
-    expect(rejected?.status === "rejected" && rejected.reason.statusCode).toBe(409);
-    expect((await proposals.getByShareToken(t.proposal.shareToken!)).status).toBe("EXPIRED");
+    expect(first.id).toBe(second.id);
+    expect(await prisma.estimate.count({ where: { revisesEstimateId: t.estimate.id } })).toBe(1);
+    expect(await prisma.estimateRevisionRequest.count({ where: { sourceEstimateId: t.estimate.id } })).toBe(2);
+    const restarted = await estimates.revise(t.estimate.id, t.company.id, t.user.id, randomUUID());
+    expect(restarted.id).toBe(first.id);
+    expect((await estimates.revise(t.estimate.id, t.company.id, t.user.id, a)).id).toBe(first.id);
+    const replacement = await proposals.create(t.company.id, { estimate_id: first.id });
+    await proposals.send(replacement.id, t.company.id, t.user.id);
+    await expect(estimates.revise(t.estimate.id, t.company.id, t.user.id, randomUUID())).rejects.toMatchObject({ statusCode: 409 });
+    expect((await estimates.revise(t.estimate.id, t.company.id, t.user.id, b)).id).toBe(first.id);
+    const next = await estimates.revise(first.id, t.company.id, t.user.id, randomUUID());
+    expect(next.version).toBe(3);
+    expect(next.revisesEstimateId).toBe(first.id);
   });
 
   it("copies exact scope, prices and item hierarchy to a separate draft, with safe request retries", async () => {

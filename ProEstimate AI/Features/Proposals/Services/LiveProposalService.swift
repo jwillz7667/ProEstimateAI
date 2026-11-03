@@ -23,11 +23,19 @@ final class LiveProposalService: ProposalServiceProtocol, Sendable {
     }
 
     func sendProposal(id: String, clientMessage: String?, expectedEstimateUpdatedAt: Date?) async throws -> Proposal {
-        let body = SendProposalBody(clientMessage: clientMessage, expectedEstimateUpdatedAt: expectedEstimateUpdatedAt)
+        try await sendProposal(id: id, clientMessage: clientMessage, expectedEstimateUpdatedAt: expectedEstimateUpdatedAt, draftReviewToken: nil)
+    }
+
+    func sendProposal(id: String, clientMessage: String?, expectedEstimateUpdatedAt: Date?, draftReviewToken: String?) async throws -> Proposal {
+        let body = SendProposalBody(clientMessage: clientMessage, expectedEstimateUpdatedAt: expectedEstimateUpdatedAt, draftReviewToken: draftReviewToken)
         return try await apiClient.request(.sendProposal(id: id, body: body))
     }
 
     func deleteProposal(id: String) async throws {
         try await apiClient.request(.deleteProposal(id: id)) as Void
+    }
+
+    func updateProposal(id: String, body: UpdateProposalDocumentBody) async throws -> Proposal {
+        try await apiClient.request(.updateProposal(id: id, body: body))
     }
 }

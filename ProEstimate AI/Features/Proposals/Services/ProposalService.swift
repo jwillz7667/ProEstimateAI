@@ -12,10 +12,18 @@ protocol ProposalServiceProtocol: Sendable {
     func createFromEstimate(estimateId: String, title: String?, clientMessage: String?) async throws -> Proposal
     /// Send the proposal to the client (status → sent, emails the client).
     func sendProposal(id: String, clientMessage: String?, expectedEstimateUpdatedAt: Date?) async throws -> Proposal
+    func sendProposal(id: String, clientMessage: String?, expectedEstimateUpdatedAt: Date?, draftReviewToken: String?) async throws -> Proposal
     func deleteProposal(id: String) async throws
+    func updateProposal(id: String, body: UpdateProposalDocumentBody) async throws -> Proposal
 }
 
 extension ProposalServiceProtocol {
+    func sendProposal(id: String, clientMessage: String?, expectedEstimateUpdatedAt: Date?, draftReviewToken: String?) async throws -> Proposal {
+        try await sendProposal(id: id, clientMessage: clientMessage, expectedEstimateUpdatedAt: expectedEstimateUpdatedAt)
+    }
+    func updateProposal(id: String, body: UpdateProposalDocumentBody) async throws -> Proposal {
+        throw ProposalServiceError.updateUnavailable
+    }
     func sendProposal(id: String, clientMessage: String?) async throws -> Proposal {
         try await sendProposal(id: id, clientMessage: clientMessage, expectedEstimateUpdatedAt: nil)
     }
@@ -48,15 +56,18 @@ struct CreateProposalBody: Encodable, Sendable {
 struct SendProposalBody: Encodable, Sendable {
     let clientMessage: String?
     var expectedEstimateUpdatedAt: Date? = nil
+    var draftReviewToken: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case clientMessage = "client_message"
         case expectedEstimateUpdatedAt = "expected_estimate_updated_at"
+        case draftReviewToken = "draft_review_token"
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encodeIfPresent(clientMessage, forKey: .clientMessage)
+        try c.encodeIfPresent(draftReviewToken, forKey: .draftReviewToken)
         if let expectedEstimateUpdatedAt {
             // The API's default ISO encoder drops milliseconds. Preserve them
             // for the server's exact review-version comparison.
@@ -73,12 +84,14 @@ enum ProposalServiceError: LocalizedError {
     case notFound
     case createFailed
     case sendFailed
+    case updateUnavailable
 
     var errorDescription: String? {
         switch self {
         case .notFound: "Proposal not found."
         case .createFailed: "Failed to create proposal. Please try again."
         case .sendFailed: "Failed to send proposal. Please try again."
+        case .updateUnavailable: "This proposal service does not support document editing."
         }
     }
 }

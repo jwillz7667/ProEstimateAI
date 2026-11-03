@@ -57,3 +57,14 @@ test('API errors preserve status and provider message for caller recovery', asyn
   const api = load('lib/api.ts', { fetch: async () => Response.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Proposal missing' } }, { status: 404 }) });
   await assert.rejects(api.fetchAPI('/proposal'), error => error.name === 'APIError' && error.status === 404 && error.message === 'Proposal missing');
 });
+
+
+test('client unit prices derive from marked-up line totals and omit misleading rounded rates', () => {
+  assert.equal(proposal.customerUnitPriceLabel({ quantity: 2, line_total: 22, unit_cost: 10 }), '$11.00');
+  assert.equal(proposal.customerUnitPriceLabel({ quantity: 3, line_total: 1, unit_cost: 999 }), null);
+  assert.equal(proposal.customerUnitPriceLabel({ quantity: 0, line_total: 1, unit_cost: 999 }), null);
+});
+test('a requested change closes approval controls without changing the legacy status enum', () => {
+  assert.equal(proposal.isProposalOpen({ status: 'viewed', changes_requested_at: '2026-11-03T00:00:00Z' }), false);
+  assert.equal(proposal.isProposalOpen({ status: 'viewed', changes_requested_at: null }), true);
+});

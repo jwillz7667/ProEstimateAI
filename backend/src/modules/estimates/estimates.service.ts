@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database";
-import { ConflictError, NotFoundError } from "../../lib/errors";
+import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors";
+import { calculateEstimateTotals, estimateMoney, normalizeEstimateLineMoney } from "../../lib/estimate-money";
 import { assertEditableEstimate } from "./estimates.lifecycle";
 import {
   PaginationParams,
@@ -130,7 +131,7 @@ export async function create(
         notes: data.notes ?? null,
         assumptions: data.assumptions ?? null,
         exclusions: data.exclusions ?? null,
-        contingencyAmount: data.contingency_amount ?? null,
+        contingencyAmount: data.contingency_amount === null || data.contingency_amount === undefined ? null : estimateMoney(data.contingency_amount, "Contingency"),
         validUntil: data.valid_until ? new Date(data.valid_until) : null,
         createdByUserId: userId,
         // Snapshot the tier the project carried at create time. If the project
@@ -207,46 +208,25 @@ export async function update(
         ? new Date(data.valid_until)
         : null;
     }
-    if (data.subtotal_materials !== undefined) {
-      updateData.subtotalMaterials = data.subtotal_materials;
+    const lineItems = await tx.estimateLineItem.findMany({ where: { estimateId: id } });
+    const totals = calculateEstimateTotals(lineItems, data.discount_amount ?? existing.discountAmount);
+    const suppliedTotals = [
+      ["subtotal_materials", "subtotalMaterials"], ["subtotal_labor", "subtotalLabor"],
+      ["subtotal_other", "subtotalOther"], ["tax_amount", "taxAmount"], ["total_amount", "totalAmount"],
+    ] as const;
+    for (const [wireName, property] of suppliedTotals) {
+      const value = data[wireName];
+      if (value !== undefined && !estimateMoney(value, wireName).equals(totals[property])) {
+        throw new ValidationError("Estimate totals must match the saved line items. Edit the items or discount instead of overriding totals.");
+      }
     }
-    if (data.subtotal_labor !== undefined) {
-      updateData.subtotalLabor = data.subtotal_labor;
+    if (!lineItems.length && !existing.totalAmount.isZero() && suppliedTotals.every(([key]) => data[key] === undefined)) {
+      throw new ValidationError("Add priced line items before changing this legacy header-only estimate. Its existing value has been preserved.");
     }
-    if (data.subtotal_other !== undefined) {
-      updateData.subtotalOther = data.subtotal_other;
+    if (data.contingency_amount !== undefined && data.contingency_amount !== null) {
+      updateData.contingencyAmount = estimateMoney(data.contingency_amount, "Contingency");
     }
-    if (data.tax_amount !== undefined) {
-      updateData.taxAmount = data.tax_amount;
-    }
-    if (data.discount_amount !== undefined) {
-      updateData.discountAmount = data.discount_amount;
-    }
-    if (data.total_amount !== undefined) {
-      updateData.totalAmount = data.total_amount;
-    }
-
-    if (
-      data.total_amount === undefined &&
-      [
-        data.subtotal_materials,
-        data.subtotal_labor,
-        data.subtotal_other,
-        data.tax_amount,
-        data.discount_amount,
-      ].some((value) => value !== undefined)
-    ) {
-      updateData.totalAmount = Prisma.Decimal.max(
-        0,
-        new Prisma.Decimal(
-          data.subtotal_materials ?? existing.subtotalMaterials,
-        )
-          .plus(data.subtotal_labor ?? existing.subtotalLabor)
-          .plus(data.subtotal_other ?? existing.subtotalOther)
-          .plus(data.tax_amount ?? existing.taxAmount)
-          .minus(data.discount_amount ?? existing.discountAmount),
-      ).toDecimalPlaces(2);
-    }
+    Object.assign(updateData, totals, { updatedAt: new Date(Math.max(Date.now(), existing.updatedAt.getTime() + 1)) });
     const estimate = await tx.estimate.update({
       where: { id },
       data: updateData,
@@ -282,27 +262,36 @@ export async function remove(id: string, companyId: string) {
 /** A durable retry key prevents a lost response from creating two revisions. */
 export async function revise(id: string, companyId: string, userId: string, requestId: string) {
   return prisma.$transaction(async (tx) => {
+    const key = `revision:${companyId}:${requestId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM "Estimate" WHERE id = ${id} AND "companyId" = ${companyId} FOR UPDATE
     `;
     if (!rows.length) throw new NotFoundError("Estimate", id);
-    const previous = await tx.estimate.findFirst({ where: { companyId, revisionRequestId: requestId } });
-    if (previous) {
-      if (previous.revisesEstimateId !== id) throw new ConflictError("This revision request was already used for another estimate.");
-      return previous;
+    const receipt = await tx.estimateRevisionRequest.findUnique({ where: { companyId_requestId: { companyId, requestId } } });
+    if (receipt) {
+      if (receipt.sourceEstimateId !== id) throw new ConflictError("This revision request was already used for another estimate.");
+      const result = receipt.revisionEstimateId ? await tx.estimate.findFirst({ where: { id: receipt.revisionEstimateId, companyId } }) : null;
+      if (!result) throw new ConflictError("The previously created revision was removed. Start a new revision request to continue.");
+      return result;
     }
     const source = await tx.estimate.findUniqueOrThrow({
       where: { id }, include: { lineItems: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] } },
     });
     if (source.status === "DRAFT") throw new ConflictError("This estimate is still a draft. Continue editing it before creating a revision.");
+    const published = await tx.estimate.findFirst({ where: { companyId, revisesEstimateId: source.id, status: { not: "DRAFT" } }, select: { id: true } });
+    if (published) throw new ConflictError("A later revision has already been sent. Open that revision and create the next version from it.");
+    const pending = await tx.estimate.findFirst({
+      where: { companyId, revisesEstimateId: source.id, status: "DRAFT" }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    });
+    if (pending) {
+      await tx.estimateRevisionRequest.create({ data: { companyId, requestId, sourceEstimateId: source.id, revisionEstimateId: pending.id } });
+      return pending;
+    }
     const company = await tx.company.update({
       where: { id: companyId }, data: { nextEstimateNumber: { increment: 1 } },
       select: { estimatePrefix: true, nextEstimateNumber: true },
     });
-    // Requests for different source rows can race before the company lock.
-    // Recheck after that lock, returning a domain conflict instead of a unique-key 500.
-    const claimedRequest = await tx.estimate.findFirst({ where: { companyId, revisionRequestId: requestId } });
-    if (claimedRequest) throw new ConflictError("This revision request was already used for another estimate.");
     const revision = await tx.estimate.create({
       data: {
         companyId, projectId: source.projectId, createdByUserId: userId,
@@ -318,7 +307,6 @@ export async function revise(id: string, companyId: string, userId: string, requ
       },
     });
     const copiedIds = new Map<string, string>();
-    // First copy without parents, then restore hierarchy using the NEW IDs.
     for (const item of source.lineItems) {
       const { id: oldId, estimateId: _estimateId, parentLineItemId: _parent, ...fields } = item;
       const copy = await tx.estimateLineItem.create({ data: { ...fields, estimateId: revision.id } });
@@ -330,12 +318,11 @@ export async function revise(id: string, companyId: string, userId: string, requ
       if (!parentId) throw new ConflictError("The estimate contains an invalid item hierarchy. Contact support before revising it.");
       await tx.estimateLineItem.update({ where: { id: copiedIds.get(item.id)! }, data: { parentLineItemId: parentId } });
     }
-    await tx.activityLogEntry.create({
-      data: {
-        projectId: source.projectId, userId, action: "ESTIMATE_CREATED",
-        description: `Revision ${revision.estimateNumber} created from ${source.estimateNumber} (version ${source.version})`,
-      },
-    });
+    await tx.estimateRevisionRequest.create({ data: { companyId, requestId, sourceEstimateId: source.id, revisionEstimateId: revision.id } });
+    await tx.activityLogEntry.create({ data: {
+      projectId: source.projectId, userId, action: "ESTIMATE_CREATED",
+      description: `Revision ${revision.estimateNumber} created from ${source.estimateNumber} (version ${source.version})`,
+    } });
     return revision;
   });
 }
@@ -443,36 +430,11 @@ export async function generateAI(
   return runReservedAction(reservation, async () => {
     const generated = await generateEstimate(context);
 
-    // Compute totals from the generated line items so the Estimate row has
-    // realistic pre-tax and total numbers on first load — the user can still
-    // tweak everything in the editor.
-    let subtotalMaterials = 0;
-    let subtotalLabor = 0;
-    let subtotalOther = 0;
-    let taxAmount = 0;
-
-    for (const item of generated.lineItems) {
-      const lineBase = item.quantity * item.unitCost;
-      const markup = lineBase * (item.markupPercent / 100);
-      const preTax = lineBase + markup;
-      const lineTax = preTax * item.taxRate;
-
-      switch (item.category) {
-        case "materials":
-          subtotalMaterials += preTax;
-          break;
-        case "labor":
-          subtotalLabor += preTax;
-          break;
-        case "other":
-          subtotalOther += preTax;
-          break;
-      }
-      taxAmount += lineTax;
-    }
-
-    const totalAmount =
-      subtotalMaterials + subtotalLabor + subtotalOther + taxAmount;
+    const normalizedLines = generated.lineItems.map((item) => ({
+      ...item, ...normalizeEstimateLineMoney(item.quantity, item.unitCost, item.markupPercent),
+      taxRate: new Prisma.Decimal(item.taxRate).toDecimalPlaces(4),
+    }));
+    const canonicalTotals = calculateEstimateTotals(normalizedLines, 0);
 
     const validUntil = new Date();
     validUntil.setDate(validUntil.getDate() + generated.validDays);
@@ -514,12 +476,7 @@ export async function generateAI(
           // Snapshot the project's tier (or null for Auto). Stored alongside
           // the line items so audit trails show what was clamped against.
           qualityTier,
-          subtotalMaterials,
-          subtotalLabor,
-          subtotalOther,
-          taxAmount,
-          discountAmount: 0,
-          totalAmount,
+          ...canonicalTotals,
           assumptions: generated.assumptions || null,
           exclusions: generated.exclusions || null,
           notes: notesWithTerms || null,
@@ -528,19 +485,8 @@ export async function generateAI(
       });
 
       // Persist each AI-generated line item.
-      for (let i = 0; i < generated.lineItems.length; i++) {
-        const item = generated.lineItems[i];
-        const lineBase = item.quantity * item.unitCost;
-        const markup = lineBase * (item.markupPercent / 100);
-        const preTax = lineBase + markup;
-        // lineTotal is the PRE-TAX line subtotal. This must match the manual
-        // create path (estimate-line-items.service.ts) and recalculateEstimateTotals,
-        // which both treat lineTotal as pre-tax and add `lineTotal * taxRate`
-        // separately. Storing it tax-inclusive here caused tax to be applied
-        // twice (and subtotals to be inflated) the moment any line item on an
-        // AI-generated estimate was edited and totals were recalculated.
-        const lineTotal = preTax;
-
+      for (let i = 0; i < normalizedLines.length; i++) {
+        const item = normalizedLines[i];
         const categoryEnum =
           item.category === "materials"
             ? LineItemCategory.MATERIALS
@@ -552,6 +498,7 @@ export async function generateAI(
           data: {
             estimateId: created.id,
             category: categoryEnum,
+            priceOrigin: "AI_SUGGESTED",
             itemType: "per_unit",
             name: item.name,
             description: item.description || null,
@@ -563,7 +510,7 @@ export async function generateAI(
             // matching the validator (max 1.0) and the recalc logic that
             // treats the DB value as a multiplier.
             taxRate: item.taxRate,
-            lineTotal,
+            lineTotal: item.lineTotal,
             sortOrder: i,
           },
         });

@@ -13,6 +13,7 @@ final class ProposalPreviewViewModel {
 
     var isLoading = false
     var isSending = false
+    private(set) var isSavingDocument = false
     var errorMessage: String?
     var didCopyShareLink = false
     private(set) var reviewedEstimate: Estimate?
@@ -41,14 +42,14 @@ final class ProposalPreviewViewModel {
 
     var shareURL: URL? { proposal.shareURL }
     var canSend: Bool {
-        proposal.canSend && !isLoading && !isSending
-            && (proposal.status != .draft || (!reviewNeedsRefresh && !reviewedLineItems.isEmpty))
+        proposal.canSend && !isLoading && !isSending && !isSavingDocument
+            && (proposal.status != .draft || (!reviewNeedsRefresh && !reviewedLineItems.isEmpty && proposal.draftReviewToken != nil))
     }
 
     // MARK: - Loading
 
     func load() async {
-        guard !isLoading, !isSending else { return }
+        guard !isLoading, !isSending, !isSavingDocument else { return }
         isLoading = true
         defer { isLoading = false }
         do {
@@ -79,6 +80,24 @@ final class ProposalPreviewViewModel {
 
     // MARK: - Actions
 
+    func saveDocument(_ form: ProposalDocumentForm) async throws {
+        guard proposal.isEditableDraft, !isSending, !isLoading, !isSavingDocument else {
+            throw ProposalDocumentError.readOnly
+        }
+        isSavingDocument = true
+        defer { isSavingDocument = false }
+        let saved = try await service.updateProposal(id: proposal.id, body: form.request)
+        guard saved.id == proposal.id, saved.companyId == proposal.companyId, saved.isEditableDraft else {
+            reviewNeedsRefresh = true
+            throw ProposalDocumentError.invalidResponse
+        }
+        proposal = saved
+        if let refreshed = try? await service.getProposal(id: proposal.id), refreshed.id == proposal.id, refreshed.companyId == proposal.companyId {
+            proposal = refreshed
+        } else { reviewNeedsRefresh = true }
+        AppEventBus.shared.noteProjectChange()
+    }
+
     func send() async {
         guard canSend else { return }
         isSending = true
@@ -86,7 +105,8 @@ final class ProposalPreviewViewModel {
         do {
             proposal = try await service.sendProposal(
                 id: proposal.id, clientMessage: nil,
-                expectedEstimateUpdatedAt: proposal.status == .draft ? reviewedEstimate?.updatedAt : nil
+                expectedEstimateUpdatedAt: proposal.status == .draft ? reviewedEstimate?.updatedAt : nil,
+                draftReviewToken: proposal.status == .draft ? proposal.draftReviewToken : nil
             )
             AppEventBus.shared.noteProjectChange()
         } catch {
