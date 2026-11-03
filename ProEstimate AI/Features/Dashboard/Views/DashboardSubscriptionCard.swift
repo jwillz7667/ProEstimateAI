@@ -1,177 +1,101 @@
 import SwiftUI
 
-/// Dashboard card showing the user's current subscription posture.
-///
-/// For free / expired / revoked users it surfaces the trial-offer CTA.
-/// For active subscribers it switches to a status block showing the Pro
-/// plan, renewal / trial countdown, and grace-period warnings — no upgrade
-/// prompts. The card auto-reads from `EntitlementStore` so it re-renders
-/// the moment a purchase or restore mutates the snapshot.
+/// Secondary plan information. Purchase offers remain in the paywall, where
+/// StoreKit supplies the actual price and trial eligibility.
 struct DashboardSubscriptionCard: View {
     @Environment(EntitlementStore.self) private var entitlementStore
-
     var onUpgrade: (() -> Void)?
+    var onManage: (() -> Void)?
 
     var body: some View {
-        GlassCard {
-            switch entitlementStore.subscriptionState {
-            case .free, .expired, .revoked:
-                upgradePromptContent
-            case .trialActive:
-                statusContent(variant: .trial)
-            case .proActive, .canceledActive, .adminOverride:
-                statusContent(variant: .active)
-            case .gracePeriod, .billingRetry:
-                statusContent(variant: .billingIssue)
+        if entitlementStore.snapshot == nil {
+            Button { onManage?() } label: {
+                content(title: "Plan details", subtitle: "View your subscription in Settings.", icon: "person.crop.circle")
             }
+            .buttonStyle(.plain)
+        } else {
+            Button {
+                if entitlementStore.hasProAccess || entitlementStore.hasBillingIssue {
+                    onManage?()
+                } else {
+                    onUpgrade?()
+                }
+            } label: {
+                content(title: title, subtitle: subtitle, icon: icon)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(entitlementStore.hasProAccess || entitlementStore.hasBillingIssue
+                ? "Opens subscription settings" : "View Pro plans, pricing and trial eligibility")
         }
     }
 
-    // MARK: - Active / Trial / Billing-Issue Status
-
-    private enum StatusVariant {
-        case active
-        case trial
-        case billingIssue
-    }
-
-    private func statusContent(variant: StatusVariant) -> some View {
-        HStack(alignment: .top, spacing: SpacingTokens.md) {
-            Image(systemName: statusIcon(variant: variant))
-                .font(.system(size: 28))
-                .foregroundStyle(statusIconColor(variant: variant))
-
+    private func content(title: String, subtitle: String, icon: String) -> some View {
+        HStack(alignment: .top, spacing: SpacingTokens.sm) {
+            Image(systemName: icon)
+                .font(.body)
+                .foregroundStyle(ColorTokens.primaryText)
+                .padding(.top, 2)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                HStack(spacing: SpacingTokens.xs) {
-                    Text(planTitle)
-                        .font(TypographyTokens.headline)
-
-                    StatusBadge(text: statusBadgeText(variant: variant), style: statusBadgeStyle(variant: variant))
-                }
-
-                Text(statusSubtitle(variant: variant))
+                Text(title)
+                    .font(TypographyTokens.subheadline.weight(.semibold))
+                    .foregroundStyle(ColorTokens.primaryText)
+                Text(subtitle)
                     .font(TypographyTokens.caption)
                     .foregroundStyle(ColorTokens.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
-
-                if entitlementStore.hasProAccess,
-                   let bucket = entitlementStore.snapshot?.usage.first(where: { $0.metricCode == .aiGeneration }),
-                   bucket.source != "ADMIN" {
-                    Text("\(bucket.remainingQuantity) of \(bucket.includedQuantity) AI previews remaining in your plan window")
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(ColorTokens.secondaryText)
-                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(ColorTokens.secondaryText)
+                .accessibilityHidden(true)
+        }
+        .padding(.vertical, SpacingTokens.md)
+        .padding(.horizontal, SpacingTokens.xxs)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
 
-            Spacer(minLength: 0)
+    private var title: String {
+        switch entitlementStore.subscriptionState {
+        case .free, .expired, .revoked: "AI tools with Pro"
+        case .trialActive: "Pro trial active"
+        case .gracePeriod, .billingRetry: "Billing needs attention"
+        case .proActive, .canceledActive, .adminOverride: "Pro plan"
         }
     }
 
-    private var planTitle: String {
-        let tier = entitlementStore.currentPlanCode.tier
-        switch tier {
-        case .pro: return "ProEstimate Pro"
-        case .free: return "ProEstimate"
-        }
+    private var icon: String {
+        if entitlementStore.hasBillingIssue { return "exclamationmark.triangle" }
+        return entitlementStore.hasProAccess ? "checkmark.seal" : "sparkles"
     }
 
-    private func statusIcon(variant: StatusVariant) -> String {
-        switch variant {
-        case .active: return "crown.fill"
-        case .trial: return "sparkles"
-        case .billingIssue: return "exclamationmark.triangle.fill"
-        }
-    }
-
-    private func statusIconColor(variant: StatusVariant) -> Color {
-        switch variant {
-        case .active, .trial: return ColorTokens.primaryOrange
-        case .billingIssue: return ColorTokens.warning
-        }
-    }
-
-    private func statusBadgeText(variant: StatusVariant) -> String {
-        switch variant {
-        case .active:
-            return entitlementStore.subscriptionState == .canceledActive ? "Canceled" : "Active"
-        case .trial:
-            if let days = entitlementStore.trialDaysRemaining, days > 0 {
-                return days == 1 ? "Trial · 1 day left" : "Trial · \(days) days left"
+    private var subtitle: String {
+        switch entitlementStore.subscriptionState {
+        case .free, .expired, .revoked:
+            return "Basic project tools stay free. View Pro plans for AI previews and estimates."
+        case .trialActive:
+            if let date = entitlementStore.snapshot?.trialEndsAt {
+                return "Trial ends \(date.formatted(date: .abbreviated, time: .omitted)). View plan details."
             }
-            return "Trial"
-        case .billingIssue:
-            return "Action needed"
-        }
-    }
-
-    private func statusBadgeStyle(variant: StatusVariant) -> StatusBadge.Style {
-        switch variant {
-        case .active: return .success
-        case .trial: return .info
-        case .billingIssue: return .warning
-        }
-    }
-
-    private func statusSubtitle(variant: StatusVariant) -> String {
-        switch variant {
-        case .active:
-            if entitlementStore.subscriptionState == .canceledActive,
-               let date = formattedRenewalDate
-            {
-                return "Access continues until \(date)."
+            return "View your trial and plan details."
+        case .gracePeriod, .billingRetry:
+            return "Review your payment method in subscription settings."
+        case .canceledActive:
+            if let date = entitlementStore.renewalDate {
+                return "Access until \(date.formatted(date: .abbreviated, time: .omitted))."
             }
-            if let date = formattedRenewalDate {
-                return entitlementStore.isAutoRenewEnabled
-                    ? "Renews \(date)."
-                    : "Access through \(date)."
+            return "Subscription canceled. Access continues until your paid period ends."
+        case .proActive, .adminOverride:
+            if let bucket = entitlementStore.snapshot?.usage.first(where: { $0.metricCode == .aiGeneration }) {
+                return "\(bucket.remainingQuantity) AI previews left in your plan window."
             }
-            return "AI previews, branded proposals, invoicing, and approvals."
-        case .trial:
-            if let date = formattedRenewalDate {
-                return "Trial converts to paid on \(date). Cancel anytime in Settings."
-            }
-            return "Full access to every Pro feature during your trial."
-        case .billingIssue:
-            return entitlementStore.billingWarning
-                ?? "Update your payment method to keep your subscription active."
-        }
-    }
-
-    private var formattedRenewalDate: String? {
-        guard let date = entitlementStore.renewalDate else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter.string(from: date)
-    }
-
-    // MARK: - Free Upgrade Prompt
-
-    private var upgradePromptContent: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.md) {
-            HStack(alignment: .top, spacing: SpacingTokens.md) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 28))
-                    .foregroundStyle(ColorTokens.primaryOrange)
-
-                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("Get the Full ProEstimate AI")
-                        .font(TypographyTokens.headline)
-                    Text("Unlock AI previews, instant estimates, branded proposals, and lawn / roof scouting. A three-day trial is available to eligible Apple Accounts.")
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(ColorTokens.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            PrimaryCTAButton(title: "View Pro Plans", icon: "crown") {
-                onUpgrade?()
-            }
+            return "View your included tools and plan details."
         }
     }
 }
-
-// MARK: - Preview
 
 #Preview("Free") {
     DashboardSubscriptionCard()
@@ -179,13 +103,13 @@ struct DashboardSubscriptionCard: View {
         .padding()
 }
 
-#Preview("Pro Active") {
+#Preview("Pro") {
     DashboardSubscriptionCard()
         .environment(EntitlementStore.preview(snapshot: .samplePro))
         .padding()
 }
 
-#Preview("Grace Period") {
+#Preview("Billing issue") {
     DashboardSubscriptionCard()
         .environment(EntitlementStore.preview(snapshot: .sampleGracePeriod))
         .padding()
