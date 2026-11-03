@@ -9,11 +9,13 @@ extension View {
     func appNavigationDestinations() -> some View {
         navigationDestination(for: AppDestination.self) { destination in
             switch destination {
-            case let .projectDetail(id, autoGenerate, highlightGenerationId):
+            case let .projectDetail(id, autoGenerate, highlightGenerationId, highlightEstimateId, highlightProposalId):
                 ProjectDetailView(
                     projectId: id,
                     autoGenerateOnOpen: autoGenerate,
-                    highlightGenerationId: highlightGenerationId
+                    highlightGenerationId: highlightGenerationId,
+                    highlightEstimateId: highlightEstimateId,
+                    highlightProposalId: highlightProposalId
                 )
             case let .invoiceDetail(id):
                 InvoiceDetailView(invoiceId: id)

@@ -4,20 +4,24 @@ import Observation
 protocol DashboardDataProviding: Sendable {
     func fetchSummary() async throws -> DashboardSummary
     func fetchProjects() async throws -> [Project]
+    func fetchAttention() async throws -> DashboardAttention
 }
 
 @MainActor
 @Observable
 final class DashboardViewModel {
     private(set) var summary: DashboardSummary?
+    private(set) var attention: DashboardAttention?
     private(set) var recentProjects: [Project] = []
     private(set) var isLoadingSummary = false
     private(set) var isLoadingProjects = false
     private(set) var hasLoadedProjects = false
     private(set) var summaryErrorMessage: String?
     private(set) var projectsErrorMessage: String?
+    private(set) var attentionErrorMessage: String?
+    private(set) var isLoadingAttention = false
 
-    var isLoading: Bool { isLoadingSummary || isLoadingProjects }
+    var isLoading: Bool { isLoadingSummary || isLoadingProjects || isLoadingAttention }
 
     private let service: any DashboardDataProviding
     private var currentScope: String?
@@ -40,11 +44,9 @@ final class DashboardViewModel {
     }
 
     var formattedRevenue: String {
-        guard let revenue = summary?.revenueThisMonth else { return "—" }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: revenue as NSDecimalNumber) ?? "—"
+        guard let amounts = summary?.settledInvoiceAmounts else { return "—" }
+        return amounts.isEmpty ? DashboardMoney(currencyCode: "USD", amount: 0).formatted
+            : amounts.map(\.formatted).joined(separator: " + ")
     }
 
     /// Loads each section independently. A slow or failed summary never hides
@@ -54,24 +56,30 @@ final class DashboardViewModel {
             currentScope = scope
             requestRevision &+= 1
             summary = nil
+            attention = nil
             recentProjects = []
             hasLoadedProjects = false
             isLoadingSummary = false
             isLoadingProjects = false
+            isLoadingAttention = false
             summaryErrorMessage = nil
             projectsErrorMessage = nil
+            attentionErrorMessage = nil
         }
         guard !isLoading else { return }
         requestRevision &+= 1
         let revision = requestRevision
         isLoadingSummary = true
         isLoadingProjects = true
+        isLoadingAttention = true
         summaryErrorMessage = nil
         projectsErrorMessage = nil
+        attentionErrorMessage = nil
         defer {
             if revision == requestRevision {
                 isLoadingSummary = false
                 isLoadingProjects = false
+                isLoadingAttention = false
             }
         }
 
@@ -85,11 +93,23 @@ final class DashboardViewModel {
                 do { return .projects(.success(try await service.fetchProjects())) }
                 catch { return .projects(.failure(LoadFailure(error))) }
             }
+            group.addTask {
+                do { return .attention(.success(try await service.fetchAttention())) }
+                catch { return .attention(.failure(LoadFailure(error))) }
+            }
             for await result in group {
                 // An account/workspace change supersedes every earlier result,
                 // even if its transport ignores Swift task cancellation.
                 guard revision == requestRevision, !Task.isCancelled else { continue }
                 switch result {
+                case let .attention(.success(value)):
+                    attention = value
+                    isLoadingAttention = false
+                case .attention(.failure(.cancelled)):
+                    isLoadingAttention = false
+                case .attention(.failure(.unavailable)):
+                    attentionErrorMessage = "Next actions couldn't be refreshed. Refresh before acting on saved information."
+                    isLoadingAttention = false
                 case let .summary(.success(value)):
                     summary = value
                     isLoadingSummary = false
@@ -127,6 +147,7 @@ final class DashboardViewModel {
     private enum SectionResult: Sendable {
         case summary(Result<DashboardSummary, LoadFailure>)
         case projects(Result<[Project], LoadFailure>)
+        case attention(Result<DashboardAttention, LoadFailure>)
     }
 
     private enum LoadFailure: Error, Sendable {

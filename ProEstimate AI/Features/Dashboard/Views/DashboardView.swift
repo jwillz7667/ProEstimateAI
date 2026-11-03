@@ -9,6 +9,7 @@ struct DashboardView: View {
     @State private var eventBus = AppEventBus.shared
     @State private var viewModel = DashboardViewModel()
     @State private var showProjectCreation = false
+    @State private var showEstimateCreation = false
     @State private var showSettings = false
     @State private var navigateToProjectId: String?
     @State private var navigateAutoGenerate = false
@@ -42,13 +43,31 @@ struct DashboardView: View {
                 .onChange(of: appState.selectedTab) { _, tab in
                     if tab == .dashboard { reload() }
                 }
+                .onChange(of: router.dashboardPath.count) { previous, current in
+                    // Returning from a document can change the next-action
+                    // queue even without switching tabs or pulling to refresh.
+                    if current < previous { reload() }
+                }
                 .fullScreenCover(isPresented: $showProjectCreation) {
                     ProjectCreationFlowView { projectId, autoGenerate in
                         navigateToProjectId = projectId
                         navigateAutoGenerate = autoGenerate
                     }
                 }
+                .fullScreenCover(isPresented: $showEstimateCreation) {
+                    EstimateCreationFlowView { projectId in
+                        navigateToProjectId = projectId
+                        navigateAutoGenerate = false
+                        showEstimateCreation = false
+                    }
+                }
                 .onChange(of: showProjectCreation) { wasPresented, isPresented in
+                    if wasPresented && !isPresented {
+                        reload()
+                        navigateToCreatedProject()
+                    }
+                }
+                .onChange(of: showEstimateCreation) { wasPresented, isPresented in
                     if wasPresented && !isPresented {
                         reload()
                         navigateToCreatedProject()
@@ -64,7 +83,7 @@ struct DashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.xl) {
                 greeting
-                newProjectButton
+                creationActions
                 workspaceSections
             }
             .padding(.horizontal, SpacingTokens.lg)
@@ -91,16 +110,31 @@ struct DashboardView: View {
         }
     }
 
-    private var newProjectButton: some View {
-        Button(action: handleCreateProject) {
+    private var creationActions: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            newEstimateButton
+            Button(action: handleCreateProject) {
+                Label("New project", systemImage: "folder.badge.plus")
+                    .font(TypographyTokens.subheadline.weight(.semibold))
+                    .foregroundStyle(ColorTokens.primaryText)
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Organize a project with photos and optional AI previews")
+            .accessibilityIdentifier("home.newProject")
+        }
+    }
+
+    private var newEstimateButton: some View {
+        Button { showEstimateCreation = true } label: {
             HStack(alignment: .center, spacing: SpacingTokens.md) {
                 Image(systemName: "plus")
                     .font(.title2.weight(.semibold))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("New project")
+                    Text("New estimate")
                         .font(TypographyTokens.title3)
-                    Text("Keep photos, estimates and client details together.")
+                    Text("Choose a client, price the work and send it for approval.")
                         .font(TypographyTokens.subheadline)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -116,9 +150,9 @@ struct DashboardView: View {
             .contentShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("New project")
-        .accessibilityHint("Choose the type of work, then add photos and project details")
-        .accessibilityIdentifier("home.newProject")
+        .accessibilityLabel("New estimate")
+        .accessibilityHint("Create a manual estimate or use optional AI assistance")
+        .accessibilityIdentifier("home.newEstimate")
     }
 
     @ViewBuilder
@@ -128,7 +162,7 @@ struct DashboardView: View {
         } else {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: SpacingTokens.xl) {
-                    recentWork.frame(minWidth: 460, maxWidth: .infinity)
+                    workSections.frame(minWidth: 460, maxWidth: .infinity)
                     businessContext.frame(width: 300)
                 }
                 stackedSections
@@ -138,8 +172,21 @@ struct DashboardView: View {
 
     private var stackedSections: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xl) {
-            recentWork
+            workSections
             businessContext
+        }
+    }
+
+    private var workSections: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xl) {
+            DashboardAttentionSection(
+                attention: viewModel.attention,
+                isLoading: viewModel.isLoadingAttention,
+                errorMessage: viewModel.attentionErrorMessage,
+                onSelect: openAttention,
+                onRetry: reload
+            )
+            recentWork
         }
     }
 
@@ -215,6 +262,21 @@ struct DashboardView: View {
         switch featureGateCoordinator.guardCreateProject() {
         case .allowed: showProjectCreation = true
         case let .blocked(decision): paywallPresenter.present(decision)
+        }
+    }
+
+    private func openAttention(_ group: DashboardAttentionGroup) {
+        switch group.kind {
+        case .overdueInvoice:
+            router.dashboardPath.append(AppDestination.invoiceDetail(id: group.target.documentId))
+        case .draftEstimate, .approvedEstimate:
+            router.dashboardPath.append(AppDestination.projectDetail(
+                id: group.target.projectId, highlightEstimateId: group.target.documentId
+            ))
+        case .unansweredProposal:
+            router.dashboardPath.append(AppDestination.projectDetail(
+                id: group.target.projectId, highlightProposalId: group.target.documentId
+            ))
         }
     }
 

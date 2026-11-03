@@ -13,7 +13,11 @@ struct DashboardMetricsSection: View {
                 .font(TypographyTokens.headline)
                 .accessibilityAddTraits(.isHeader)
 
-            metric("Revenue this month", value: formattedRevenue)
+            metric("Invoices settled this month", value: formattedRevenue)
+            Text("Total value of invoices marked paid. Partial payments are tracked on each invoice.")
+                .font(TypographyTokens.caption)
+                .foregroundStyle(ColorTokens.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
             Divider()
             metricsLayout {
                 metric("Active projects", value: summary.activeProjectsCount.formatted())

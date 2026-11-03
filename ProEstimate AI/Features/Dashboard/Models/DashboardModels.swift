@@ -8,6 +8,7 @@ struct DashboardSummary: Codable, Sendable {
     let invoicesDueCount: Int
     let generationsRemaining: Int
     let quotesRemaining: Int
+    let settledInvoiceAmounts: [DashboardMoney]?
 
     enum CodingKeys: String, CodingKey {
         case activeProjectsCount = "active_projects_count"
@@ -16,6 +17,7 @@ struct DashboardSummary: Codable, Sendable {
         case invoicesDueCount = "invoices_due_count"
         case generationsRemaining = "generations_remaining"
         case quotesRemaining = "quotes_remaining"
+        case settledInvoiceAmounts = "settled_invoice_amounts"
     }
 }
 
@@ -28,7 +30,8 @@ extension DashboardSummary {
         revenueThisMonth: 24_750.00,
         invoicesDueCount: 2,
         generationsRemaining: 2,
-        quotesRemaining: 1
+        quotesRemaining: 1,
+        settledInvoiceAmounts: [DashboardMoney(currencyCode: "USD", amount: 24_750)]
     )
 
     static let empty = DashboardSummary(
@@ -37,7 +40,8 @@ extension DashboardSummary {
         revenueThisMonth: 0,
         invoicesDueCount: 0,
         generationsRemaining: AppConstants.freeGenerationCredits,
-        quotesRemaining: AppConstants.freeQuoteExportCredits
+        quotesRemaining: AppConstants.freeQuoteExportCredits,
+        settledInvoiceAmounts: []
     )
 }
 

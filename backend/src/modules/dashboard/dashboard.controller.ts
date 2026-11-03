@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { sendSuccess } from '../../lib/envelope';
 import * as dashboardService from './dashboard.service';
+import { getAttention } from './dashboard-attention.service';
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -16,5 +17,11 @@ export const getSummaryHandler = asyncHandler(
       req.userId!,
     );
     sendSuccess(res, summary);
+  },
+);
+
+export const getAttentionHandler = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    sendSuccess(res, await getAttention(req.companyId!));
   },
 );

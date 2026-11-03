@@ -33,6 +33,10 @@ struct DashboardRegressionTests {
         try await cancelledLoadsCanBeRetried()
         try await staleWorkspaceResultsAreDiscarded()
         try await simultaneousLoadsAreCoalesced()
+        try await attentionPublishesIndependently()
+        try await attentionFailurePreservesSavedActions()
+        try await staleAttentionIsDiscarded()
+        try monetaryAmountsKeepCurrencyAndPrecision()
         try recentWorkIsDeterministic()
         try greetingHandlesMissingNames()
         print("PASS: \(checks) dashboard checks (independent sections, retry, cancellation, workspace changes, deterministic recent work).")
@@ -170,6 +174,90 @@ struct DashboardRegressionTests {
         try expect(model.formattedRevenue == "—", "Unloaded revenue must not claim a zero balance")
     }
 
+    static func attentionPublishesIndependently() async throws {
+        let service = ControlledDashboardService(holdAttention: true)
+        let model = DashboardViewModel(service: service)
+        let load = Task { await model.loadDashboard(scope: "workspace") }
+        try await service.waitForRequests(1)
+        try await service.waitForAttentionRequests(1)
+        await service.finishAttention(0, .success(attention("estimate-a")))
+        try await waitUntil { model.attention != nil }
+        try expect(model.attention?.totalCount == 7, "Next-action totals must use server counts, not the number of cards")
+        try expect(model.isLoadingSummary && model.isLoadingProjects && !model.isLoadingAttention, "Actionable work must publish before unrelated sections finish")
+        await service.finishSummary(0, .failure(URLError(.timedOut)))
+        await service.finishProjects(0, .success([]))
+        await load.value
+        try expect(model.attention?.groups.first?.target.documentId == "estimate-a", "Business summary failure must not hide next actions")
+    }
+
+    static func attentionFailurePreservesSavedActions() async throws {
+        let service = ControlledDashboardService(holdAttention: true)
+        let model = DashboardViewModel(service: service)
+        let initial = Task { await model.loadDashboard(scope: "workspace") }
+        try await service.waitForRequests(1)
+        try await service.waitForAttentionRequests(1)
+        await service.finishSummary(0, .success(.empty))
+        await service.finishProjects(0, .success([]))
+        await service.finishAttention(0, .success(attention("saved")))
+        await initial.value
+        let refresh = Task { await model.loadDashboard(scope: "workspace") }
+        try await service.waitForRequests(2)
+        try await service.waitForAttentionRequests(2)
+        try expect(model.attention?.groups.first?.target.documentId == "saved", "Refreshing must retain the last action summary")
+        await service.finishSummary(1, .success(.empty))
+        await service.finishProjects(1, .success([]))
+        await service.finishAttention(1, .failure(URLError(.notConnectedToInternet)))
+        await refresh.value
+        try expect(model.attention?.groups.count == 1 && model.attentionErrorMessage != nil, "Failed refresh must keep saved information with explicit stale feedback")
+        try expect(!model.isLoadingAttention && !model.isLoading, "Attention failure must settle all loading state")
+    }
+
+    static func staleAttentionIsDiscarded() async throws {
+        let service = ControlledDashboardService(holdAttention: true)
+        let model = DashboardViewModel(service: service)
+        let old = Task { await model.loadDashboard(scope: "company-a") }
+        try await service.waitForRequests(1)
+        try await service.waitForAttentionRequests(1)
+        let current = Task { await model.loadDashboard(scope: "company-b") }
+        try await service.waitForRequests(2)
+        try await service.waitForAttentionRequests(2)
+        await service.finishSummary(0, .success(.empty))
+        await service.finishProjects(0, .success([]))
+        await service.finishAttention(0, .success(attention("private-a")))
+        await old.value
+        try expect(model.attention == nil && model.isLoadingAttention, "Old workspace actions must neither publish nor stop the current spinner")
+        await service.finishSummary(1, .success(.empty))
+        await service.finishProjects(1, .success([]))
+        await service.finishAttention(1, .success(attention("private-b")))
+        await current.value
+        try expect(model.attention?.groups.first?.target.documentId == "private-b", "Only the current workspace action target may publish")
+    }
+
+    static func monetaryAmountsKeepCurrencyAndPrecision() throws {
+        let data = Data(#"{"currency_code":"CAD","amount":"9999999.99"}"#.utf8)
+        let money = try JSONDecoder().decode(DashboardMoney.self, from: data)
+        try expect(money.amount == Decimal(string: "9999999.99"), "Attention totals must preserve decimal cents")
+        try expect(money.currencyCode == "CAD", "Money must retain its own currency")
+        let number = try JSONDecoder().decode(DashboardMoney.self, from: Data(#"{"currency_code":"USD","amount":12.34}"#.utf8))
+        try expect(number.amount == Decimal(string: "12.34"), "Numeric legacy amounts should decode too")
+        do {
+            _ = try JSONDecoder().decode(DashboardMoney.self, from: Data(#"{"currency_code":"USD","amount":"nope"}"#.utf8))
+            throw Failure.check("Invalid monetary values must not silently become zero")
+        } catch is DecodingError {
+            try expect(true, "Malformed money is rejected")
+        }
+        let model = DashboardViewModel(service: ControlledDashboardService())
+        try expect(model.formattedRevenue == "—", "Unavailable settlement totals cannot become fake zero collections")
+    }
+
+    static func attention(_ documentId: String) -> DashboardAttention {
+        DashboardAttention(generatedAt: Date(), followUpAfterDays: 3, groups: [
+            DashboardAttentionGroup(kind: .draftEstimate, count: 7,
+                amounts: [DashboardMoney(currencyCode: "USD", amount: 123.45)],
+                target: .init(documentId: documentId, projectId: "project", documentNumber: "EST-1", projectTitle: "Kitchen", clientName: nil))
+        ])
+    }
+
     static func project(_ id: String, updated: TimeInterval = 1, created: TimeInterval = 1, status: Project.Status = .draft) -> Project {
         Project(id: id, companyId: "company", clientId: nil, title: id, description: nil,
                 projectType: .kitchen, status: status, budgetMin: nil, budgetMax: nil,
@@ -183,6 +271,11 @@ actor ControlledDashboardService: DashboardDataProviding {
     private var projectRequests: [Int: CheckedContinuation<[Project], Error>] = [:]
     private var summaryCount = 0
     private var projectsCount = 0
+    private let holdAttention: Bool
+    private var attentionRequests: [Int: CheckedContinuation<DashboardAttention, Error>] = [:]
+    private var attentionCount = 0
+
+    init(holdAttention: Bool = false) { self.holdAttention = holdAttention }
     var requestCounts: (summary: Int, projects: Int) { (summaryCount, projectsCount) }
 
     func fetchSummary() async throws -> DashboardSummary {
@@ -195,6 +288,25 @@ actor ControlledDashboardService: DashboardDataProviding {
         let id = projectsCount
         projectsCount += 1
         return try await withCheckedThrowingContinuation { projectRequests[id] = $0 }
+    }
+
+    func fetchAttention() async throws -> DashboardAttention {
+        let id = attentionCount
+        attentionCount += 1
+        if !holdAttention { return DashboardAttention(generatedAt: Date(), followUpAfterDays: 3, groups: []) }
+        return try await withCheckedThrowingContinuation { attentionRequests[id] = $0 }
+    }
+
+    func waitForAttentionRequests(_ count: Int) async throws {
+        for _ in 0 ..< 1000 {
+            if attentionCount >= count { return }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        throw DashboardRegressionTests.Failure.check("Timed out waiting for next actions")
+    }
+
+    func finishAttention(_ id: Int, _ result: Result<DashboardAttention, Error>) {
+        attentionRequests.removeValue(forKey: id)?.resume(with: result)
     }
 
     func waitForRequests(_ count: Int) async throws {
@@ -219,4 +331,5 @@ actor ControlledDashboardService: DashboardDataProviding {
 struct DashboardService: DashboardDataProviding {
     func fetchSummary() async throws -> DashboardSummary { throw CancellationError() }
     func fetchProjects() async throws -> [Project] { throw CancellationError() }
+    func fetchAttention() async throws -> DashboardAttention { throw CancellationError() }
 }

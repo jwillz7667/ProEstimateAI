@@ -1,5 +1,7 @@
 import { prisma } from '../../config/database';
 import { cached, CacheKeys, CacheTTL } from '../../config/redis';
+import { DashboardMoney } from './dashboard-attention.service';
+import { Prisma } from '@prisma/client';
 
 export interface DashboardSummary {
   active_projects_count: number;
@@ -8,6 +10,7 @@ export interface DashboardSummary {
   invoices_due_count: number;
   generations_remaining: number;
   quotes_remaining: number;
+  settled_invoice_amounts: DashboardMoney[];
 }
 
 export async function getSummary(
@@ -29,6 +32,7 @@ export async function getSummary(
         invoicesDueCount,
         generationBucket,
         quoteBucket,
+        settledInvoiceGroups,
       ] = await Promise.all([
         // Active projects: status NOT IN (COMPLETED, ARCHIVED)
         prisma.project.count({
@@ -73,6 +77,11 @@ export async function getSummary(
         prisma.usageBucket.findMany({
           where: { userId, metricCode: 'QUOTE_EXPORT' },
         }),
+        prisma.invoice.groupBy({
+          by: ['currencyCode'],
+          where: { companyId, status: 'PAID', paidAt: { gte: monthStart } },
+          _sum: { totalAmount: true },
+        }),
       ]);
 
       const revenueThisMonth = revenueResult._sum.totalAmount
@@ -87,6 +96,12 @@ export async function getSummary(
         (sum, b) => sum + Math.max(0, b.includedQuantity - b.consumedQuantity), 0,
       );
 
+      const amounts = new Map<string, Prisma.Decimal>();
+      for (const group of settledInvoiceGroups) {
+        const currency = group.currencyCode?.trim().toUpperCase() || 'USD';
+        amounts.set(currency, (amounts.get(currency) ?? new Prisma.Decimal(0)).plus(group._sum.totalAmount ?? 0));
+      }
+
       return {
         active_projects_count: activeProjectsCount,
         pending_estimates_count: pendingEstimatesCount,
@@ -94,6 +109,12 @@ export async function getSummary(
         invoices_due_count: invoicesDueCount,
         generations_remaining: generationsRemaining,
         quotes_remaining: quotesRemaining,
+        // Values of invoices settled this month, not a cash-receipts ledger.
+        // Preserve the legacy numeric field for released clients, while new
+        // clients can display currency-separated totals with an honest label.
+        settled_invoice_amounts: Array.from(amounts.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([currency_code, amount]) => ({ currency_code, amount: amount.toFixed(2) })),
       };
     },
   );
