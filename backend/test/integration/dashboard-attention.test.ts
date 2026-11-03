@@ -199,7 +199,12 @@ describe('Home next actions', () => {
     expect(result.groups.map(group => group.kind)).toEqual(['approved_change_order', 'approved_estimate']);
     expect(result.groups[0]).toMatchObject({ count: 1, amounts: [], target: { document_id: orders[1].id } });
     expect(result.groups[1]).toMatchObject({ count: 1, target: { document_id: independent.id } });
-    await prisma.changeOrder.update({ where: { id: orders[1].id }, data: { status: 'APPLIED' } });
+    // Domain selection breaks an equal timestamp by ID. Home must choose
+    // that same single record, independently of insertion/fixture order.
+    await prisma.changeOrder.updateMany({ where: { id: { in: orders.map(order => order.id) } }, data: { createdAt: daysAgo(1) } });
+    const tieWinner = [...orders].sort((a, b) => a.id < b.id ? 1 : a.id > b.id ? -1 : 0)[0];
+    expect((await getAttention(t.company.id, now)).groups[0]).toMatchObject({ count: 1, target: { document_id: tieWinner.id } });
+    await prisma.changeOrder.updateMany({ where: { id: { in: orders.map(order => order.id) } }, data: { status: 'APPLIED' } });
     expect((await getAttention(t.company.id, now)).groups.map(group => group.kind)).toEqual(['approved_estimate']);
   });
 });

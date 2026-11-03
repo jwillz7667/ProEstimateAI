@@ -201,7 +201,7 @@ describe('optional contractor invoice checkout', () => {
   });
   it('returns one invoice for parallel conversion retries and blocks full billing of already invoiced revisions', async () => {
     const t = await fixture();
-    const plan = await prisma.plan.upsert({ where: { code: 'PRO_MONTHLY' }, create: { code: 'PRO_MONTHLY', displayName: 'Test Pro', description: 'Fixture', featuresJson: { CAN_CREATE_INVOICE: true } }, update: {} });
+    const plan = await prisma.plan.upsert({ where: { code: 'PRO_MONTHLY' }, create: { code: 'PRO_MONTHLY', displayName: 'Test Pro', description: 'Fixture', featuresJson: { CAN_CREATE_INVOICE: true } }, update: { featuresJson: { CAN_CREATE_INVOICE: true }, isActive: true } });
     await prisma.userEntitlement.create({ data: { userId: t.user.id, companyId: t.company.id, planId: plan.id,
       status: 'PRO_ACTIVE', source: 'ADMIN_OVERRIDE', renewalDate: new Date(Date.now() + 86_400_000) } });
     const source = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'CONVERT-1', status: 'APPROVED', subtotalMaterials: 20, totalAmount: 20 } });
@@ -215,7 +215,7 @@ describe('optional contractor invoice checkout', () => {
   });
   it('blocks an obsolete parent from full billing after its newer version was invoiced first', async () => {
     const t = await fixture();
-    const plan = await prisma.plan.upsert({ where: { code: 'PRO_MONTHLY' }, create: { code: 'PRO_MONTHLY', displayName: 'Test Pro', description: 'Fixture', featuresJson: { CAN_CREATE_INVOICE: true } }, update: {} });
+    const plan = await prisma.plan.upsert({ where: { code: 'PRO_MONTHLY' }, create: { code: 'PRO_MONTHLY', displayName: 'Test Pro', description: 'Fixture', featuresJson: { CAN_CREATE_INVOICE: true } }, update: { featuresJson: { CAN_CREATE_INVOICE: true }, isActive: true } });
     await prisma.userEntitlement.create({ data: { userId: t.user.id, companyId: t.company.id, planId: plan.id, status: 'PRO_ACTIVE', source: 'ADMIN_OVERRIDE', renewalDate: new Date(Date.now() + 86_400_000) } });
     const parent = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'PARENT', status: 'APPROVED' } });
     const child = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'CHILD', status: 'APPROVED', revisesEstimateId: parent.id } });
