@@ -108,3 +108,6 @@ jobs:
 
       - name: Run estimate delivery regressions
         run: scripts/tests/run-estimate-delivery-regressions.sh
+
+      - name: Run estimate library regressions
+        run: scripts/tests/run-estimate-library-regressions.sh

@@ -8,9 +8,14 @@ struct EstimateCreationFlowView: View {
     @Environment(AppState.self) private var appState
     @Environment(FeatureGateCoordinator.self) private var featureGate
     @Environment(PaywallPresenter.self) private var paywall
-    @State private var model = EstimateCreationViewModel(service: EstimateCreationService())
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var model = EstimateCreationViewModel(service: EstimateCreationService(), draftStore: EstimateDraftStore.shared)
     @State private var clientPicker: ClientPickerRoute?
     @State private var editor: EstimateEditorRoute?
+    @State private var showTemplates = false
+    @State private var selectedTemplateName: String?
+    @State private var confirmReplaceInputs = false
+    @State private var confirmStartNew = false
 
     var body: some View {
         NavigationStack {
@@ -21,6 +26,7 @@ struct EstimateCreationFlowView: View {
                         .foregroundStyle(ColorTokens.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                draftRecoverySection
                 Section("Client") {
                     Button { clientPicker = ClientPickerRoute() } label: {
                         HStack {
@@ -58,10 +64,14 @@ struct EstimateCreationFlowView: View {
                             Text(method.title).tag(method)
                         }
                     }
-                    .disabled(model.isCreating || model.recovery != .none)
-                    Text(model.draft.method == .manual
-                         ? "Add your own materials and labor. Manual drafting is free."
-                         : "AI writes a draft from your scope. Requires an active trial or subscription and uses an AI estimate allowance. No image is generated.")
+                    .disabled(model.isCreating || model.recovery != .none || model.hasRecoverableDraft)
+                    if model.draft.method == .template {
+                        Button { showTemplates = true } label: {
+                            Label(selectedTemplateName ?? (model.draft.templateId == nil ? "Choose saved template" : "Saved template selected"), systemImage: "doc.on.doc")
+                        }
+                        .disabled(model.isCreating || model.recovery != .none || model.hasRecoverableDraft)
+                    }
+                    Text(startingPointDescription)
                         .font(TypographyTokens.footnote)
                         .foregroundStyle(ColorTokens.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
@@ -94,19 +104,74 @@ struct EstimateCreationFlowView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }.disabled(model.isCreating)
+                    Button("Close") { Task { await model.saveDraftNow(); dismiss() } }.disabled(model.isCreating)
                 }
             }
             .scrollDismissesKeyboard(.interactively)
             .interactiveDismissDisabled(model.isCreating)
-            .task(id: appState.currentCompany?.id) {
-                if let companyId = appState.currentCompany?.id { await model.loadClients(companyId: companyId) }
+            .task(id: "\(appState.currentUser?.id ?? ""):\(appState.currentCompany?.id ?? "")") {
+                if let companyId = appState.currentCompany?.id, let userId = appState.currentUser?.id {
+                    await model.loadClients(companyId: companyId)
+                    await model.restoreDraft(userId: userId, companyId: companyId)
+                }
             }
+            .onChange(of: scenePhase) { _, phase in if phase != .active { Task { await model.saveDraftNow() } } }
+            .onDisappear { Task { await model.saveDraftNow() } }
             .sheet(item: $clientPicker) { _ in
                 EstimateCreationClientPicker(model: model)
             }
             .sheet(item: $editor, onDismiss: openSavedProject) { target in
                 EstimateEditorView(estimateId: target.id)
+            }
+            .sheet(isPresented: $showTemplates) {
+                EstimateTemplatePickerView { template in
+                    model.draft.templateId = template.id
+                    selectedTemplateName = template.name
+                    if model.draft.trimmedTitle.isEmpty { model.draft.title = template.name }
+                    if !model.inputsLocked { model.draft.projectType = template.projectType }
+                }
+            }
+            .confirmationDialog("Replace the current form with your saved draft?", isPresented: $confirmReplaceInputs, titleVisibility: .visible) {
+                Button("Resume saved draft") { _ = model.resumeRecoveredDraft(replacingCurrentInputs: true) }
+                Button("Keep current form", role: .cancel) {}
+            }
+            .confirmationDialog("Start a new draft?", isPresented: $confirmStartNew, titleVisibility: .visible) {
+                Button("Start new draft", role: .destructive) { Task { await model.startNewDraft(); selectedTemplateName = nil } }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("Only the recovery copy on this device is cleared. Projects and estimates already saved to your account remain available.") }
+        }
+    }
+
+    private var startingPointDescription: String {
+        switch model.draft.method {
+        case .manual: "Add your own materials and labor. Manual drafting is free."
+        case .ai: "AI writes a draft from your scope. Requires an active trial or subscription and uses an AI estimate allowance. No image is generated."
+        case .template: "Reuse saved scope and pricing in a new draft. No AI allowance is used. Review rates and quantities for this job."
+        }
+    }
+
+    @ViewBuilder private var draftRecoverySection: some View {
+        if model.hasRecoverableDraft {
+            Section("Saved on this device") {
+                Text(model.recoveredDraftNotice ?? "A previous draft is available.")
+                if model.canResumeRecoveredDraft {
+                    Button("Resume saved draft") {
+                        if !model.resumeRecoveredDraft(), model.restoreNeedsConfirmation { confirmReplaceInputs = true }
+                    }
+                }
+                Button("Start new draft") { confirmStartNew = true }
+            }
+        } else if model.isDraftSavedOnDevice || model.draftSaveError != nil || model.createdEstimate != nil {
+            Section {
+                if let error = model.draftSaveError {
+                    Text(error).font(TypographyTokens.footnote)
+                    Button("Retry saving draft") { Task { await model.saveDraftNow() } }
+                } else if model.isDraftSavedOnDevice {
+                    Label("Draft saved on this device", systemImage: "checkmark.circle").font(TypographyTokens.caption).foregroundStyle(ColorTokens.secondaryText)
+                }
+                if let estimate = model.createdEstimate {
+                    Button("Open saved estimate") { editor = EstimateEditorRoute(id: estimate.id) }
+                }
             }
         }
     }
@@ -158,9 +223,12 @@ struct EstimateCreationFlowView: View {
 
     private func openSavedProject() {
         guard let projectId = model.createdProject?.id else { return }
-        AppEventBus.shared.noteProjectChange()
-        onOpenProject(projectId)
-        dismiss()
+        Task {
+            if model.createdEstimate != nil { await model.finishDraft() } else { await model.saveDraftNow() }
+            AppEventBus.shared.noteProjectChange()
+            onOpenProject(projectId)
+            dismiss()
+        }
     }
 }
 

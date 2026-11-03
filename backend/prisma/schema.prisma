@@ -280,6 +280,59 @@ model Company {
   proposals       Proposal[]
   invoices        Invoice[]
   pricingProfiles PricingProfile[]
+  estimateTemplates EstimateTemplate[]
+  savedEstimateItems SavedEstimateItem[]
+  estimateLibraryOperations EstimateLibraryOperation[]
+}
+
+/// Reusable company-owned scope and pricing, independent of the original job.
+model EstimateTemplate {
+  id String @id @default(cuid())
+  companyId String
+  name String
+  description String?
+  projectType ProjectType @default(CUSTOM)
+  snapshotJson Json
+  itemCount Int
+  totalAmount Decimal @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  @@index([companyId, createdAt, id])
+}
+
+model SavedEstimateItem {
+  id String @id @default(cuid())
+  companyId String
+  category LineItemCategory @default(MATERIALS)
+  name String
+  description String?
+  quantity Decimal @db.Decimal(10, 2)
+  unit String
+  unitCost Decimal @db.Decimal(12, 2)
+  markupPercent Decimal @default(0) @db.Decimal(5, 2)
+  taxRate Decimal @default(0) @db.Decimal(5, 4)
+  itemType String? @default("per_unit")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  @@index([companyId, createdAt, id])
+}
+
+/// Durable replay protection for manual library writes. A request UUID is
+/// scoped to a company and permanently tied to its operation and input hash.
+model EstimateLibraryOperation {
+  id String @id @default(cuid())
+  companyId String
+  requestId String
+  operation String
+  payloadHash String
+  resultId String
+  proposalDefaults Json?
+  createdAt DateTime @default(now())
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  @@unique([companyId, requestId])
+  @@index([companyId, resultId])
 }
 
 model RefreshToken {

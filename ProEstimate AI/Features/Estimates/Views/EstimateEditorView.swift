@@ -11,6 +11,8 @@ struct EstimateEditorView: View {
     @State private var destination: EstimateEditorDestination?
     @State private var pendingClient: Client?
     @State private var confirmRevision = false
+    @State private var confirmDuplicate = false
+    @State private var libraryMutation = EstimateLibraryMutationModel(service: EstimateLibraryService())
 
     init(estimateId: String, initialNotice: String? = nil) {
         self.initialNotice = initialNotice
@@ -30,6 +32,7 @@ struct EstimateEditorView: View {
                     itemsSection
                     totalsSection(estimate)
                     documentNotes(estimate)
+                    reuseSection(estimate)
                     nextActionsSection(estimate)
                 } else if viewModel.isLoading {
                     ProgressView("Loading estimate…")
@@ -42,7 +45,7 @@ struct EstimateEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
-                        .disabled(viewModel.isSaving || delivery.isWorking)
+                        .disabled(viewModel.isSaving || delivery.isWorking || libraryMutation.isWorking)
                 }
             }
             .refreshable { await refresh() }
@@ -50,6 +53,7 @@ struct EstimateEditorView: View {
             .sheet(item: $destination, onDismiss: destinationDismissed) { target in
                 switch target {
                 case let .line(selection): EstimateLineEditorSheet(model: viewModel, selection: selection)
+                case let .document(estimate): EstimateDocumentFormView(model: viewModel, estimate: estimate)
                 case .client:
                     EstimateCreationClientPicker(model: clientPicker, allowsNoClient: false) { client in pendingClient = client }
                 case let .proposal(proposal):
@@ -58,14 +62,25 @@ struct EstimateEditorView: View {
                 case let .revision(estimate): EstimateEditorView(estimateId: estimate.id, initialNotice: "This is a new draft revision. The previously sent version stays unchanged.")
                 case let .invoice(invoice):
                     NavigationStack { InvoiceDetailView(invoiceId: invoice.id, isPresentedInSheet: true) }
+                case .savedItems:
+                    EstimateSavedItemsView(estimateId: viewModel.estimateId) { AppEventBus.shared.noteProjectChange() }
+                case let .saveTemplate(estimate): SaveEstimateTemplateSheet(estimate: estimate)
+                case let .saveLibraryItem(item): EstimateLibraryItemEditorView(sourceLine: item)
+                case let .copy(estimate): EstimateEditorView(estimateId: estimate.id, initialNotice: "This is a new draft copy. Prices were calculated from the copied items. Review them before sending.")
                 }
             }
-            .interactiveDismissDisabled(viewModel.isSaving || delivery.isWorking)
+            .interactiveDismissDisabled(viewModel.isSaving || delivery.isWorking || libraryMutation.isWorking)
             .confirmationDialog("Create a new draft revision?", isPresented: $confirmRevision, titleVisibility: .visible) {
                 Button("Create revision") { Task { await revise() } }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("The sent version and its approval history stay unchanged. Review and send the new version separately.")
+            }
+            .confirmationDialog("Duplicate this estimate?", isPresented: $confirmDuplicate, titleVisibility: .visible) {
+                Button("Create draft copy") { Task { await duplicate() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("A separate draft is created in this project with a new estimate number. Existing sent versions and approvals stay unchanged.")
             }
         }
     }
@@ -87,6 +102,10 @@ struct EstimateEditorView: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
+            if estimate.isEditable {
+                Button("Edit scope, notes & discount") { destination = .document(estimate) }
+                    .disabled(!viewModel.canEdit || delivery.isWorking || libraryMutation.isWorking)
+            }
         }
     }
 
@@ -112,6 +131,7 @@ struct EstimateEditorView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             ForEach(viewModel.lineItems) { item in
+                Group {
                 if viewModel.canEdit {
                     Button {
                         destination = .line(LineEditorSelection(itemId: item.id, form: EstimateLineItemForm(item: item)))
@@ -123,12 +143,22 @@ struct EstimateEditorView: View {
                 } else {
                     lineItemRow(item, editable: false)
                 }
+                }
+                .contextMenu {
+                    Button { destination = .saveLibraryItem(item) } label: {
+                        Label("Save to item library", systemImage: "books.vertical")
+                    }
+                }
             }
             if viewModel.estimate?.isEditable == true {
                 Button {
                     destination = .line(LineEditorSelection(itemId: nil, form: viewModel.newItemForm()))
                 } label: {
                     Label("Add line item", systemImage: "plus.circle")
+                }
+                .disabled(!viewModel.canEdit)
+                Button { destination = .savedItems } label: {
+                    Label("Add from saved items", systemImage: "books.vertical")
                 }
                 .disabled(!viewModel.canEdit)
             }
@@ -267,6 +297,29 @@ struct EstimateEditorView: View {
         .disabled(delivery.isWorking || delivery.isLoading || viewModel.isSaving || viewModel.isLoading)
     }
 
+    private func reuseSection(_ estimate: Estimate) -> some View {
+        Section("Reuse this work") {
+            Button { destination = .saveTemplate(estimate) } label: {
+                Label("Save as template", systemImage: "doc.badge.plus")
+            }
+            Button(libraryMutation.pending ? "Check draft copy" : "Duplicate estimate") {
+                if libraryMutation.pending { Task { await duplicate() } }
+                else { confirmDuplicate = true }
+            }
+            if libraryMutation.isWorking { ProgressView("Preparing draft copy…") }
+            if let message = libraryMutation.errorMessage { Text(message).font(TypographyTokens.footnote) }
+        }
+        .disabled(viewModel.isLoading || viewModel.isSaving || delivery.isWorking || libraryMutation.isWorking || viewModel.requiresRefresh)
+    }
+
+    private func duplicate() async {
+        guard let estimate = viewModel.estimate else { return }
+        if let result = await libraryMutation.duplicate(estimate: estimate) {
+            AppEventBus.shared.noteProjectChange()
+            destination = .copy(result)
+        }
+    }
+
     private func refresh() async {
         await viewModel.load()
         if let estimate = viewModel.estimate { await delivery.load(for: estimate) }
@@ -336,18 +389,28 @@ struct EstimateEditorView: View {
 
 private enum EstimateEditorDestination: Identifiable {
     case line(LineEditorSelection)
+    case document(Estimate)
     case client
     case proposal(Proposal)
     case revision(Estimate)
     case invoice(Invoice)
+    case savedItems
+    case saveTemplate(Estimate)
+    case saveLibraryItem(EstimateLineItem)
+    case copy(Estimate)
 
     var id: String {
         switch self {
         case let .line(selection): "line-\(selection.id)"
+        case let .document(estimate): "document-\(estimate.id)"
         case .client: "client"
         case let .proposal(proposal): "proposal-\(proposal.id)"
         case let .revision(estimate): "revision-\(estimate.id)"
         case let .invoice(invoice): "invoice-\(invoice.id)"
+        case .savedItems: "saved-items"
+        case let .saveTemplate(estimate): "save-template-\(estimate.id)"
+        case let .saveLibraryItem(item): "save-library-item-\(item.id)"
+        case let .copy(estimate): "copy-\(estimate.id)"
         }
     }
 }
