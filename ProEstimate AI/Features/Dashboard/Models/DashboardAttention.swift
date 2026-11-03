@@ -56,6 +56,7 @@ struct DashboardAttentionGroup: Codable, Identifiable, Sendable {
     enum Kind: String, Codable, Sendable {
         case overdueInvoice = "overdue_invoice"
         case changesRequested = "changes_requested"
+        case approvedChangeOrder = "approved_change_order"
         case approvedEstimate = "approved_estimate"
         case unansweredProposal = "unanswered_proposal"
         case draftEstimate = "draft_estimate"
@@ -64,6 +65,7 @@ struct DashboardAttentionGroup: Codable, Identifiable, Sendable {
             switch self {
             case .overdueInvoice: "Follow up overdue payment"
             case .changesRequested: "Review requested changes"
+            case .approvedChangeOrder: "Review approved changes"
             case .approvedEstimate: "Invoice approved work"
             case .unansweredProposal: "Follow up a proposal"
             case .draftEstimate: "Finish an estimate"
@@ -74,6 +76,7 @@ struct DashboardAttentionGroup: Codable, Identifiable, Sendable {
             switch self {
             case .overdueInvoice: "exclamationmark.circle"
             case .changesRequested: "text.bubble"
+            case .approvedChangeOrder: "doc.badge.plus"
             case .approvedEstimate: "checkmark.seal"
             case .unansweredProposal: "paperplane"
             case .draftEstimate: "square.and.pencil"
@@ -84,6 +87,7 @@ struct DashboardAttentionGroup: Codable, Identifiable, Sendable {
             switch self {
             case .overdueInvoice: "overdue"
             case .changesRequested: "need a revision"
+            case .approvedChangeOrder: "approved changes ready"
             case .approvedEstimate: "ready to invoice"
             case .unansweredProposal: "awaiting a reply"
             case .draftEstimate: "drafts"

@@ -13,6 +13,7 @@ struct DashboardView: View {
     @State private var showSettings = false
     @State private var navigateToProjectId: String?
     @State private var navigateAutoGenerate = false
+    @State private var selectedChangeOrder: DashboardChangeOrderRoute?
 
     var body: some View {
         @Bindable var router = router
@@ -33,6 +34,12 @@ struct DashboardView: View {
                                     Button("Done") { showSettings = false }
                                 }
                             }
+                    }
+                }
+                .sheet(item: $selectedChangeOrder, onDismiss: reload) { route in
+                    NavigationStack {
+                        ChangeOrderDetailView(orderId: route.id)
+                            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { selectedChangeOrder = nil } } }
                     }
                 }
                 .task(id: workspaceScope) {
@@ -276,6 +283,8 @@ struct DashboardView: View {
         switch group.kind {
         case .overdueInvoice:
             router.dashboardPath.append(AppDestination.invoiceDetail(id: group.target.documentId))
+        case .approvedChangeOrder:
+            selectedChangeOrder = DashboardChangeOrderRoute(id: group.target.documentId)
         case .draftEstimate, .approvedEstimate:
             router.dashboardPath.append(AppDestination.projectDetail(
                 id: group.target.projectId, highlightEstimateId: group.target.documentId
@@ -299,3 +308,5 @@ struct DashboardView: View {
         }
     }
 }
+
+private struct DashboardChangeOrderRoute: Identifiable { let id: String }

@@ -178,4 +178,28 @@ describe('Home next actions', () => {
     const summary = await getSummary(t.company.id, t.user.id);
     expect(summary.settled_invoice_amounts).toEqual([{ currency_code: 'CAD', amount: '30.03' }, { currency_code: 'USD', amount: '30.03' }]);
   });
+
+  it('routes only the latest approved amendment per contract and never offers its full price as another ordinary invoice', async () => {
+    const t = await fixture();
+    const root = await estimate(t, 'APPROVED', '100');
+    const one = await estimate(t, 'APPROVED', '120');
+    const two = await estimate(t, 'APPROVED', '140');
+    const independent = await estimate(t, 'APPROVED', '40');
+    await prisma.estimate.update({ where: { id: one.id }, data: { revisesEstimateId: root.id } });
+    await prisma.estimate.update({ where: { id: two.id }, data: { revisesEstimateId: one.id } });
+    const orders = [];
+    for (const [index, revised] of [one, two].entries()) {
+      const offer = await prisma.proposal.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateId: revised.id, status: 'APPROVED' } });
+      orders.push(await prisma.changeOrder.create({ data: { companyId: t.company.id, projectId: t.project.id, rootEstimateId: root.id,
+        baseEstimateId: index === 0 ? root.id : one.id, estimateId: revised.id, proposalId: offer.id, requestId: randomUUID(),
+        title: 'Approved amendment', reason: 'Additional scope', status: 'APPROVED', baseSnapshot: {}, createdByUserId: t.user.id,
+        createdAt: daysAgo(3 - index) } }));
+    }
+    const result = await getAttention(t.company.id, now);
+    expect(result.groups.map(group => group.kind)).toEqual(['approved_change_order', 'approved_estimate']);
+    expect(result.groups[0]).toMatchObject({ count: 1, amounts: [], target: { document_id: orders[1].id } });
+    expect(result.groups[1]).toMatchObject({ count: 1, target: { document_id: independent.id } });
+    await prisma.changeOrder.update({ where: { id: orders[1].id }, data: { status: 'APPLIED' } });
+    expect((await getAttention(t.company.id, now)).groups.map(group => group.kind)).toEqual(['approved_estimate']);
+  });
 });

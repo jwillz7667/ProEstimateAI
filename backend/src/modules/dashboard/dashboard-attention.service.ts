@@ -15,7 +15,7 @@ export interface DashboardAttentionTarget {
 }
 
 export interface DashboardAttentionGroup {
-  kind: 'overdue_invoice' | 'changes_requested' | 'approved_estimate' | 'unanswered_proposal' | 'draft_estimate';
+  kind: 'overdue_invoice' | 'changes_requested' | 'approved_change_order' | 'approved_estimate' | 'unanswered_proposal' | 'draft_estimate';
   count: number;
   amounts: DashboardMoney[];
   target: DashboardAttentionTarget;
@@ -84,6 +84,24 @@ export async function getAttention(companyId: string, now = new Date()) {
         AND e.status IN ('DRAFT', 'SENT') AND q."respondedAt" IS NULL
         AND q."changesRequestedAt" IS NOT NULL AND p.status <> 'ARCHIVED'
     `);
+    const approvedChanges = await summarize(tx, Prisma.sql`
+      SELECT o.id AS document_id, o."projectId" AS project_id,
+        COALESCE(q."proposalNumber", e."estimateNumber") AS document_number,
+        p.title AS project_title, c.name AS client_name,
+        0::decimal AS amount, 'USD'::text AS currency_code, o."createdAt" AS action_at
+      FROM "ChangeOrder" o
+      JOIN "Estimate" e ON e.id = o."estimateId" AND e."companyId" = ${companyId}
+      JOIN "Proposal" q ON q.id = o."proposalId" AND q."companyId" = ${companyId}
+      JOIN "Project" p ON p.id = o."projectId" AND p."companyId" = ${companyId}
+      LEFT JOIN "Client" c ON c.id = p."clientId" AND c."companyId" = ${companyId}
+      WHERE o."companyId" = ${companyId} AND o.status = 'APPROVED'
+        AND e.status = 'APPROVED' AND q.status = 'APPROVED' AND p.status <> 'ARCHIVED'
+        AND NOT EXISTS (SELECT 1 FROM "ChangeOrder" newer WHERE newer."companyId" = ${companyId}
+          AND newer."rootEstimateId" = o."rootEstimateId" AND newer.status IN ('APPROVED', 'APPLIED', 'INCLUDED')
+          AND (newer."createdAt", newer.id) > (o."createdAt", o.id))
+        AND (o."rootInvoiceId" IS NOT NULL OR NOT EXISTS (SELECT 1 FROM "ChangeOrder" pending
+          WHERE pending."companyId" = ${companyId} AND pending."rootEstimateId" = o."rootEstimateId" AND pending.status IN ('DRAFT', 'SENT')))
+    `);
     const approved = await summarize(tx, Prisma.sql`
       SELECT e.id AS document_id, e."projectId" AS project_id,
         e."estimateNumber" AS document_number, p.title AS project_title,
@@ -93,6 +111,9 @@ export async function getAttention(companyId: string, now = new Date()) {
       LEFT JOIN "Client" c ON c.id = p."clientId" AND c."companyId" = ${companyId}
       WHERE e."companyId" = ${companyId} AND e.status = 'APPROVED'
         AND p.status <> 'ARCHIVED'
+        AND NOT EXISTS (SELECT 1 FROM "ChangeOrder" o WHERE o."estimateId" = e.id AND o."companyId" = ${companyId})
+        AND NOT EXISTS (SELECT 1 FROM "ChangeOrder" o WHERE o."baseEstimateId" = e.id AND o."companyId" = ${companyId}
+          AND o.status IN ('DRAFT', 'SENT', 'APPROVED', 'APPLIED', 'INCLUDED', 'CHANGES_REQUESTED'))
         AND NOT EXISTS (SELECT 1 FROM "Invoice" i WHERE i."estimateId" = e.id
           AND i."companyId" = ${companyId} AND i.status <> 'VOID')
     `);
@@ -125,10 +146,12 @@ export async function getAttention(companyId: string, now = new Date()) {
         AND NOT EXISTS (SELECT 1 FROM "Proposal" q WHERE q."estimateId" = e.id
           AND q."companyId" = ${companyId} AND q.status <> 'DRAFT')
     `);
-    const kinds = ['overdue_invoice', 'changes_requested', 'approved_estimate', 'unanswered_proposal', 'draft_estimate'] as const;
+    const kinds = ['overdue_invoice', 'changes_requested', 'approved_change_order', 'approved_estimate', 'unanswered_proposal', 'draft_estimate'] as const;
     const groups: DashboardAttentionGroup[] = [];
-    for (const [index, result] of [overdue, requestedChanges, approved, unanswered, drafts].entries()) {
-      if (result.count > 0 && result.target) groups.push({ kind: kinds[index], ...result, target: result.target });
+    for (const [index, result] of [overdue, requestedChanges, approvedChanges, approved, unanswered, drafts].entries()) {
+      // Changes may create either an extra invoice or a credit. Never present
+      // their full revised contract value (or an offsetting net) as revenue.
+      if (result.count > 0 && result.target) groups.push({ kind: kinds[index], ...result, amounts: kinds[index] === 'approved_change_order' ? [] : result.amounts, target: result.target });
     }
     return { generated_at: now.toISOString(), follow_up_after_days: 3, groups };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });

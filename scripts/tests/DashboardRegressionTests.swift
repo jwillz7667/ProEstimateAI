@@ -37,9 +37,17 @@ struct DashboardRegressionTests {
         try await attentionFailurePreservesSavedActions()
         try await staleAttentionIsDiscarded()
         try monetaryAmountsKeepCurrencyAndPrecision()
+        try approvedChangesHaveTheirOwnAction()
         try recentWorkIsDeterministic()
         try greetingHandlesMissingNames()
         print("PASS: \(checks) dashboard checks (independent sections, retry, cancellation, workspace changes, deterministic recent work).")
+    }
+
+    static func approvedChangesHaveTheirOwnAction() throws {
+        let value = Data("\"approved_change_order\"".utf8)
+        let kind = try JSONDecoder().decode(DashboardAttentionGroup.Kind.self, from: value)
+        try expect(kind == .approvedChangeOrder, "Approved amendments need a distinct action, never another full invoice")
+        try expect(kind.title == "Review approved changes", "The amendment action must describe the customer's approved work")
     }
 
     static func projectsDoNotWaitForBusinessTotals() async throws {
