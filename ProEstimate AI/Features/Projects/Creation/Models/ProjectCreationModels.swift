@@ -164,14 +164,9 @@ enum ProjectStatusFilter: String, CaseIterable, Identifiable, Sendable {
 
 /// Steps in the project creation flow.
 ///
-/// Standard projects walk: `type → photos → details → generating`.
-/// Lawn-care projects insert a `lawnMap` step between photos and
-/// details so the contractor can pin the lawn polygon on a satellite
-/// map and capture an area measurement for estimation. The wizard
-/// skips `.lawnMap` for any non-lawn-care project type — see
-/// `ProjectCreationViewModel.nextStep` / `previousStep` for the
-/// step-skipping logic and `navigableStepCount` for the progress-bar
-/// length.
+/// Standard projects need two input pages: project setup, then photos/notes.
+/// Optional estimate context stays on the second page. Paid lawn-care
+/// projects add measurement before the save/generation pipeline.
 ///
 /// `generating` is a non-interactive loading state — it sits at the
 /// end of the enum and is excluded from the navigable count for both
@@ -180,15 +175,33 @@ enum ProjectCreationStep: Int, CaseIterable, Sendable {
     case type = 0
     case photos = 1
     case lawnMap = 2
-    case details = 3
-    case generating = 4
+    case generating = 3
+
+    static func inputSteps(includesLawnMeasurement: Bool) -> [Self] {
+        includesLawnMeasurement ? [.type, .photos, .lawnMap] : [.type, .photos]
+    }
+
+    func inputPosition(includesLawnMeasurement: Bool) -> Int? {
+        Self.inputSteps(includesLawnMeasurement: includesLawnMeasurement).firstIndex(of: self)
+    }
+
+    func nextInputStep(includesLawnMeasurement: Bool) -> Self? {
+        let steps = Self.inputSteps(includesLawnMeasurement: includesLawnMeasurement)
+        guard let index = steps.firstIndex(of: self), steps.indices.contains(index + 1) else { return nil }
+        return steps[index + 1]
+    }
+
+    func previousInputStep(includesLawnMeasurement: Bool) -> Self? {
+        let steps = Self.inputSteps(includesLawnMeasurement: includesLawnMeasurement)
+        guard let index = steps.firstIndex(of: self), index > 0 else { return nil }
+        return steps[index - 1]
+    }
 
     var title: String {
         switch self {
-        case .type: "Category"
-        case .photos: "Photos & Vision"
+        case .type: "New Project"
+        case .photos: "Photos & Notes"
         case .lawnMap: "Measure Lawn"
-        case .details: "Details"
         case .generating: "Generating"
         }
     }

@@ -1,66 +1,128 @@
 import SwiftUI
 
-/// Step 0 of the simplified creation flow. Single decision: pick the
-/// project category. The project name moved to the details step so this
-/// page stays scannable and decisive.
-///
-/// The grid renders 13 photographic tiles in a 3-column layout — every
-/// `Project.ProjectType` case. The trailing single tile on the final row
-/// is acceptable inside this `ScrollView`; the grid scrolls anyway, so a
-/// short last row reads as natural pagination instead of a layout bug.
-/// Tile design and selection cues live in `ProjectTypeCard`.
+/// Establish the project in one place: category and an optional name.
+/// Search and adaptive tiles keep the full trade catalog usable on small
+/// displays and at larger text sizes.
 struct ProjectTypeSelectionStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var searchQuery = ""
+    @FocusState private var focusedField: Field?
 
-    /// Wider than 2 × (shadow blur + |y offset|) so adjacent tiles'
-    /// shadows fully clear each other in the gutter. ProjectTypeCard's
-    /// selected-state shadow is radius 7 / y 4 → ~11pt visible spread
-    /// on the selected side, plus the 1.02× scale pushes its edge
-    /// another ~1pt outward; the unselected neighbor adds ~6pt of its
-    /// own shadow reach. 24pt clears that combined ~18pt with a small
-    /// margin, mirroring the same fix DashboardRecentProjectsSection
-    /// applied to its carousel.
-    private let gridSpacing: CGFloat = 24
+    private enum Field: Hashable { case name, search }
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 24),
-        GridItem(.flexible(), spacing: 24),
-        GridItem(.flexible(), spacing: 24),
-    ]
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: dynamicTypeSize.isAccessibilitySize ? 280 : 148), spacing: 24)]
+    }
+
+    private var matchingTypes: [Project.ProjectType] {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return query.isEmpty ? Project.ProjectType.allCases : Project.ProjectType.allCases.filter {
+            $0.displayName.localizedCaseInsensitiveContains(query)
+        }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.md) {
                 header
+                nameSection
+                categorySearch
 
-                LazyVGrid(columns: columns, spacing: gridSpacing) {
-                    ForEach(Project.ProjectType.allCases, id: \.self) { type in
+                LazyVGrid(columns: columns, spacing: 24) {
+                    ForEach(matchingTypes, id: \.self) { type in
                         ProjectTypeCard(
                             projectType: type,
                             isSelected: viewModel.selectedProjectType == type
                         ) {
                             viewModel.selectedProjectType = type
+                            focusedField = nil
                         }
                     }
                 }
                 .padding(.top, SpacingTokens.xs)
+                if matchingTypes.isEmpty {
+                    ContentUnavailableView.search(text: searchQuery)
+                }
             }
+            .frame(maxWidth: 960)
             .padding(.horizontal, SpacingTokens.md)
             .padding(.vertical, SpacingTokens.sm)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                if focusedField != nil {
+                    Spacer()
+                    Button("Done") { focusedField = nil }
+                }
+            }
         }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-            Text("What type of project is this?")
+            Text("Start with the work.")
                 .font(TypographyTokens.title2)
 
-            Text("Pick the category that best describes the work. We'll tailor the next step's design suggestions to your choice.")
+            Text("Choose a project type. Add photos and notes next, then create an estimate from your project.")
                 .font(TypographyTokens.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, SpacingTokens.xs)
+    }
+
+    private var nameSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            Text("Project name (optional)")
+                .font(TypographyTokens.headline)
+            TextField(viewModel.generatedTitle, text: $viewModel.customTitle, axis: .vertical)
+                .focused($focusedField, equals: .name)
+                .submitLabel(.done)
+                .onSubmit { focusedField = nil }
+                .lineLimit(1 ... 2)
+                .padding(SpacingTokens.sm)
+                .background(ColorTokens.inputBackground, in: RoundedRectangle(cornerRadius: RadiusTokens.small))
+                .overlay(RoundedRectangle(cornerRadius: RadiusTokens.small).strokeBorder(ColorTokens.subtleBorder, lineWidth: 1))
+                .accessibilityLabel("Project name, optional")
+            if let message = viewModel.projectNameValidationMessage {
+                Text(message)
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.error)
+            } else {
+                Text("Leave this blank to use the project type as its name.")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var categorySearch: some View {
+        HStack(spacing: SpacingTokens.xs) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField("Search project types", text: $searchQuery)
+                .focused($focusedField, equals: .search)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .onSubmit { focusedField = nil }
+            if !searchQuery.isEmpty {
+                Button {
+                    searchQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel("Clear project type search")
+            }
+        }
+        .padding(SpacingTokens.sm)
+        .background(ColorTokens.inputBackground, in: RoundedRectangle(cornerRadius: RadiusTokens.small))
     }
 }
 

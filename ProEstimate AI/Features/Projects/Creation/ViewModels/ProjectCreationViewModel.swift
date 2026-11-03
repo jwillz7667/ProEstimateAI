@@ -2,10 +2,10 @@ import Foundation
 import PhotosUI
 import SwiftUI
 
-/// Drives the four-step project creation flow.
+/// Drives the two-page project creation flow and its save/generation pipeline.
 ///
 /// Inputs flow forward only — no review step. After the user taps
-/// "Create Project" on the details step, the view model transitions to
+/// "Save Project" or "Create with AI" on the final input page, the view model transitions to
 /// the `.generating` step and runs a four-stage pipeline (create →
 /// upload photos → start generation → poll until complete) so the user
 /// sees a single continuous loading screen and lands on a fully-rendered
@@ -17,18 +17,20 @@ final class ProjectCreationViewModel {
 
     var currentStep: Int = 0
 
-    var totalSteps: Int {
-        ProjectCreationStep.allCases.count
-    }
-
     /// Number of navigable input steps in the active flow (excludes the
     /// trailing `.generating` loading step, and excludes `.lawnMap`
     /// unless the user picked a lawn-care project type). Drives the
     /// progress-indicator pill count so the bar is accurate per flow.
     var navigableStepCount: Int {
-        // Standard: type + photos + details = 3. Lawn care adds the
-        // lawnMap step between photos and details for a total of 4.
-        isLawnCareFlow ? 4 : 3
+        ProjectCreationStep.inputSteps(includesLawnMeasurement: isLawnCareFlow).count
+    }
+
+    var currentInputStepIndex: Int {
+        currentStepEnum.inputPosition(includesLawnMeasurement: isLawnCareFlow) ?? 0
+    }
+
+    var isLastInputStep: Bool {
+        currentStepEnum == ProjectCreationStep.inputSteps(includesLawnMeasurement: isLawnCareFlow).last
     }
 
     var currentStepEnum: ProjectCreationStep {
@@ -46,7 +48,13 @@ final class ProjectCreationViewModel {
 
     // MARK: - Step 0: Project Type
 
-    var selectedProjectType: Project.ProjectType?
+    var selectedProjectType: Project.ProjectType? {
+        didSet {
+            // A suggestion belongs to its original category; changing the
+            // project type must not silently submit an old category's prompt.
+            if oldValue != selectedProjectType { selectedPromptCard = nil }
+        }
+    }
 
     // MARK: - Step 1: Photos + Prompt
 
@@ -107,7 +115,7 @@ final class ProjectCreationViewModel {
         _lawnMeasurementVM?.hasValidPolygon ?? false
     }
 
-    // MARK: - Step 2: Details
+    // MARK: - Optional Estimate Context
 
     /// Optional user-supplied project title. When empty, `generatedTitle`
     /// falls back to a sensible default built from the selected type.
@@ -246,9 +254,10 @@ final class ProjectCreationViewModel {
     var canProceed: Bool {
         switch currentStepEnum {
         case .type:
-            return selectedProjectType != nil
+            return selectedProjectType != nil && projectNameValidationMessage == nil
         case .photos:
-            guard !isLoadingImages, customInstructionsCharacterCount <= maxCustomInstructionsLength else { return false }
+            guard !isLoadingImages, customInstructionsCharacterCount <= maxCustomInstructionsLength,
+                  detailsValidationMessage == nil else { return false }
             // Service trades (plumbing, HVAC, …) and recurring lawn care
             // don't need an uploaded photo — service trades aren't
             // redesigning anything, and lawn care generates from its prompt
@@ -265,9 +274,7 @@ final class ProjectCreationViewModel {
         case .lawnMap:
             // Polygon must be closed (3+ vertices) before we can
             // estimate per-area pricing.
-            return hasValidLawnPolygon
-        case .details:
-            return detailsValidationMessage == nil
+            return hasValidLawnPolygon && detailsValidationMessage == nil
         case .generating:
             return false
         }
@@ -277,14 +284,17 @@ final class ProjectCreationViewModel {
         if shouldGenerateAI, aiPreviewEnabled,
            selectedProjectType?.requiresReferencePhoto == true,
            selectedImageData.isEmpty {
-            return "Add a project photo on the previous step to create an AI design preview, or turn off AI to save manually."
+            return "Add a project photo to create an AI design preview, or turn off AI to save manually."
         }
-        if customTitle.trimmingCharacters(in: .whitespacesAndNewlines).count > 255 {
-            return "Keep the project name under 256 characters."
-        }
+        if let error = projectNameValidationMessage { return error }
         if let error = DecimalFormInput.validationMessage(for: squareFootageText, field: "project area") { return error }
         if let error = DecimalFormInput.validationMessage(for: lotSizeText, field: "lot size") { return error }
         return DecimalFormInput.budgetValidationMessage(minimum: budgetMinText, maximum: budgetMaxText)
+    }
+
+    var projectNameValidationMessage: String? {
+        customTitle.trimmingCharacters(in: .whitespacesAndNewlines).count > 255
+            ? "Keep the project name under 256 characters." : nil
     }
 
     /// True when the user has supplied either a tapped suggestion card
@@ -385,34 +395,20 @@ final class ProjectCreationViewModel {
     // MARK: - Step Actions
 
     func nextStep() {
-        guard canProceed, currentStep < totalSteps - 1 else { return }
-        var next = currentStep + 1
-        // Skip the lawn measurement step when the user isn't building a
-        // lawn-care project. The map step is only meaningful when we're
-        // about to estimate per-area pricing.
-        if ProjectCreationStep(rawValue: next) == .lawnMap, !isLawnCareFlow {
-            next += 1
-        }
-        guard next < totalSteps else { return }
-        currentStep = next
+        guard canProceed, let next = currentStepEnum.nextInputStep(includesLawnMeasurement: isLawnCareFlow) else { return }
+        currentStep = next.rawValue
     }
 
     func previousStep() {
-        // Guard against going back into the loading step or pre-step 0.
-        guard !isPipelineRunning, currentStep > 0 else { return }
-        var prev = currentStep - 1
-        // Mirror the forward skip — non-lawn-care flows never see
-        // `.lawnMap`, so Back from `.details` jumps straight to
-        // `.photos` instead of an empty map step.
-        if ProjectCreationStep(rawValue: prev) == .lawnMap, !isLawnCareFlow {
-            prev -= 1
-        }
-        currentStep = prev
+        guard !isPipelineRunning,
+              let previous = currentStepEnum.previousInputStep(includesLawnMeasurement: isLawnCareFlow) else { return }
+        currentStep = previous.rawValue
     }
 
     /// Jump straight to the loading step. Called when the user taps
-    /// "Create Project" on the details step.
+    /// "Save Project" or "Create with AI" on the final input page.
     func enterGeneratingStep() {
+        guard isLastInputStep, canProceed, !isPipelineRunning else { return }
         currentStep = ProjectCreationStep.generating.rawValue
     }
 

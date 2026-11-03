@@ -11,6 +11,8 @@ struct PhotosAndPromptStep: View {
 
     @FocusState private var isInstructionsFocused: Bool
     @State private var isCameraPresented = false
+    @State private var showsSuggestions = false
+    @State private var showsEstimateDetails = false
 
     private let isCameraAvailable = UIImagePickerController.isSourceTypeAvailable(.camera)
 
@@ -23,17 +25,42 @@ struct PhotosAndPromptStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
+                creationModeSection
                 photosSection
-                if viewModel.shouldGenerateAI {
-                    aiPreviewSection
-                }
-                qualityTierSection
-                if viewModel.shouldGenerateAI {
-                    promptSuggestionsSection
-                }
                 customInstructionsSection
+                if viewModel.shouldGenerateAI {
+                    DisclosureGroup(isExpanded: $showsSuggestions) {
+                        promptSuggestionsSection
+                            .padding(.top, SpacingTokens.sm)
+                    } label: {
+                        Label(viewModel.selectedPromptCard == nil ? "Browse design suggestions" : "Change selected suggestion", systemImage: "sparkles")
+                            .font(TypographyTokens.headline)
+                    }
+                    .padding(.horizontal, SpacingTokens.md)
+                }
+                DisclosureGroup(isExpanded: $showsEstimateDetails) {
+                    VStack(spacing: SpacingTokens.lg) {
+                        if viewModel.shouldGenerateAI { aiPreviewSection }
+                        qualityTierSection
+                        ProjectDetailsStep(viewModel: viewModel)
+                            .padding(.horizontal, SpacingTokens.md)
+                    }
+                    .padding(.top, SpacingTokens.sm)
+                } label: {
+                    Label("Estimate details (optional)", systemImage: "slider.horizontal.3")
+                        .font(TypographyTokens.headline)
+                }
+                .padding(.horizontal, SpacingTokens.md)
+                if let message = viewModel.detailsValidationMessage {
+                    Label(message, systemImage: "exclamationmark.circle")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(ColorTokens.error)
+                        .padding(.horizontal, SpacingTokens.md)
+                }
             }
+            .frame(maxWidth: 960)
             .padding(.vertical, SpacingTokens.sm)
+            .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
         .fullScreenCover(isPresented: $isCameraPresented) {
@@ -42,6 +69,27 @@ struct PhotosAndPromptStep: View {
             }
             .ignoresSafeArea()
         }
+    }
+
+    // MARK: - Creation Mode
+
+    private var creationModeSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            Toggle(isOn: $viewModel.shouldGenerateAI) {
+                Label("Use AI", systemImage: "sparkles")
+                    .font(TypographyTokens.headline)
+            }
+            .tint(ColorTokens.primaryOrange)
+            Text(viewModel.shouldGenerateAI
+                 ? "Create AI suggestions and an optional design preview. An active Pro subscription or trial is required."
+                 : "Save your project, photos and notes for free. Build an estimate manually from the project.")
+                .font(TypographyTokens.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(SpacingTokens.md)
+        .background(ColorTokens.inputBackground, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
+        .padding(.horizontal, SpacingTokens.md)
     }
 
     // MARK: - Photos
@@ -274,6 +322,8 @@ struct PhotosAndPromptStep: View {
                     .font(.title3)
                     .foregroundStyle(.white)
                     .shadow(radius: 2)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .offset(x: 6, y: -6)
             .accessibilityLabel("Remove photo \(index + 1)")
@@ -507,13 +557,13 @@ struct PhotosAndPromptStep: View {
                 Text(viewModel.shouldGenerateAI ? "Custom instructions" : "Project notes")
                     .font(TypographyTokens.title3)
                 HStack(spacing: SpacingTokens.xxs) {
-                    Text("Optional")
+                    Text(viewModel.shouldGenerateAI && viewModel.selectedPromptCard == nil ? "Required" : "Optional")
                         .font(TypographyTokens.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, SpacingTokens.xs)
                         .padding(.vertical, 1)
                         .background(ColorTokens.inputBackground, in: Capsule())
-                    Text(viewModel.shouldGenerateAI ? "Layer specifics on top of your selection above." : "Keep the scope of work and job details with this project.")
+                    Text(viewModel.shouldGenerateAI ? "Describe the work, or choose a design suggestion below." : "Keep the scope of work and job details with this project.")
                         .font(TypographyTokens.subheadline)
                         .foregroundStyle(.secondary)
                 }

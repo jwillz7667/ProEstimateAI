@@ -127,7 +127,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .dashboard: "Dashboard"
+        case .dashboard: "Home"
         case .projects: "Projects"
         case .invoices: "Invoices"
         case .clients: "Clients"
@@ -137,7 +137,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
-        case .dashboard: "square.grid.2x2"
+        case .dashboard: "house"
         case .projects: "folder"
         case .invoices: "doc.plaintext"
         case .clients: "person.2"
