@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct EstimateEditorView: View {
+    @Environment(AppState.self) private var appState
     let initialNotice: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(FeatureGateCoordinator.self) private var featureGate
@@ -66,6 +67,7 @@ struct EstimateEditorView: View {
                     EstimateSavedItemsView(estimateId: viewModel.estimateId) { AppEventBus.shared.noteProjectChange() }
                 case let .saveTemplate(estimate): SaveEstimateTemplateSheet(estimate: estimate)
                 case let .saveLibraryItem(item): EstimateLibraryItemEditorView(sourceLine: item)
+                case let .priceReview(item): EstimatePriceReviewView(item: item)
                 case let .copy(estimate): EstimateEditorView(estimateId: estimate.id, initialNotice: "This is a new draft copy. Prices were calculated from the copied items. Review them before sending.")
                 }
             }
@@ -104,7 +106,7 @@ struct EstimateEditorView: View {
             .fixedSize(horizontal: false, vertical: true)
             if estimate.isEditable {
                 Button("Edit scope, notes & discount") { destination = .document(estimate) }
-                    .disabled(!viewModel.canEdit || delivery.isWorking || libraryMutation.isWorking)
+                    .disabled(!viewModel.canEdit || delivery.isWorking || libraryMutation.isWorking || appState.currentUser?.canEdit != true)
             }
         }
     }
@@ -132,7 +134,7 @@ struct EstimateEditorView: View {
             }
             ForEach(viewModel.lineItems) { item in
                 Group {
-                if viewModel.canEdit {
+                if viewModel.canEdit && appState.currentUser?.canEdit == true {
                     Button {
                         destination = .line(LineEditorSelection(itemId: item.id, form: EstimateLineItemForm(item: item)))
                     } label: {
@@ -148,9 +150,15 @@ struct EstimateEditorView: View {
                     Button { destination = .saveLibraryItem(item) } label: {
                         Label("Save to item library", systemImage: "books.vertical")
                     }
+                    .disabled(appState.currentUser?.canEdit != true)
+                }
+                if viewModel.canEdit && appState.currentUser?.canEdit == true {
+                    Button("Check price & quantity") { destination = .priceReview(item) }
+                        .font(TypographyTokens.caption.weight(.semibold))
+                        .frame(minHeight: 44)
                 }
             }
-            if viewModel.estimate?.isEditable == true {
+            if viewModel.estimate?.isEditable == true && appState.currentUser?.canEdit == true {
                 Button {
                     destination = .line(LineEditorSelection(itemId: nil, form: viewModel.newItemForm()))
                 } label: {
@@ -203,6 +211,22 @@ struct EstimateEditorView: View {
             Text("Markup \(item.markupPercent.formatted())% · Tax \(item.taxRate.formatted())%")
                 .font(TypographyTokens.caption)
                 .foregroundStyle(ColorTokens.secondaryText)
+            Text(item.priceOriginLabel)
+                .font(TypographyTokens.caption)
+                .foregroundStyle(ColorTokens.secondaryText)
+            if let checkedAt = item.priceCheckedAt {
+                Text("Base price checked by contractor · \(checkedAt.formatted(date: .abbreviated, time: .omitted))")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.secondaryText)
+                if let source = item.priceSourceLabel { Text(source).font(TypographyTokens.caption) }
+            } else {
+                Text("Base price not checked")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(ColorTokens.secondaryText)
+            }
+            if let basis = item.quantityBasis, item.quantityCheckedAt != nil {
+                Text("Quantity basis: \(basis)").font(TypographyTokens.caption)
+            }
             HStack {
                 Text("Line subtotal")
                     .font(TypographyTokens.caption)
@@ -225,7 +249,9 @@ struct EstimateEditorView: View {
             moneyRow("Tax", estimate.taxAmount)
             if estimate.discountAmount > 0 { moneyRow("Discount", -estimate.discountAmount) }
             if let contingency = estimate.contingencyAmount, contingency > 0 {
-                moneyRow("Contingency", contingency)
+                moneyRow("Contingency reference", contingency)
+                Text("Reference only. Include contingency in the line items when pricing the work.")
+                    .font(TypographyTokens.footnote).foregroundStyle(ColorTokens.secondaryText)
             }
             moneyRow("Total", estimate.totalAmount)
                 .fontWeight(.semibold)
@@ -247,7 +273,7 @@ struct EstimateEditorView: View {
                 Text(delivery.isLoading ? "Loading client…" : "Choose a client before sending.")
                     .foregroundStyle(ColorTokens.secondaryText)
             }
-            if estimate.isEditable || (estimate.status == .approved && delivery.client == nil) {
+            if appState.currentUser?.canEdit == true && (estimate.isEditable || (estimate.status == .approved && delivery.client == nil)) {
                 Button(delivery.client == nil ? "Choose or add client" : "Change client") {
                     Task {
                         await clientPicker.loadClients(companyId: estimate.companyId)
@@ -266,7 +292,15 @@ struct EstimateEditorView: View {
 
     private func nextActionsSection(_ estimate: Estimate) -> some View {
         Section {
-            if estimate.status == .approved {
+            if estimate.isEditable && !viewModel.lineItems.isEmpty {
+                let checkedPrices = viewModel.lineItems.filter { $0.priceCheckedAt != nil }.count
+                let checkedQuantities = viewModel.lineItems.filter { $0.quantityCheckedAt != nil }.count
+                Text("Base prices checked: \(checkedPrices) of \(viewModel.lineItems.count)")
+                    .font(TypographyTokens.footnote).foregroundStyle(ColorTokens.secondaryText)
+                Text("Quantities checked: \(checkedQuantities) of \(viewModel.lineItems.count)")
+                    .font(TypographyTokens.footnote).foregroundStyle(ColorTokens.secondaryText)
+            }
+            if estimate.status == .approved && appState.currentUser?.canEdit == true {
                 Button(delivery.needsInvoiceReconciliation ? "Check saved invoice" : "Create invoice") {
                     Task { await invoice() }
                 }
@@ -279,8 +313,8 @@ struct EstimateEditorView: View {
                       systemImage: estimate.isEditable ? "paperplane" : "doc.text.magnifyingglass")
                     .font(estimate.isEditable ? TypographyTokens.headline : TypographyTokens.subheadline)
             }
-            .disabled(viewModel.lineItems.isEmpty || viewModel.requiresRefresh)
-            if !estimate.isEditable {
+            .disabled((estimate.isEditable && viewModel.lineItems.isEmpty) || viewModel.requiresRefresh || (estimate.isEditable && appState.currentUser?.canEdit != true))
+            if !estimate.isEditable && appState.currentUser?.canEdit == true {
                 Button("Create revision") { confirmRevision = true }
             }
             if delivery.isWorking { ProgressView("Preparing next step…") }
@@ -309,7 +343,7 @@ struct EstimateEditorView: View {
             if libraryMutation.isWorking { ProgressView("Preparing draft copy…") }
             if let message = libraryMutation.errorMessage { Text(message).font(TypographyTokens.footnote) }
         }
-        .disabled(viewModel.isLoading || viewModel.isSaving || delivery.isWorking || libraryMutation.isWorking || viewModel.requiresRefresh)
+        .disabled(viewModel.isLoading || viewModel.isSaving || delivery.isWorking || libraryMutation.isWorking || viewModel.requiresRefresh || appState.currentUser?.canEdit != true)
     }
 
     private func duplicate() async {
@@ -397,6 +431,7 @@ private enum EstimateEditorDestination: Identifiable {
     case savedItems
     case saveTemplate(Estimate)
     case saveLibraryItem(EstimateLineItem)
+    case priceReview(EstimateLineItem)
     case copy(Estimate)
 
     var id: String {
@@ -410,6 +445,7 @@ private enum EstimateEditorDestination: Identifiable {
         case .savedItems: "saved-items"
         case let .saveTemplate(estimate): "save-template-\(estimate.id)"
         case let .saveLibraryItem(item): "save-library-item-\(item.id)"
+        case let .priceReview(item): "price-review-\(item.id)"
         case let .copy(estimate): "copy-\(estimate.id)"
         }
     }

@@ -113,7 +113,7 @@ describe('estimate templates and saved pricing library', () => {
     await expect(library.saveItem(t.company.id, { ...input, quantity: 99999999, unit_cost: 9999999999 })).rejects.toMatchObject({ statusCode: 400 });
     expect(await prisma.savedEstimateItem.count()).toBe(0); expect(await prisma.estimateLibraryOperation.count()).toBe(0);
     expect(saveItemSchema.safeParse({ ...input, tax_rate: 8.25 }).success).toBe(false);
-    expect(saveItemSchema.safeParse({ ...input, markup_percent: 1000 }).success).toBe(false);
+    expect(saveItemSchema.safeParse({ ...input, markup_percent: 1000.01 }).success).toBe(false);
   });
 
   it('fails corrupt snapshot hierarchy atomically without claiming a number', async () => {

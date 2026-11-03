@@ -118,5 +118,8 @@ jobs:
       - name: Run saved estimate library regressions
         run: scripts/tests/run-estimate-library-regressions.sh
 
+      - name: Run contractor price review regressions
+        run: scripts/tests/run-estimate-price-review-regressions.sh
+
       - name: Run job cost and receipt regressions
         run: scripts/tests/run-job-cost-regressions.sh

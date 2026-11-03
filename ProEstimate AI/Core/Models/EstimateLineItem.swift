@@ -19,6 +19,12 @@ struct EstimateLineItem: Codable, Identifiable, Hashable, Sendable {
     let taxRate: Decimal
     let lineTotal: Decimal
     let sortOrder: Int
+    var priceOrigin: String? = nil
+    var priceSourceLabel: String? = nil
+    var priceSourceUrl: String? = nil
+    var priceCheckedAt: Date? = nil
+    var quantityBasis: String? = nil
+    var quantityCheckedAt: Date? = nil
 
     // MARK: - Nested Enums
 
@@ -45,6 +51,8 @@ struct EstimateLineItem: Codable, Identifiable, Hashable, Sendable {
         case taxRate = "tax_rate"
         case lineTotal = "line_total"
         case sortOrder = "sort_order"
+        case priceOrigin = "price_origin", priceSourceLabel = "price_source_label", priceSourceUrl = "price_source_url"
+        case priceCheckedAt = "price_checked_at", quantityBasis = "quantity_basis", quantityCheckedAt = "quantity_checked_at"
     }
 
     init(
@@ -107,6 +115,12 @@ struct EstimateLineItem: Codable, Identifiable, Hashable, Sendable {
         self.taxRate = wireTax > 1 ? wireTax : wireTax * 100
         self.lineTotal = try c.decode(Decimal.self, forKey: .lineTotal)
         self.sortOrder = try c.decode(Int.self, forKey: .sortOrder)
+        self.priceOrigin = try c.decodeIfPresent(String.self, forKey: .priceOrigin)
+        self.priceSourceLabel = try c.decodeIfPresent(String.self, forKey: .priceSourceLabel)
+        self.priceSourceUrl = try c.decodeIfPresent(String.self, forKey: .priceSourceUrl)
+        self.priceCheckedAt = try c.decodeIfPresent(Date.self, forKey: .priceCheckedAt)
+        self.quantityBasis = try c.decodeIfPresent(String.self, forKey: .quantityBasis)
+        self.quantityCheckedAt = try c.decodeIfPresent(Date.self, forKey: .quantityCheckedAt)
     }
 
     /// Symmetric encoder — converts `tax_rate` back to a fraction on the
@@ -128,12 +142,27 @@ struct EstimateLineItem: Codable, Identifiable, Hashable, Sendable {
         try c.encode(taxRate / 100, forKey: .taxRate)
         try c.encode(lineTotal, forKey: .lineTotal)
         try c.encode(sortOrder, forKey: .sortOrder)
+        try c.encodeIfPresent(priceOrigin, forKey: .priceOrigin)
+        try c.encodeIfPresent(priceSourceLabel, forKey: .priceSourceLabel)
+        try c.encodeIfPresent(priceSourceUrl, forKey: .priceSourceUrl)
+        try c.encodeIfPresent(priceCheckedAt, forKey: .priceCheckedAt)
+        try c.encodeIfPresent(quantityBasis, forKey: .quantityBasis)
+        try c.encodeIfPresent(quantityCheckedAt, forKey: .quantityCheckedAt)
     }
 }
 
 // MARK: - Convenience
 
 extension EstimateLineItem {
+    var priceOriginLabel: String {
+        switch priceOrigin {
+        case "ai_suggested": "AI suggested"
+        case "contractor_entered": "Contractor entered"
+        case "saved_item": "Saved company item"
+        case "template", "copied_estimate": "Copied prices"
+        default: "Price source not recorded"
+        }
+    }
     /// Base cost before markup (quantity * unitCost).
     var baseCost: Decimal {
         quantity * unitCost

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Estimate, LineItemCategory, Prisma, ProjectType, SavedEstimateItem } from '@prisma/client';
+import { LineItemCategory, Prisma, ProjectType, SavedEstimateItem } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../config/database';
 import { ConflictError, NotFoundError, ValidationError } from '../../lib/errors';
@@ -142,7 +142,7 @@ function storedMoney(input: { quantity: string | number; unit_cost: string | num
   const taxRate = new Prisma.Decimal(input.tax_rate).toDecimalPlaces(4);
   const lineTotal = quantity.times(unitCost).times(markupPercent.div(100).plus(1)).toDecimalPlaces(2);
   if (quantity.lte(0) || quantity.gt('99999999.99') || unitCost.lt(0) || unitCost.gt('9999999999.99') || markupPercent.lt(0)
-    || markupPercent.gt('999.99') || taxRate.lt(0) || taxRate.gt(1) || lineTotal.gt('9999999999.99'))
+    || markupPercent.gt('1000') || taxRate.lt(0) || taxRate.gt(1) || lineTotal.gt('9999999999.99'))
     throw new ValidationError('The saved item quantity, price, markup or total exceeds the supported range.');
   return { quantity, unitCost, markupPercent, taxRate, lineTotal };
 }
@@ -180,6 +180,8 @@ async function materialize(tx: Prisma.TransactionClient, companyId: string, user
       unit: item.unit, itemType: item.item_type, sortOrder: item.sort_order, ...storedMoney(item),
       // Cross-job AI provenance and source links intentionally do not travel.
       sourceMaterialSuggestionId: null,
+      priceOrigin: "COPIED_ESTIMATE",
+      priceSourceLabel: "Copied scope and prices; confirm for this job",
     } });
     copies.set(item.key, copy.id);
   }
@@ -249,6 +251,7 @@ export async function applyItem(companyId: string, itemId: string, data: { reque
       const order = await tx.estimateLineItem.aggregate({ where: { estimateId: estimate.id }, _max: { sortOrder: true } });
       const result = await tx.estimateLineItem.create({ data: {
         estimateId: estimate.id, category: item.category, name: item.name, description: item.description, unit: item.unit,
+        priceOrigin: "SAVED_ITEM", priceSourceLabel: "Saved company item; confirm current pricing",
         itemType: item.itemType, sortOrder: (order._max.sortOrder ?? -1) + 1,
         ...storedMoney({ quantity: item.quantity.toString(), unit_cost: item.unitCost.toString(), markup_percent: item.markupPercent.toString(), tax_rate: item.taxRate.toString() }),
       } });
