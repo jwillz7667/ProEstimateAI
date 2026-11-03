@@ -10,8 +10,8 @@ final class EstimateCreationViewModel {
         case checkEstimates
     }
 
-    var draft = EstimateCreationDraft()
-    var selectedClient: Client?
+    var draft = EstimateCreationDraft() { didSet { queueDraftSave() } }
+    var selectedClient: Client? { didSet { queueDraftSave() } }
     private(set) var clients: [Client] = []
     private(set) var isLoadingClients = false
     private(set) var clientsError: String?
@@ -23,17 +23,39 @@ final class EstimateCreationViewModel {
     private(set) var recovery = Recovery.none
     private(set) var errorMessage: String?
     private(set) var lastError: (any Error)?
+    private(set) var hasRecoverableDraft = false
+    var canResumeRecoveredDraft: Bool { pendingCheckpoint != nil }
+    private(set) var recoveredDraftNotice: String?
+    private(set) var draftSaveError: String?
+    private(set) var restoreNeedsConfirmation = false
+    private(set) var isDraftSavedOnDevice = false
     private var companyId: String?
     private var workspaceRevision = 0
     private let service: any EstimateCreationServing
+    private let draftStore: (any EstimateDraftPersisting)?
+    private var draftScope: EstimateDraftScope?
+    private var writerSessionId: UUID?
+    private var checkpointPhase = EstimateDraftCheckpoint.Phase.draft
+    private var templateRequestId = UUID().uuidString
+    private var pendingCheckpoint: EstimateDraftCheckpoint?
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var applyingCheckpoint = false
+    @ObservationIgnored private var finishedDraft = false
 
-    init(service: any EstimateCreationServing) { self.service = service }
+    init(service: any EstimateCreationServing, draftStore: (any EstimateDraftPersisting)? = nil) {
+        self.service = service
+        self.draftStore = draftStore
+    }
 
     var inputsLocked: Bool { isCreating || createdProject != nil || recovery == .checkProjects }
-    var canCreate: Bool { !isCreating && !isRecovering && recovery == .none && createdEstimate == nil }
+    var canCreate: Bool {
+        !isCreating && !isRecovering && recovery == .none && createdEstimate == nil && !hasRecoverableDraft
+            && (draftStore == nil || writerSessionId != nil)
+    }
 
     func loadClients(companyId: String) async {
         if self.companyId != companyId {
+            if self.companyId != nil { resetWorkspaceMemory() }
             self.companyId = companyId
             workspaceRevision += 1
             clients = []
@@ -54,6 +76,110 @@ final class EstimateCreationViewModel {
             guard revision == workspaceRevision, !Task.isCancelled else { return }
             clientsError = "Clients couldn't be loaded. You can retry or add a new client."
         }
+    }
+
+    /// Offer restoration without overwriting any text typed while loading.
+    /// Existing saved work is retained until the user chooses resume or discard.
+    func restoreDraft(userId: String, companyId: String) async {
+        guard let draftStore, self.companyId == companyId, !isCreating, !Task.isCancelled else { return }
+        let scope = EstimateDraftScope(userId: userId, companyId: companyId)
+        guard scope != draftScope else { return }
+        if let previous = draftScope, previous.userId != userId { resetWorkspaceMemory() }
+        saveTask?.cancel()
+        draftScope = scope
+        finishedDraft = false
+        do {
+            let sessionId = try await draftStore.openSession(scope: scope)
+            guard draftScope == scope, !Task.isCancelled else { return }
+            writerSessionId = sessionId
+            let saved = try await draftStore.load(scope: scope)
+            guard draftScope == scope, !Task.isCancelled else { return }
+            pendingCheckpoint = saved
+            hasRecoverableDraft = saved != nil
+            recoveredDraftNotice = saved.map { "Saved draft: \($0.draft.trimmedTitle.isEmpty ? "Untitled estimate" : $0.draft.trimmedTitle)" }
+            draftSaveError = nil
+        } catch {
+            guard draftScope == scope, !Task.isCancelled else { return }
+            hasRecoverableDraft = true
+            recoveredDraftNotice = "The saved draft needs attention."
+            draftSaveError = "The saved draft couldn't be read. Your server projects are still available. \(error.localizedDescription)"
+        }
+    }
+
+    @discardableResult
+    func resumeRecoveredDraft(replacingCurrentInputs: Bool = false) -> Bool {
+        guard let saved = pendingCheckpoint, saved.scope == draftScope, !isCreating else { return false }
+        let hasInput = draft != EstimateCreationDraft() || selectedClient != nil
+        if hasInput && !replacingCurrentInputs {
+            restoreNeedsConfirmation = true
+            return false
+        }
+        applyingCheckpoint = true
+        defer { applyingCheckpoint = false }
+        draft = saved.draft
+        selectedClient = clients.first { $0.id == saved.selectedClientId }
+        createdProject = saved.project
+        createdEstimate = saved.estimate
+        checkpointPhase = saved.phase
+        templateRequestId = saved.templateRequestId
+        switch saved.phase {
+        case .draft, .projectSaved, .estimateSaved: recovery = .none
+        case .projectWritePending: recovery = .checkProjects
+        case .estimateWritePending: recovery = draft.method == .template ? .none : .checkEstimates
+        }
+        errorMessage = recovery == .none ? nil : "A previous save wasn't confirmed. Check the saved work before creating another copy."
+        pendingCheckpoint = nil
+        hasRecoverableDraft = false
+        restoreNeedsConfirmation = false
+        recoveredDraftNotice = "Recovered your saved draft."
+        isDraftSavedOnDevice = true
+        return true
+    }
+
+    /// This discards only the local recovery copy; confirmed server projects
+    /// and estimates remain available in Projects.
+    func startNewDraft() async {
+        guard !isCreating else { return }
+        saveTask?.cancel()
+        if let scope = draftScope, let session = writerSessionId, let draftStore {
+            do { try await draftStore.remove(scope: scope, sessionId: session) }
+            catch { draftSaveError = "The local draft couldn't be removed. \(error.localizedDescription)"; return }
+        }
+        applyingCheckpoint = true
+        draft = EstimateCreationDraft()
+        selectedClient = nil
+        createdProject = nil
+        createdEstimate = nil
+        recoveredEstimates = []
+        checkpointPhase = .draft
+        templateRequestId = UUID().uuidString
+        recovery = .none
+        errorMessage = nil
+        lastError = nil
+        pendingCheckpoint = nil
+        hasRecoverableDraft = false
+        restoreNeedsConfirmation = false
+        recoveredDraftNotice = nil
+        draftSaveError = nil
+        isDraftSavedOnDevice = false
+        finishedDraft = false
+        applyingCheckpoint = false
+    }
+
+    func saveDraftNow() async {
+        saveTask?.cancel()
+        guard !finishedDraft, !hasRecoverableDraft, !applyingCheckpoint,
+              draft != EstimateCreationDraft() || selectedClient != nil || createdProject != nil else { return }
+        do { try await persistCheckpoint(checkpointPhase) }
+        catch { draftSaveError = "Your latest changes couldn't be saved on this device. \(error.localizedDescription)" }
+    }
+
+    func finishDraft() async {
+        saveTask?.cancel()
+        finishedDraft = true
+        guard let draftStore, let scope = draftScope, let session = writerSessionId else { return }
+        do { try await draftStore.remove(scope: scope, sessionId: session) }
+        catch { draftSaveError = "The recovery copy couldn't be cleared. The saved estimate is safe on the server." }
     }
 
     func selectClient(_ client: Client?) {
@@ -87,6 +213,7 @@ final class EstimateCreationViewModel {
         defer { isCreating = false }
         do {
             if createdProject == nil {
+                try await persistCheckpoint(.projectWritePending)
                 let project = try await service.createProject(request: input.projectRequest(clientId: clientId, language: language))
                 guard revision == workspaceRevision, project.companyId == companyId else {
                     recovery = .checkProjects
@@ -94,31 +221,101 @@ final class EstimateCreationViewModel {
                     return false
                 }
                 createdProject = project
+                try await persistCheckpoint(.projectSaved)
             }
             guard let project = createdProject, project.companyId == companyId else { return false }
             try Task.checkCancellation()
-            let estimate = try await service.createEstimate(projectId: project.id, title: input.trimmedTitle, method: input.method)
+            try await persistCheckpoint(.estimateWritePending)
+            let estimate: Estimate
+            if input.method == .template, let templateId = input.templateId {
+                estimate = try await service.createEstimateFromTemplate(projectId: project.id, title: input.trimmedTitle,
+                    templateId: templateId, requestId: templateRequestId)
+            } else {
+                estimate = try await service.createEstimate(projectId: project.id, title: input.trimmedTitle, method: input.method)
+            }
             guard revision == workspaceRevision, estimate.projectId == project.id, estimate.companyId == companyId else {
                 recovery = .checkEstimates
                 errorMessage = "The estimate couldn't be matched to this project. Check its saved estimates before creating another."
                 return false
             }
             createdEstimate = estimate
+            // The result is already confirmed. A failed local journal update
+            // must not hide the successfully created server estimate.
+            do { try await persistCheckpoint(.estimateSaved) }
+            catch { draftSaveError = "The estimate is saved on the server, but its local recovery copy couldn't be updated." }
             return true
         } catch {
             lastError = error
             let uncertain = (error as? any EstimateCreationFailureClassifying)?.creationWriteIsUnconfirmed ?? true
-            if uncertain {
+            if uncertain, input.method == .template, createdProject != nil {
+                recovery = .none
+                errorMessage = "The template estimate couldn't be confirmed. Retry safely to retrieve the same estimate; the request ID is preserved."
+            } else if uncertain {
                 recovery = createdProject == nil ? .checkProjects : .checkEstimates
                 errorMessage = createdProject == nil
                     ? "We couldn't confirm whether the project was saved. Check Projects before creating another."
                     : "Your project is saved. We couldn't confirm the estimate yet; check its saved estimates before trying again."
             } else {
+                checkpointPhase = createdProject == nil ? .draft : .projectSaved
+                try? await persistCheckpoint(checkpointPhase)
                 errorMessage = createdProject == nil
                     ? error.localizedDescription
                     : "Your project is saved. \(error.localizedDescription) You can retry this step without creating another project."
             }
             return false
+        }
+    }
+
+    private func queueDraftSave() {
+        guard draftStore != nil, draftScope != nil, !applyingCheckpoint, !finishedDraft, !hasRecoverableDraft else { return }
+        saveTask?.cancel()
+        isDraftSavedOnDevice = false
+        saveTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .milliseconds(300)) }
+            catch { return }
+            self?.saveTask = nil
+            await self?.saveDraftNow()
+        }
+    }
+
+    private func resetWorkspaceMemory() {
+        saveTask?.cancel()
+        applyingCheckpoint = true
+        draft = EstimateCreationDraft()
+        selectedClient = nil
+        createdProject = nil
+        createdEstimate = nil
+        recoveredEstimates = []
+        recovery = .none
+        checkpointPhase = .draft
+        templateRequestId = UUID().uuidString
+        pendingCheckpoint = nil
+        hasRecoverableDraft = false
+        recoveredDraftNotice = nil
+        draftSaveError = nil
+        errorMessage = nil
+        lastError = nil
+        draftScope = nil
+        writerSessionId = nil
+        finishedDraft = false
+        isDraftSavedOnDevice = false
+        applyingCheckpoint = false
+    }
+
+    private func persistCheckpoint(_ phase: EstimateDraftCheckpoint.Phase) async throws {
+        saveTask?.cancel()
+        checkpointPhase = phase
+        guard let draftStore, let scope = draftScope, let session = writerSessionId else { return }
+        guard scope.companyId == companyId, !finishedDraft else { throw EstimateDraftCheckpointFailure() }
+        let checkpoint = EstimateDraftCheckpoint(scope: scope, draft: draft, selectedClientId: selectedClient?.id,
+            project: createdProject, estimate: createdEstimate, phase: phase,
+            templateRequestId: templateRequestId, savedAt: Date())
+        do {
+            try await draftStore.save(checkpoint, sessionId: session)
+            draftSaveError = nil
+            isDraftSavedOnDevice = true
+        } catch {
+            throw EstimateDraftCheckpointFailure()
         }
     }
 
@@ -142,8 +339,15 @@ final class EstimateCreationViewModel {
               recoveredEstimates.contains(where: { $0.id == estimate.id }),
               estimate.projectId == project.id, estimate.companyId == project.companyId else { return false }
         createdEstimate = estimate
+        checkpointPhase = .estimateSaved
         recovery = .none
         errorMessage = nil
+        Task { await saveDraftNow() }
         return true
     }
+}
+
+private struct EstimateDraftCheckpointFailure: LocalizedError, EstimateCreationFailureClassifying {
+    var creationWriteIsUnconfirmed: Bool { false }
+    nonisolated var errorDescription: String? { "The draft couldn't be secured on this device. Check device storage and try again." }
 }

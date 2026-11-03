@@ -123,6 +123,7 @@ struct EstimateCreationRegressionTests {
         try expect(model.clients.isEmpty, "Client lists must reject another tenant's response")
         model.selectClient(Client.sample)
         try expect(model.selectedClient == nil, "A stale client cannot be selected in another company")
+        model.draft.title = "New workspace quote"
         _ = await model.create(companyId: "another-company", language: "en")
         try expect(model.createdProject == nil && model.recovery == .checkProjects, "A mismatched create response must not publish another company's project")
         try expect(service.estimateCalls == 0, "Tenant mismatches cannot progress into estimate creation")
@@ -172,4 +173,7 @@ private final class FakeCreationService: EstimateCreationServing, @unchecked Sen
         return Estimate.sample
     }
     func listEstimates(projectId: String) async throws -> [Estimate] { estimates }
+    func createEstimateFromTemplate(projectId: String, title: String, templateId: String, requestId: String) async throws -> Estimate {
+        try await createEstimate(projectId: projectId, title: title, method: .template)
+    }
 }

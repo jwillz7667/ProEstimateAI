@@ -6,4 +6,5 @@ protocol EstimateEditing: Sendable {
     func addLineItem(estimateId: String, request: EstimateLineItemEditRequest) async throws
     func updateLineItem(id: String, request: EstimateLineItemEditRequest) async throws
     func removeLineItem(id: String) async throws
+    func updateDocument(estimateId: String, request: EstimateDocumentEditRequest) async throws
 }

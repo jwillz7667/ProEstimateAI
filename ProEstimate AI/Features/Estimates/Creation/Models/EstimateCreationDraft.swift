@@ -1,18 +1,26 @@
 import Foundation
 
-enum EstimateCreationMethod: String, CaseIterable, Identifiable, Sendable {
+enum EstimateCreationMethod: String, Codable, CaseIterable, Identifiable, Sendable {
     case manual
     case ai
+    case template
 
     var id: String { rawValue }
-    var title: String { self == .manual ? "Manual" : "AI estimate · Pro" }
+    var title: String {
+        switch self {
+        case .manual: "Manual"
+        case .ai: "AI estimate · Pro"
+        case .template: "Template"
+        }
+    }
 }
 
-struct EstimateCreationDraft: Equatable, Sendable {
+struct EstimateCreationDraft: Codable, Equatable, Sendable {
     var title = ""
     var projectType: Project.ProjectType = .handyman
     var scope = ""
     var method: EstimateCreationMethod = .manual
+    var templateId: String?
 
     var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedScope: String { scope.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -24,6 +32,7 @@ struct EstimateCreationDraft: Equatable, Sendable {
         if method == .ai && trimmedScope.count < 20 {
             return "Describe the work in a little more detail so AI can build a useful draft."
         }
+        if method == .template && templateId?.isEmpty != false { return "Choose a saved estimate template." }
         return nil
     }
 
@@ -49,5 +58,6 @@ protocol EstimateCreationServing: Sendable {
     func listClients() async throws -> [Client]
     func createProject(request: ProjectCreationRequest) async throws -> Project
     func createEstimate(projectId: String, title: String, method: EstimateCreationMethod) async throws -> Estimate
+    func createEstimateFromTemplate(projectId: String, title: String, templateId: String, requestId: String) async throws -> Estimate
     func listEstimates(projectId: String) async throws -> [Estimate]
 }

@@ -21,6 +21,8 @@ struct EstimateEditorRegressionTests {
         try await confirmedWriteWithFailedRefresh()
         try await partialReadDoesNotPublish()
         try await doubleTapIsSingleWrite()
+        try documentValidationAndSerialization()
+        try await documentEditingRecovery()
         print("PASS: \(checks) estimate editor checks (validation, tax scaling, canonical totals, lifecycle, ambiguous writes and refresh recovery).")
     }
 
@@ -179,6 +181,65 @@ struct EstimateEditorRegressionTests {
         try expect(!second && service.adds == 1, "A second tap during a mutation must not send another write")
     }
 
+    static func documentValidationAndSerialization() throws {
+        var form = EstimateDocumentForm(estimate: Estimate.sample, locale: us)
+        form.title = "  Hallway scope  "
+        form.notes = ""
+        form.assumptions = "Existing wall is sound."
+        form.exclusions = "Hidden structural repairs"
+        form.discount = "50.25"
+        form.hasValidUntil = false
+        let request = try form.validatedRequest(estimate: Estimate.sample, locale: us)
+        let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as! [String: Any]
+        try expect(request.title == "Hallway scope", "Document titles must trim surrounding whitespace")
+        try expect(object["notes"] is NSNull && object["valid_until"] is NSNull, "Cleared document fields must send explicit nulls")
+        try expect((object["discount_amount"] as? NSNumber)?.decimalValue == Decimal(string: "50.25"), "Discount is a money amount, not a percentage")
+        try expect(object["total_amount"] == nil && object["status"] == nil && object["company_id"] == nil, "Document editing must not send server totals, lifecycle or ownership")
+        let badValues: [(WritableKeyPath<EstimateDocumentForm, String>, String)] = [
+            (\.title, String(repeating: "😀", count: 251)), (\.notes, String(repeating: "x", count: 10001)),
+            (\.assumptions, String(repeating: "x", count: 50001)), (\.exclusions, String(repeating: "x", count: 50001)),
+            (\.discount, "-1"), (\.discount, "1.001"), (\.discount, "10000000000"),
+            (\.discount, "999999"), (\.discount, "25 dollars")
+        ]
+        for (key, bad) in badValues {
+            var invalid = form
+            invalid[keyPath: key] = bad
+            do { _ = try invalid.validatedRequest(estimate: Estimate.sample, locale: us); throw Failure(description: "Invalid document input accepted") }
+            catch is EstimateEditError { checks += 1 }
+        }
+        form.title = ""
+        form.discount = "50,25"
+        let localized = try form.validatedRequest(estimate: Estimate.sample, locale: Locale(identifier: "de_DE"))
+        try expect(localized.title == nil && localized.discountAmount == Decimal(string: "50.25"), "Localized discounts and fallback document numbers must remain usable")
+        do {
+            _ = try form.validatedRequest(estimate: document(status: .sent), locale: us)
+            throw Failure(description: "A sent document was editable")
+        } catch is EstimateEditError { checks += 1 }
+    }
+
+    static func documentEditingRecovery() async throws {
+        let service = FakeEstimateEditingService()
+        let model = EstimateEditorViewModel(estimateId: Estimate.sample.id, service: service)
+        await model.load()
+        var form = EstimateDocumentForm(estimate: model.estimate!, locale: us)
+        form.notes = "Include cleanup and disposal."
+        let saved = await model.saveDocument(form: form, locale: us)
+        try expect(saved && service.documentUpdates == 1, "A valid detail save must update one draft")
+        try expect(model.estimate?.notes == form.notes && model.estimate?.totalAmount == 888, "The refreshed server document and total must be authoritative")
+        service.throwAfterDocument = true
+        form.notes = "Updated saved scope"
+        let unknown = await model.saveDocument(form: form, locale: us)
+        try expect(!unknown && model.requiresRefresh && !model.canEdit, "An ambiguous detail save must block repeated edits")
+        _ = await model.saveDocument(form: form, locale: us)
+        try expect(service.documentUpdates == 2, "Unconfirmed detail writes must not be blindly repeated")
+        await model.load()
+        try expect(model.canEdit && model.estimate?.notes == "Updated saved scope", "Refreshing must recover an accepted detail write")
+        service.document = document(status: .approved)
+        await model.load()
+        _ = await model.saveDocument(form: form, locale: us)
+        try expect(service.documentUpdates == 2, "Locked estimates require a revision before document edits")
+    }
+
     static func document(status: Estimate.Status = .draft, total: Decimal = Estimate.sample.totalAmount) -> Estimate {
         let s = Estimate.sample
         return Estimate(id: s.id, projectId: s.projectId, companyId: s.companyId,
@@ -217,6 +278,8 @@ final class FakeEstimateEditingService: EstimateEditing {
     var failReads = false
     var failItems = false
     var delayWrites = false
+    var documentUpdates = 0
+    var throwAfterDocument = false
 
     func getEstimate(id: String) async throws -> Estimate {
         documentReads += 1
@@ -247,6 +310,15 @@ final class FakeEstimateEditingService: EstimateEditing {
         removes += 1
         items.removeAll { $0.id == id }
         document = EstimateEditorRegressionTests.document(total: 333)
+    }
+    func updateDocument(estimateId: String, request: EstimateDocumentEditRequest) async throws {
+        documentUpdates += 1
+        var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(document)) as! [String: Any]
+        let changes = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as! [String: Any]
+        for (key, value) in changes { object[key] = value }
+        object["total_amount"] = 888
+        document = try JSONDecoder().decode(Estimate.self, from: JSONSerialization.data(withJSONObject: object))
+        if throwAfterDocument { throw URLError(.timedOut) }
     }
 }
 

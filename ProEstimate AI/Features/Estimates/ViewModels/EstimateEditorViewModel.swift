@@ -87,6 +87,26 @@ final class EstimateEditorViewModel {
         }
     }
 
+    func saveDocument(form: EstimateDocumentForm, locale: Locale = .current) async -> Bool {
+        guard canEdit, let estimate else { return false }
+        let request: EstimateDocumentEditRequest
+        do { request = try form.validatedRequest(estimate: estimate, locale: locale) }
+        catch { errorMessage = error.localizedDescription; return false }
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+        do {
+            try await service.updateDocument(estimateId: estimateId, request: request)
+            requiresRefresh = true
+            if !(await readSnapshot()) { errorMessage = "Details were saved. Refresh to review the current document and total." }
+            return true
+        } catch {
+            requiresRefresh = true
+            errorMessage = "The saved details couldn't be confirmed. Reload and review them before trying again. \(error.localizedDescription)"
+            return false
+        }
+    }
+
     private func readSnapshot() async -> Bool {
         do {
             async let document = service.getEstimate(id: estimateId)

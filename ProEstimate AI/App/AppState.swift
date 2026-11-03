@@ -96,6 +96,9 @@ final class AppState {
         entitlementStore: EntitlementStore? = nil,
         usageMeterStore: UsageMeterStore? = nil
     ) {
+        if let userId = currentUser?.id {
+            Task { try? await EstimateDraftStore.shared.purge(userId: userId) }
+        }
         let refreshToken = TokenStore.shared.clearTokens()
         if let refreshToken {
             // Revocation is best-effort and uses the captured token. Local

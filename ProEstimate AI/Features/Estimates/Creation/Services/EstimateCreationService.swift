@@ -20,11 +20,28 @@ struct EstimateCreationService: EstimateCreationServing {
         switch method {
         case .manual: return try await apiClient.request(.createEstimate(body: body))
         case .ai: return try await apiClient.request(.generateAIEstimate(body: body))
+        case .template: throw APIError.validation(fields: ["template_id": ["Choose an estimate template."]])
         }
+    }
+
+    func createEstimateFromTemplate(projectId: String, title: String, templateId: String, requestId: String) async throws -> Estimate {
+        try await apiClient.request(.instantiateEstimateTemplate(id: templateId,
+            body: EstimateTemplateCreationBody(projectId: projectId, title: title, requestId: requestId)))
     }
 
     func listEstimates(projectId: String) async throws -> [Estimate] {
         try await apiClient.request(.listEstimates(projectId: projectId))
+    }
+}
+
+private struct EstimateTemplateCreationBody: Encodable, Sendable {
+    let projectId: String
+    let title: String
+    let requestId: String
+    enum CodingKeys: String, CodingKey {
+        case projectId = "project_id"
+        case title
+        case requestId = "request_id"
     }
 }
 

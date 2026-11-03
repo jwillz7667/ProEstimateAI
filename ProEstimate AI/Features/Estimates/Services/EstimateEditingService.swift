@@ -26,4 +26,8 @@ struct EstimateEditingService: EstimateEditing {
     func removeLineItem(id: String) async throws {
         try await apiClient.request(.deleteEstimateLineItem(id: id)) as Void
     }
+
+    func updateDocument(estimateId: String, request: EstimateDocumentEditRequest) async throws {
+        let _: Estimate = try await apiClient.request(.updateEstimate(id: estimateId, body: request))
+    }
 }
