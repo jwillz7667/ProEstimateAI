@@ -1,8 +1,9 @@
-This update fixes image comparison and subscription access.
+A clearer Home and a simpler project workflow.
 
-• Slide before/after images fully edge to edge, including full-screen comparison.
-• Create manual projects and view saved work without upgrading.
-• AI features require Pro or an active Apple trial; eligible new subscribers can start a three-day trial.
-• Improved purchase recovery and retry handling when the App Store is unavailable.
+• Start a project from one clear action and return to recent work with readable status.
+• Set up most projects in two steps, with optional details tucked away until you need them.
+• Create manual estimates directly, review saved line items and edit draft quantities, prices, markup and tax.
+• Keep estimate review separate from PDF export, proposal sharing and invoicing.
+• More useful layouts on iPhone and iPad, with improved loading and error handling.
 
-Cloud service update: The app uses a new cloud service. If your previous login is not recognized, create an account and restore active App Store purchases. Previous cloud projects and invoices have not been transferred.
+Basic project access and manual estimates remain free. AI requires Pro or an active Apple trial; eligible new subscribers can start a three-day trial.

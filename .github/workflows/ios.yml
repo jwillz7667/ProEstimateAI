@@ -93,3 +93,12 @@ jobs:
 
       - name: Run model and pagination regressions
         run: scripts/tests/run-ios-regressions.sh
+
+      - name: Run Home state regressions
+        run: scripts/tests/run-dashboard-regressions.sh
+
+      - name: Run project setup navigation regressions
+        run: scripts/tests/run-project-creation-navigation.sh
+
+      - name: Run manual estimate editing regressions
+        run: scripts/tests/run-estimate-editor-regressions.sh

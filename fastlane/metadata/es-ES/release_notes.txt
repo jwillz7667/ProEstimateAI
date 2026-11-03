@@ -1,8 +1,9 @@
-Esta actualización mejora la comparación de imágenes y el acceso a Pro.
+Una pantalla de inicio más clara y un flujo de proyectos más sencillo.
 
-• Desliza la comparación antes/después de un extremo al otro, también en pantalla completa.
-• Crea proyectos manuales y consulta tu trabajo guardado sin suscribirte.
-• Las funciones de IA requieren Pro o una prueba de Apple activa; los nuevos suscriptores elegibles pueden probar Pro durante tres días.
-• Mejor recuperación de compras y reintentos cuando el App Store no responde.
+• Inicia un proyecto con una acción principal y retoma el trabajo reciente con estados fáciles de leer.
+• Configura la mayoría de los proyectos en dos pasos, con los detalles opcionales disponibles cuando los necesites.
+• Crea presupuestos manuales, revisa sus partidas y edita cantidades, precios, margen e impuestos en los borradores.
+• Revisa los presupuestos por separado de la exportación de PDF, las propuestas y la facturación.
+• Diseño más útil en iPhone y iPad, con mejoras en la carga y la gestión de errores.
 
-Actualización del servicio en la nube: La app usa un nuevo servicio. Si tu acceso anterior no se reconoce, crea una cuenta y restaura tus compras activas del App Store. Los proyectos y las facturas anteriores no se han transferido.
+El acceso básico y los presupuestos manuales siguen siendo gratuitos. La IA requiere Pro o una prueba activa de Apple. Los nuevos suscriptores que cumplan los requisitos pueden iniciar una prueba de tres días.
