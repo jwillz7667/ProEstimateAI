@@ -13,7 +13,7 @@ module ListingScreenshots
     "ipad-13" => [2064, 2752],
     "ipad-11" => [1668, 2420]
   }.freeze
-  CAMPAIGN = "artifacts/app-store-listing/2026-10-30".freeze
+  CAMPAIGN = "artifacts/app-store-listing/2026-11-03".freeze
   PNG_SIGNATURE = "\x89PNG\r\n\x1a\n".b.freeze
 
   def self.prepare(root:)
@@ -25,7 +25,7 @@ module ListingScreenshots
       family = families.first
       raise "Incorrect manifest dimensions for #{id}" unless [family.fetch("width"), family.fetch("height")] == dimensions
       paths = family.fetch("files")
-      raise "Expected three ordered screenshots for #{id}" unless paths.length == 3 && paths.map { |path| File.basename(path)[0, 2] } == %w[01 02 03]
+      raise "Expected five ordered screenshots for #{id}" unless paths.length == 5 && paths.map { |path| File.basename(path)[0, 2] } == %w[01 02 03 04 05]
 
       paths.map do |relative_path|
         path = File.realpath(File.join(source, relative_path))
@@ -36,8 +36,8 @@ module ListingScreenshots
     end
 
     # The 2048 × 2732 export and 2064 × 2752 export share Apple's iPad
-    # 12.9/13-inch bucket. Upload only the latter, keeping three panels per
-    # bucket and preserving their continuous background in 01 → 02 → 03 order.
+    # 12.9/13-inch bucket. Upload only the latter, keeping five panels per
+    # bucket and preserving their continuous background in 01 → 02 → 03 → 04 → 05 order.
     build = File.join(root, "build")
     FileUtils.mkdir_p(build)
     destination = Dir.mktmpdir("listing-screenshots-", build)

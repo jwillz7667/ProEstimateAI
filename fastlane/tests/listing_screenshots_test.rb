@@ -7,7 +7,7 @@ class ListingScreenshotsTest < ReleaseAssertions
     @campaign = File.join(@root, ListingScreenshots::CAMPAIGN)
     FileUtils.mkdir_p(@campaign)
     @families = ListingScreenshots::FAMILIES.map do |id, dimensions|
-      files = (1..3).map do |index|
+      files = (1..5).map do |index|
         relative = "#{id}/#{format('%02d', index)}-panel.png"
         path = File.join(@campaign, relative)
         FileUtils.mkdir_p(File.dirname(path))
@@ -31,7 +31,7 @@ class ListingScreenshotsTest < ReleaseAssertions
     File.write(File.join(@campaign, "manifest.json"), JSON.generate("families" => @families))
   end
 
-  def test_stages_exactly_three_ordered_panels_per_display_bucket_in_each_locale
+  def test_stages_exactly_five_ordered_panels_per_display_bucket_in_each_locale
     # The optional 12.9-inch export must never join the same bucket as 13-inch.
     @families << { "id" => "ipad-12-9", "width" => 2048, "height" => 2732, "files" => ["not-selected.png"] }
     save_manifest
@@ -39,13 +39,20 @@ class ListingScreenshotsTest < ReleaseAssertions
     assert_equal ListingScreenshots::LOCALES.sort, Dir.children(path).sort
     ListingScreenshots::LOCALES.each do |locale|
       files = Dir.children(File.join(path, locale)).sort
-      assert_equal 15, files.length
+      assert_equal 25, files.length
       refute files.any? { |file| file.include?("ipad-12-9") }
       ListingScreenshots::FAMILIES.each_key do |family|
         selected = files.select { |file| file.start_with?(family + "-") }
-        assert_equal %w[01 02 03], selected.map { |file| file.delete_prefix(family + "-")[0, 2] }
+        assert_equal %w[01 02 03 04 05], selected.map { |file| file.delete_prefix(family + "-")[0, 2] }
       end
     end
+  end
+
+  def test_rejects_a_three_panel_regression_before_staging_any_files
+    @families.first["files"] = @families.first["files"].first(3)
+    save_manifest
+    assert_raises(RuntimeError) { ListingScreenshots.prepare(root: @root) }
+    refute File.exist?(File.join(@root, "build"))
   end
 
   def test_rejects_alpha_before_staging_any_files

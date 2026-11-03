@@ -1,0 +1,62 @@
+{
+  "checkedAt": "2026-11-03T09:47:40Z",
+  "stagedFiles": 125,
+  "locales": [
+    {
+      "locale": "en-US",
+      "files": 25,
+      "buckets": {
+        "iphone-dynamic-island-medium": 5,
+        "iphone-dynamic-island-large": 5,
+        "iphone-face-id-large": 5,
+        "ipad-13": 5,
+        "ipad-11": 5
+      }
+    },
+    {
+      "locale": "en-GB",
+      "files": 25,
+      "buckets": {
+        "iphone-dynamic-island-medium": 5,
+        "iphone-dynamic-island-large": 5,
+        "iphone-face-id-large": 5,
+        "ipad-13": 5,
+        "ipad-11": 5
+      }
+    },
+    {
+      "locale": "en-AU",
+      "files": 25,
+      "buckets": {
+        "iphone-dynamic-island-medium": 5,
+        "iphone-dynamic-island-large": 5,
+        "iphone-face-id-large": 5,
+        "ipad-13": 5,
+        "ipad-11": 5
+      }
+    },
+    {
+      "locale": "es-MX",
+      "files": 25,
+      "buckets": {
+        "iphone-dynamic-island-medium": 5,
+        "iphone-dynamic-island-large": 5,
+        "iphone-face-id-large": 5,
+        "ipad-13": 5,
+        "ipad-11": 5
+      }
+    },
+    {
+      "locale": "es-ES",
+      "files": 25,
+      "buckets": {
+        "iphone-dynamic-island-medium": 5,
+        "iphone-dynamic-island-large": 5,
+        "iphone-face-id-large": 5,
+        "ipad-13": 5,
+        "ipad-11": 5
+      }
+    }
+  ],
+  "appleWrites": false
+}
