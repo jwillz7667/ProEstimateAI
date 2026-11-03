@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { APIError } from "@/lib/api";
 import { getSharedInvoice, invoiceMoney, paymentMethodLabel, type SharedInvoice } from "@/lib/invoice";
 import { PrintInvoice } from "./PrintInvoice";
+import { InvoiceCheckoutButton } from "./InvoiceCheckoutButton";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -65,6 +66,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
           <div className="text-right"><p className="font-semibold">{money(item.amount)}</p><p className="mt-1 text-sm text-ink-500">{item.amount_due === 0 ? "Paid" : `${money(item.amount_due)} remaining`}</p></div>
         </li>)}</ul>
       </section> : null}
+      {!isVoid && !isPaid && data.online_payment?.available ? <InvoiceCheckoutButton token={token} processing={data.online_payment.processing}
+        label={data.installments.some(item => item.amount_due > 0) ? `Pay next scheduled amount ${money(data.installments.find(item => item.amount_due > 0)!.amount_due)}` : `Pay ${money(invoice.amount_due)}`}
+        accent={accent} testMode={data.online_payment.test_mode} /> : null}
+      {!isVoid && data.online_payment?.requires_contractor_review ? <section className="rounded-2xl border border-ink-200 bg-white p-6"><h2 className="text-xl font-semibold">Payment needs review</h2><p className="mt-2 text-ink-600">Contact {company.name} before making another online payment.</p></section> : null}
       {!isVoid && !isPaid && invoice.payment_instructions ? <section className="rounded-2xl border border-ink-200 bg-white p-6">
         <h2 className="text-xl font-semibold">How to pay</h2><p className="mt-3 whitespace-pre-wrap break-words text-ink-600">{invoice.payment_instructions}</p>
       </section> : null}

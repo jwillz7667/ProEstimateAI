@@ -12,6 +12,7 @@ export interface SharedInvoice {
   line_items: Array<{ name: string; description: string | null; quantity: number; unit: string; unit_cost: number; line_total: number }>;
   payments: Array<{ id: string; amount: number; method: string; recorded_at: string | null; created_at: string }>;
   installments: Array<{ id: string; title: string; amount: number; paid_amount: number; amount_due: number; due_date: string | null }>;
+  online_payment?: { available: boolean; processing: boolean; requires_contractor_review: boolean; test_mode?: boolean };
 }
 
 export function getSharedInvoice(token: string): Promise<SharedInvoice> {
@@ -28,6 +29,7 @@ export function paymentMethodLabel(method: string): string {
     cash: "Cash", check: "Check", bank_transfer: "Bank transfer", other: "Other payment",
     opening_balance: "Previous recorded balance", legacy_manual: "Recorded payment",
     balance_correction: "Balance correction", stripe: "Online payment",
+    stripe_refund: "Online payment refund",
   };
   return labels[method] ?? "Recorded payment";
 }

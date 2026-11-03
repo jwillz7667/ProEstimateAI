@@ -20,6 +20,7 @@ import {
 import { computeInvoiceTotals } from "../invoice-line-items/invoice-line-items.service";
 import { InvoiceStatus, Prisma } from "@prisma/client";
 import { recordLegacyBalanceChange } from "../invoice-finance/invoice-finance.service";
+import { assertNoActiveCheckout } from "../invoice-checkout/invoice-checkout.policy";
 
 /**
  * Paywall decision for INVOICE_LOCKED placement.
@@ -247,6 +248,36 @@ export async function createFromEstimate(
       throw new NotFoundError("Estimate", estimateId);
     }
 
+    // Conversion is one financial document per estimate, including retries
+    // from older clients without request UUIDs. A revised contract must not
+    // invoice its full value again after another version was already billed.
+    const existingInvoice = await tx.invoice.findFirst({ where: { estimateId: estimate.id, companyId, status: { not: 'VOID' } }, orderBy: { createdAt: 'asc' } });
+    if (existingInvoice) return existingInvoice;
+    const family = new Set<string>([estimate.id]);
+    let parentId = estimate.revisesEstimateId;
+    let rootId = estimate.id;
+    while (parentId) {
+      if (family.has(parentId) || family.size > 1000) throw new ConflictError('This estimate revision history needs review before invoicing.');
+      const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "Estimate" WHERE id = ${parentId} AND "companyId" = ${companyId} FOR UPDATE`;
+      if (!locked.length) throw new NotFoundError('Estimate', parentId);
+      const parent = await tx.estimate.findUniqueOrThrow({ where: { id: parentId }, select: { id: true, revisesEstimateId: true } });
+      family.add(parent.id); rootId = parent.id; parentId = parent.revisesEstimateId;
+    }
+    // The root lock serializes all conversions in a revision family. Include
+    // descendants too, so an older client cannot invoice an obsolete version
+    // immediately after a newer version was converted.
+    let frontier = [rootId];
+    const traversed = new Set<string>();
+    while (frontier.length) {
+      frontier.forEach(id => traversed.add(id));
+      const descendants = await tx.estimate.findMany({ where: { companyId, revisesEstimateId: { in: frontier } }, select: { id: true } });
+      frontier = descendants.map(item => item.id).filter(id => !traversed.has(id));
+      frontier.forEach(id => family.add(id));
+      if (family.size > 1000) throw new ConflictError('This estimate revision history needs review before invoicing.');
+    }
+    const billedVersion = await tx.invoice.findFirst({ where: { companyId, estimateId: { in: [...family] }, status: { not: 'VOID' } }, select: { id: true } });
+    if (billedVersion) throw new ConflictError('Another version of this estimate has already been invoiced. Use a separately approved change order for additional scope instead of billing the full contract again.');
+
     // An invoice requires a client (Invoice.clientId is non-null). Projects can
     // exist without one, so fail loudly rather than inventing a client.
     const clientId = estimate.project.clientId;
@@ -371,6 +402,18 @@ export async function update(
     `;
     if (rows.length === 0) throw new NotFoundError("Invoice", id);
     const existing = await tx.invoice.findUniqueOrThrow({ where: { id } });
+    await assertNoActiveCheckout(tx, id);
+    const headerFields = ['notes', 'proposal_id', 'issued_date', 'due_date', 'payment_instructions', 'currency_code', 'discount_amount'] as const;
+    if (existing.status !== 'DRAFT' && headerFields.some(field => data[field] !== undefined))
+      throw new ConflictError('The sent invoice and its agreed financial terms are read-only. Create a new invoice for revisions.');
+    if (existing.status !== 'DRAFT' && data.status === 'draft')
+      throw new ConflictError('A sent invoice cannot be reopened as a draft.');
+    if (existing.status === 'VOID' && (data.status !== undefined && data.status !== 'void' || data.amount_paid !== undefined))
+      throw new ConflictError('A void invoice cannot be reopened or paid.');
+    if (existing.status === 'DRAFT' && (data.amount_paid !== undefined && data.amount_paid > 0 || data.status === 'paid'))
+      throw new ConflictError('Send the invoice before recording a payment.');
+    if (data.status === 'void' && !existing.amountPaid.isZero())
+      throw new ConflictError('Review recorded payments and refunds before voiding this invoice.');
     if (
       data.expected_amount_paid !== undefined &&
       !existing.amountPaid.equals(
@@ -440,6 +483,9 @@ export async function update(
       data.discount_amount !== undefined ||
       data.amount_paid !== undefined ||
       data.status === "paid";
+    if (existing.status !== 'DRAFT' && existing.status !== 'VOID' && data.status !== 'void' && amountPaid > 0)
+      updateData.status = amountDue === 0 ? 'PAID' : 'PARTIALLY_PAID';
+    if (data.status === 'partially_paid' && amountPaid === 0) throw new ConflictError('A partially paid status requires a recorded payment.');
     if (financialChange) {
       updateData.discountAmount = discountAmount;
       updateData.totalAmount = totalAmount;
@@ -457,6 +503,7 @@ export async function update(
       }
     }
     const nextStatus = updateData.status ?? existing.status;
+    if (nextStatus === 'VOID') updateData.amountDue = 0;
     if (nextStatus === "PAID")
       updateData.paidAt = existing.paidAt ?? new Date();
     else if (data.status !== undefined || financialChange)
@@ -527,13 +574,14 @@ export async function send(
 }
 
 export async function remove(id: string, companyId: string) {
-  const existing = await prisma.invoice.findFirst({
-    where: { id, companyId },
+  await prisma.$transaction(async tx => {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "Invoice" WHERE id = ${id} AND "companyId" = ${companyId} FOR UPDATE`;
+    if (!rows.length) throw new NotFoundError('Invoice', id);
+    const invoice = await tx.invoice.findUniqueOrThrow({ where: { id } });
+    await assertNoActiveCheckout(tx, id);
+    const receipts = await tx.invoicePayment.count({ where: { invoiceId: id } });
+    if (invoice.status !== 'DRAFT' || receipts > 0 || !invoice.amountPaid.isZero())
+      throw new ConflictError('Only draft invoices with no payment history can be deleted. Sent invoices and receipts stay in your records.');
+    await tx.invoice.delete({ where: { id } });
   });
-
-  if (!existing) {
-    throw new NotFoundError("Invoice", id);
-  }
-
-  await prisma.invoice.delete({ where: { id } });
 }

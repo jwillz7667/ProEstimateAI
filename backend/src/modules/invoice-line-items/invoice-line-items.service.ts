@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { NotFoundError, ValidationError } from "../../lib/errors";
+import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors";
+import { assertNoActiveCheckout } from "../invoice-checkout/invoice-checkout.policy";
 import {
   CreateInvoiceLineItemInput,
   UpdateInvoiceLineItemInput,
@@ -39,10 +40,15 @@ async function lockInvoice(
     SELECT id FROM "Invoice" WHERE id = ${invoiceId} AND "companyId" = ${companyId} FOR UPDATE
   `;
   if (rows.length === 0) throw new NotFoundError("Invoice", invoiceId);
-  return tx.invoice.findUniqueOrThrow({
+  const invoice = await tx.invoice.findUniqueOrThrow({
     where: { id: invoiceId },
     include: { company: { select: { defaultTaxRate: true } } },
   });
+  await assertNoActiveCheckout(tx, invoiceId);
+  const receipts = await tx.invoicePayment.count({ where: { invoiceId } });
+  if (invoice.status !== 'DRAFT' || !invoice.amountPaid.isZero() || receipts > 0)
+    throw new ConflictError('Sent invoices and their saved line items cannot be changed. Create a new invoice for additional work.');
+  return invoice;
 }
 
 export async function recalculateInvoiceTotals(

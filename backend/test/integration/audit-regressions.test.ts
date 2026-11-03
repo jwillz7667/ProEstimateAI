@@ -121,7 +121,7 @@ const otherLine = (name: string) => ({
 });
 
 describe("invoice money and reference invariants", () => {
-  it("retains agreed tax during payment and discount changes, records payment status", async () => {
+  it("sets discounts before sending, retains agreed tax during payments, and locks sent terms", async () => {
     const t = await tenant();
     const invoice = await invoices.createFromEstimate(
       t.company.id,
@@ -133,17 +133,17 @@ describe("invoice money and reference invariants", () => {
       where: { id: t.company.id },
       data: { defaultTaxRate: 25 },
     });
-    const partial = await invoices.update(invoice.id, t.company.id, {
-      amount_paid: 500,
-    });
-    expect(Number(partial.taxAmount)).toBe(80);
-    expect(Number(partial.amountDue)).toBe(620);
-    expect(partial.status).toBe("PARTIALLY_PAID");
     const discounted = await invoices.update(invoice.id, t.company.id, {
       discount_amount: 100,
     });
     expect(Number(discounted.totalAmount)).toBe(1020);
-    expect(Number(discounted.amountDue)).toBe(520);
+    expect(Number(discounted.amountDue)).toBe(1020);
+    await prisma.invoice.update({ where: { id: invoice.id }, data: { status: "SENT" } });
+    const partial = await invoices.update(invoice.id, t.company.id, { amount_paid: 500 });
+    expect(Number(partial.taxAmount)).toBe(80);
+    expect(Number(partial.amountDue)).toBe(520);
+    expect(partial.status).toBe("PARTIALLY_PAID");
+    await expect(invoices.update(invoice.id, t.company.id, { discount_amount: 200 })).rejects.toMatchObject({ code: "CONFLICT" });
     const paid = await invoices.update(invoice.id, t.company.id, {
       status: "paid",
     });
@@ -185,6 +185,7 @@ describe("invoice money and reference invariants", () => {
       t.estimate.id,
       {},
     );
+    await prisma.invoice.update({ where: { id: invoice.id }, data: { status: "SENT" } });
     const results = await Promise.allSettled([
       invoices.update(invoice.id, t.company.id, {
         amount_paid: 100,
@@ -216,6 +217,7 @@ describe("invoice money and reference invariants", () => {
       t.estimate.id,
       {},
     );
+    await prisma.invoice.update({ where: { id: invoice.id }, data: { status: "SENT" } });
     await invoices.update(invoice.id, t.company.id, { amount_paid: 100 });
     expect(
       (await invoices.send(invoice.id, t.company.id, t.user.id)).status,
@@ -224,9 +226,11 @@ describe("invoice money and reference invariants", () => {
     await expect(
       invoices.send(invoice.id, t.company.id, t.user.id),
     ).rejects.toThrow(/cannot be sent/);
-    await invoices.update(invoice.id, t.company.id, { status: "void" });
+    await expect(invoices.update(invoice.id, t.company.id, { status: "void" })).rejects.toMatchObject({ code: "CONFLICT" });
+    const unpaid = await invoices.create(t.company.id, t.user.id, { project_id: t.project.id, client_id: t.client.id });
+    await invoices.update(unpaid.id, t.company.id, { status: "void" });
     await expect(
-      invoices.send(invoice.id, t.company.id, t.user.id),
+      invoices.send(unpaid.id, t.company.id, t.user.id),
     ).rejects.toThrow(/cannot be sent/);
   });
   it("preserves authoritative converted line totals on metadata-only edits", async () => {
@@ -281,18 +285,19 @@ describe("invoice money and reference invariants", () => {
       t.estimate.id,
       {},
     );
+    await prisma.invoice.update({ where: { id: invoice.id }, data: { status: "SENT" } });
     await expect(
       invoices.update(invoice.id, t.company.id, { amount_paid: 1121 }),
     ).rejects.toThrow(/exceed/);
     await invoices.update(invoice.id, t.company.id, { amount_paid: 1000 });
     await expect(
       invoices.update(invoice.id, t.company.id, { discount_amount: 200 }),
-    ).rejects.toThrow(/exceed/);
+    ).rejects.toMatchObject({ code: "CONFLICT" });
     const line = await prisma.invoiceLineItem.findFirstOrThrow({
       where: { invoiceId: invoice.id, name: "Tile" },
     });
     await expect(invoiceLines.remove(line.id, t.company.id)).rejects.toThrow(
-      /below/,
+      /cannot be changed/,
     );
     expect(
       await prisma.invoiceLineItem.count({ where: { invoiceId: invoice.id } }),

@@ -285,6 +285,8 @@ model Company {
   estimateTemplates EstimateTemplate[]
   savedEstimateItems SavedEstimateItem[]
   estimateLibraryOperations EstimateLibraryOperation[]
+  stripeMerchant StripeMerchant?
+  stripePaymentEvents StripePaymentEvent[]
 }
 
 /// Reusable company-owned scope and pricing, independent of the original job.
@@ -686,6 +688,7 @@ model Invoice {
   paymentInstructions String?       @db.Text
   currencyCode        String?       @default("USD")
   shareToken          String        @unique @default(uuid())
+  paymentReviewRequired Boolean @default(false)
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -695,11 +698,55 @@ model Invoice {
   lineItems InvoiceLineItem[]
   payments  InvoicePayment[]
   installments InvoiceInstallment[]
+  checkoutAttempts InvoiceCheckoutAttempt[]
 
   @@unique([companyId, invoiceNumber])
   @@index([projectId])
   @@index([companyId])
   @@index([clientId])
+}
+
+/// Independent contractors accept direct charges in their own Stripe account.
+/// The creation inputs are frozen so an ambiguous account creation can replay.
+model StripeMerchant {
+  companyId String @id
+  requestId String @unique @default(uuid())
+  accountId String? @unique
+  country String
+  displayName String
+  contactEmail String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model InvoiceCheckoutAttempt {
+  id String @id @default(cuid())
+  invoiceId String
+  companyId String
+  accountId String
+  state String @default("PREPARING")
+  amount Decimal @db.Decimal(12, 2)
+  currencyCode String
+  paymentScope String
+  sessionId String? @unique
+  paymentIntentId String? @unique
+  checkoutUrl String?
+  integrationIdentifier String
+  refundedAmount Decimal @default(0) @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  @@index([companyId, createdAt])
+  @@index([invoiceId, state])
+}
+
+model StripePaymentEvent {
+  id String @id
+  companyId String
+  accountId String
+  processedAt DateTime @default(now())
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model InvoiceLineItem {

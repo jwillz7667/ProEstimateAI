@@ -28,6 +28,9 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   SERPAPI_API_KEY: z.string().min(1).optional(),
   REDIS_URL: z.string().url().optional(),
+  STRIPE_API_KEY: z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+  STRIPE_PAYMENTS_ENABLED: z.enum(['true', 'false']).default('false').transform(value => value === 'true'),
   RESEND_FROM_EMAIL: z
     .string()
     .default("ProEstimate AI <noreply@proestimateai.com>"),

@@ -5,6 +5,8 @@ import { env } from "../../config/env";
 import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors";
 import { toInvoiceDto } from "../invoices/invoices.dto";
 import type { InvoiceScheduleInput, RecordInvoicePaymentInput } from "./invoice-finance.validators";
+import { assertNoActiveCheckout, invoiceCheckoutInfo } from "../invoice-checkout/invoice-checkout.policy";
+import { sharedCheckoutAvailability } from "../invoice-checkout/invoice-checkout.service";
 
 async function lockedInvoice(tx: Prisma.TransactionClient, id: string, companyId: string) {
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
@@ -37,6 +39,7 @@ export async function getFinance(id: string, companyId: string) {
         due_date: installment.dueDate?.toISOString() ?? null, sort_order: installment.sortOrder,
       };
     }),
+    checkout: await invoiceCheckoutInfo(id, companyId),
   };
 }
 
@@ -54,6 +57,7 @@ export async function recordPayment(id: string, companyId: string, userId: strin
       }
       return;
     }
+    await assertNoActiveCheckout(tx, id);
     if (invoice.status === "DRAFT" || invoice.status === "VOID") throw new ConflictError("Send the invoice before recording a payment");
     if (amount.gt(invoice.amountDue)) throw new ValidationError("The payment exceeds the current outstanding balance. Refresh this invoice.");
     const recordedAt = input.recorded_at ? new Date(input.recorded_at) : new Date();
@@ -124,5 +128,6 @@ export async function getSharedInvoice(token: string) {
     // Internal notes and processor identifiers never leave the contractor's account.
     payments: finance.payments.map(({ notes: _notes, reference: _reference, request_id: _requestId, ...payment }) => payment),
     installments: finance.installments,
+    online_payment: await sharedCheckoutAvailability(invoice.id, invoice.companyId),
   };
 }
