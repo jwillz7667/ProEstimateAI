@@ -5,6 +5,7 @@ import { AuthorizationError, NotFoundError } from "../../lib/errors";
 import { hasEffectiveProAccess } from "../../lib/entitlement-access";
 import { readProposalSnapshot } from "../proposals/proposal-document-snapshot";
 import { lockProposalRecipient, proposalRecipientMatches } from "../proposals/proposal-recipient";
+import { lockChangeOrderProposal } from "../change-orders/change-order-proposal";
 
 export type FollowUpKind = "proposal" | "invoice";
 export interface FollowUpTarget {
@@ -39,6 +40,7 @@ export async function loadFollowUpTarget(tx: Prisma.TransactionClient, kind: Fol
   if (kind === "proposal") {
     const found = await tx.proposal.findFirst({ where: { id, companyId }, select: { estimateId: true } });
     if (!found) throw new NotFoundError("Proposal", id);
+    await lockChangeOrderProposal(tx, id, companyId);
     const estimate = await tx.estimate.findUniqueOrThrow({ where: { id: found.estimateId }, select: { revisesEstimateId: true } });
     const ids = [found.estimateId, ...(estimate.revisesEstimateId ? [estimate.revisesEstimateId] : [])];
     await tx.$queryRaw(Prisma.sql`SELECT id FROM "Estimate" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`);

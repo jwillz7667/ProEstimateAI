@@ -36,6 +36,7 @@ struct Proposal: Codable, Identifiable, Hashable, Sendable {
     var recipientName: String? = nil
     var recipientEmail: String? = nil
     var recipientMatchesCurrent: Bool? = nil
+    var changeOrder: ProposalChangeOrder? = nil
 
     // MARK: - Nested Enums
 
@@ -82,6 +83,7 @@ struct Proposal: Codable, Identifiable, Hashable, Sendable {
         case recipientName = "recipient_name"
         case recipientEmail = "recipient_email"
         case recipientMatchesCurrent = "recipient_matches_current"
+        case changeOrder = "change_order"
     }
 }
 
@@ -140,6 +142,56 @@ struct ProposalAcceptance: Codable, Hashable, Sendable {
         case consentText = "consent_text"
         case consentVersion = "consent_version"
         case identityAssurance = "identity_assurance"
+    }
+}
+
+/// The customer-facing comparison belongs to the frozen proposal version.
+/// It contains marked-up line totals and never the contractor's base costs.
+struct ProposalChangeOrder: Codable, Hashable, Sendable {
+    let id: String
+    let title: String
+    let reason: String
+    let baseEstimateNumber: String
+    let baseVersion: Int
+    let baseDocumentHash: String
+    let baseTotal: Decimal
+    let newTotal: Decimal
+    let changeAmount: Decimal
+    let subtotalDelta: Decimal
+    let taxDelta: Decimal
+    let discountDelta: Decimal
+    let billingEffect: String
+    let baseScope: Scope
+
+    struct Scope: Codable, Hashable, Sendable {
+        let lineItems: [Line]
+        let assumptions: String?
+        let exclusions: String?
+        enum CodingKeys: String, CodingKey { case lineItems = "line_items", assumptions, exclusions }
+    }
+    struct Line: Codable, Hashable, Sendable {
+        let name: String
+        let description: String?
+        let quantity: Decimal
+        let unit: String
+        let lineTotal: Decimal
+        enum CodingKeys: String, CodingKey { case name, description, quantity, unit; case lineTotal = "line_total" }
+    }
+    enum CodingKeys: String, CodingKey {
+        case id, title, reason
+        case baseEstimateNumber = "base_estimate_number", baseVersion = "base_version", baseDocumentHash = "base_document_hash"
+        case baseTotal = "base_total", newTotal = "new_total", changeAmount = "change_amount"
+        case subtotalDelta = "subtotal_delta", taxDelta = "tax_delta", discountDelta = "discount_delta"
+        case billingEffect = "billing_effect", baseScope = "base_scope"
+    }
+    var billingExplanation: String {
+        switch billingEffect {
+        case "additional_invoice": "This increase will be billed separately after approval. The revised contract total is not a second bill for the full project."
+        case "credit_note": "This reduction will be recorded as a contract credit after approval. A credit is not a cash refund."
+        case "included_in_first_invoice": "This change will be included in the first invoice for the revised contract total. It is not a separate payment request."
+        case "no_price_change": "This changes the agreed scope without adding a charge."
+        default: "Review this change with your contractor before approving."
+        }
     }
 }
 

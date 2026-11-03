@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import { ConflictError } from "../../lib/errors";
+import { changeOrderComparisonSchema } from "../change-orders/change-order-comparison";
 
 const nullableText = z.string().nullable();
 const money = z.number().finite();
@@ -34,6 +35,7 @@ export const sharedProposalContentSchema = z.object({
   before_after_images: z.array(z.object({
     asset_id: z.string(), asset_type: z.string(), url: z.string(), sort_order: z.number().int(),
   })),
+  change_order: changeOrderComparisonSchema.optional(),
 });
 
 const snapshotSchema = z.object({

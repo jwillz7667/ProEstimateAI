@@ -350,6 +350,40 @@ async function renderProposalPDF(
     y = doc.y + 16;
   }
 
+  if (document.change_order) {
+    const change = document.change_order;
+    y = ensureSpace(doc, 140, y);
+    doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold').text('Change to Approved Contract', PAGE_MARGIN, y);
+    y += 20;
+    doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica').text(change.reason, PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN, lineGap: 3 });
+    y = doc.y + 12;
+    y = drawSummaryRow(doc, 'Previously Approved Total', formatCurrency(change.base_total), y);
+    y = drawSummaryRow(doc, 'Revised Contract Total', formatCurrency(change.new_total), y);
+    y = drawSummaryRow(doc, change.change_amount < 0 ? 'Contract Reduction' : 'Contract Increase', formatCurrency(change.change_amount), y, { bold: true });
+    const billing = change.billing_effect === 'additional_invoice' ? 'This increase will be billed separately after approval. The revised contract total is not a second bill for the full project.'
+      : change.billing_effect === 'credit_note' ? 'This reduction will be recorded as a contract credit after approval. A credit is not a cash refund.'
+      : change.billing_effect === 'included_in_first_invoice' ? 'This change will be included in the first invoice for the revised contract total. It is not a separate payment request.'
+      : 'This changes the agreed scope without adding a charge.';
+    y = ensureSpace(doc, 60, y + 8);
+    doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica').text(billing, PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN, lineGap: 3 });
+    y = ensureSpace(doc, 60, doc.y + 16);
+    doc.fontSize(FONT_SUBHEADER).font('Helvetica-Bold').text(`Previously Approved Scope: ${change.base_estimate_number} (v${change.base_version})`, PAGE_MARGIN, y);
+    y += 20;
+    y = drawTableHeader(doc, y);
+    for (const item of change.base_scope.line_items) y = drawTableRow(doc, { ...item, unitCost: 0, lineTotal: item.line_total, hideUnitCost: true }, y);
+    for (const [label, text] of [['Previous assumptions', change.base_scope.assumptions], ['Previous exclusions', change.base_scope.exclusions]]) {
+      if (!text) continue;
+      y = ensureSpace(doc, 50, y + 12);
+      doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica').text(`${label}: ${text}`, PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN, lineGap: 3 });
+      y = doc.y;
+    }
+    y = ensureSpace(doc, 100, y + 16);
+    y = drawSummaryRow(doc, 'Subtotal Change', formatCurrency(change.subtotal_delta), y);
+    y = drawSummaryRow(doc, 'Tax Change', formatCurrency(change.tax_delta), y);
+    y = drawSummaryRow(doc, 'Discount Change (Deducted)', formatCurrency(change.discount_delta), y);
+    y += 20;
+  }
+
   // ── Scope of Work ──
   if (proposal.scope_of_work) {
     y = ensureSpace(doc, 60, y);
@@ -452,7 +486,7 @@ async function renderProposalPDF(
     drawHR(doc, y);
     y += 8;
 
-    y = drawSummaryRow(doc, 'Total', formatCurrency(estimate.total_amount), y, {
+    y = drawSummaryRow(doc, document.change_order ? 'Revised Contract Total' : 'Total', formatCurrency(estimate.total_amount), y, {
       bold: true,
       fontSize: FONT_HEADER,
     });
@@ -660,6 +694,9 @@ async function renderInvoicePDF(
 
   if (toNumber(invoice.amountPaid) > 0) {
     y = drawSummaryRow(doc, 'Amount Paid', formatCurrency(invoice.amountPaid), y);
+  }
+  if (toNumber(invoice.creditAmount) > 0) {
+    y = drawSummaryRow(doc, 'Contract Credits Applied', `-${formatCurrency(invoice.creditAmount)}`, y);
   }
 
   const amountDueValue = toNumber(invoice.amountDue);

@@ -64,6 +64,7 @@ export async function list(
 export async function getById(id: string, companyId: string) {
   const estimate = await prisma.estimate.findFirst({
     where: { id, companyId },
+    include: { changeOrder: { select: { id: true } } },
   });
 
   if (!estimate) {
@@ -276,13 +277,14 @@ export async function revise(id: string, companyId: string, userId: string, requ
       return result;
     }
     const source = await tx.estimate.findUniqueOrThrow({
-      where: { id }, include: { lineItems: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] } },
+      where: { id }, include: { lineItems: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }, changeOrder: true },
     });
+    if (source.changeOrder) throw new ConflictError("Open this change order to prepare a replacement amendment. Generic revisions cannot replace a change order.");
     if (source.status === "DRAFT") throw new ConflictError("This estimate is still a draft. Continue editing it before creating a revision.");
-    const published = await tx.estimate.findFirst({ where: { companyId, revisesEstimateId: source.id, status: { not: "DRAFT" } }, select: { id: true } });
+    const published = await tx.estimate.findFirst({ where: { companyId, revisesEstimateId: source.id, status: { not: "DRAFT" }, changeOrder: null }, select: { id: true } });
     if (published) throw new ConflictError("A later revision has already been sent. Open that revision and create the next version from it.");
     const pending = await tx.estimate.findFirst({
-      where: { companyId, revisesEstimateId: source.id, status: "DRAFT" }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      where: { companyId, revisesEstimateId: source.id, status: "DRAFT", changeOrder: null }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     });
     if (pending) {
       await tx.estimateRevisionRequest.create({ data: { companyId, requestId, sourceEstimateId: source.id, revisionEstimateId: pending.id } });

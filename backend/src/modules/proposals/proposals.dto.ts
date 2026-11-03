@@ -1,7 +1,8 @@
-import { Proposal, ProposalAcceptance } from '@prisma/client';
-import { proposalDocumentHash } from './proposal-document-snapshot';
+import { Proposal, ProposalAcceptance, Estimate, ChangeOrder } from '@prisma/client';
+import { proposalDocumentHash, readProposalSnapshot } from './proposal-document-snapshot';
 import { toAcceptanceDto } from './proposals.share-dto';
 import { currentProposalRecipient, proposalRecipientMatches } from './proposal-recipient';
+import { toChangeOrderComparison, type ChangeOrderComparison } from '../change-orders/change-order-comparison';
 
 export interface ProposalDto {
   id: string;
@@ -35,11 +36,14 @@ export interface ProposalDto {
   recipient_name: string | null;
   recipient_email: string | null;
   recipient_matches_current: boolean | null;
+  change_order: ChangeOrderComparison | null;
 }
 
-export function toProposalDto(proposal: Proposal & { acceptance?: ProposalAcceptance | null; draftReviewToken?: string | null; project?: { clientId: string | null; client: { id: string; name: string; email: string | null } | null } }): ProposalDto {
+export function toProposalDto(proposal: Proposal & { acceptance?: ProposalAcceptance | null; draftReviewToken?: string | null; project?: { clientId: string | null; client: { id: string; name: string; email: string | null } | null }; estimate?: Estimate & { changeOrder?: ChangeOrder | null } }): ProposalDto {
   const draft = proposal.status === 'DRAFT' && !proposal.sentSnapshot && !proposal.sentAt;
   const recipient = draft && proposal.project ? currentProposalRecipient(proposal.project) : { clientId: proposal.sentRecipientClientId, name: proposal.sentRecipientName, email: proposal.sentRecipientEmail };
+  const comparison = proposal.sentSnapshot ? readProposalSnapshot(proposal.sentSnapshot).content.change_order ?? null
+    : draft && proposal.estimate?.changeOrder ? toChangeOrderComparison(proposal.estimate.changeOrder, proposal.estimate) : null;
   return {
     id: proposal.id,
     estimate_id: proposal.estimateId,
@@ -72,5 +76,6 @@ export function toProposalDto(proposal: Proposal & { acceptance?: ProposalAccept
     recipient_name: recipient.name,
     recipient_email: recipient.email,
     recipient_matches_current: draft ? null : proposal.project ? proposalRecipientMatches({ ...proposal, project: proposal.project }) : null,
+    change_order: comparison,
   };
 }

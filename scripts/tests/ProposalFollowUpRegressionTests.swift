@@ -39,6 +39,14 @@ struct ProposalFollowUpRegressionTests {
         try expect(bound.canSend, "A sent version can be resent only to its recorded current recipient")
         let boundDecode = try JSONDecoder().decode(Proposal.self, from: encoder.encode(bound))
         try expect(boundDecode.recipientEmail == "original@example.test", "Authenticated recipient details must survive model decoding")
+        let comparisonJSON = """
+        {"id":"co-1","title":"Extra work","reason":"Customer request","base_estimate_number":"EST-1","base_version":1,"base_document_hash":"aaaa","base_total":100.25,"new_total":150.75,"change_amount":50.5,"subtotal_delta":50.5,"tax_delta":0,"discount_delta":0,"billing_effect":"additional_invoice","base_scope":{"line_items":[{"name":"Old scope","description":null,"quantity":1,"unit":"job","line_total":100.25}],"assumptions":"Existing framing","exclusions":null}}
+        """
+        bound.changeOrder = try JSONDecoder().decode(ProposalChangeOrder.self, from: Data(comparisonJSON.utf8))
+        let comparison = try JSONDecoder().decode(Proposal.self, from: encoder.encode(bound)).changeOrder
+        try expect(comparison?.changeAmount == Decimal(string: "50.5"), "Change-order differences retain decimal precision")
+        try expect(comparison?.baseScope.lineItems.first?.name == "Old scope", "The frozen previously approved scope must decode for review")
+        try expect(comparison?.billingExplanation.contains("not a second bill") == true, "A delta invoice must not look like a second full-contract bill")
         bound.recipientMatchesCurrent = false
         try expect(!bound.canSend && bound.shareURL != nil, "Recipient changes stop email but retain the historical reference link")
         var changed = legacy

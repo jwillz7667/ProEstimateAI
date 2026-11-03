@@ -19,6 +19,7 @@ import { APIError } from "@/lib/api";
 
 import { ProposalActions } from "./ProposalActions";
 import { PrintProposal } from "./PrintProposal";
+import { ChangeOrderReview } from "./ChangeOrderReview";
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -168,6 +169,8 @@ export default async function ProposalPage({ params }: Params) {
           )}
         </section>
 
+        {data.change_order && <ChangeOrderReview comparison={data.change_order} />}
+
         {/* Before/after gallery ------------------------------------------- */}
         {before_after_images.length > 0 && (
           <section className="mb-10">
@@ -204,7 +207,7 @@ export default async function ProposalPage({ params }: Params) {
 
         {/* Line items ------------------------------------------------------ */}
         <section className="mb-10">
-          <SectionHeading>Pricing</SectionHeading>
+          <SectionHeading>{data.change_order ? "Revised scope pricing" : "Pricing"}</SectionHeading>
 
           <div className="overflow-hidden rounded-2xl border border-ink-100 bg-white">
             {groups.materials.length > 0 && (
@@ -257,7 +260,7 @@ export default async function ProposalPage({ params }: Params) {
               )}
               <div className="flex items-baseline justify-between pt-3 border-t border-ink-200">
                 <span className="text-base font-semibold text-ink-950">
-                  Total
+                  {data.change_order ? "Revised contract total" : "Total"}
                 </span>
                 <span
                   className="text-2xl font-bold tabular-nums text-ink-950"

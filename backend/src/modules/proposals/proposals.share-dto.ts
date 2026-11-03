@@ -6,8 +6,10 @@ import {
   Asset,
   ProjectType,
   ProposalAcceptance,
+  ChangeOrder,
 } from '@prisma/client';
 import { ACCEPTANCE_CONSENT_TEXT, ACCEPTANCE_CONSENT_VERSION, customerUnitPrice, proposalDocumentHash, readProposalSnapshot } from './proposal-document-snapshot';
+import { toChangeOrderComparison, type ChangeOrderComparison } from '../change-orders/change-order-comparison';
 
 export interface ProposalWithRelations extends Proposal {
   acceptance: ProposalAcceptance | null;
@@ -23,6 +25,7 @@ export interface ProposalWithRelations extends Proposal {
   };
   estimate: Estimate & {
     lineItems: EstimateLineItem[];
+    changeOrder: ChangeOrder | null;
   };
 }
 
@@ -117,6 +120,7 @@ export interface SharedProposalPageDto {
   document_capture_reason?: 'sent' | 'legacy_backfill';
   document_hash?: string | null;
   acceptance?: ReturnType<typeof toAcceptanceDto> | null;
+  change_order?: ChangeOrderComparison;
   approval_consent_text?: string;
   approval_consent_version?: string;
 }
@@ -179,6 +183,7 @@ export function toLiveSharedProposalDto(proposal: ProposalWithRelations): Shared
   }));
 
   return {
+    ...(estimate.changeOrder ? { change_order: toChangeOrderComparison(estimate.changeOrder, estimate) } : {}),
     company: {
       name: company.name,
       phone: company.phone,

@@ -30,6 +30,7 @@ struct ProposalPreviewView: View {
                         .buttonStyle(.bordered)
                         .disabled(viewModel.isLoading || viewModel.isSending || viewModel.isSavingDocument)
                     }
+                    if let comparison = viewModel.proposal.changeOrder { changeOrderReviewCard(comparison) }
                     estimateReviewCard
                     if hasNarrative {
                         narrativeCard
@@ -57,7 +58,7 @@ struct ProposalPreviewView: View {
                 .padding(SpacingTokens.md)
             }
             .background(ColorTokens.background.ignoresSafeArea())
-            .navigationTitle("Proposal")
+            .navigationTitle(viewModel.proposal.changeOrder == nil ? "Proposal" : "Change order")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -115,13 +116,21 @@ struct ProposalPreviewView: View {
                 Label("Client requested changes", systemImage: "bubble.left.and.text.bubble.right")
                     .font(TypographyTokens.headline)
                 if let message = viewModel.proposal.requestedChangesMessage { Text(message) }
-                Text("Keep this sent version for reference. Create a revision from the estimate to update the offer.")
-                    .font(TypographyTokens.footnote).foregroundStyle(.secondary)
-                Button(revisionDelivery.isWorking ? "Creating revision…" : "Create revision") {
-                    Task { await createRevision() }
+                if let comparison = viewModel.proposal.changeOrder {
+                    Text("Keep this sent change order for reference. Open it to review the request and prepare a replacement from the approved contract.")
+                        .font(TypographyTokens.footnote).foregroundStyle(.secondary)
+                    NavigationLink { ChangeOrderDetailView(orderId: comparison.id) } label: {
+                        Label("Open change order", systemImage: "doc.badge.gearshape")
+                    }.frame(minHeight: 44)
+                } else {
+                    Text("Keep this sent version for reference. Create a revision from the estimate to update the offer.")
+                        .font(TypographyTokens.footnote).foregroundStyle(.secondary)
+                    Button(revisionDelivery.isWorking ? "Creating revision…" : "Create revision") {
+                        Task { await createRevision() }
+                    }
+                    .frame(minHeight: 44)
+                    .disabled(viewModel.isLoading || viewModel.isSending || revisionDelivery.isWorking)
                 }
-                .frame(minHeight: 44)
-                .disabled(viewModel.isLoading || viewModel.isSending || revisionDelivery.isWorking)
                 if let error = revisionDelivery.errorMessage { Text(error).font(TypographyTokens.footnote).foregroundStyle(ColorTokens.error) }
             }
         }
@@ -204,7 +213,7 @@ struct ProposalPreviewView: View {
                     }
                     Divider()
                     HStack {
-                        Text("Total").font(TypographyTokens.headline)
+                        Text(viewModel.proposal.changeOrder == nil ? "Total" : "Revised contract total").font(TypographyTokens.headline)
                         Spacer()
                         CurrencyText(amount: estimate.totalAmount)
                     }
@@ -218,6 +227,49 @@ struct ProposalPreviewView: View {
             }
         } else if viewModel.isLoading {
             ProgressView("Loading estimate review…")
+        }
+    }
+
+    private func changeOrderReviewCard(_ comparison: ProposalChangeOrder) -> some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: SpacingTokens.md) {
+                Text("Change to approved contract").font(TypographyTokens.caption).foregroundStyle(.secondary)
+                Text(comparison.title).font(TypographyTokens.headline)
+                Text(comparison.reason).font(TypographyTokens.body)
+                changeOrderAmountRow("Previously approved total", comparison.baseTotal)
+                changeOrderAmountRow("Revised contract total", comparison.newTotal)
+                Divider()
+                changeOrderAmountRow(comparison.changeAmount < 0 ? "Contract reduction" : comparison.changeAmount > 0 ? "Contract increase" : "Price change", comparison.changeAmount)
+                Text(comparison.billingExplanation).font(TypographyTokens.footnote).foregroundStyle(.secondary)
+                DisclosureGroup("Previously approved scope") {
+                    VStack(alignment: .leading, spacing: SpacingTokens.sm) {
+                        Text("\(comparison.baseEstimateNumber) · Version \(comparison.baseVersion)").font(TypographyTokens.caption).foregroundStyle(.secondary)
+                        ForEach(comparison.baseScope.lineItems.indices, id: \.self) { index in
+                            let item = comparison.baseScope.lineItems[index]
+                            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                                changeOrderAmountRow(item.name, item.lineTotal)
+                                Text("\(NSDecimalNumber(decimal: item.quantity).stringValue) \(item.unit)").font(TypographyTokens.caption).foregroundStyle(.secondary)
+                                if let description = item.description { Text(description).font(TypographyTokens.footnote) }
+                            }
+                        }
+                        if let assumptions = comparison.baseScope.assumptions { Text("Previous assumptions: \(assumptions)").font(TypographyTokens.footnote) }
+                        if let exclusions = comparison.baseScope.exclusions { Text("Previous exclusions: \(exclusions)").font(TypographyTokens.footnote) }
+                        Divider()
+                        changeOrderAmountRow("Subtotal change", comparison.subtotalDelta)
+                        changeOrderAmountRow("Tax change", comparison.taxDelta)
+                        changeOrderAmountRow("Discount change (deducted)", comparison.discountDelta)
+                    }.padding(.top, SpacingTokens.sm)
+                }
+                Text("Review the complete revised scope, price and terms below before sending.").font(TypographyTokens.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func changeOrderAmountRow(_ title: String, _ amount: Decimal) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: SpacingTokens.md) {
+            Text(title).font(TypographyTokens.subheadline)
+            Spacer(minLength: SpacingTokens.sm)
+            CurrencyText(amount: amount).font(TypographyTokens.subheadline.weight(.semibold))
         }
     }
 

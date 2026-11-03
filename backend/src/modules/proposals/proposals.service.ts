@@ -8,6 +8,7 @@ import { ACCEPTANCE_CONSENT_TEXT, ACCEPTANCE_CONSENT_VERSION, hashCanonicalValue
 import { invalidateCache, CacheKeys } from "../../config/redis";
 import { getTemplateProposalDefaults } from "../estimate-library/estimate-library.service";
 import { currentProposalRecipient, lockProposalRecipient, proposalRecipientMatches } from "./proposal-recipient";
+import { freezeChangeOrderForSend, lockChangeOrderProposal, recordChangeOrderDecision } from "../change-orders/change-order-proposal";
 import {
   PaginationParams,
   paginateResults,
@@ -27,8 +28,10 @@ async function lockProposal(
   selector: { id: string; companyId: string } | { shareToken: string },
   lockRecipient = false,
 ) {
-  const found = await tx.proposal.findFirst({ where: selector, select: { id: true, estimateId: true } });
+  const found = await tx.proposal.findFirst({ where: selector, select: { id: true, estimateId: true, companyId: true } });
   if (!found) throw new NotFoundError("Proposal");
+  // Contract/payment gates precede every document row lock for amendments.
+  await lockChangeOrderProposal(tx, found.id, found.companyId);
   const source = await tx.estimate.findUnique({ where: { id: found.estimateId }, select: { revisesEstimateId: true } });
   if (!source) throw new NotFoundError("Proposal");
   const ids = [found.estimateId, ...(source.revisesEstimateId ? [source.revisesEstimateId] : [])];
@@ -134,6 +137,8 @@ export async function create(companyId: string, data: CreateProposalInput) {
     `;
     if (!rows.length) throw new NotFoundError("Estimate", data.estimate_id);
     const estimate = await tx.estimate.findUniqueOrThrow({ where: { id: data.estimate_id } });
+    const changeOrder = await tx.changeOrder.findFirst({ where: { estimateId: estimate.id, companyId }, select: { proposalId: true } });
+    if (changeOrder) return tx.proposal.findFirstOrThrow({ where: { id: changeOrder.proposalId, companyId } });
     if (estimate.status !== "DRAFT") {
       throw new ConflictError("Create a new estimate revision before preparing another proposal.");
     }
@@ -192,9 +197,9 @@ export async function send(
       if (data?.draft_review_token && data.draft_review_token !== draftReviewToken(proposal)) {
         throw new ConflictError("The proposal scope, terms, price or recipient changed after your review. Refresh before sending.");
       }
-      if (proposal.estimate.revisesEstimateId) {
+      if (proposal.estimate.revisesEstimateId && !proposal.estimate.changeOrder) {
         const newer = await tx.estimate.findFirst({
-          where: { revisesEstimateId: proposal.estimate.revisesEstimateId, id: { not: proposal.estimateId }, status: { not: "DRAFT" } },
+          where: { revisesEstimateId: proposal.estimate.revisesEstimateId, id: { not: proposal.estimateId }, status: { not: "DRAFT" }, changeOrder: null },
           select: { id: true },
         });
         if (newer) throw new ConflictError("Another revision has already been sent. Revise that version to continue.");
@@ -206,6 +211,7 @@ export async function send(
         });
         await tx.estimate.updateMany({ where: { id: proposal.estimate.revisesEstimateId, status: "SENT" }, data: { status: "EXPIRED" } });
       }
+      await freezeChangeOrderForSend(tx, proposal.id, companyId);
       const sentAt = new Date();
       const recipient = currentProposalRecipient(proposal.project);
       proposal = {
@@ -322,11 +328,11 @@ const sharedProposalInclude = {
       projectType: true,
       clientId: true,
       client: { select: { id: true, name: true, email: true } },
-      assets: { orderBy: { sortOrder: "asc" as const } },
+      assets: { orderBy: [{ sortOrder: "asc" as const }, { id: "asc" as const }] },
     },
   },
   estimate: {
-    include: { lineItems: { orderBy: { sortOrder: "asc" as const } } },
+    include: { lineItems: { orderBy: [{ sortOrder: "asc" as const }, { id: "asc" as const }] }, changeOrder: true },
   },
 } as const;
 
@@ -386,6 +392,10 @@ export async function respondToProposal(
     if (data.document_hash && data.document_hash !== documentHash) {
       throw new ConflictError("This is not the proposal version you reviewed. Refresh before responding.");
     }
+    if (data.decision === "approved" && (proposal.estimate.changeOrder || readProposalSnapshot(proposal.sentSnapshot).content.change_order) &&
+        (!data.signer_name?.trim() || data.acceptance_consent !== true || !data.document_hash || data.consent_version !== ACCEPTANCE_CONSENT_VERSION)) {
+      throw new ValidationError("Change order approval requires your name, explicit consent and the exact version you reviewed.");
+    }
     if (data.decision === "changes_requested") {
       if (!data.message?.trim()) throw new ValidationError("Describe the changes you would like.");
       const changed = await tx.proposal.update({
@@ -393,6 +403,7 @@ export async function respondToProposal(
         data: { status: "VIEWED", changesRequestedAt: new Date(), requestedChangesMessage: data.message.trim() },
         include: sharedProposalInclude,
       });
+      await recordChangeOrderDecision(tx, proposal.id, "changes_requested", null);
       await tx.activityLogEntry.create({
         data: { projectId: proposal.projectId, action: "UPDATED", description: `Client requested proposal changes: ${data.message.trim()}` },
       });
@@ -426,8 +437,9 @@ export async function respondToProposal(
       where: { id: proposal.estimateId },
       data: { status },
     });
+    await recordChangeOrderDecision(tx, proposal.id, data.decision, data.decision === "approved" ? documentHash : null);
     // A late response must not reopen a project already invoiced or finished.
-    await tx.project.updateMany({
+    if (!proposal.estimate.changeOrder) await tx.project.updateMany({
       where: {
         id: proposal.projectId,
         status: { notIn: ["INVOICED", "COMPLETED", "ARCHIVED"] },

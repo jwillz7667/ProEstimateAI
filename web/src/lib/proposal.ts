@@ -103,6 +103,38 @@ export interface SharedProposalPage {
   approval_consent_text?: string;
   approval_consent_version?: string;
   acceptance?: ProposalAcceptance | null;
+  change_order?: ChangeOrderComparison;
+}
+
+export interface ChangeOrderComparison {
+  id: string;
+  title: string;
+  reason: string;
+  currency_code: "USD";
+  base_estimate_number: string;
+  base_version: number;
+  base_document_hash: string;
+  base_total: number;
+  new_total: number;
+  change_amount: number;
+  subtotal_delta: number;
+  tax_delta: number;
+  discount_delta: number;
+  base_scope: {
+    line_items: Array<{ name: string; description: string | null; quantity: number; unit: string; line_total: number }>;
+    assumptions: string | null;
+    exclusions: string | null;
+  };
+  billing_effect: "additional_invoice" | "credit_note" | "included_in_first_invoice" | "no_price_change";
+}
+
+export function changeOrderBillingExplanation(comparison: ChangeOrderComparison): string {
+  switch (comparison.billing_effect) {
+    case "additional_invoice": return "This increase will be billed separately after approval. The revised contract total below is not a second bill for the full project.";
+    case "credit_note": return "This reduction will be recorded as a contract credit after approval. A credit is not a cash refund; your contractor can explain any remaining credit balance.";
+    case "included_in_first_invoice": return "This change will be included in the first invoice for the revised contract total. It is not a separate payment request.";
+    case "no_price_change": return "This changes the agreed scope without changing the contract price. Approval does not create an additional charge.";
+  }
 }
 
 export async function getSharedProposal(
