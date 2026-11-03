@@ -133,11 +133,26 @@ describe('explicit approved contract amendments',()=>{
   const key=randomUUID();const results=await Promise.all([key,key,randomUUID()].map(request=>orders.apply(replacement.id,t.company.id,t.user.id,request)));
   expect(new Set(results.map(r=>r.credit_note!.id)).size).toBe(1);expect(await prisma.creditNote.count()).toBe(1);expect(await prisma.invoice.count()).toBe(1);
  });
+ it('blocks legacy duplicate full invoices rather than adding another charge',async()=>{
+  const t=await fixture();const change=await amend(t,t.estimate.id,120);
+  await prisma.invoice.create({data:{companyId:t.company.id,projectId:t.project.id,clientId:t.client.id,estimateId:t.estimate.id,invoiceNumber:'LEGACY-DUPLICATE',subtotal:100,totalAmount:100,amountDue:100}});
+  await expect(orders.apply(change.id,t.company.id,t.user.id,randomUUID())).rejects.toMatchObject({statusCode:409});
+  await expect(orders.create(t.company.id,t.user.id,{request_id:randomUUID(),base_estimate_id:change.estimate_id,title:'Another change',reason:'Extra work'})).rejects.toMatchObject({statusCode:409});
+  expect(await prisma.invoice.count()).toBe(2);expect(await prisma.creditNote.count()).toBe(0);
+ });
+ it('replays an already committed apply after trial expiration while gating new financial writes',async()=>{
+  const t=await fixture();const change=await amend(t,t.estimate.id,120);const request=randomUUID();
+  const original=await orders.apply(change.id,t.company.id,t.user.id,request);
+  await prisma.userEntitlement.update({where:{userId:t.user.id},data:{status:'EXPIRED',renewalDate:new Date(0)}});
+  const recovered=await orders.apply(change.id,t.company.id,t.user.id,request);
+  expect(recovered.invoices[0].id).toBe(original.invoices[0].id);expect(await prisma.invoice.count()).toBe(2);
+  await expect(orders.apply(change.id,t.company.id,t.user.id,randomUUID())).rejects.toMatchObject({statusCode:402});
+ });
  it('keeps issued notes and allocations immutable and blocks apply during active checkout',async()=>{
   const t=await fixture();const change=await amend(t,t.estimate.id,60);
   const attempt=await prisma.invoiceCheckoutAttempt.create({data:{invoiceId:t.invoice!.id,companyId:t.company.id,accountId:'acct_test',state:'OPEN',amount:100,currencyCode:'USD',paymentScope:'balance',integrationIdentifier:'test'}});
   await expect(orders.apply(change.id,t.company.id,t.user.id,randomUUID())).rejects.toMatchObject({statusCode:409});
-  await prisma.invoiceCheckoutAttempt.update({where:{id:attempt.id},data:{state:'CANCELLED'}});
+  await prisma.invoiceCheckoutAttempt.update({where:{id:attempt.id},data:{state:'CANCELED'}});
   await orders.apply(change.id,t.company.id,t.user.id,randomUUID());
   const note=await prisma.creditNote.findFirstOrThrow();const allocation=await prisma.creditAllocation.findFirstOrThrow();
   await expect(prisma.creditNote.update({where:{id:note.id},data:{amount:1000}})).rejects.toThrow();

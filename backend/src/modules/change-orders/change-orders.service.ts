@@ -58,7 +58,9 @@ export async function create(companyId:string,userId:string,data:CreateChangeOrd
   const pending=await tx.changeOrder.findFirst({where:{companyId,rootEstimateId:family.rootEstimateId,status:{in:['DRAFT','SENT']}}});
   if(pending) throw new ConflictError('Finish or decline the pending change order before creating another.');
   const latest=await tx.changeOrder.findFirst({where:{companyId,rootEstimateId:family.rootEstimateId,status:{in:['APPROVED','APPLIED','INCLUDED']}},orderBy:[{createdAt:'desc'},{id:'desc'}]});
-  const rootInvoice=await tx.invoice.findFirst({where:{companyId,estimateId:{in:family.estimateIds},sourceChangeOrderId:null,status:{not:'VOID'}},orderBy:[{createdAt:'asc'},{id:'asc'}]});
+  const baseInvoices=await tx.invoice.findMany({where:{companyId,estimateId:{in:family.estimateIds},sourceChangeOrderId:null,status:{not:'VOID'}},orderBy:[{createdAt:'asc'},{id:'asc'}],take:2});
+  if(baseInvoices.length>1) throw new ConflictError('This contract already has more than one full invoice. Reconcile that billing history before applying any change orders.');
+  const rootInvoice=baseInvoices[0]??null;
   if(rootInvoice) {
    if(rootInvoice.clientId!==source.project.clientId) throw new ConflictError("The original invoice belongs to a different customer. Restore that contract customer before creating a change order.");
    await assertOriginalInvoiceBasis(tx,rootInvoice,companyId);
@@ -80,7 +82,6 @@ export async function create(companyId:string,userId:string,data:CreateChangeOrd
  * amendment bills only signed component deltas; credit never rewrites cash.
  */
 export async function apply(id:string,companyId:string,userId:string,requestId:string) {
- await assertCanCreateInvoice(userId);
  return prisma.$transaction(async tx=>{
   const initial=await getOrder(tx,id,companyId);
   await lockContractForEstimate(tx,initial.estimateId,companyId);
@@ -88,13 +89,16 @@ export async function apply(id:string,companyId:string,userId:string,requestId:s
   const receipt=await tx.changeOrderApplyRequest.findUnique({where:{companyId_requestId:{companyId,requestId}}});
   if(receipt && receipt.changeOrderId!==id) throw new ConflictError('This apply request was already used for another change order.');
   if(receipt) return dto(await getOrder(tx,id,companyId));
+  await assertCanCreateInvoice(userId);
   const order=await getOrder(tx,id,companyId);
   if(!['APPROVED','APPLIED','INCLUDED'].includes(order.status)) throw new ConflictError('The customer must approve this exact change order before applying it.');
   const chain:ChangeOrder[]=[];let cursor:ChangeOrder|null=order;const seen=new Set<string>();
-  while(cursor) {if(seen.has(cursor.id)||seen.size>=1000) throw new ConflictError('The amendment history needs review.');seen.add(cursor.id);chain.unshift(cursor);const parentId=cursor.parentChangeOrderId;cursor=parentId?await tx.changeOrder.findFirst({where:{id:parentId,companyId,rootEstimateId:order.rootEstimateId}}):null;if(parentId&&!cursor)throw new ConflictError('The amendment parent history could not be verified.');}
+  while(cursor) {if(seen.has(cursor.id)||seen.size>=1000) throw new ConflictError('The amendment history needs review.');seen.add(cursor.id);chain.unshift(cursor);const parentId:string|null=cursor.parentChangeOrderId;cursor=parentId?await tx.changeOrder.findFirst({where:{id:parentId,companyId,rootEstimateId:order.rootEstimateId}}):null;if(parentId&&!cursor)throw new ConflictError('The amendment parent history could not be verified.');}
   const family=await estimateFamily(tx,order.estimateId,companyId);
   for(const invoiceId of await lockFamilyInvoices(tx,companyId,family.estimateIds)) await assertNoActiveCheckout(tx,invoiceId);
-  const rootInvoice=await tx.invoice.findFirst({where:{companyId,estimateId:{in:family.estimateIds},sourceChangeOrderId:null,status:{not:'VOID'}},orderBy:[{createdAt:'asc'},{id:'asc'}]});
+  const baseInvoices=await tx.invoice.findMany({where:{companyId,estimateId:{in:family.estimateIds},sourceChangeOrderId:null,status:{not:'VOID'}},orderBy:[{createdAt:'asc'},{id:'asc'}],take:2});
+  if(baseInvoices.length>1) throw new ConflictError('This contract already has more than one full invoice. Reconcile that billing history before applying any change orders.');
+  const rootInvoice=baseInvoices[0]??null;
   if(!rootInvoice) throw new ConflictError('Create the first invoice from the latest approved contract. Its change orders will be included in that full invoice.');
   await assertOriginalInvoiceBasis(tx,rootInvoice,companyId);
   if((rootInvoice.currencyCode??'USD').toUpperCase()!=='USD') throw new ConflictError('The contract invoice currency needs review.');

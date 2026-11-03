@@ -57,6 +57,19 @@ import Foundation
         let previous = service.creates.count
         await offline.create(title: "Title", reason: "Scope")
         try expect(service.creates.count == previous && offline.pending == nil, "No POST occurs when the recovery journal cannot save")
+        let rapidService = FakeChangeOrders(), suspended = FakeChangeOrderJournal()
+        rapidService.fail = true
+        suspended.suspendSaves = true
+        let rapid = ChangeOrderMutationModel(service: rapidService, journal: suspended)
+        await rapid.restore(scope: scope, resourceId: "base-1")
+        let firstTap = Task { await rapid.create(title: "First tap", reason: "Original scope") }
+        for _ in 0..<1000 { if suspended.continuation != nil { break }; await Task.yield() }
+        try expect(suspended.continuation != nil && rapid.isWorking, "Busy state begins before the journal's first suspension")
+        await rapid.create(title: "Second tap", reason: "Changed scope")
+        try expect(suspended.saveCalls == 1 && rapidService.creates.isEmpty, "A second tap cannot persist a competing UUID before dispatch")
+        suspended.continuation?.resume(); suspended.continuation = nil
+        await firstTap.value
+        try expect(rapidService.creates.count == 1 && rapid.pending?.create?.title == "First tap", "Only the first exact journal body reaches the server")
         try await realJournal()
         try invoiceCredits()
         print("PASS: \(checks) change order checks (validation, frozen replay, restart, tenant scope, protected journal and credit-aware invoice decoding).")
@@ -101,8 +114,11 @@ import Foundation
 @MainActor final class FakeChangeOrderJournal: ChangeOrderJournaling {
     var stored: ChangeOrderPending?
     var failSave = false
+    var suspendSaves = false
+    var saveCalls = 0
+    var continuation: CheckedContinuation<Void, Never>?
     func load(scope: EstimateDraftScope, resourceId: String) async throws -> ChangeOrderPending? { stored }
-    func save(_ pending: ChangeOrderPending) async throws { if failSave { throw CocoaError(.fileWriteOutOfSpace) }; stored = pending }
+    func save(_ pending: ChangeOrderPending) async throws { saveCalls += 1; if failSave { throw CocoaError(.fileWriteOutOfSpace) }; if suspendSaves { await withCheckedContinuation { continuation = $0 } }; stored = pending }
     func remove(scope: EstimateDraftScope, resourceId: String) async throws { stored = nil }
 }
 @MainActor struct AppEventBus { static let shared = AppEventBus(); func noteProjectChange() {} }
