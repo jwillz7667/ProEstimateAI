@@ -491,12 +491,12 @@ final class ProjectDetailViewModel {
             // Retain and refresh the confirmed creation for review.
             if let createdEstimate {
                 estimates.insert(createdEstimate, at: 0)
-                await loadEstimates(projectId: project.id)
             }
+            await loadEstimates(projectId: project.id)
             errorMessage = createdEstimate == nil
-                ? error.localizedDescription
+                ? "The estimate couldn't be confirmed. Check the saved estimates before creating another one. \(error.localizedDescription)"
                 : "The estimate was created, but the remaining steps couldn't finish. Review it before creating another estimate. \(error.localizedDescription)"
-            return nil
+            return createdEstimate
         }
     }
 

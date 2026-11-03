@@ -24,6 +24,7 @@ struct ProjectDetailView: View {
     @State private var showEditSheet = false
     @State private var isCreatingEstimate = false
     @State private var isGeneratingAIEstimate = false
+    @State private var presentedEstimate: EstimateEditorSelection?
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
 
@@ -56,6 +57,11 @@ struct ProjectDetailView: View {
     private struct ExportedPDF: Identifiable, Hashable {
         let url: URL
         var id: URL { url }
+    }
+
+    private struct EstimateEditorSelection: Identifiable {
+        let id: String
+        var notice: String? = nil
     }
 
     /// Map measurement sheets. Presenting these as full-screen covers
@@ -157,6 +163,11 @@ struct ProjectDetailView: View {
         }
         .sheet(item: $exportedPDF) { pdf in
             ActivityViewRepresentable(activityItems: [pdf.url])
+        }
+        .sheet(item: $presentedEstimate, onDismiss: {
+            Task { await viewModel.loadProject(id: projectId) }
+        }) { selection in
+            EstimateEditorView(estimateId: selection.id, initialNotice: selection.notice)
         }
         .sheet(item: $presentedProposal, onDismiss: {
             Task { await viewModel.reloadProposals() }
@@ -273,7 +284,7 @@ struct ProjectDetailView: View {
                     AIEstimateReadyCard(
                         estimate: latestEstimate,
                         onReview: {
-                            handleExportEstimate(estimateId: latestEstimate.id)
+                            presentedEstimate = EstimateEditorSelection(id: latestEstimate.id)
                         }
                     )
                 }
@@ -300,11 +311,15 @@ struct ProjectDetailView: View {
                     exportingEstimateId: exportingEstimateId,
                     convertingEstimateId: convertingEstimateId,
                     isGeneratingAI: isGeneratingAIEstimate,
+                    isCreatingEstimate: isCreatingEstimate,
                     onGenerateAI: {
                         handleGenerateAIEstimate()
                     },
                     onCreateEstimate: {
                         handleCreateEstimate()
+                    },
+                    onReviewEstimate: { estimateId in
+                        presentedEstimate = EstimateEditorSelection(id: estimateId)
                     },
                     onExportEstimate: { estimateId in
                         handleExportEstimate(estimateId: estimateId)
@@ -509,13 +524,14 @@ struct ProjectDetailView: View {
     }
 
     private func handleCreateEstimate() {
+        guard !isCreatingEstimate, !isGeneratingAIEstimate else { return }
         isCreatingEstimate = true
         Task {
-            _ = await viewModel.createEstimate()
+            if let estimate = await viewModel.createEstimate() {
+                presentedEstimate = EstimateEditorSelection(id: estimate.id, notice: viewModel.errorMessage)
+                viewModel.errorMessage = nil
+            }
             isCreatingEstimate = false
-            // The new estimate appears in the Estimates section and the user
-            // taps "Export PDF" to generate the branded copy. On nil, the VM
-            // sets errorMessage which surfaces via the .alert above.
         }
     }
 
@@ -582,9 +598,12 @@ struct ProjectDetailView: View {
         let result = featureGateCoordinator.guardGenerateAIEstimate()
         switch result {
         case .allowed:
+            guard !isGeneratingAIEstimate, !isCreatingEstimate else { return }
             isGeneratingAIEstimate = true
             Task {
-                _ = await viewModel.generateAIEstimate()
+                if let estimate = await viewModel.generateAIEstimate() {
+                    presentedEstimate = EstimateEditorSelection(id: estimate.id)
+                }
                 isGeneratingAIEstimate = false
             }
         case let .blocked(decision):
