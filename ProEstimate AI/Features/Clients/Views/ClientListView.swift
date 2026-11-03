@@ -1,11 +1,8 @@
 import SwiftUI
 
-/// Clients tab landing page. The contractor's primary action here is to
-/// update a client's contact info, so tapping a card opens the edit
-/// form sheet directly rather than routing through a separate detail
-/// screen first. Long-press (context menu) still surfaces the
-/// destructive delete affordance.
+/// Client history is the primary destination; editing stays available in the context menu.
 struct ClientListView: View {
+    @Environment(AppRouter.self) private var router
     @State private var viewModel = ClientListViewModel()
     @State private var showingNewClient = false
     @State private var clientToEdit: Client?
@@ -13,7 +10,8 @@ struct ClientListView: View {
     @State private var clientToDelete: Client?
 
     var body: some View {
-        NavigationStack {
+        @Bindable var router = router
+        NavigationStack(path: $router.clientsPath) {
             content
                 .navigationTitle("Clients")
                 .toolbar {
@@ -50,6 +48,7 @@ struct ClientListView: View {
                         viewModel.addOrUpdateClient(updatedClient)
                     }
                 }
+                .appNavigationDestinations()
                 .confirmationDialog(
                     "Delete Client",
                     isPresented: $showingDeleteConfirmation,
@@ -97,15 +96,19 @@ struct ClientListView: View {
         ScrollView {
             LazyVStack(spacing: SpacingTokens.sm) {
                 ForEach(viewModel.filteredClients) { client in
-                    Button {
-                        clientToEdit = client
+                    NavigationLink {
+                        ClientDetailView(
+                            clientId: client.id,
+                            onClientUpdated: { viewModel.addOrUpdateClient($0) },
+                            onClientDeleted: { viewModel.removeClient(id: $0) }
+                        )
                     } label: {
                         clientRow(client)
                             .padding(SpacingTokens.md)
                             .glassCard()
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint("Opens the edit form for this client")
+                    .accessibilityHint("Open client details, projects and estimates")
                     .contextMenu {
                         Button {
                             clientToEdit = client

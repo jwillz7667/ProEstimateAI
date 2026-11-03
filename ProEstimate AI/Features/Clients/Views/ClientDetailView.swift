@@ -16,9 +16,14 @@ struct ClientDetailView: View {
     @State private var estimates: [Estimate] = []
     @State private var isLoadingEstimates = false
     @State private var estimatesError: String?
+    @State private var projects: [Project] = []
+    @State private var isLoadingProjects = false
+    @State private var projectsError: String?
+    @State private var showsAllProjects = false
 
     private let clientService: ClientServiceProtocol = LiveClientService()
     private let estimateService: EstimateServiceProtocol = LiveEstimateService()
+    private let historyService = ClientProjectHistoryService()
 
     var body: some View {
         Group {
@@ -59,9 +64,11 @@ struct ClientDetailView: View {
                 .disabled(client == nil || isDeleting)
             }
         }
-        .task {
-            await loadClient()
-            await loadEstimates()
+        .task(id: clientId) {
+            async let clientLoad: () = loadClient()
+            async let estimateLoad: () = loadEstimates()
+            async let projectLoad: () = loadProjects()
+            _ = await (clientLoad, estimateLoad, projectLoad)
         }
         .sheet(isPresented: $showingEditSheet) {
             if let client {
@@ -255,22 +262,38 @@ struct ClientDetailView: View {
         }
     }
 
-    // MARK: - Projects Section (Placeholder)
+    // MARK: - Project History
 
     private var projectsSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            SectionHeaderView(title: "Projects", actionTitle: "See All") {
-                // Navigate to filtered project list — will be implemented in Projects phase
+            SectionHeaderView(title: "Projects", actionTitle: projects.count > 3 ? (showsAllProjects ? "Show less" : "See all") : nil) {
+                showsAllProjects.toggle()
             }
-
-            GlassCard {
-                HStack {
-                    Image(systemName: "folder")
-                        .foregroundStyle(.secondary)
-                    Text("Projects will appear here")
-                        .font(TypographyTokens.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+            VStack(spacing: SpacingTokens.sm) {
+                if isLoadingProjects && projects.isEmpty {
+                    GlassCard { ProgressView("Loading projects…").frame(maxWidth: .infinity, alignment: .leading) }
+                } else if let projectsError {
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+                            Text(projectsError).font(TypographyTokens.subheadline)
+                            Button("Retry projects") { Task { await loadProjects() } }
+                                .frame(minHeight: 44)
+                        }
+                    }
+                } else if projects.isEmpty {
+                    GlassCard {
+                        Label("No projects linked to this client yet.", systemImage: "folder")
+                            .font(TypographyTokens.subheadline)
+                            .foregroundStyle(ColorTokens.secondaryText)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                ForEach(showsAllProjects ? projects : Array(projects.prefix(3))) { project in
+                    NavigationLink(value: AppDestination.projectDetail(id: project.id)) {
+                        ProjectRowView(project: project, clientName: client?.name)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Open this client's project")
                 }
             }
             .padding(.horizontal, SpacingTokens.md)
@@ -336,7 +359,8 @@ struct ClientDetailView: View {
     }
 
     private func estimateRow(_ estimate: Estimate) -> some View {
-        GlassCard {
+        NavigationLink(value: AppDestination.projectDetail(id: estimate.projectId)) {
+          GlassCard {
             HStack(spacing: SpacingTokens.sm) {
                 Image(systemName: "doc.text.fill")
                     .font(.system(size: 18))
@@ -370,7 +394,10 @@ struct ClientDetailView: View {
                     }
                 }
             }
+          }
         }
+        .buttonStyle(.plain)
+        .accessibilityHint("Open the project for this estimate")
     }
 
     // MARK: - Data Loading
@@ -402,6 +429,22 @@ struct ClientDetailView: View {
     }
 
     // MARK: - Delete
+
+    private func loadProjects() async {
+        guard !isLoadingProjects else { return }
+        isLoadingProjects = true
+        projectsError = nil
+        defer { isLoadingProjects = false }
+        do {
+            let loaded = try await historyService.projects(clientId: clientId)
+            try Task.checkCancellation()
+            projects = loaded
+        } catch is CancellationError {
+            return
+        } catch {
+            projectsError = error.localizedDescription
+        }
+    }
 
     private func performDeletion() async {
         guard !isDeleting else { return }

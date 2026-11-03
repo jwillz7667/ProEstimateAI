@@ -45,11 +45,11 @@ async function verifyClientOwnership(
   if (!client) throw new NotFoundError("Client", clientId);
 }
 
-export async function list(companyId: string, pagination: PaginationParams) {
+export async function list(companyId: string, pagination: PaginationParams, clientId?: string) {
   const { cursor, pageSize = 25 } = pagination;
 
   const projects = await prisma.project.findMany({
-    where: { companyId },
+    where: { companyId, ...(clientId ? { clientId } : {}) },
     // Defensive select: avoids decoding `qualityTier` when an environment has
     // DB/client enum nullability mismatch (which can crash Prisma on read).
     select: {

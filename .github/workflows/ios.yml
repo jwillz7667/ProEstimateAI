@@ -102,3 +102,9 @@ jobs:
 
       - name: Run manual estimate editing regressions
         run: scripts/tests/run-estimate-editor-regressions.sh
+
+      - name: Run direct estimate creation regressions
+        run: scripts/tests/run-estimate-creation-regressions.sh
+
+      - name: Run estimate delivery regressions
+        run: scripts/tests/run-estimate-delivery-regressions.sh
