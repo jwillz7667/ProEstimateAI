@@ -1,0 +1,45 @@
+{
+  "app_bundle_id": "Res.ProEstimate-AI",
+  "source_commit": "d9aab6feaf6177607eb93bd25ee8f266a017f2b0",
+  "status_run_completed_at": "2026-11-03T22:39:27Z",
+  "upload_run": {
+    "id": 41731062569,
+    "url": "https://github.com/jwillz7667/ProEstimateAI/actions/runs/41731062569",
+    "conclusion": "success"
+  },
+  "status_run": {
+    "id": 41732389464,
+    "url": "https://github.com/jwillz7667/ProEstimateAI/actions/runs/41732389464",
+    "scope": "status",
+    "conclusion": "success"
+  },
+  "uploaded_build": {
+    "version": "1.0.9",
+    "build_number": "15",
+    "build_id": "67087440-74dc-44f7-acb4-b701ea33706a",
+    "processing_state": "VALID",
+    "upload_state": "COMPLETE",
+    "expired": false,
+    "upload_error_count": 0,
+    "upload_warning_count": 0,
+    "selected_for_app_review": false,
+    "submitted_for_app_review": false
+  },
+  "existing_selected_build": {
+    "version": "1.0.9",
+    "build_number": "14",
+    "build_id": "8d261e8e-578c-4a71-997c-a234ebd88b53",
+    "app_store_state": "PENDING_DEVELOPER_RELEASE",
+    "release_type": "MANUAL",
+    "selection_changed": false
+  },
+  "release_actions_performed": {
+    "upload": true,
+    "read_only_status": true,
+    "attach_build": false,
+    "submit_for_review": false,
+    "withdraw_or_reject_review": false,
+    "release": false,
+    "launch_or_boot_simulator": false
+  }
+}
