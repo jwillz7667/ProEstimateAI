@@ -12,6 +12,9 @@ import {
   buildCursorWhere,
 } from "../../lib/pagination";
 import { CreateProjectInput, UpdateProjectInput } from "./projects.validators";
+import { prepareCheckoutErasure, assertCheckoutErasureSafe } from "../invoice-checkout/invoice-checkout.service";
+import { lockCompanyPaymentErasure } from "../invoice-checkout/payment-erasure-lock";
+import type { InvoicePaymentGateway } from "../invoice-checkout/stripe-gateway";
 
 // Home-service trades bid labor + parts without redesigning anything, so an
 // AI "after" render adds nothing. When the client doesn't specify, these
@@ -342,7 +345,7 @@ export async function update(
   return project;
 }
 
-export async function remove(id: string, companyId: string) {
+export async function remove(id: string, companyId: string, gateway?: InvoicePaymentGateway) {
   const existing = await prisma.project.findFirst({
     where: { id, companyId },
     select: { id: true },
@@ -351,6 +354,7 @@ export async function remove(id: string, companyId: string) {
   if (!existing) {
     throw new NotFoundError("Project", id);
   }
+  await prepareCheckoutErasure(companyId, id, gateway);
 
   // A project must delete with its full subtree, but the FK constraints on
   // Estimate, Proposal, and Invoice are RESTRICT (not CASCADE) — so a bare
@@ -362,10 +366,12 @@ export async function remove(id: string, companyId: string) {
   // CASCADE (Asset, AIGeneration → MaterialSuggestion, ActivityLogEntry,
   // EstimateExport, *LineItem). Order matters: Proposal FK-references Estimate
   // (also RESTRICT), so proposals must be removed before estimates.
-  await prisma.$transaction([
-    prisma.invoice.deleteMany({ where: { projectId: id } }),
-    prisma.proposal.deleteMany({ where: { projectId: id } }),
-    prisma.estimate.deleteMany({ where: { projectId: id } }),
-    prisma.project.delete({ where: { id } }),
-  ]);
+  await prisma.$transaction(async tx => {
+    await lockCompanyPaymentErasure(tx, companyId);
+    await assertCheckoutErasureSafe(tx, companyId, id);
+    await tx.invoice.deleteMany({ where: { projectId: id, companyId } });
+    await tx.proposal.deleteMany({ where: { projectId: id, companyId } });
+    await tx.estimate.deleteMany({ where: { projectId: id, companyId } });
+    await tx.project.delete({ where: { id } });
+  });
 }

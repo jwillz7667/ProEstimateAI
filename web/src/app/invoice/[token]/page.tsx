@@ -26,10 +26,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
   const isVoid = invoice.status === "void";
   const isPaid = !isVoid && invoice.amount_due === 0;
   const accent = company.primary_color && /^#[0-9a-fA-F]{6}$/.test(company.primary_color) ? company.primary_color : "#FF9230";
-  const status = isVoid ? "Void" : isPaid ? "Paid" : invoice.amount_paid > 0 ? "Partially paid" : "Awaiting payment";
+  const credit = invoice.credit_amount ?? 0;
+  const status = isVoid ? "Void" : isPaid ? (credit > 0 ? "Settled" : "Paid") : invoice.amount_paid > 0 ? "Partially paid" : "Awaiting payment";
   const totals: Array<[string, number]> = [["Subtotal", invoice.subtotal], ["Tax", invoice.tax_amount]];
   if (invoice.discount_amount > 0) totals.push(["Discount", -invoice.discount_amount]);
   totals.push(["Invoice total", invoice.total_amount], ["Recorded payments", invoice.amount_paid]);
+  if (credit > 0) totals.push(["Contract credits applied", -credit]);
 
   return <main className="min-h-screen bg-surface-secondary text-ink-900 print:bg-white">
     <div className="h-1.5" style={{ backgroundColor: accent }} />
@@ -63,14 +65,15 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
         <h2 id="schedule-title" className="text-xl font-semibold">Payment schedule</h2>
         <ul className="mt-3 divide-y divide-ink-100">{data.installments.map((item) => <li key={item.id} className="flex justify-between gap-5 py-4">
           <div><h3 className="font-medium">{item.title}</h3><p className="mt-1 text-sm text-ink-500">{item.due_date ? `Due ${displayDate(item.due_date)}` : "Due at the agreed milestone"}</p></div>
-          <div className="text-right"><p className="font-semibold">{money(item.amount)}</p><p className="mt-1 text-sm text-ink-500">{item.amount_due === 0 ? "Paid" : `${money(item.amount_due)} remaining`}</p></div>
+          <div className="text-right"><p className="font-semibold">{money(item.amount)}</p><p className="mt-1 text-sm text-ink-500">{item.amount_due === 0 ? ((item.credit_amount ?? 0) > 0 ? "Settled" : "Paid") : `${money(item.amount_due)} remaining`}</p>
+            {(item.credit_amount ?? 0) > 0 ? <p className="mt-1 text-sm text-ink-500">Includes {money(item.credit_amount!)} contract credit</p> : null}</div>
         </li>)}</ul>
       </section> : null}
       {!isVoid && !isPaid && data.online_payment?.available ? <InvoiceCheckoutButton token={token} processing={data.online_payment.processing}
         label={data.installments.some(item => item.amount_due > 0) ? `Pay next scheduled amount ${money(data.installments.find(item => item.amount_due > 0)!.amount_due)}` : `Pay ${money(invoice.amount_due)}`}
         accent={accent} testMode={data.online_payment.test_mode} /> : null}
       {!isVoid && data.online_payment?.requires_contractor_review ? <section className="rounded-2xl border border-ink-200 bg-white p-6"><h2 className="text-xl font-semibold">Payment needs review</h2><p className="mt-2 text-ink-600">Contact {company.name} before making another online payment.</p></section> : null}
-      {!isVoid && !isPaid && invoice.payment_instructions ? <section className="rounded-2xl border border-ink-200 bg-white p-6">
+      {!isVoid && !isPaid && !data.online_payment?.requires_contractor_review && invoice.payment_instructions ? <section className="rounded-2xl border border-ink-200 bg-white p-6">
         <h2 className="text-xl font-semibold">How to pay</h2><p className="mt-3 whitespace-pre-wrap break-words text-ink-600">{invoice.payment_instructions}</p>
       </section> : null}
       {data.payments.length ? <section aria-labelledby="receipts-title" className="rounded-2xl border border-ink-200 bg-white p-6">

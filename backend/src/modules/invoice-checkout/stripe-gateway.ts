@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import { InvoiceCheckoutAttempt, StripeMerchant } from '@prisma/client';
 import { env } from '../../config/env';
 import { AppError, ConflictError } from '../../lib/errors';
-import { checkoutConfigured } from './invoice-checkout.policy';
+import { checkoutConfigured, stripeCredentialsConfigured } from './invoice-checkout.policy';
 
 export interface GatewaySession {
   id: string; url: string | null; amount: number | null; currency: string | null;
@@ -134,5 +134,13 @@ export class StripeInvoiceGateway implements InvoicePaymentGateway {
 let gateway: InvoicePaymentGateway | undefined;
 export function configuredGateway(): InvoicePaymentGateway {
   if (!checkoutConfigured()) throw new AppError(503, 'PAYMENTS_NOT_CONFIGURED', 'Online invoice payments are not configured.');
+  return reconciliationGateway();
+}
+
+/** Disabling new collection must never disable receipts or cancellation for
+ * sessions that were already created while payments were enabled.
+ */
+export function reconciliationGateway(): InvoicePaymentGateway {
+  if (!stripeCredentialsConfigured()) throw new AppError(503, 'PAYMENT_RECONCILIATION_UNAVAILABLE', 'Existing online payments need their payment-service credentials restored before they can be reconciled.');
   return gateway ??= new StripeInvoiceGateway(env.STRIPE_API_KEY!, env.STRIPE_WEBHOOK_SECRET!);
 }

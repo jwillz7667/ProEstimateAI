@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeInvoiceTotals } from "./invoice-line-items.service";
+import { computeInvoiceTotals } from "../invoice-finance/invoice-balance";
 
 describe("computeInvoiceTotals", () => {
   it("adds tax to the subtotal when there is no discount", () => {

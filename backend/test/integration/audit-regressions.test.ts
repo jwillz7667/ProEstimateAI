@@ -121,8 +121,9 @@ const otherLine = (name: string) => ({
 });
 
 describe("invoice money and reference invariants", () => {
-  it("sets discounts before sending, retains agreed tax during payments, and locks sent terms", async () => {
+  it("retains the approved discount and tax during invoicing and payment, and locks the agreed price", async () => {
     const t = await tenant();
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED", discountAmount: 100, totalAmount: 1020 } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,
@@ -133,9 +134,8 @@ describe("invoice money and reference invariants", () => {
       where: { id: t.company.id },
       data: { defaultTaxRate: 25 },
     });
-    const discounted = await invoices.update(invoice.id, t.company.id, {
-      discount_amount: 100,
-    });
+    await expect(invoices.update(invoice.id, t.company.id, { discount_amount: 200 })).rejects.toMatchObject({ code: "CONFLICT" });
+    const discounted = await prisma.invoice.findUniqueOrThrow({ where: { id: invoice.id } });
     expect(Number(discounted.totalAmount)).toBe(1020);
     expect(Number(discounted.amountDue)).toBe(1020);
     await prisma.invoice.update({ where: { id: invoice.id }, data: { status: "SENT" } });
@@ -153,6 +153,7 @@ describe("invoice money and reference invariants", () => {
   });
   it("snapshots exact converted line taxes and keeps labor untaxed after company rate changes", async () => {
     const t = await tenant();
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED" } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,
@@ -169,16 +170,17 @@ describe("invoice money and reference invariants", () => {
       where: { id: t.company.id },
       data: { defaultTaxRate: 25 },
     });
-    await invoiceLines.update(lines[1].id, t.company.id, { unit_cost: 150 });
+    await expect(invoiceLines.update(lines[1].id, t.company.id, { unit_cost: 150 })).rejects.toMatchObject({ code: "CONFLICT" });
     const fresh = await prisma.invoice.findUniqueOrThrow({
       where: { id: invoice.id },
     });
-    expect(Number(fresh.subtotal)).toBe(1100);
+    expect(Number(fresh.subtotal)).toBe(1040);
     expect(Number(fresh.taxAmount)).toBe(80);
-    expect(Number(fresh.totalAmount)).toBe(1180);
+    expect(Number(fresh.totalAmount)).toBe(1120);
   });
   it("rejects stale concurrent cumulative payments, including an ambiguous equal-sized retry", async () => {
     const t = await tenant();
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED" } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,
@@ -211,6 +213,7 @@ describe("invoice money and reference invariants", () => {
   });
   it("does not reopen paid/void invoices by sending and keeps partial payments intact", async () => {
     const t = await tenant();
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED" } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,
@@ -257,6 +260,7 @@ describe("invoice money and reference invariants", () => {
         totalAmount: 1,
       },
     });
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED" } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,
@@ -266,9 +270,10 @@ describe("invoice money and reference invariants", () => {
     const line = await prisma.invoiceLineItem.findFirstOrThrow({
       where: { invoiceId: invoice.id },
     });
-    const updated = await invoiceLines.update(line.id, t.company.id, {
+    await expect(invoiceLines.update(line.id, t.company.id, {
       description: "Clarified scope", quantity: 3, unit_cost: 0.33,
-    });
+    })).rejects.toMatchObject({ code: "CONFLICT" });
+    const updated = await prisma.invoiceLineItem.findUniqueOrThrow({ where: { id: line.id } });
     expect(Number(updated.lineTotal)).toBe(1);
     expect(
       Number(
@@ -279,6 +284,7 @@ describe("invoice money and reference invariants", () => {
   });
   it("rejects overpayments and reductions below payments without partial writes", async () => {
     const t = await tenant();
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED" } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,

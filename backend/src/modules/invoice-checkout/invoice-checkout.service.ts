@@ -4,8 +4,11 @@ import Stripe from 'stripe';
 import { prisma } from '../../config/database';
 import { env } from '../../config/env';
 import { AppError, AuthorizationError, ConflictError, NotFoundError, ValidationError } from '../../lib/errors';
-import { ACTIVE_CHECKOUT_STATES, checkoutConfigured, invoiceCheckoutInfo } from './invoice-checkout.policy';
-import { configuredGateway, GatewayRefund, GatewaySession, InvoicePaymentGateway } from './stripe-gateway';
+import { ACTIVE_CHECKOUT_STATES, checkoutConfigured, invoiceCheckoutInfo, assertNoActiveCheckout } from './invoice-checkout.policy';
+import { configuredGateway, reconciliationGateway, GatewayRefund, GatewaySession, InvoicePaymentGateway } from './stripe-gateway';
+import { lockContractForInvoice } from '../change-orders/change-order-locks';
+import { applyAvailableContractCredits } from '../change-orders/credit-notes.service';
+import { allocateInvoiceInstallments, invoiceAmountDue } from '../invoice-finance/invoice-balance';
 
 const SUPPORTED_CURRENCIES = new Set(['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'NZD', 'MXN']);
 const MINIMUM_MINOR: Record<string, number> = { USD: 50, CAD: 50, EUR: 50, GBP: 30, AUD: 50, NZD: 50, MXN: 1000 };
@@ -14,9 +17,10 @@ export async function requirePaymentAdministrator(companyId: string, userId: str
   if (!user || !['OWNER', 'ADMIN'].includes(user.role)) throw new AuthorizationError('Only a company owner or administrator can manage online payment setup.');
 }
 async function lockInvoice(tx: Prisma.TransactionClient, id: string, companyId: string) {
+  const contract = await lockContractForInvoice(tx, id, companyId);
   const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "Invoice" WHERE id = ${id} AND "companyId" = ${companyId} FOR UPDATE`;
   if (!rows.length) throw new NotFoundError('Invoice', id);
-  return tx.invoice.findUniqueOrThrow({ where: { id } });
+  return { ...await tx.invoice.findUniqueOrThrow({ where: { id } }), contractRootEstimateId: contract.rootEstimateId };
 }
 function minorAmount(amount: Prisma.Decimal) {
   const minor = amount.times(100);
@@ -73,29 +77,30 @@ async function reserveCheckout(token: string, scope: 'next_installment' | 'balan
   const found = await prisma.invoice.findUnique({ where: { shareToken: token }, select: { id: true, companyId: true } });
   if (!found) throw new NotFoundError('Invoice');
   return prisma.$transaction(async tx => {
-    const invoice = await lockInvoice(tx, found.id, found.companyId);
+    let invoice = await lockInvoice(tx, found.id, found.companyId);
     if (invoice.status === 'DRAFT' || invoice.status === 'VOID' || invoice.amountDue.lte(0)) throw new ConflictError('This invoice has no available online payment.');
     if (invoice.paymentReviewRequired) throw new ConflictError('The contractor must review a refunded or disputed payment before collecting online again.');
     const active = await tx.invoiceCheckoutAttempt.findFirst({ where: { invoiceId: invoice.id, state: { in: ACTIVE_CHECKOUT_STATES } } });
     if (active) return { attempt: active, invoice };
+    if (invoice.contractRootEstimateId) {
+      await applyAvailableContractCredits(tx, invoice.companyId, invoice.contractRootEstimateId);
+      invoice = { ...await tx.invoice.findUniqueOrThrow({ where: { id: invoice.id } }), contractRootEstimateId: invoice.contractRootEstimateId };
+      if (invoice.amountDue.lte(0)) return { attempt: null, invoice };
+    }
     const merchant = await tx.stripeMerchant.findUnique({ where: { companyId: invoice.companyId } });
     if (!merchant?.accountId) throw new ConflictError('The contractor has not finished online payment setup.');
     const currencyCode = (invoice.currencyCode || 'USD').toUpperCase();
-    if (!SUPPORTED_CURRENCIES.has(currencyCode)) throw new ValidationError('Online checkout is not supported for this invoice currency. Contact the contractor for payment instructions.');
+    if (!SUPPORTED_CURRENCIES.has(currencyCode)) return { attempt: null, invoice, error: new ValidationError('Online checkout is not supported for this invoice currency. Contact the contractor for payment instructions.') };
     let amount = invoice.amountDue;
     if (scope === 'next_installment') {
       const installments = await tx.invoiceInstallment.findMany({ where: { invoiceId: invoice.id }, orderBy: { sortOrder: 'asc' } });
-      let allocated = invoice.amountPaid;
-      for (const installment of installments) {
-        const paid = Prisma.Decimal.min(installment.amount, Prisma.Decimal.max(0, allocated));
-        allocated = allocated.minus(paid);
-        const due = installment.amount.minus(paid);
-        if (due.gt(0)) { amount = Prisma.Decimal.min(due, invoice.amountDue); break; }
+      for (const installment of allocateInvoiceInstallments(installments, invoice.amountPaid, invoice.creditAmount)) {
+        if (installment.amountDue.gt(0)) { amount = Prisma.Decimal.min(installment.amountDue, invoice.amountDue); break; }
       }
     }
     const minor = minorAmount(amount);
     if (minor < MINIMUM_MINOR[currencyCode] || minor > 99_999_999)
-      throw new ValidationError('This scheduled amount is outside the supported online payment range. Contact the contractor for payment instructions or a different payment schedule.');
+      return { attempt: null, invoice, error: new ValidationError('This scheduled amount is outside the supported online payment range. Contact the contractor for payment instructions or a different payment schedule.') };
     const letters = Array.from(randomBytes(8), byte => String.fromCharCode(97 + byte % 26)).join('');
     const attempt = await tx.invoiceCheckoutAttempt.create({ data: { invoiceId: invoice.id, companyId: invoice.companyId, accountId: merchant.accountId, createdAt: new Date(),
       amount, currencyCode, paymentScope: scope, integrationIdentifier: `proestimate_invoice_${letters}` } });
@@ -129,7 +134,10 @@ export async function createCheckout(token: string, scope: 'next_installment' | 
   const merchant = await prisma.stripeMerchant.findUnique({ where: { companyId: preflight.companyId } });
   if (!merchant?.accountId || !(await gateway.merchantReady(merchant.accountId)))
     throw new ConflictError('The contractor must finish online payment setup before accepting payment.');
-  const { attempt, invoice } = await reserveCheckout(token, scope);
+  const reserved = await reserveCheckout(token, scope);
+  if ('error' in reserved && reserved.error) throw reserved.error;
+  const { attempt, invoice } = reserved;
+  if (!attempt) return { url: null, state: 'settled', amount: 0, currency_code: invoice.currencyCode ?? 'USD' };
   // Capability status is retrieved on every attempt, never trusted from a
   // previous onboarding redirect or a cached v1 charges_enabled flag.
   if (!(await gateway.merchantReady(attempt.accountId))) throw new ConflictError('The contractor’s payment account needs attention before it can accept payment.');
@@ -151,11 +159,16 @@ export async function createCheckout(token: string, scope: 'next_installment' | 
   return { url, state: observed.state.toLowerCase(), amount: Number(observed.amount), currency_code: observed.currencyCode };
 }
 
-export async function cancelCheckout(invoiceId: string, companyId: string, userId: string, gateway = configuredGateway()) {
+export async function cancelCheckout(invoiceId: string, companyId: string, userId: string, gateway?: InvoicePaymentGateway) {
   await requirePaymentAdministrator(companyId, userId);
   if (!(await prisma.invoice.findFirst({ where: { id: invoiceId, companyId }, select: { id: true } }))) throw new NotFoundError('Invoice', invoiceId);
   const attempt = await prisma.invoiceCheckoutAttempt.findFirst({ where: { invoiceId, companyId, state: { in: ACTIVE_CHECKOUT_STATES } } });
   if (!attempt) return;
+  await cancelExistingAttempt(attempt, gateway ?? reconciliationGateway());
+}
+
+async function cancelExistingAttempt(attempt: InvoiceCheckoutAttempt, gateway: InvoicePaymentGateway) {
+  const invoiceId = attempt.invoiceId, companyId = attempt.companyId;
   let session = attempt.sessionId ? await gateway.retrieveSession(attempt.sessionId, attempt.accountId) : await gateway.findSession(attempt);
   if (!session) {
     // An in-flight request can commit after an early list response. Wait out
@@ -174,6 +187,32 @@ export async function cancelCheckout(invoiceId: string, companyId: string, userI
   }
   const result = await observeSession(attempt, session, gateway);
   if (ACTIVE_CHECKOUT_STATES.includes(result.state)) throw new ConflictError('A payment is processing or awaiting verified confirmation. It cannot be replaced or manually recorded yet.');
+}
+
+/** Called before erasing a project or sole-member company. It never creates a
+ * new provider session. Unknown/processing writes retain their local records.
+ */
+export async function prepareCheckoutErasure(companyId: string, projectId?: string, gateway?: InvoicePaymentGateway) {
+  const attempts = await prisma.invoiceCheckoutAttempt.findMany({ where: {
+    companyId, state: { in: ACTIVE_CHECKOUT_STATES }, ...(projectId ? { invoice: { projectId } } : {}),
+  }, orderBy: [{ invoiceId: 'asc' }, { id: 'asc' }] });
+  if (attempts.some(attempt => attempt.state !== 'OPEN'))
+    throw new ConflictError('An online payment is being prepared or processed. Reconcile it from the invoice Payments screen before deleting this project or account.');
+  if (!attempts.length) return;
+  try {
+    gateway ??= reconciliationGateway();
+    for (const attempt of attempts) await cancelExistingAttempt(attempt, gateway);
+  } catch {
+    throw new ConflictError('Online checkout cancellation could not be confirmed. Payment records were retained. Restore payment-service access or reconcile the invoice before deleting this project or account.');
+  }
+}
+
+/** The caller holds the exclusive company payment-erasure gate. */
+export async function assertCheckoutErasureSafe(tx: Prisma.TransactionClient, companyId: string, projectId?: string) {
+  const active = await tx.invoiceCheckoutAttempt.findFirst({ where: {
+    companyId, state: { in: ACTIVE_CHECKOUT_STATES }, ...(projectId ? { invoice: { projectId } } : {}),
+  }, select: { id: true } });
+  if (active) throw new ConflictError('An online payment opened or is still processing. Its reconciliation records were retained. Retry after confirming cancellation or payment in the invoice Payments screen.');
 }
 
 /** The only path that writes Stripe payment receipts. Caller has verified the
@@ -199,11 +238,11 @@ async function settleVerifiedSession(session: GatewaySession, accountId: string,
       if (!receipt) {
         await tx.invoicePayment.create({ data: { invoiceId: invoice.id, companyId: invoice.companyId, requestId: providerId,
           providerPaymentId: providerId, amount: attempt.amount, method: 'STRIPE', recordedAt: paymentDate } });
-        const amountPaid = invoice.amountPaid.plus(attempt.amount), amountDue = Prisma.Decimal.max(0, invoice.totalAmount.minus(amountPaid));
-        await tx.invoice.update({ where: { id: invoice.id }, data: { amountPaid, amountDue,
+        const amountPaid = invoice.amountPaid.plus(attempt.amount), amountDue = invoiceAmountDue(invoice.totalAmount, amountPaid, invoice.creditAmount);
+        await tx.invoice.update({ where: { id: invoice.id }, data: { amountPaid, amountDue: invoice.status === 'VOID' ? 0 : amountDue,
           status: invoice.status === 'VOID' ? 'VOID' : amountDue.isZero() ? 'PAID' : 'PARTIALLY_PAID',
           paidAt: amountDue.isZero() ? paymentDate : null,
-          paymentReviewRequired: invoice.paymentReviewRequired || amountPaid.gt(invoice.totalAmount) || invoice.status === 'VOID' } });
+          paymentReviewRequired: invoice.paymentReviewRequired || amountPaid.plus(invoice.creditAmount).gt(invoice.totalAmount) || invoice.status === 'VOID' } });
       } else if (!receipt.recordedAt && paymentDate) {
         // A refund may have arrived first. Fill the previously unknown original
         // date only when its actual signed payment-confirmation event arrives.
@@ -212,6 +251,7 @@ async function settleVerifiedSession(session: GatewaySession, accountId: string,
       }
       await tx.invoiceCheckoutAttempt.update({ where: { id: attempt.id }, data: { state: attempt.refundedAmount.gt(0) ? 'REFUNDED' : 'PAID',
         sessionId: session.id, paymentIntentId: session.paymentIntentId, checkoutUrl: null } });
+      if (invoice.contractRootEstimateId) await applyAvailableContractCredits(tx, invoice.companyId, invoice.contractRootEstimateId);
     } else if (ACTIVE_CHECKOUT_STATES.includes(attempt.state)) {
       const state = session.status === 'open' ? 'OPEN' : session.status === 'expired' && session.paymentIntentStatus !== 'succeeded' ? 'EXPIRED'
         : session.paymentIntentStatus === 'canceled' || session.paymentIntentStatus === 'requires_payment_method' ? 'FAILED' : 'PROCESSING';
@@ -250,15 +290,16 @@ async function settleVerifiedRefund(refund: GatewayRefund, accountId: string, ev
       providerPaymentId: providerId, amount: amount.negated(), method: 'STRIPE_REFUND', recordedAt: refundDate } });
     const amountPaid = invoice.amountPaid.minus(amount);
     if (amountPaid.lt(0)) throw new ConflictError('Recorded payment corrections conflict with this refund. Review the invoice in Stripe.');
-    const amountDue = Prisma.Decimal.max(0, invoice.totalAmount.minus(amountPaid));
+    const amountDue = invoiceAmountDue(invoice.totalAmount, amountPaid, invoice.creditAmount);
     await tx.invoice.update({ where: { id: invoice.id }, data: { amountPaid, amountDue: invoice.status === 'VOID' ? 0 : amountDue,
-      status: invoice.status === 'VOID' ? 'VOID' : amountPaid.gt(0) ? 'PARTIALLY_PAID' : 'SENT', paidAt: null, paymentReviewRequired: true } });
+      status: invoice.status === 'VOID' ? 'VOID' : amountDue.isZero() ? 'PAID' : amountPaid.gt(0) ? 'PARTIALLY_PAID' : 'SENT', paidAt: amountDue.isZero() ? invoice.paidAt : null, paymentReviewRequired: true } });
     await tx.invoiceCheckoutAttempt.update({ where: { id: attempt.id }, data: { refundedAmount: attempt.refundedAmount.plus(amount), state: 'REFUNDED' } });
+    if (invoice.contractRootEstimateId) await applyAvailableContractCredits(tx, invoice.companyId, invoice.contractRootEstimateId);
     await tx.stripePaymentEvent.upsert({ where: { id: `${eventId}:refund:${refund.id}` }, create: { id: `${eventId}:refund:${refund.id}`, accountId, companyId: invoice.companyId }, update: {} });
   });
 }
 
-export async function receiveStripeWebhook(body: Buffer, signature: string, gateway = configuredGateway()) {
+export async function receiveStripeWebhook(body: Buffer, signature: string, gateway = reconciliationGateway()) {
   let event: Stripe.Event;
   try { event = gateway.verifyEvent(body, signature); }
   catch { throw new AppError(400, 'INVALID_WEBHOOK_SIGNATURE', 'The Stripe webhook signature could not be verified.'); }
@@ -303,13 +344,22 @@ export async function receiveStripeWebhook(body: Buffer, signature: string, gate
 
 export async function acknowledgeRefundReview(invoiceId: string, companyId: string, userId: string, expectedPaid: number, expectedDue: number) {
   await requirePaymentAdministrator(companyId, userId);
-  await prisma.$transaction(async tx => {
-    const invoice = await lockInvoice(tx, invoiceId, companyId);
-    if (!invoice.amountPaid.equals(expectedPaid) || !invoice.amountDue.equals(expectedDue)) throw new ConflictError('Payment totals changed. Refresh before acknowledging this review.');
+  const acknowledged = await prisma.$transaction(async tx => {
+    let invoice = await lockInvoice(tx, invoiceId, companyId);
+    await assertNoActiveCheckout(tx, invoiceId);
+    if (invoice.contractRootEstimateId) {
+      await applyAvailableContractCredits(tx, companyId, invoice.contractRootEstimateId);
+      invoice = { ...await tx.invoice.findUniqueOrThrow({ where: { id: invoiceId } }), contractRootEstimateId: invoice.contractRootEstimateId };
+    }
+    // Commit any newly allocated approved credits, but keep the review hold
+    // until the owner has seen the resulting canonical balance.
+    if (!invoice.amountPaid.equals(expectedPaid) || !invoice.amountDue.equals(expectedDue)) return false;
     await tx.invoice.update({ where: { id: invoice.id }, data: { paymentReviewRequired: false } });
     await tx.activityLogEntry.create({ data: { projectId: invoice.projectId, companyId, userId, entityType: 'Invoice', action: 'UPDATED',
       description: `Refund or payment dispute reviewed for invoice ${invoice.invoiceNumber}` } });
+    return true;
   });
+  if (!acknowledged) throw new ConflictError('Payment totals or contract credits changed. Refresh before acknowledging this review.');
 }
 
 export async function sharedCheckoutAvailability(invoiceId: string, companyId: string) {

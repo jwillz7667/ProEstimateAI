@@ -83,6 +83,7 @@ async function seedEstimate(companyId: string, opts: { withClient: boolean }) {
       companyId,
       estimateNumber: "EST-1001",
       title: "Bathroom Estimate",
+      status: "APPROVED",
       subtotalMaterials: 800,
       subtotalLabor: 240,
       subtotalOther: 0,

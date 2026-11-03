@@ -3,7 +3,7 @@ import { fetchAPI } from "./api";
 export interface SharedInvoice {
   invoice: {
     invoice_number: string; status: string; subtotal: number; tax_amount: number;
-    discount_amount: number; total_amount: number; amount_paid: number; amount_due: number;
+    discount_amount: number; total_amount: number; amount_paid: number; amount_due: number; credit_amount?: number;
     currency_code: string | null; issued_date: string | null; due_date: string | null;
     notes: string | null; payment_instructions: string | null;
   };
@@ -11,7 +11,7 @@ export interface SharedInvoice {
   client: { name: string }; project: { title: string };
   line_items: Array<{ name: string; description: string | null; quantity: number; unit: string; unit_cost: number; line_total: number }>;
   payments: Array<{ id: string; amount: number; method: string; recorded_at: string | null; created_at: string }>;
-  installments: Array<{ id: string; title: string; amount: number; paid_amount: number; amount_due: number; due_date: string | null }>;
+  installments: Array<{ id: string; title: string; amount: number; paid_amount: number; credit_amount?: number; amount_due: number; due_date: string | null }>;
   online_payment?: { available: boolean; processing: boolean; requires_contractor_review: boolean; test_mode?: boolean };
 }
 

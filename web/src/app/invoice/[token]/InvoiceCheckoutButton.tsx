@@ -22,6 +22,7 @@ export function InvoiceCheckoutButton({ token, processing, label, accent, testMo
         return;
       }
       setMessage(result.state === "processing" ? "Your payment is processing or awaiting verified confirmation. Please wait and refresh its status."
+        : result.state === "settled" ? "Approved contract credits settled the remaining balance. No new payment was collected."
         : "This checkout is no longer available. Refresh the invoice before trying again.");
       router.refresh();
     } catch (error) {

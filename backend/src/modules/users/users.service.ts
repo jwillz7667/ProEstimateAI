@@ -2,6 +2,9 @@ import { prisma } from '../../config/database';
 import { NotFoundError } from '../../lib/errors';
 import { UpdateUserInput } from './users.validators';
 import { invalidateCache, CacheKeys } from '../../config/redis';
+import { prepareCheckoutErasure, assertCheckoutErasureSafe } from '../invoice-checkout/invoice-checkout.service';
+import { lockCompanyPaymentErasure } from '../invoice-checkout/payment-erasure-lock';
+import type { InvoicePaymentGateway } from '../invoice-checkout/stripe-gateway';
 
 export async function getMe(userId: string) {
   const user = await prisma.user.findUnique({
@@ -42,7 +45,7 @@ export async function updateMe(userId: string, data: UpdateUserInput) {
  * single transaction so a partial failure rolls back rather than leaving the
  * user in an inconsistent state.
  */
-export async function deleteMe(userId: string) {
+export async function deleteMe(userId: string, gateway?: InvoicePaymentGateway) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, companyId: true, email: true },
@@ -53,8 +56,14 @@ export async function deleteMe(userId: string) {
   }
 
   const { companyId } = user;
+  if (await prisma.user.count({ where: { companyId, id: { not: userId } } }) === 0) {
+    await prepareCheckoutErasure(companyId, undefined, gateway);
+  }
 
   await prisma.$transaction(async (tx) => {
+    // Serializes concurrent final-member deletions and prevents new checkout
+    // reservations after the last active-attempt check.
+    await lockCompanyPaymentErasure(tx, companyId);
     // Detect whether this user is the sole member of the company tenancy.
     const otherUsers = await tx.user.count({
       where: { companyId, id: { not: userId } },
@@ -63,6 +72,7 @@ export async function deleteMe(userId: string) {
     // If sole owner, wipe all company-scoped data first so the company row
     // can be deleted at the end without FK constraint violations.
     if (otherUsers === 0) {
+      await assertCheckoutErasureSafe(tx, companyId);
       await tx.invoiceLineItem.deleteMany({
         where: { invoice: { companyId } },
       });

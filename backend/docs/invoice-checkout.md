@@ -4,7 +4,7 @@ This optional integration collects payment for contractors’ physical work. App
 
 ## Activation
 
-Online collection defaults off. Configure a Stripe Connect platform and a restricted backend key with the required Accounts v2, Account Links, Checkout Sessions, PaymentIntent and refund read/write permissions. Keep credentials in Railway variables; never place them in the app, website bundle, repository or chat.
+Online collection defaults off. Select and activate the business's Stripe platform account, complete Connect setup and enable Accounts v2. Configure a restricted backend key for the actual adapter calls: platform Accounts v2 create/read/list and Account Links create; connected-account Checkout Sessions create/read/list/expire, PaymentIntent read for expanded confirmation, and Refund read/list. Validate these exact calls with a restricted key in an isolated sandbox and add only resource permissions identified by Stripe's permission errors. The integration makes no refund-creation, payout, transfer, Billing subscription or application-fee calls. Keep credentials in Railway variables; never place them in the app, website bundle, repository or chat.
 
 - `STRIPE_PAYMENTS_ENABLED=true`
 - `STRIPE_API_KEY`: a restricted Stripe API key where available
@@ -12,13 +12,15 @@ Online collection defaults off. Configure a Stripe Connect platform and a restri
 
 Production refuses sandbox keys even if the flag is enabled. Use separate Stripe sandboxes and a disposable development database to test checkout; do not create sandbox receipts in real customer invoices.
 
+`STRIPE_PAYMENTS_ENABLED=false` stops new collection and onboarding. Keep the valid key and signing secret available until existing sessions are fully reconciled: cancellation, verified receipts/refunds and safe erasure still work while new collection is disabled. Removing credentials first blocks safe cancellation and erasure until service access is restored.
+
 Company owners/admins open Settings → Customer payments and explicitly begin hosted onboarding. New Accounts v2 merchants have full Stripe Dashboard access, direct charges, Stripe fee collection and Stripe negative balance responsibility. No application fee is introduced. Company/country/creation inputs and the creation idempotency key are retained for safe retry. Reconciliation searches by company metadata before creating another account once the provider idempotency-retention window may have elapsed.
 
 Before every checkout the backend retrieves `configuration.merchant.capabilities.card_payments.status` afresh. Returning from onboarding does not establish readiness. Expired onboarding links return to an informational page that directs the authenticated owner back to the app to request a new link.
 
 ## Webhook destination
 
-Configure connected-account snapshot events to POST to `/v1/payments/stripe/webhook`. This route must receive the raw JSON bytes before Express JSON parsing. Signature verification, payment environment, connected account, saved attempt, session, PaymentIntent, currency and exact server amount are checked before a receipt is written.
+Configure a connected-account snapshot event destination at `https://<API-host>/v1/payments/stripe/webhook`, with API version `2026-10-28.endive`. Choose **Connected accounts** as the source for these v1 payment events, even though merchant onboarding uses Accounts v2. Use that destination's signing secret, which is separate from the API key. This route must receive the raw JSON bytes before Express JSON parsing. Signature verification, payment environment, connected account, saved attempt, session, PaymentIntent, currency and exact server amount are checked before a receipt is written.
 
 Events handled:
 
@@ -38,13 +40,17 @@ The customer chooses the next unpaid installment or the remaining invoice balanc
 
 One PREPARING/OPEN/PROCESSING attempt per invoice is enforced by an Invoice row lock and a partial unique index. Retried provider requests use the saved attempt ID as an idempotency key and retain the same amount, expiry and integration identifier. An unknown old provider write is reconciled against bounded account session history before another checkout is created. An unconfirmed recent write remains blocked instead of being treated as canceled.
 
-Manual payment recording, legacy balance changes, voiding and financial edits cannot run while checkout is active. Owners/admins can expire an open checkout. Processing payments remain blocked until the provider confirms success or failure. Sent invoice financial headers and line items are read-only; only drafts with no receipt history can be deleted through the invoice endpoint. Explicit project/account erasure remains a separate privacy operation.
+Manual payment recording, legacy balance changes, voiding and financial edits cannot run while checkout is active. Owners/admins can expire an open checkout. Processing payments remain blocked until the provider confirms success or failure. Sent invoice financial headers and line items are read-only; only drafts with no receipt history or contract credit can be deleted through the invoice endpoint.
+
+Project and last-member company erasure expire open provider sessions first. Preparing, processing or unconfirmed cancellation returns an actionable conflict while retaining reconciliation data. An exclusive company payment gate then prevents a new session slipping between the final active-attempt check and deletion. Deleting one member of a shared company retains the company's invoices and payment sessions. No erasure endpoint deletes the contractor's external Stripe financial records.
 
 Estimate conversion returns an existing non-VOID invoice for the same estimate. Conversions in a linked revision family serialize on its ancestor locks and reject another full contract invoice once any related version has been billed. Additional approved scope requires an explicit amendment/delta invoice.
 
 ## Receipts and refunds
 
 Provider PaymentIntent/refund identifiers uniquely deduplicate append-only monetary entries. Repeated or out-of-order payment events cannot count the same receipt twice. A verified successful refund adds a negative receipt, recomputes the balance and requires an owner/admin to review refreshed totals before further online collection. Pending/failed refunds do not change the paid balance. Disputes trigger an explicit review hold and are managed in the contractor’s full Stripe Dashboard; they do not automatically rewrite the invoice’s contractual balance.
+
+Contract credits are independent of cash receipts: due is gross invoice total minus net cash paid minus applied credits. A verified refund allocates available approved contract credits under the same contract lock before publishing a collectible balance. Active sessions retain their agreed amounts; deferred credits are reconciled before the next collection. Credits appear separately on schedules, PDFs and public invoices and never generate a cash receipt. Refund/dispute review holds stop both online and new manual collection, and the public page hides external payment instructions until review is complete.
 
 Receipt dates use the signed payment-confirmation event time. If a refund arrives before the original confirmation, the original payment date remains unknown until its signed event arrives; the app does not invent a historical date from webhook arrival time. Public invoices omit internal notes, request UUIDs, processor identifiers and private payment references.
 

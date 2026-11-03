@@ -7,6 +7,11 @@ import * as checkout from '../../src/modules/invoice-checkout/invoice-checkout.s
 import * as finance from '../../src/modules/invoice-finance/invoice-finance.service';
 import * as invoices from '../../src/modules/invoices/invoices.service';
 import * as lines from '../../src/modules/invoice-line-items/invoice-line-items.service';
+import * as projects from '../../src/modules/projects/projects.service';
+import * as users from '../../src/modules/users/users.service';
+import { lockCompanyPaymentErasure } from '../../src/modules/invoice-checkout/payment-erasure-lock';
+import { env } from '../../src/config/env';
+import { checkoutConfigured, stripeCredentialsConfigured } from '../../src/modules/invoice-checkout/invoice-checkout.policy';
 import { GatewayRefund, GatewaySession, InvoicePaymentGateway, StripeInvoiceGateway } from '../../src/modules/invoice-checkout/stripe-gateway';
 
 async function fixture() {
@@ -55,6 +60,21 @@ class FakeGateway implements InvoicePaymentGateway {
     this.event = { id: eventId, object: 'event', type, account, livemode: false, created: Math.floor(Date.now() / 1000),
       data: { object: { id: objectId, payment_status: this.sessions.get(objectId)?.paymentStatus, status: this.refunds.get(objectId)?.status } } } as unknown as Stripe.Event;
   }
+}
+
+async function addContractCredit(t: Awaited<ReturnType<typeof fixture>>, amount = 20) {
+  const root = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'ROOT', totalAmount: 100 } });
+  await prisma.invoice.update({ where: { id: t.invoice.id }, data: { estimateId: root.id } });
+  const revised = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id,
+    estimateNumber: 'REDUCED', revisesEstimateId: root.id, status: 'APPROVED', totalAmount: 100 - amount } });
+  const proposal = await prisma.proposal.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateId: revised.id, status: 'APPROVED' } });
+  const order = await prisma.changeOrder.create({ data: { companyId: t.company.id, projectId: t.project.id,
+    rootEstimateId: root.id, baseEstimateId: root.id, estimateId: revised.id, proposalId: proposal.id,
+    requestId: randomUUID(), title: 'Approved reduction', reason: 'Reduced scope', baseSnapshot: {},
+    createdByUserId: t.user.id, status: 'APPLIED', rootInvoiceId: t.invoice.id } });
+  return prisma.creditNote.create({ data: { companyId: t.company.id, projectId: t.project.id,
+    rootEstimateId: root.id, sourceChangeOrderId: order.id, creditNumber: 'CR-1', amount,
+    subtotalDelta: -amount, taxDelta: 0, discountDelta: 0, reason: 'Reduced scope' } });
 }
 
 describe('optional contractor invoice checkout', () => {
@@ -184,22 +204,22 @@ describe('optional contractor invoice checkout', () => {
     const plan = await prisma.plan.upsert({ where: { code: 'PRO_MONTHLY' }, create: { code: 'PRO_MONTHLY', displayName: 'Test Pro', description: 'Fixture', featuresJson: { CAN_CREATE_INVOICE: true } }, update: {} });
     await prisma.userEntitlement.create({ data: { userId: t.user.id, companyId: t.company.id, planId: plan.id,
       status: 'PRO_ACTIVE', source: 'ADMIN_OVERRIDE', renewalDate: new Date(Date.now() + 86_400_000) } });
-    const source = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'CONVERT-1', subtotalMaterials: 20, totalAmount: 20 } });
+    const source = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'CONVERT-1', status: 'APPROVED', subtotalMaterials: 20, totalAmount: 20 } });
     await prisma.estimateLineItem.create({ data: { estimateId: source.id, name: 'Work', quantity: 1, unit: 'lot', unitCost: 20, lineTotal: 20 } });
     const [one, two] = await Promise.all([invoices.createFromEstimate(t.company.id, t.user.id, source.id, {}), invoices.createFromEstimate(t.company.id, t.user.id, source.id, {})]);
     expect(one.id).toBe(two.id); expect(await prisma.invoice.count({ where: { estimateId: source.id } })).toBe(1);
-    const revised = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'CONVERT-2', revisesEstimateId: source.id, version: 2, totalAmount: 40 } });
+    const revised = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'CONVERT-2', status: 'APPROVED', revisesEstimateId: source.id, version: 2, totalAmount: 40 } });
     await expect(invoices.createFromEstimate(t.company.id, t.user.id, revised.id, {})).rejects.toMatchObject({ statusCode: 409 });
-    const independent = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'INDEPENDENT', totalAmount: 5 } });
+    const independent = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'INDEPENDENT', status: 'APPROVED', totalAmount: 5 } });
     expect((await invoices.createFromEstimate(t.company.id, t.user.id, independent.id, {})).estimateId).toBe(independent.id);
   });
   it('blocks an obsolete parent from full billing after its newer version was invoiced first', async () => {
     const t = await fixture();
     const plan = await prisma.plan.upsert({ where: { code: 'PRO_MONTHLY' }, create: { code: 'PRO_MONTHLY', displayName: 'Test Pro', description: 'Fixture', featuresJson: { CAN_CREATE_INVOICE: true } }, update: {} });
     await prisma.userEntitlement.create({ data: { userId: t.user.id, companyId: t.company.id, planId: plan.id, status: 'PRO_ACTIVE', source: 'ADMIN_OVERRIDE', renewalDate: new Date(Date.now() + 86_400_000) } });
-    const parent = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'PARENT' } });
-    const child = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'CHILD', revisesEstimateId: parent.id } });
-    const grandchild = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'GRANDCHILD', revisesEstimateId: child.id } });
+    const parent = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'PARENT', status: 'APPROVED' } });
+    const child = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'CHILD', status: 'APPROVED', revisesEstimateId: parent.id } });
+    const grandchild = await prisma.estimate.create({ data: { companyId: t.company.id, projectId: t.project.id, estimateNumber: 'GRANDCHILD', status: 'APPROVED', revisesEstimateId: child.id } });
     await invoices.createFromEstimate(t.company.id, t.user.id, grandchild.id, {});
     await expect(invoices.createFromEstimate(t.company.id, t.user.id, parent.id, {})).rejects.toMatchObject({ statusCode: 409 });
     await expect(invoices.createFromEstimate(t.company.id, t.user.id, child.id, {})).rejects.toMatchObject({ statusCode: 409 });
@@ -212,5 +232,176 @@ describe('optional contractor invoice checkout', () => {
     const gateway = new StripeInvoiceGateway('rk_test_local_fixture_only', secret);
     expect(gateway.verifyEvent(Buffer.from(body), signature).id).toBe('evt_fixture');
     expect(() => gateway.verifyEvent(Buffer.from(body + ' '), signature)).toThrow();
+  });
+
+  it('expires an open checkout before project or sole-member account erasure', async () => {
+    for (const eraseAccount of [false, true]) {
+      const t = await fixture(), gateway = new FakeGateway();
+      await checkout.createCheckout(t.invoice.shareToken, 'balance', gateway);
+      const attempt = await prisma.invoiceCheckoutAttempt.findFirstOrThrow({ where: { invoiceId: t.invoice.id } });
+      if (eraseAccount) await users.deleteMe(t.user.id, gateway);
+      else await projects.remove(t.project.id, t.company.id, gateway);
+      expect(gateway.sessions.get(attempt.sessionId!)!.status).toBe('expired');
+      expect(await prisma.invoiceCheckoutAttempt.count({ where: { id: attempt.id } })).toBe(0);
+      expect(await prisma.project.findUnique({ where: { id: t.project.id } })).toBeNull();
+    }
+  });
+
+  it('retains project, account and payment reconciliation rows while a write is unknown or processing', async () => {
+    for (const state of ['PREPARING', 'PROCESSING']) {
+      const t = await fixture(), gateway = new FakeGateway();
+      if (state === 'PREPARING') gateway.failAfterCreation = 1;
+      try { await checkout.createCheckout(t.invoice.shareToken, 'balance', gateway); } catch {}
+      const attempt = await prisma.invoiceCheckoutAttempt.findFirstOrThrow({ where: { invoiceId: t.invoice.id } });
+      await prisma.invoiceCheckoutAttempt.update({ where: { id: attempt.id }, data: { state } });
+      await expect(projects.remove(t.project.id, t.company.id, gateway)).rejects.toMatchObject({ statusCode: 409 });
+      await expect(users.deleteMe(t.user.id, gateway)).rejects.toMatchObject({ statusCode: 409 });
+      expect(await prisma.user.findUnique({ where: { id: t.user.id } })).not.toBeNull();
+      expect(await prisma.invoiceCheckoutAttempt.findUnique({ where: { id: attempt.id } })).not.toBeNull();
+    }
+  });
+
+  it('keeps reconciliation data if expiration cannot be confirmed or payment wins the deletion race', async () => {
+    const t = await fixture(), gateway = new FakeGateway();
+    await checkout.createCheckout(t.invoice.shareToken, 'balance', gateway);
+    const attempt = await prisma.invoiceCheckoutAttempt.findFirstOrThrow();
+    gateway.expireSession = async () => { throw new Error('Unconfirmed cancellation'); };
+    await expect(projects.remove(t.project.id, t.company.id, gateway)).rejects.toMatchObject({ statusCode: 409 });
+    gateway.paid(attempt.sessionId!);
+    await expect(projects.remove(t.project.id, t.company.id, gateway)).rejects.toMatchObject({ statusCode: 409 });
+    expect(await prisma.invoicePayment.count()).toBe(0);
+    expect(await prisma.invoice.findUnique({ where: { id: t.invoice.id } })).not.toBeNull();
+    gateway.setEvent('checkout.session.completed', attempt.sessionId!, attempt.accountId);
+    await checkout.receiveStripeWebhook(Buffer.from('{}'), 'valid', gateway);
+    expect(await prisma.invoicePayment.count()).toBe(1);
+    await projects.remove(t.project.id, t.company.id, gateway);
+    expect(await prisma.project.findUnique({ where: { id: t.project.id } })).toBeNull();
+  });
+
+  it('does not cancel shared-company payments when one member deletes only their account', async () => {
+    const t = await fixture(), gateway = new FakeGateway();
+    await prisma.user.create({ data: { companyId: t.company.id, fullName: 'Remaining member', email: `${randomUUID()}@example.test` } });
+    await checkout.createCheckout(t.invoice.shareToken, 'balance', gateway);
+    const attempt = await prisma.invoiceCheckoutAttempt.findFirstOrThrow();
+    await users.deleteMe(t.user.id, gateway);
+    expect(gateway.sessions.get(attempt.sessionId!)!.status).toBe('open');
+    expect(await prisma.company.findUnique({ where: { id: t.company.id } })).not.toBeNull();
+    expect(await prisma.invoiceCheckoutAttempt.findUnique({ where: { id: attempt.id } })).not.toBeNull();
+  });
+
+  it('serializes concurrent final-member deletions so a private orphaned tenancy is not left behind', async () => {
+    const t = await fixture();
+    const other = await prisma.user.create({ data: { companyId: t.company.id, fullName: 'Other member', email: `${randomUUID()}@example.test` } });
+    await Promise.all([users.deleteMe(t.user.id), users.deleteMe(other.id)]);
+    expect(await prisma.company.findUnique({ where: { id: t.company.id } })).toBeNull();
+  });
+
+  it('blocks a new checkout behind the final erasure gate instead of orphaning its provider session', async () => {
+    const t = await fixture(), gateway = new FakeGateway();
+    let unlock!: () => void, locked!: () => void;
+    const acquired = new Promise<void>(resolve => { locked = resolve; });
+    const released = new Promise<void>(resolve => { unlock = resolve; });
+    const erase = prisma.$transaction(async tx => {
+      await lockCompanyPaymentErasure(tx, t.company.id); locked(); await released;
+      await checkout.assertCheckoutErasureSafe(tx, t.company.id, t.project.id);
+      await tx.invoice.delete({ where: { id: t.invoice.id } });
+    });
+    await acquired;
+    const pending = checkout.createCheckout(t.invoice.shareToken, 'balance', gateway).then(() => 'created', () => 'rejected');
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(gateway.createdAmounts).toEqual([]);
+    unlock(); await erase;
+    expect(await pending).toBe('rejected'); expect(await prisma.invoiceCheckoutAttempt.count()).toBe(0);
+  });
+
+  it('continues verified receipt reconciliation and cancellation while new collection is disabled', async () => {
+    const previous = { enabled: env.STRIPE_PAYMENTS_ENABLED, key: env.STRIPE_API_KEY, secret: env.STRIPE_WEBHOOK_SECRET };
+    try {
+      env.STRIPE_PAYMENTS_ENABLED = false; env.STRIPE_API_KEY = 'rk_test_local_fixture_only'; env.STRIPE_WEBHOOK_SECRET = 'whsec_local_fixture_only';
+      expect(checkoutConfigured()).toBe(false); expect(stripeCredentialsConfigured()).toBe(true);
+      const t = await fixture(), gateway = new FakeGateway();
+      await expect(checkout.createCheckout(t.invoice.shareToken, 'balance')).rejects.toMatchObject({ statusCode: 503 });
+      await expect(checkout.receiveStripeWebhook(Buffer.from('{}'), 'invalid')).rejects.toMatchObject({ statusCode: 400 });
+      await checkout.createCheckout(t.invoice.shareToken, 'balance', gateway);
+      const attempt = await prisma.invoiceCheckoutAttempt.findFirstOrThrow();
+      await checkout.cancelCheckout(t.invoice.id, t.company.id, t.user.id, gateway);
+      expect((await prisma.invoiceCheckoutAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).state).toBe('EXPIRED');
+    } finally { env.STRIPE_PAYMENTS_ENABLED = previous.enabled; env.STRIPE_API_KEY = previous.key; env.STRIPE_WEBHOOK_SECRET = previous.secret; }
+  });
+
+  it('applies an approved contract credit after a verified refund without inventing another cash receipt or charge', async () => {
+    const t = await fixture(), gateway = new FakeGateway();
+    await checkout.createCheckout(t.invoice.shareToken, 'balance', gateway);
+    const attempt = await prisma.invoiceCheckoutAttempt.findFirstOrThrow(); gateway.paid(attempt.sessionId!);
+    gateway.setEvent('checkout.session.completed', attempt.sessionId!, attempt.accountId);
+    await checkout.receiveStripeWebhook(Buffer.from('{}'), 'valid', gateway);
+    await addContractCredit(t, 20);
+    gateway.refunds.set('re_credit', { id: 're_credit', amount: 2000, currency: 'usd', status: 'succeeded', paymentIntentId: gateway.sessions.get(attempt.sessionId!)!.paymentIntentId });
+    gateway.setEvent('refund.created', 're_credit', attempt.accountId);
+    await checkout.receiveStripeWebhook(Buffer.from('{}'), 'valid', gateway);
+    const result = await finance.getFinance(t.invoice.id, t.company.id);
+    expect(result.invoice.amount_paid).toBe(80); expect(result.invoice.credit_amount).toBe(20); expect(result.invoice.amount_due).toBe(0);
+    expect(result.payments.map(row => row.amount)).toEqual([100, -20]); expect(await prisma.creditAllocation.count()).toBe(1);
+    expect(result.checkout.requires_refund_review).toBe(true); expect(result.checkout.can_record_manual_payment).toBe(false);
+    await checkout.acknowledgeRefundReview(t.invoice.id, t.company.id, t.user.id, 80, 0);
+    await expect(checkout.createCheckout(t.invoice.shareToken, 'balance', gateway)).rejects.toMatchObject({ statusCode: 409 });
+    expect(gateway.createdAmounts).toEqual([10000]);
+  });
+
+  it('reconciles available credit before refusing an oversized manual receipt, then collects only the net balance', async () => {
+    const t = await fixture(); await addContractCredit(t, 20);
+    await expect(finance.recordPayment(t.invoice.id, t.company.id, t.user.id, { request_id: randomUUID(), amount: 100, method: 'cash' })).rejects.toMatchObject({ statusCode: 400 });
+    expect((await finance.getFinance(t.invoice.id, t.company.id)).invoice.credit_amount).toBe(20);
+    const result = await finance.recordPayment(t.invoice.id, t.company.id, t.user.id, { request_id: randomUUID(), amount: 80, method: 'cash' });
+    expect(result.invoice.amount_paid).toBe(80); expect(result.invoice.amount_due).toBe(0); expect(result.payments.map(row => row.amount)).toEqual([80]);
+  });
+
+  it('keeps installment cash, credit and the next provider amount separate', async () => {
+    const t = await fixture(), gateway = new FakeGateway();
+    await prisma.invoiceInstallment.createMany({ data: [{ invoiceId: t.invoice.id, title: 'Deposit', amount: 30, sortOrder: 0 }, { invoiceId: t.invoice.id, title: 'Completion', amount: 70, sortOrder: 1 }] });
+    await addContractCredit(t, 20);
+    const result = await finance.recordPayment(t.invoice.id, t.company.id, t.user.id, { request_id: randomUUID(), amount: 10, method: 'cash' });
+    expect(result.installments.map(row => [row.paid_amount, row.credit_amount, row.amount_due])).toEqual([[10, 20, 0], [0, 0, 70]]);
+    await checkout.createCheckout(t.invoice.shareToken, 'next_installment', gateway);
+    expect(gateway.createdAmounts).toEqual([7000]);
+  });
+
+  it('settles a fully credited balance without creating a provider session or cash receipt', async () => {
+    const t = await fixture(), gateway = new FakeGateway(); await addContractCredit(t, 100);
+    expect((await checkout.createCheckout(t.invoice.shareToken, 'balance', gateway)).state).toBe('settled');
+    const result = await finance.getFinance(t.invoice.id, t.company.id);
+    expect(result.invoice.amount_paid).toBe(0); expect(result.invoice.credit_amount).toBe(100); expect(result.invoice.amount_due).toBe(0);
+    expect(gateway.createdAmounts).toEqual([]); expect(await prisma.invoicePayment.count()).toBe(0);
+  });
+
+  it('makes an older mark-paid request collect only the cash outstanding after contract credit', async () => {
+    const t = await fixture(); await addContractCredit(t, 20);
+    const result = await invoices.update(t.invoice.id, t.company.id, { status: 'paid', expected_amount_paid: 0 });
+    expect(result.amountPaid.toString()).toBe('80'); expect(result.creditAmount.toString()).toBe('20'); expect(result.amountDue.toString()).toBe('0');
+    expect((await prisma.invoicePayment.findMany()).map(row => row.amount.toString())).toEqual(['80']);
+  });
+
+  it('commits credit reconciliation but keeps the review hold until the owner sees the updated balance', async () => {
+    const t = await fixture(); await addContractCredit(t, 20);
+    await prisma.invoice.update({ where: { id: t.invoice.id }, data: { amountPaid: 80, amountDue: 20, paymentReviewRequired: true } });
+    await expect(checkout.acknowledgeRefundReview(t.invoice.id, t.company.id, t.user.id, 80, 20)).rejects.toMatchObject({ statusCode: 409 });
+    const result = await finance.getFinance(t.invoice.id, t.company.id);
+    expect(result.invoice.amount_due).toBe(0); expect(result.invoice.credit_amount).toBe(20); expect(result.checkout.requires_refund_review).toBe(true);
+    await checkout.acknowledgeRefundReview(t.invoice.id, t.company.id, t.user.id, 80, 0);
+    expect((await finance.getFinance(t.invoice.id, t.company.id)).checkout.requires_refund_review).toBe(false);
+  });
+
+  it('rejects a manual correction to verified online cash so a later real refund cannot be counted twice', async () => {
+    const t = await fixture(), gateway = new FakeGateway();
+    await checkout.createCheckout(t.invoice.shareToken, 'balance', gateway);
+    const attempt = await prisma.invoiceCheckoutAttempt.findFirstOrThrow(); gateway.paid(attempt.sessionId!);
+    gateway.setEvent('checkout.session.completed', attempt.sessionId!, attempt.accountId);
+    await checkout.receiveStripeWebhook(Buffer.from('{}'), 'valid', gateway);
+    await expect(invoices.update(t.invoice.id, t.company.id, { amount_paid: 80, expected_amount_paid: 100 })).rejects.toMatchObject({ statusCode: 409 });
+    expect(await prisma.invoicePayment.count()).toBe(1);
+    gateway.refunds.set('re_actual', { id: 're_actual', amount: 2000, currency: 'usd', status: 'succeeded', paymentIntentId: gateway.sessions.get(attempt.sessionId!)!.paymentIntentId });
+    gateway.setEvent('refund.created', 're_actual', attempt.accountId);
+    await checkout.receiveStripeWebhook(Buffer.from('{}'), 'valid', gateway);
+    expect((await finance.getFinance(t.invoice.id, t.company.id)).invoice.amount_paid).toBe(80);
   });
 });

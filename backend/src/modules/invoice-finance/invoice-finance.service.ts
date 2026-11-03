@@ -7,12 +7,16 @@ import { toInvoiceDto } from "../invoices/invoices.dto";
 import type { InvoiceScheduleInput, RecordInvoicePaymentInput } from "./invoice-finance.validators";
 import { assertNoActiveCheckout, invoiceCheckoutInfo } from "../invoice-checkout/invoice-checkout.policy";
 import { sharedCheckoutAvailability } from "../invoice-checkout/invoice-checkout.service";
+import { invoiceAmountDue, allocateInvoiceInstallments } from "./invoice-balance";
+import { lockContractForInvoice } from "../change-orders/change-order-locks";
+import { applyAvailableContractCredits } from "../change-orders/credit-notes.service";
 
 async function lockedInvoice(tx: Prisma.TransactionClient, id: string, companyId: string) {
+  const contract = await lockContractForInvoice(tx, id, companyId);
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT id FROM "Invoice" WHERE id = ${id} AND "companyId" = ${companyId} FOR UPDATE`;
   if (!rows.length) throw new NotFoundError("Invoice", id);
-  return tx.invoice.findUniqueOrThrow({ where: { id } });
+  return { ...await tx.invoice.findUniqueOrThrow({ where: { id } }), contractRootEstimateId: contract.rootEstimateId };
 }
 
 export async function getFinance(id: string, companyId: string) {
@@ -21,7 +25,7 @@ export async function getFinance(id: string, companyId: string) {
     installments: { orderBy: { sortOrder: "asc" } },
   } });
   if (!invoice) throw new NotFoundError("Invoice", id);
-  let unallocated = invoice.amountPaid;
+  const installments = allocateInvoiceInstallments(invoice.installments, invoice.amountPaid, invoice.creditAmount);
   return {
     invoice: toInvoiceDto(invoice),
     share_url: invoice.status === "DRAFT" ? null : `${env.PUBLIC_WEB_BASE_URL.replace(/\/$/, "")}/invoice/${encodeURIComponent(invoice.shareToken)}`,
@@ -30,12 +34,10 @@ export async function getFinance(id: string, companyId: string) {
       reference: payment.reference, notes: payment.notes,
       recorded_at: payment.recordedAt?.toISOString() ?? null, created_at: payment.createdAt.toISOString(),
     })),
-    installments: invoice.installments.map((installment) => {
-      const allocated = Prisma.Decimal.min(installment.amount, Prisma.Decimal.max(0, unallocated));
-      unallocated = unallocated.minus(allocated);
+    installments: installments.map((installment) => {
       return {
         id: installment.id, title: installment.title, amount: Number(installment.amount),
-        paid_amount: Number(allocated), amount_due: Number(installment.amount.minus(allocated)),
+        paid_amount: Number(installment.paidAmount), credit_amount: Number(installment.creditAmount), amount_due: Number(installment.amountDue),
         due_date: installment.dueDate?.toISOString() ?? null, sort_order: installment.sortOrder,
       };
     }),
@@ -46,8 +48,9 @@ export async function getFinance(id: string, companyId: string) {
 export async function recordPayment(id: string, companyId: string, userId: string, input: RecordInvoicePaymentInput) {
   const amount = new Prisma.Decimal(input.amount);
   if (amount.lte(0) || amount.decimalPlaces() > 2) throw new ValidationError("Enter a positive payment with at most two decimal places");
+  let refusal: Error | undefined;
   await prisma.$transaction(async (tx) => {
-    const invoice = await lockedInvoice(tx, id, companyId);
+    let invoice = await lockedInvoice(tx, id, companyId);
     const existing = await tx.invoicePayment.findUnique({ where: { companyId_requestId: { companyId, requestId: input.request_id } } });
     if (existing) {
       if (existing.invoiceId !== id || !existing.amount.equals(amount) || existing.method !== input.method.toUpperCase() ||
@@ -59,7 +62,18 @@ export async function recordPayment(id: string, companyId: string, userId: strin
     }
     await assertNoActiveCheckout(tx, id);
     if (invoice.status === "DRAFT" || invoice.status === "VOID") throw new ConflictError("Send the invoice before recording a payment");
-    if (amount.gt(invoice.amountDue)) throw new ValidationError("The payment exceeds the current outstanding balance. Refresh this invoice.");
+    if (invoice.contractRootEstimateId) {
+      await applyAvailableContractCredits(tx, companyId, invoice.contractRootEstimateId);
+      invoice = { ...await tx.invoice.findUniqueOrThrow({ where: { id } }), contractRootEstimateId: invoice.contractRootEstimateId };
+    }
+    if (invoice.paymentReviewRequired) {
+      refusal = new ConflictError("An owner or administrator must reconcile the refund, credits or dispute before recording another payment");
+      return;
+    }
+    if (amount.gt(invoice.amountDue)) {
+      refusal = new ValidationError("The payment exceeds the current outstanding balance after contract credits. Refresh this invoice.");
+      return;
+    }
     const recordedAt = input.recorded_at ? new Date(input.recorded_at) : new Date();
     if (recordedAt.getTime() > Date.now() + 60_000) throw new ValidationError("A payment date cannot be in the future");
     await tx.invoicePayment.create({ data: {
@@ -67,7 +81,7 @@ export async function recordPayment(id: string, companyId: string, userId: strin
       reference: input.reference ?? null, notes: input.notes ?? null, recordedAt,
     } });
     const paid = invoice.amountPaid.plus(amount);
-    const due = Prisma.Decimal.max(0, invoice.totalAmount.minus(paid));
+    const due = invoiceAmountDue(invoice.totalAmount, paid, invoice.creditAmount);
     await tx.invoice.update({ where: { id }, data: {
       amountPaid: paid, amountDue: due, status: due.isZero() ? "PAID" : "PARTIALLY_PAID",
       paidAt: due.isZero() ? recordedAt : null,
@@ -79,6 +93,7 @@ export async function recordPayment(id: string, companyId: string, userId: strin
       metadataJson: { request_id: input.request_id, amount: amount.toFixed(2), method: input.method },
     } });
   });
+  if (refusal) throw refusal;
   return getFinance(id, companyId);
 }
 

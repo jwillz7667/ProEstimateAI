@@ -14,6 +14,10 @@ export interface InvoiceDto {
   discount_amount: number;
   total_amount: number;
   amount_paid: number;
+  credit_amount: number;
+  root_invoice_id: string | null;
+  source_change_order_id: string | null;
+  financial_basis_locked: boolean;
   amount_due: number;
   issued_date: string | null;
   due_date: string | null;
@@ -41,6 +45,10 @@ export function toInvoiceDto(invoice: Invoice): InvoiceDto {
     discount_amount: Number(invoice.discountAmount),
     total_amount: Number(invoice.totalAmount),
     amount_paid: Number(invoice.amountPaid),
+    credit_amount: Number(invoice.creditAmount),
+    root_invoice_id: invoice.rootInvoiceId,
+    source_change_order_id: invoice.sourceChangeOrderId,
+    financial_basis_locked: invoice.financialBasisLocked,
     amount_due: Number(invoice.amountDue),
     issued_date: invoice.issuedDate?.toISOString() ?? null,
     due_date: invoice.dueDate ? invoice.dueDate.toISOString() : null,

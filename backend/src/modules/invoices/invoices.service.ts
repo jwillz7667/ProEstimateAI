@@ -17,10 +17,15 @@ import {
   UpdateInvoiceInput,
   ConvertEstimateToInvoiceInput,
 } from "./invoices.validators";
-import { computeInvoiceTotals } from "../invoice-line-items/invoice-line-items.service";
+import { computeInvoiceTotals } from "../invoice-finance/invoice-balance";
 import { InvoiceStatus, Prisma } from "@prisma/client";
 import { recordLegacyBalanceChange } from "../invoice-finance/invoice-finance.service";
+import { lockProposalRecipient } from "../proposals/proposal-recipient";
+import { assertChangeOrderFirstInvoice, includeChangeOrdersInFirstInvoice } from '../change-orders/change-order-invoice';
 import { assertNoActiveCheckout } from "../invoice-checkout/invoice-checkout.policy";
+import { estimateFamily, lockContractForInvoice, lockContractForEstimate } from "../change-orders/change-order-locks";
+import { lockCompanyPaymentAccess } from "../invoice-checkout/payment-erasure-lock";
+import { applyAvailableContractCredits } from "../change-orders/credit-notes.service";
 
 /**
  * Paywall decision for INVOICE_LOCKED placement.
@@ -45,7 +50,7 @@ const INVOICE_LOCKED_PAYWALL = {
  * Reads the user's active entitlement, then inspects the associated Plan's
  * featuresJson array for the CAN_CREATE_INVOICE feature code.
  */
-async function assertCanCreateInvoice(userId: string): Promise<void> {
+export async function assertCanCreateInvoice(userId: string): Promise<void> {
   if (await isAdminUser(userId)) return;
 
   const entitlement = await prisma.userEntitlement.findUnique({
@@ -143,6 +148,7 @@ export async function create(
     if (!estimate) {
       throw new NotFoundError("Estimate", data.estimate_id);
     }
+    throw new ConflictError("Use Convert estimate to invoice to preserve its approved financial basis. Apply a linked change order for approved additional scope.");
   }
 
   await verifyProposalOwnership(
@@ -154,6 +160,7 @@ export async function create(
 
   // Auto-increment invoice number inside a transaction
   const invoice = await prisma.$transaction(async (tx) => {
+    await lockCompanyPaymentAccess(tx, companyId);
     // Atomically claim the next number. The increment row-locks the company
     // row, serializing concurrent creates for the same company; a
     // read-then-write under READ COMMITTED would let two transactions read
@@ -232,9 +239,10 @@ export async function createFromEstimate(
   await assertCanCreateInvoice(userId);
 
   return prisma.$transaction(async (tx) => {
-    const rows = await tx.$queryRaw<
-      Array<{ id: string }>
-    >`SELECT id FROM "Estimate" WHERE id = ${estimateId} AND "companyId" = ${companyId} FOR UPDATE`;
+    await lockContractForEstimate(tx, estimateId, companyId);
+    const familyForLocks = await estimateFamily(tx, estimateId, companyId);
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "Estimate" WHERE "companyId"=${companyId} AND id IN (${Prisma.join(familyForLocks.estimateIds)}) ORDER BY id FOR UPDATE`);
+    const rows = familyForLocks.estimateIds.includes(estimateId) ? [{ id: estimateId }] : [];
     if (rows.length === 0) throw new NotFoundError("Estimate", estimateId);
     const estimate = await tx.estimate.findFirst({
       where: { id: estimateId, companyId },
@@ -253,6 +261,7 @@ export async function createFromEstimate(
     // invoice its full value again after another version was already billed.
     const existingInvoice = await tx.invoice.findFirst({ where: { estimateId: estimate.id, companyId, status: { not: 'VOID' } }, orderBy: { createdAt: 'asc' } });
     if (existingInvoice) return existingInvoice;
+    if (estimate.status !== "APPROVED") throw new ConflictError("The customer must approve the estimate before it can be invoiced.");
     const family = new Set<string>([estimate.id]);
     let parentId = estimate.revisesEstimateId;
     let rootId = estimate.id;
@@ -277,10 +286,16 @@ export async function createFromEstimate(
     }
     const billedVersion = await tx.invoice.findFirst({ where: { companyId, estimateId: { in: [...family] }, status: { not: 'VOID' } }, select: { id: true } });
     if (billedVersion) throw new ConflictError('Another version of this estimate has already been invoiced. Use a separately approved change order for additional scope instead of billing the full contract again.');
+    await assertChangeOrderFirstInvoice(tx, companyId, estimate.id);
+
+    await lockProposalRecipient(tx, estimate.projectId, companyId);
+    const acceptedProposal = await tx.proposal.findFirst({ where: { estimateId: estimate.id, companyId, status: "APPROVED", sentRecipientClientId: { not: null } }, orderBy: { createdAt: "desc" } });
+    const currentProject = await tx.project.findFirstOrThrow({ where: { id: estimate.projectId, companyId }, select: { clientId: true } });
+    if (acceptedProposal?.sentRecipientClientId && acceptedProposal.sentRecipientClientId !== currentProject.clientId) throw new ConflictError("The project customer changed after approval. Restore the approved customer or prepare a new customer agreement before invoicing.");
 
     // An invoice requires a client (Invoice.clientId is non-null). Projects can
     // exist without one, so fail loudly rather than inventing a client.
-    const clientId = estimate.project.clientId;
+    const clientId = currentProject.clientId;
     if (!clientId) {
       throw new ValidationError(
         "The estimate's project has no client assigned. Assign a client to the project before converting it to an invoice.",
@@ -321,6 +336,7 @@ export async function createFromEstimate(
         companyId,
         clientId,
         estimateId: estimate.id,
+        financialBasisLocked: true,
         invoiceNumber,
         subtotal,
         taxAmount,
@@ -333,6 +349,8 @@ export async function createFromEstimate(
         paymentInstructions: data.payment_instructions ?? null,
       },
     });
+
+    await includeChangeOrdersInFirstInvoice(tx, companyId, estimate.id, created.id);
 
     for (let i = 0; i < estimate.lineItems.length; i++) {
       const li = estimate.lineItems[i];
@@ -367,7 +385,7 @@ export async function createFromEstimate(
       },
     });
 
-    return created;
+    return tx.invoice.findUniqueOrThrow({ where: { id: created.id } });
   });
 }
 
@@ -397,23 +415,32 @@ export async function update(
   data: UpdateInvoiceInput,
 ) {
   return prisma.$transaction(async (tx) => {
+    const contract = await lockContractForInvoice(tx, id, companyId);
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM "Invoice" WHERE id = ${id} AND "companyId" = ${companyId} FOR UPDATE
     `;
     if (rows.length === 0) throw new NotFoundError("Invoice", id);
-    const existing = await tx.invoice.findUniqueOrThrow({ where: { id } });
+    let existing = await tx.invoice.findUniqueOrThrow({ where: { id } });
     await assertNoActiveCheckout(tx, id);
+    if (contract.rootEstimateId && (data.amount_paid !== undefined || data.status === 'paid')) {
+      await applyAvailableContractCredits(tx, companyId, contract.rootEstimateId);
+      existing = await tx.invoice.findUniqueOrThrow({ where: { id } });
+    }
     const headerFields = ['notes', 'proposal_id', 'issued_date', 'due_date', 'payment_instructions', 'currency_code', 'discount_amount'] as const;
     if (existing.status !== 'DRAFT' && headerFields.some(field => data[field] !== undefined))
       throw new ConflictError('The sent invoice and its agreed financial terms are read-only. Create a new invoice for revisions.');
+    if ((existing.financialBasisLocked || !existing.creditAmount.isZero()) && ['proposal_id', 'currency_code', 'discount_amount'].some(field => data[field as keyof UpdateInvoiceInput] !== undefined))
+      throw new ConflictError('The approved invoice basis and applied contract credits cannot be changed.');
+    if (existing.financialBasisLocked && data.status === 'void')
+      throw new ConflictError('An approved change-order invoice cannot be voided. Use an approved linked amendment to adjust the contract.');
     if (existing.status !== 'DRAFT' && data.status === 'draft')
       throw new ConflictError('A sent invoice cannot be reopened as a draft.');
     if (existing.status === 'VOID' && (data.status !== undefined && data.status !== 'void' || data.amount_paid !== undefined))
       throw new ConflictError('A void invoice cannot be reopened or paid.');
     if (existing.status === 'DRAFT' && (data.amount_paid !== undefined && data.amount_paid > 0 || data.status === 'paid'))
       throw new ConflictError('Send the invoice before recording a payment.');
-    if (data.status === 'void' && !existing.amountPaid.isZero())
-      throw new ConflictError('Review recorded payments and refunds before voiding this invoice.');
+    if (data.status === 'void' && (!existing.amountPaid.isZero() || !existing.creditAmount.isZero()))
+      throw new ConflictError('Review recorded payments, contract credits and refunds before voiding this invoice.');
     if (
       data.expected_amount_paid !== undefined &&
       !existing.amountPaid.equals(
@@ -466,25 +493,33 @@ export async function update(
     const amountPaid = Number(
       new Prisma.Decimal(
         data.amount_paid ??
-          (data.status === "paid" ? totalAmount : existing.amountPaid),
+          (data.status === "paid" ? Prisma.Decimal.max(0, new Prisma.Decimal(totalAmount).minus(existing.creditAmount)) : existing.amountPaid),
       ).toDecimalPlaces(2),
     );
-    if (amountPaid > totalAmount)
+    if (new Prisma.Decimal(amountPaid).plus(existing.creditAmount).gt(totalAmount) && amountPaid > Number(existing.amountPaid))
       throw new ValidationError(
-        "Recorded payments cannot exceed the invoice total",
+        "Recorded payments cannot exceed the invoice total after contract credits",
       );
     const amountDue = computeInvoiceTotals({
       subtotal: Number(existing.subtotal),
       taxAmount: Number(existing.taxAmount),
       discountAmount,
       amountPaid,
+      creditAmount: Number(existing.creditAmount),
     }).amountDue;
     const financialChange =
       data.discount_amount !== undefined ||
       data.amount_paid !== undefined ||
       data.status === "paid";
-    if (existing.status !== 'DRAFT' && existing.status !== 'VOID' && data.status !== 'void' && amountPaid > 0)
-      updateData.status = amountDue === 0 ? 'PAID' : 'PARTIALLY_PAID';
+    if (existing.paymentReviewRequired && amountPaid !== Number(existing.amountPaid))
+      throw new ConflictError('An owner or administrator must reconcile refunds, credits or disputes before changing recorded payments.');
+    if (amountPaid < Number(existing.amountPaid)) {
+      const providerReceipts = await tx.invoicePayment.aggregate({ where: { invoiceId: id, method: { in: ['STRIPE', 'STRIPE_REFUND'] } }, _sum: { amount: true } });
+      if (new Prisma.Decimal(amountPaid).lt(providerReceipts._sum.amount ?? 0))
+        throw new ConflictError('Verified online receipts cannot be reduced by a manual balance correction. Refund through Stripe and wait for verified confirmation.');
+    }
+    if (existing.status !== 'DRAFT' && existing.status !== 'VOID' && data.status !== 'void' && (amountPaid > 0 || existing.creditAmount.gt(0)))
+      updateData.status = amountDue === 0 ? 'PAID' : amountPaid > 0 ? 'PARTIALLY_PAID' : (data.status === 'paid' ? 'SENT' : updateData.status ?? existing.status);
     if (data.status === 'partially_paid' && amountPaid === 0) throw new ConflictError('A partially paid status requires a recorded payment.');
     if (financialChange) {
       updateData.discountAmount = discountAmount;
@@ -492,8 +527,8 @@ export async function update(
       updateData.amountPaid = amountPaid;
       updateData.amountDue = amountDue;
       if (data.status !== "void" && existing.status !== "VOID") {
-        if (amountPaid > 0 || data.status === "paid") {
-          updateData.status = amountDue === 0 ? "PAID" : "PARTIALLY_PAID";
+        if (amountPaid > 0 || existing.creditAmount.gt(0) || data.status === "paid") {
+          updateData.status = amountDue === 0 ? "PAID" : amountPaid > 0 ? "PARTIALLY_PAID" : (existing.status === 'PAID' || existing.status === 'PARTIALLY_PAID' ? 'SENT' : existing.status);
         } else if (
           existing.status === "PAID" ||
           existing.status === "PARTIALLY_PAID"
@@ -509,7 +544,12 @@ export async function update(
     else if (data.status !== undefined || financialChange)
       updateData.paidAt = null;
     await recordLegacyBalanceChange(tx, existing, new Prisma.Decimal(amountPaid));
-    return tx.invoice.update({ where: { id }, data: updateData });
+    const updated = await tx.invoice.update({ where: { id }, data: updateData });
+    if (contract.rootEstimateId && financialChange) {
+      await applyAvailableContractCredits(tx, companyId, contract.rootEstimateId);
+      return tx.invoice.findUniqueOrThrow({ where: { id } });
+    }
+    return updated;
   });
 }
 
@@ -519,19 +559,25 @@ export async function send(
   userId: string,
 ) {
   const updated = await prisma.$transaction(async (tx) => {
+    const contract = await lockContractForInvoice(tx, invoiceId, companyId);
     const rows = await tx.$queryRaw<
       Array<{ id: string }>
     >`SELECT id FROM "Invoice" WHERE id = ${invoiceId} AND "companyId" = ${companyId} FOR UPDATE`;
     if (rows.length === 0) throw new NotFoundError("Invoice", invoiceId);
-    const invoice = await tx.invoice.findUniqueOrThrow({
+    let invoice = await tx.invoice.findUniqueOrThrow({
       where: { id: invoiceId },
     });
+    if (contract.rootEstimateId) {
+      await applyAvailableContractCredits(tx, companyId, contract.rootEstimateId);
+      invoice = await tx.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
+    }
     if (invoice.status === "PAID" || invoice.status === "VOID")
       throw new ValidationError("Paid or void invoices cannot be sent");
     const result = await tx.invoice.update({
       where: { id: invoiceId },
       data: {
-        status: invoice.status === "PARTIALLY_PAID" ? "PARTIALLY_PAID" : "SENT",
+        status: invoice.amountDue.isZero() && invoice.creditAmount.gt(0) ? 'PAID' : invoice.status === "PARTIALLY_PAID" ? "PARTIALLY_PAID" : "SENT",
+        paidAt: invoice.amountDue.isZero() && invoice.creditAmount.gt(0) ? (invoice.paidAt ?? new Date()) : invoice.paidAt,
         sentAt: new Date(),
       },
     });
@@ -575,12 +621,13 @@ export async function send(
 
 export async function remove(id: string, companyId: string) {
   await prisma.$transaction(async tx => {
+    await lockContractForInvoice(tx, id, companyId);
     const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "Invoice" WHERE id = ${id} AND "companyId" = ${companyId} FOR UPDATE`;
     if (!rows.length) throw new NotFoundError('Invoice', id);
     const invoice = await tx.invoice.findUniqueOrThrow({ where: { id } });
     await assertNoActiveCheckout(tx, id);
     const receipts = await tx.invoicePayment.count({ where: { invoiceId: id } });
-    if (invoice.status !== 'DRAFT' || receipts > 0 || !invoice.amountPaid.isZero())
+    if (invoice.status !== 'DRAFT' || receipts > 0 || !invoice.amountPaid.isZero() || !invoice.creditAmount.isZero() || invoice.financialBasisLocked)
       throw new ConflictError('Only draft invoices with no payment history can be deleted. Sent invoices and receipts stay in your records.');
     await tx.invoice.delete({ where: { id } });
   });
