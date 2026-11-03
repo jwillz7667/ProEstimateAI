@@ -37,6 +37,7 @@ final class EstimateCreationViewModel {
     private var writerSessionId: UUID?
     private var checkpointPhase = EstimateDraftCheckpoint.Phase.draft
     private var templateRequestId = UUID().uuidString
+    private var frozenTemplateDraft: EstimateCreationDraft?
     private var pendingCheckpoint: EstimateDraftCheckpoint?
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var applyingCheckpoint = false
@@ -48,6 +49,7 @@ final class EstimateCreationViewModel {
     }
 
     var inputsLocked: Bool { isCreating || createdProject != nil || recovery == .checkProjects }
+    var isTemplateReplayPending: Bool { frozenTemplateDraft != nil }
     var canCreate: Bool {
         !isCreating && !isRecovering && recovery == .none && createdEstimate == nil && !hasRecoverableDraft
             && (draftStore == nil || writerSessionId != nil)
@@ -122,6 +124,7 @@ final class EstimateCreationViewModel {
         createdEstimate = saved.estimate
         checkpointPhase = saved.phase
         templateRequestId = saved.templateRequestId
+        frozenTemplateDraft = saved.phase == .estimateWritePending && saved.draft.method == .template ? saved.draft : nil
         switch saved.phase {
         case .draft, .projectSaved, .estimateSaved: recovery = .none
         case .projectWritePending: recovery = .checkProjects
@@ -153,6 +156,7 @@ final class EstimateCreationViewModel {
         recoveredEstimates = []
         checkpointPhase = .draft
         templateRequestId = UUID().uuidString
+        frozenTemplateDraft = nil
         recovery = .none
         errorMessage = nil
         lastError = nil
@@ -199,13 +203,13 @@ final class EstimateCreationViewModel {
             errorMessage = "Your company changed. Close this estimate and start again."
             return false
         }
-        if let validation = draft.validationMessage { errorMessage = validation; return false }
+        let input = frozenTemplateDraft ?? draft
+        if let validation = input.validationMessage { errorMessage = validation; return false }
         if let selectedClient, selectedClient.companyId != companyId {
             errorMessage = "Choose a client from your current company."
             return false
         }
         let revision = workspaceRevision
-        let input = draft
         let clientId = selectedClient?.id
         isCreating = true
         errorMessage = nil
@@ -243,11 +247,13 @@ final class EstimateCreationViewModel {
             // must not hide the successfully created server estimate.
             do { try await persistCheckpoint(.estimateSaved) }
             catch { draftSaveError = "The estimate is saved on the server, but its local recovery copy couldn't be updated." }
+            frozenTemplateDraft = nil
             return true
         } catch {
             lastError = error
             let uncertain = (error as? any EstimateCreationFailureClassifying)?.creationWriteIsUnconfirmed ?? true
             if uncertain, input.method == .template, createdProject != nil {
+                frozenTemplateDraft = input
                 recovery = .none
                 errorMessage = "The template estimate couldn't be confirmed. Retry safely to retrieve the same estimate; the request ID is preserved."
             } else if uncertain {
@@ -256,6 +262,7 @@ final class EstimateCreationViewModel {
                     ? "We couldn't confirm whether the project was saved. Check Projects before creating another."
                     : "Your project is saved. We couldn't confirm the estimate yet; check its saved estimates before trying again."
             } else {
+                frozenTemplateDraft = nil
                 checkpointPhase = createdProject == nil ? .draft : .projectSaved
                 try? await persistCheckpoint(checkpointPhase)
                 errorMessage = createdProject == nil
@@ -289,6 +296,7 @@ final class EstimateCreationViewModel {
         recovery = .none
         checkpointPhase = .draft
         templateRequestId = UUID().uuidString
+        frozenTemplateDraft = nil
         pendingCheckpoint = nil
         hasRecoverableDraft = false
         recoveredDraftNotice = nil
@@ -307,7 +315,7 @@ final class EstimateCreationViewModel {
         checkpointPhase = phase
         guard let draftStore, let scope = draftScope, let session = writerSessionId else { return }
         guard scope.companyId == companyId, !finishedDraft else { throw EstimateDraftCheckpointFailure() }
-        let checkpoint = EstimateDraftCheckpoint(scope: scope, draft: draft, selectedClientId: selectedClient?.id,
+        let checkpoint = EstimateDraftCheckpoint(scope: scope, draft: frozenTemplateDraft ?? draft, selectedClientId: selectedClient?.id,
             project: createdProject, estimate: createdEstimate, phase: phase,
             templateRequestId: templateRequestId, savedAt: Date())
         do {

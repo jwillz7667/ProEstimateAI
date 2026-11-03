@@ -94,6 +94,12 @@ struct EstimateDraftRecoveryTests {
         service.templateShouldFail = true
         let first = await model.create(companyId: scope.companyId, language: "en")
         try expect(!first && model.createdProject != nil && model.canCreate, "Template retry can safely reuse its idempotent request")
+        try expect(model.isTemplateReplayPending, "Uncertain templates must freeze their exact starting point")
+        model.draft.method = .manual
+        model.draft.templateId = "another-template"
+        model.draft.title = "Changed title"
+        _ = await model.create(companyId: scope.companyId, language: "en")
+        try expect(service.estimateCalls == 0 && service.templateInputs.allSatisfy({ $0 == "template-a:Template hallway quote" }), "A pending template cannot switch to Manual/AI or change its source/payload")
         let saved = try await store.load(scope: scope)
         try expect(saved?.phase == .estimateWritePending && saved?.project?.id == Project.sample.id, "The pending template request must be journaled with its project")
         let restarted = await configured(store, service: service)
@@ -101,7 +107,7 @@ struct EstimateDraftRecoveryTests {
         service.templateShouldFail = false
         let finished = await restarted.create(companyId: scope.companyId, language: "en")
         try expect(finished && service.projectCalls == 1, "Restarting a template operation must reuse the existing project")
-        try expect(service.templateRequests.count == 2 && service.templateRequests[0] == service.templateRequests[1], "Template instantiation retains its exact idempotency key across app restarts")
+        try expect(service.templateRequests.count == 3 && Set(service.templateRequests).count == 1, "Template instantiation retains its exact idempotency key across app restarts")
         let complete = try await store.load(scope: scope)
         try expect(complete?.phase == .estimateSaved && complete?.estimate?.id == Estimate.sample.id, "Confirmed estimate IDs must be journaled before the UI opens")
     }
@@ -183,12 +189,14 @@ private final class RecoveryCreationService: EstimateCreationServing, @unchecked
     var projectCalls = 0
     var estimateCalls = 0
     var templateRequests: [String] = []
+    var templateInputs: [String] = []
     var templateShouldFail = false
     func listClients() async throws -> [Client] { [Client.sample] }
     func createProject(request: ProjectCreationRequest) async throws -> Project { projectCalls += 1; return Project.sample }
     func createEstimate(projectId: String, title: String, method: EstimateCreationMethod) async throws -> Estimate { estimateCalls += 1; return Estimate.sample }
     func createEstimateFromTemplate(projectId: String, title: String, templateId: String, requestId: String) async throws -> Estimate {
         templateRequests.append(requestId)
+        templateInputs.append("\(templateId):\(title)")
         if templateShouldFail { throw RecoveryFailure.uncertain }
         return Estimate.sample
     }

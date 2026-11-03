@@ -64,12 +64,12 @@ struct EstimateCreationFlowView: View {
                             Text(method.title).tag(method)
                         }
                     }
-                    .disabled(model.isCreating || model.recovery != .none || model.hasRecoverableDraft)
+                    .disabled(model.isCreating || model.recovery != .none || model.hasRecoverableDraft || model.isTemplateReplayPending)
                     if model.draft.method == .template {
                         Button { showTemplates = true } label: {
                             Label(selectedTemplateName ?? (model.draft.templateId == nil ? "Choose saved template" : "Saved template selected"), systemImage: "doc.on.doc")
                         }
-                        .disabled(model.isCreating || model.recovery != .none || model.hasRecoverableDraft)
+                        .disabled(model.isCreating || model.recovery != .none || model.hasRecoverableDraft || model.isTemplateReplayPending)
                     }
                     Text(startingPointDescription)
                         .font(TypographyTokens.footnote)
@@ -83,7 +83,7 @@ struct EstimateCreationFlowView: View {
                             HStack {
                                 Spacer()
                                 if model.isCreating { ProgressView().tint(ColorTokens.brandDark) }
-                                Text(model.isCreating ? "Preparing estimate…" : (model.createdProject == nil ? "Continue to estimate" : "Continue saved project"))
+                                Text(model.isCreating ? "Preparing estimate…" : (model.isTemplateReplayPending ? "Retry saved template" : (model.createdProject == nil ? "Continue to estimate" : "Continue saved project")))
                                     .font(TypographyTokens.headline)
                                 Spacer()
                             }

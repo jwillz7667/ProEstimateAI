@@ -100,11 +100,14 @@ struct EstimateDeliveryRegressionTests {
         let service = FakeDeliveryService()
         service.project = try changing(Project.sample, ["client_id": NSNull()])
         service.proposals = [Proposal.sample]
+        service.proposals.append(try changing(Proposal.sample, ["id": "newer-draft", "status": "draft", "created_at": Date().addingTimeInterval(60).timeIntervalSinceReferenceDate]))
         let model = EstimateDeliveryViewModel(service: service)
         await model.load(for: Estimate.sample)
         let sent = try changing(Estimate.sample, ["status": "sent"])
         let saved = await model.prepareProposal(estimate: sent, hasLineItems: true)
         try expect(saved?.id == Proposal.sample.id, "A historic sent proposal remains reachable without creating a new customer link")
+        let headerOnly = await model.prepareProposal(estimate: sent, hasLineItems: false)
+        try expect(headerOnly?.id == Proposal.sample.id, "Historical saved proposals remain readable without editable draft line items")
         service.proposals = []
         let absent = await model.prepareProposal(estimate: sent, hasLineItems: true)
         try expect(absent == nil && service.createProposalCalls == 0, "A locked estimate with no proposal must use a new revision")
@@ -124,6 +127,9 @@ struct EstimateDeliveryRegressionTests {
         try expect(revised?.id == "e-revision", "Revision returns a new editable estimate")
         try expect(service.revisionRequests.count == 2 && service.revisionRequests[0] == service.revisionRequests[1], "A lost revision response must reuse the same idempotency key")
         try expect(UUID(uuidString: service.revisionRequests[0]) != nil, "Revision requests use valid UUIDs")
+        service.revision = try changing(Estimate.sample, ["id": "e-revision", "version": 2, "status": "sent"])
+        let resumedSent = await model.revise(estimate: sent)
+        try expect(resumedSent?.status == .sent, "A replayed revision may already be sent and must open read-only instead of creating another")
     }
 
     static func invoiceReconciliation() async throws {

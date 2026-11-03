@@ -72,15 +72,17 @@ final class EstimateDeliveryViewModel {
 
     func prepareProposal(estimate: Estimate, hasLineItems: Bool) async -> Proposal? {
         guard !isWorking, !isLoading else { return nil }
-        guard hasLineItems else { errorMessage = "Add at least one line item before sending."; return nil }
+        guard hasLineItems || !estimate.isEditable else { errorMessage = "Add at least one line item before sending."; return nil }
         isWorking = true
         lastError = nil
         defer { isWorking = false }
         var attemptedCreate = false
         do {
             let proposals = try await service.listProposals(projectId: estimate.projectId)
-            if let saved = proposals.filter({ $0.estimateId == estimate.id && $0.companyId == estimate.companyId })
-                .max(by: { $0.createdAt < $1.createdAt }) {
+            let matching = proposals.filter { $0.estimateId == estimate.id && $0.projectId == estimate.projectId && $0.companyId == estimate.companyId }
+            let published = matching.filter { $0.status != .draft }.max(by: { $0.createdAt < $1.createdAt })
+            let draft = estimate.isEditable ? matching.filter { $0.status == .draft }.max(by: { $0.createdAt < $1.createdAt }) : nil
+            if let saved = published ?? draft {
                 needsProposalReconciliation = false
                 errorMessage = nil
                 return saved
@@ -125,7 +127,7 @@ final class EstimateDeliveryViewModel {
         defer { isWorking = false }
         do {
             let revised = try await service.reviseEstimate(estimateId: estimate.id, requestId: requestId)
-            guard revised.id != estimate.id, revised.isEditable, revised.projectId == estimate.projectId,
+            guard revised.id != estimate.id, revised.version > estimate.version, revised.projectId == estimate.projectId,
                   revised.companyId == estimate.companyId else { throw EstimateDeliveryError.invalidResponse }
             errorMessage = nil
             return revised
