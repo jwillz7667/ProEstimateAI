@@ -45,5 +45,15 @@
     "ProEstimate AI/Resources/Localizable.xcstrings",
     ".playwright-mcp/",
     "ProEstimate AI.xcodeproj/project.xcworkspace/xcuserdata/"
-  ]
+  ],
+  "remoteCI": {
+    "codeSha": "c4859cffd5f20d3057d781b75c3f221469d21999",
+    "allFourWorkflows": "success",
+    "backendUnitTests": 256,
+    "backendIntegrationTests": 282,
+    "iosFoundationChecks": 627,
+    "iosFoundationRunners": 15,
+    "integrationTestTypecheck": "passed",
+    "build": "passed"
+  }
 }
