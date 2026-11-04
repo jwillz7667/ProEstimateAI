@@ -18,6 +18,16 @@ Company owners/admins open Settings → Customer payments and explicitly begin h
 
 Before every checkout the backend retrieves `configuration.merchant.capabilities.card_payments.status` afresh. Returning from onboarding does not establish readiness. Expired onboarding links return to an informational page that directs the authenticated owner back to the app to request a new link.
 
+## Merchant country recovery
+
+New onboarding choices use the 44 native country/region entries published on [Stripe availability](https://stripe.com/global), excluding Preview and Extended network entries. This is a candidate input boundary, not certification of every connected-account/platform pairing: [Connect eligibility also depends on the platform and requested features](https://docs.stripe.com/connect/how-connect-works#availability). The app asks for an explicit actual business country; it never substitutes the device locale. Existing saved countries remain visible and immutable even if they are outside the candidate list.
+
+A short transaction commits the original creation payload, request UUID, `creationStarted` marker and a 90-second claim before calling Stripe. No database transaction remains open across provider requests. Reconciliation renews the owned claim before each explicit page, including empty pages, and immediately before account creation. Terminal writes require the same company, request UUID, claim nonce and null account; an expired or superseded caller cannot overwrite or release a newer claim.
+
+Only a first, previously unattempted creation that receives a documented country-specific HTTP 400 rejection can release its reservation. Network failures, unknown errors, idempotency conflicts and later rejections preserve the original country/payload/UUID. A returned account with an `unsupported_country` capability status remains an existing account, never a rejected creation. Legacy/default-created rows conservatively start with `creationStarted=true`; pending legacy or ambiguous reservations need operator reconciliation against Stripe before any country reset. Do not delete one merely because the app timed out or a later retry failed.
+
+Keep `STRIPE_PAYMENTS_ENABLED=false` through migration and until old application instances have drained. The database default remains conservative for old-version writes and rollback; only the new reservation code explicitly marks a proven unattempted request. After a setup error, iOS rereads the authoritative saved country, blocks another attempt if that refresh fails, and discards a late hosted URL after dismissal or an account switch.
+
 ## Webhook destination
 
 Configure a connected-account snapshot event destination at `https://<API-host>/v1/payments/stripe/webhook`, with API version `2026-10-28.endive`. Choose **Connected accounts** as the source for these v1 payment events, even though merchant onboarding uses Accounts v2. Use that destination's signing secret, which is separate from the API key. This route must receive the raw JSON bytes before Express JSON parsing. Signature verification, payment environment, connected account, saved attempt, session, PaymentIntent, currency and exact server amount are checked before a receipt is written.

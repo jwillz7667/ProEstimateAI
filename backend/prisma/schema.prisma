@@ -841,6 +841,9 @@ model StripeMerchant {
   country String
   displayName String
   contactEmail String?
+  creationStarted Boolean @default(true)
+  creationLeaseId String?
+  creationLeaseExpiresAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)

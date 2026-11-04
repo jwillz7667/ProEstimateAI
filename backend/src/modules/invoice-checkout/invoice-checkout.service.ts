@@ -1,17 +1,21 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { InvoiceCheckoutAttempt, Prisma } from '@prisma/client';
 import Stripe from 'stripe';
 import { prisma } from '../../config/database';
 import { env } from '../../config/env';
 import { AppError, AuthorizationError, ConflictError, NotFoundError, ValidationError } from '../../lib/errors';
 import { ACTIVE_CHECKOUT_STATES, checkoutConfigured, invoiceCheckoutInfo, assertNoActiveCheckout } from './invoice-checkout.policy';
-import { configuredGateway, reconciliationGateway, GatewayRefund, GatewaySession, InvoicePaymentGateway } from './stripe-gateway';
+import { configuredGateway, reconciliationGateway, GatewayRefund, GatewaySession, InvoicePaymentGateway, MerchantPaymentGateway } from './stripe-gateway';
+import { MerchantCountryRejectedError, normalizedMerchantCountry, requireSupportedMerchantCountry, SUPPORTED_MERCHANT_COUNTRIES } from './merchant-country';
 import { lockContractForInvoice } from '../change-orders/change-order-locks';
 import { applyAvailableContractCredits } from '../change-orders/credit-notes.service';
 import { allocateInvoiceInstallments, invoiceAmountDue } from '../invoice-finance/invoice-balance';
 
 const SUPPORTED_CURRENCIES = new Set(['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'NZD', 'MXN']);
 const MINIMUM_MINOR: Record<string, number> = { USD: 50, CAD: 50, EUR: 50, GBP: 30, AUD: 50, NZD: 50, MXN: 1000 };
+// Account creation uses 20-second SDK requests with at most two retries.
+// Reconciliation renews the claim before each page and before the actual write.
+const MERCHANT_CREATION_LEASE_MS = 90_000;
 export async function requirePaymentAdministrator(companyId: string, userId: string) {
   const user = await prisma.user.findFirst({ where: { id: userId, companyId, isActive: true }, select: { role: true } });
   if (!user || !['OWNER', 'ADMIN'].includes(user.role)) throw new AuthorizationError('Only a company owner or administrator can manage online payment setup.');
@@ -36,35 +40,78 @@ function validateSession(attempt: InvoiceCheckoutAttempt, session: GatewaySessio
   }
 }
 
-export async function merchantStatus(companyId: string, userId: string, gateway?: InvoicePaymentGateway) {
+export async function merchantStatus(companyId: string, userId: string, gateway?: MerchantPaymentGateway) {
   await requirePaymentAdministrator(companyId, userId);
   const merchant = await prisma.stripeMerchant.findUnique({ where: { companyId } });
-  if (!gateway && !checkoutConfigured()) return { configured: false, connected: !!merchant?.accountId, ready: false, country: merchant?.country ?? null, mode: null, dashboard_url: null };
+  if (!gateway && !checkoutConfigured()) return { configured: false, connected: !!merchant?.accountId, ready: false, country: merchant?.country ?? null, mode: null, dashboard_url: null, supported_countries: SUPPORTED_MERCHANT_COUNTRIES };
   gateway ??= configuredGateway();
   return { configured: true, connected: !!merchant?.accountId,
     country: merchant?.country ?? null,
     ready: !!merchant?.accountId && await gateway.merchantReady(merchant.accountId),
-    mode: gateway.liveMode ? 'live' : 'sandbox', dashboard_url: merchant?.accountId ? 'https://dashboard.stripe.com/' : null };
+    mode: gateway.liveMode ? 'live' : 'sandbox', dashboard_url: merchant?.accountId ? 'https://dashboard.stripe.com/' : null, supported_countries: SUPPORTED_MERCHANT_COUNTRIES };
 }
 
-export async function startMerchantOnboarding(companyId: string, userId: string, country: string, gateway = configuredGateway()) {
+export async function startMerchantOnboarding(companyId: string, userId: string, country: string, gateway: MerchantPaymentGateway = configuredGateway()) {
   await requirePaymentAdministrator(companyId, userId);
-  const merchant = await prisma.$transaction(async tx => {
+  country = normalizedMerchantCountry(country);
+  const reservation = await prisma.$transaction(async tx => {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "Company" WHERE id = ${companyId} FOR UPDATE`;
     if (!rows.length) throw new NotFoundError('Company', companyId);
     const existing = await tx.stripeMerchant.findUnique({ where: { companyId } });
-    if (existing) {
-      if (existing.country !== country.toUpperCase()) throw new ConflictError('The merchant country is already set. Continue setup with the original country.');
-      return existing;
+    if (existing && existing.country !== country) throw new ConflictError('The merchant country is already set. Continue setup with the original country.');
+    if (existing?.accountId) return { merchant: existing, leaseId: null, firstAttempt: false };
+    let merchant = existing;
+    if (!merchant) {
+      requireSupportedMerchantCountry(country);
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId } });
+      merchant = await tx.stripeMerchant.create({ data: { companyId, country, displayName: company.name, contactEmail: company.email, creationStarted: false } });
     }
-    const company = await tx.company.findUniqueOrThrow({ where: { id: companyId } });
-    return tx.stripeMerchant.create({ data: { companyId, country: country.toUpperCase(), displayName: company.name, contactEmail: company.email, createdAt: new Date() } });
+    const now = new Date();
+    if (merchant.creationLeaseId && merchant.creationLeaseExpiresAt && merchant.creationLeaseExpiresAt > now) {
+      throw new ConflictError('Payment setup is already being prepared. Refresh payment status and retry shortly.');
+    }
+    const leaseId = randomUUID();
+    const claimed = await tx.stripeMerchant.updateMany({
+      where: { companyId, requestId: merchant.requestId, accountId: null, creationLeaseId: merchant.creationLeaseId, creationLeaseExpiresAt: merchant.creationLeaseExpiresAt },
+      data: { creationStarted: true, creationLeaseId: leaseId, creationLeaseExpiresAt: new Date(now.getTime() + MERCHANT_CREATION_LEASE_MS) },
+    });
+    if (claimed.count !== 1) throw new ConflictError('Payment setup changed. Refresh payment status before continuing.');
+    return { merchant, leaseId, firstAttempt: !merchant.creationStarted };
   });
+  const { merchant, leaseId, firstAttempt } = reservation;
   let accountId = merchant.accountId;
   if (!accountId) {
-    accountId = await gateway.createMerchant(merchant);
-    await prisma.stripeMerchant.update({ where: { companyId }, data: { accountId } });
+    if (!leaseId) throw new ConflictError('Payment setup needs to be refreshed before continuing.');
+    // Both the started marker and lease are durable before any provider write.
+    // No DB connection is held during Stripe calls, and crashes retain the
+    // original payload/request UUID for safe same-country replay.
+    const owned = { companyId, requestId: merchant.requestId, accountId: null, creationLeaseId: leaseId };
+    const verifyLease = async () => {
+      const now = new Date();
+      const renewed = await prisma.stripeMerchant.updateMany({ where: { ...owned, creationLeaseExpiresAt: { gt: now } },
+        data: { creationLeaseExpiresAt: new Date(now.getTime() + MERCHANT_CREATION_LEASE_MS) } });
+      if (renewed.count !== 1) throw new ConflictError('Payment setup changed or its preparation expired. Refresh payment status before retrying.');
+    };
+    try {
+      await verifyLease();
+      const createdId = await gateway.createMerchant(merchant, verifyLease);
+      const saved = await prisma.stripeMerchant.updateMany({ where: owned, data: { accountId: createdId, creationLeaseId: null, creationLeaseExpiresAt: null } });
+      if (saved.count !== 1) throw new ConflictError('Payment setup changed before its response arrived. Refresh payment status before continuing.');
+      accountId = createdId;
+    } catch (error) {
+      if (error instanceof MerchantCountryRejectedError) {
+        if (!firstAttempt) throw new ConflictError('Stripe rejected this country, but an earlier payment setup attempt still needs reconciliation. Contact support before changing your business country.');
+        // Only the first confirmed country rejection can discard a request.
+        // A later rejection must not erase a previous ambiguous provider write.
+        const released = await prisma.stripeMerchant.deleteMany({ where: owned });
+        if (released.count !== 1) throw new ConflictError('Payment setup changed. Refresh payment status before continuing.');
+      }
+      throw error;
+    } finally {
+      await prisma.stripeMerchant.updateMany({ where: owned, data: { creationLeaseId: null, creationLeaseExpiresAt: null } });
+    }
   }
+  if (!accountId) throw new ConflictError('Payment setup could not be confirmed. Refresh payment status before continuing.');
   const base = env.PUBLIC_WEB_BASE_URL.replace(/\/$/, '');
   const url = await gateway.onboardingLink(accountId, `${base}/payments/setup?status=returned`, `${base}/payments/setup?status=expired`);
   return { url };

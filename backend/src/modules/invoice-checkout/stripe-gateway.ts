@@ -3,6 +3,7 @@ import { InvoiceCheckoutAttempt, StripeMerchant } from '@prisma/client';
 import { env } from '../../config/env';
 import { AppError, ConflictError } from '../../lib/errors';
 import { checkoutConfigured, stripeCredentialsConfigured } from './invoice-checkout.policy';
+import { MerchantCountryRejectedError } from './merchant-country';
 
 export interface GatewaySession {
   id: string; url: string | null; amount: number | null; currency: string | null;
@@ -14,7 +15,7 @@ export interface GatewayRefund {
 }
 export interface InvoicePaymentGateway {
   liveMode: boolean;
-  createMerchant(merchant: StripeMerchant): Promise<string>;
+  createMerchant(merchant: StripeMerchant, verifyLease?: () => Promise<void>): Promise<string>;
   merchantReady(accountId: string): Promise<boolean>;
   onboardingLink(accountId: string, returnUrl: string, refreshUrl: string): Promise<string>;
   createSession(attempt: InvoiceCheckoutAttempt, invoiceNumber: string, token: string): Promise<GatewaySession>;
@@ -27,6 +28,22 @@ export interface InvoicePaymentGateway {
   verifyEvent(body: Buffer, signature: string): Stripe.Event;
 }
 
+export type MerchantPaymentGateway = Pick<InvoicePaymentGateway, 'liveMode' | 'createMerchant' | 'merchantReady' | 'onboardingLink'>;
+
+/**
+ * These documented HTTP 400 account-create errors reject the country before
+ * an account exists. A capability's unsupported_country status is NOT an
+ * error: Stripe may have created the account and must retain its identity.
+ * https://docs.stripe.com/api/v2/core/accounts/create
+ * https://docs.stripe.com/error-codes#country_code_invalid
+ */
+export function isDefinitiveMerchantCountryRejection(error: unknown): boolean {
+  return error instanceof Stripe.errors.StripeInvalidRequestError
+    && error.statusCode === 400
+    && error.rawType === 'invalid_request_error'
+    && ['country_code_invalid', 'cross_border_connected_account_creation_not_allowed', 'capability_not_available_in_country'].includes(error.code ?? '');
+}
+
 const objectId = (value: string | { id: string } | null | undefined) => typeof value === 'string' ? value : value?.id ?? null;
 function sessionValue(s: Stripe.Checkout.Session): GatewaySession {
   return { id: s.id, url: s.url, amount: s.amount_total, currency: s.currency, status: s.status,
@@ -37,6 +54,25 @@ function sessionValue(s: Stripe.Checkout.Session): GatewaySession {
 const refundValue = (r: Stripe.Refund): GatewayRefund => ({ id: r.id, amount: r.amount, currency: r.currency,
   status: r.status, paymentIntentId: objectId(r.payment_intent) });
 
+function merchantPagePath(path: string | null): string {
+  // The SDK's public rawRequest retains its own Stripe host, auth/version and
+  // retry policy. Only follow relative URLs for this exact listing endpoint.
+  if (typeof path !== 'string' || !(path === '/v2/core/accounts' || path.startsWith('/v2/core/accounts?')) || path.includes('#') || path.includes('\\')) {
+    throw new ConflictError('Stripe returned an unexpected reconciliation page. Contact support before retrying payment setup.');
+  }
+  return path;
+}
+
+type MerchantAccountPage = { data: Array<{ id: string; livemode: boolean; metadata?: Record<string, unknown> | null }>; next_page_url: string | null };
+function merchantAccountPage(value: unknown): MerchantAccountPage {
+  const page = value as MerchantAccountPage | null;
+  if (!page || !Array.isArray(page.data) || !(page.next_page_url === null || typeof page.next_page_url === 'string')
+    || page.data.some(account => !account || typeof account.id !== 'string' || typeof account.livemode !== 'boolean')) {
+    throw new ConflictError('Stripe returned an incomplete reconciliation page. Contact support before retrying payment setup.');
+  }
+  return page;
+}
+
 export class StripeInvoiceGateway implements InvoicePaymentGateway {
   readonly liveMode: boolean;
   private readonly client: Stripe;
@@ -44,21 +80,49 @@ export class StripeInvoiceGateway implements InvoicePaymentGateway {
     this.client = new Stripe(key, { maxNetworkRetries: 2, timeout: 20_000 });
     this.liveMode = key.includes('_live_');
   }
-  async createMerchant(merchant: StripeMerchant) {
+  async createMerchant(merchant: StripeMerchant, verifyLease?: () => Promise<void>) {
     if (Date.now() - merchant.createdAt.getTime() > 23 * 60 * 60_000) {
       let count = 0;
-      for await (const account of this.client.v2.core.accounts.list({ limit: 100 })) {
-        if (++count > 10_000) throw new ConflictError('Merchant setup needs reconciliation in Stripe before another account can be created.');
-        if (account.metadata?.proestimate_company_id === merchant.companyId && account.livemode === this.liveMode) return account.id;
+      let nextPage: string | null = null;
+      let complete = false;
+      const seen = new Set<string>();
+      const deadline = Date.now() + 5 * 60_000;
+      for (let pageIndex = 0; pageIndex < 200; pageIndex += 1) {
+        if (Date.now() >= deadline) throw new ConflictError('Merchant reconciliation took too long. Contact support before retrying payment setup.');
+        // Explicit pages are required: the SDK iterator can silently request
+        // several empty/partial pages without yielding a single account.
+        await verifyLease?.();
+        const path = pageIndex === 0 ? '/v2/core/accounts?limit=100' : merchantPagePath(nextPage);
+        if (seen.has(path)) throw new ConflictError('Stripe reconciliation repeated a page. Contact support before retrying payment setup.');
+        seen.add(path);
+        const page = merchantAccountPage(pageIndex === 0
+          ? await this.client.v2.core.accounts.list({ limit: 100 })
+          : await this.client.rawRequest('GET', path));
+        for (const account of page.data) {
+          if (++count > 10_000) throw new ConflictError('Merchant setup needs reconciliation in Stripe before another account can be created.');
+          if (account.metadata?.proestimate_company_id === merchant.companyId && account.livemode === this.liveMode) return account.id;
+        }
+        nextPage = page.next_page_url;
+        if (nextPage === null) { complete = true; break; }
       }
+      if (!complete || Date.now() >= deadline) throw new ConflictError('Merchant setup needs reconciliation in Stripe before another account can be created.');
     }
-    const result = await this.client.v2.core.accounts.create({
-      display_name: merchant.displayName, ...(merchant.contactEmail ? { contact_email: merchant.contactEmail } : {}),
-      dashboard: 'full', identity: { country: merchant.country.toLowerCase() },
-      configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
-      defaults: { responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' } },
-      metadata: { proestimate_company_id: merchant.companyId }, include: ['configuration.merchant'],
-    }, { idempotencyKey: `merchant-${merchant.requestId}` });
+    // Reconciliation can span multiple pages. An expired or superseded claim
+    // must never start a new provider write after finishing those reads.
+    await verifyLease?.();
+    let result: Stripe.V2.Core.Account;
+    try {
+      result = await this.client.v2.core.accounts.create({
+        display_name: merchant.displayName, ...(merchant.contactEmail ? { contact_email: merchant.contactEmail } : {}),
+        dashboard: 'full', identity: { country: merchant.country.toLowerCase() },
+        configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
+        defaults: { responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' } },
+        metadata: { proestimate_company_id: merchant.companyId }, include: ['configuration.merchant'],
+      }, { idempotencyKey: `merchant-${merchant.requestId}` });
+    } catch (error) {
+      if (isDefinitiveMerchantCountryRejection(error)) throw new MerchantCountryRejectedError();
+      throw error;
+    }
     if (result.livemode !== this.liveMode) throw new ConflictError('The Stripe merchant belongs to a different payment environment.');
     return result.id;
   }
