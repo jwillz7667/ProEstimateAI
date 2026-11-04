@@ -7,6 +7,7 @@ import {
 } from './companies.controller';
 import { validate } from '../../middleware/validate.middleware';
 import { updateCompanySchema, uploadLogoSchema } from './companies.validators';
+import { requireBrandingAccess, requireBrandingForCompanyChanges } from '../../middleware/feature-access.middleware';
 
 const router = Router();
 
@@ -15,8 +16,8 @@ function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => P
 }
 
 router.get('/me', asyncHandler(getMeHandler));
-router.patch('/me', validate(updateCompanySchema), asyncHandler(updateMeHandler));
-router.post('/me/logo', validate(uploadLogoSchema), asyncHandler(uploadLogoHandler));
+router.patch('/me', validate(updateCompanySchema), requireBrandingForCompanyChanges, asyncHandler(updateMeHandler));
+router.post('/me/logo', validate(uploadLogoSchema), requireBrandingAccess, asyncHandler(uploadLogoHandler));
 router.delete('/me/logo', asyncHandler(deleteLogoHandler));
 
 export default router;

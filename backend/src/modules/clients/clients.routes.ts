@@ -5,6 +5,7 @@ import {
   createHandler,
   updateHandler,
   deleteHandler,
+  listProjectsHandler,
 } from './clients.controller';
 import { validate } from '../../middleware/validate.middleware';
 import { createClientSchema, updateClientSchema } from './clients.validators';
@@ -16,6 +17,7 @@ function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => P
 }
 
 router.get('/', asyncHandler(listHandler));
+router.get('/:id/projects', asyncHandler(listProjectsHandler));
 router.get('/:id', asyncHandler(getByIdHandler));
 router.post('/', validate(createClientSchema), asyncHandler(createHandler));
 router.patch('/:id', validate(updateClientSchema), asyncHandler(updateHandler));

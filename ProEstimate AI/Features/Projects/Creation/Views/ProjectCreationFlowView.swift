@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Multi-step project creation flow presented as a full-screen cover.
 ///
-/// Four pages: category → photos+prompts → name+advanced → generating.
+/// Two input pages: project setup → photos/notes. Paid lawn-care projects
+/// add measurement, then the save/generation pipeline runs inline.
 /// The trailing "generating" page runs the create+upload+AI pipeline
 /// inline so the user sees one continuous loading screen and lands on a
 /// fully-rendered project detail screen rather than a half-loaded shell.
@@ -11,12 +12,18 @@ struct ProjectCreationFlowView: View {
     /// the user opts to open the project anyway after a soft failure).
     /// The second parameter is kept for backward compatibility with the
     /// old auto-generate handoff; in this flow it's always `false`
-    /// because generation has already started in the wizard.
+    /// because the save/optional-AI pipeline is already handled by the wizard.
     var onProjectCreated: ((_ projectId: String, _ autoGenerate: Bool) -> Void)?
 
     @State private var viewModel = ProjectCreationViewModel()
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
+    @Environment(EntitlementStore.self) private var entitlementStore
+    @Environment(FeatureGateCoordinator.self) private var featureGate
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var activePaywall: PaywallDecision?
+    @State private var limitNotice: PaywallDecision?
+    @State private var hasConfiguredDefaults = false
 
     var body: some View {
         NavigationStack {
@@ -40,7 +47,7 @@ struct ProjectCreationFlowView: View {
                         .padding(.vertical, SpacingTokens.md)
                 }
             }
-            .navigationTitle(viewModel.currentStepEnum.title)
+            .navigationTitle(stepTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -52,19 +59,54 @@ struct ProjectCreationFlowView: View {
             }
             .interactiveDismissDisabled(viewModel.isPipelineRunning)
         }
+        .tint(ColorTokens.primaryOrange)
+        .sheet(item: $activePaywall) { decision in
+            PaywallHostView(decision: decision) {
+                activePaywall = nil
+            }
+        }
+        .alert(limitNotice?.headline ?? "Plan Limit Reached", isPresented: Binding(
+            get: { limitNotice != nil }, set: { if !$0 { limitNotice = nil } }
+        )) {
+            Button("OK", role: .cancel) { limitNotice = nil }
+        } message: {
+            Text(limitNotice?.subheadline ?? "Try again when your allowance resets.")
+        }
+        .onChange(of: viewModel.pipelinePaywall) { _, decision in
+            guard let decision else { return }
+            present(decision)
+            viewModel.pipelinePaywall = nil
+        }
         .onAppear {
+            guard !hasConfiguredDefaults else { return }
+            hasConfiguredDefaults = true
+            viewModel.shouldGenerateAI = entitlementStore.hasProAccess
+            viewModel.canUsePaidMaps = entitlementStore.hasProAccess
             // Seed the wizard's per-project AI-preview toggle from the
             // company-wide default. The VM reads this lazily for remodel
-            // trades; service trades ignore it and stay off. Setting it here
-            // (rather than in the VM init) keeps the VM free of environment
-            // coupling and lets the value follow a mid-session settings change.
+            // trades; service trades ignore it and stay off. Seed this draft
+            // once so returning from a paywall never overwrites its choices.
             if let company = appState.currentCompany {
                 viewModel.companyDefaultGeneratesImage = company.defaultAiPreviewEnabled
+            }
+        }
+        .onChange(of: entitlementStore.hasProAccess) { _, hasAccess in
+            viewModel.canUsePaidMaps = hasAccess
+            if !hasAccess, viewModel.currentStepEnum == .lawnMap {
+                viewModel.currentStep = ProjectCreationStep.photos.rawValue
             }
         }
     }
 
     // MARK: - Step Content
+
+    private var stepTitle: String {
+        if !viewModel.shouldGenerateAI {
+            if viewModel.currentStepEnum == .generating { return "Saving Project" }
+            if viewModel.currentStepEnum == .photos { return "Photos & Notes" }
+        }
+        return viewModel.currentStepEnum.title
+    }
 
     @ViewBuilder
     private var stepContent: some View {
@@ -75,8 +117,6 @@ struct ProjectCreationFlowView: View {
             PhotosAndPromptStep(viewModel: viewModel)
         case .lawnMap:
             LawnAreaCaptureStep(viewModel: viewModel)
-        case .details:
-            ProjectDetailsStep(viewModel: viewModel)
         case .generating:
             ProjectGeneratingStep(viewModel: viewModel) { projectId in
                 // Pipeline complete (or "open anyway" tapped). Hand off
@@ -90,50 +130,78 @@ struct ProjectCreationFlowView: View {
     // MARK: - Progress Bar
 
     private var progressBar: some View {
-        HStack(spacing: SpacingTokens.xxs) {
-            ForEach(0 ..< viewModel.navigableStepCount, id: \.self) { step in
-                Capsule()
-                    .fill(step <= viewModel.currentStep ? ColorTokens.primaryOrange : ColorTokens.progressTrack)
-                    .frame(height: 4)
-                    .animation(.easeInOut(duration: 0.25), value: viewModel.currentStep)
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            Text("Step \(viewModel.currentInputStepIndex + 1) of \(viewModel.navigableStepCount)")
+                .font(TypographyTokens.caption)
+                .foregroundStyle(ColorTokens.secondaryText)
+            HStack(spacing: SpacingTokens.xxs) {
+                ForEach(0 ..< viewModel.navigableStepCount, id: \.self) { step in
+                    Capsule()
+                        .fill(step <= viewModel.currentInputStepIndex ? ColorTokens.primaryOrange : ColorTokens.progressTrack)
+                        .frame(height: 4)
+                }
             }
+            .accessibilityHidden(true)
         }
     }
 
     // MARK: - Navigation Buttons
 
+    @ViewBuilder
     private var navigationButtons: some View {
-        HStack(spacing: SpacingTokens.sm) {
-            if viewModel.currentStep > 0 {
-                SecondaryButton(title: "Back", icon: "chevron.left") {
-                    viewModel.previousStep()
-                }
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: SpacingTokens.sm) {
+                forwardButton
+                backButton
             }
-
-            // Last input step is `.details`; tapping the primary button
-            // there should kick off the pipeline by transitioning to
-            // the generating step (which auto-runs the pipeline in its
-            // .task). All earlier steps just step forward.
-            if viewModel.currentStepEnum == .details {
-                PrimaryCTAButton(
-                    title: "Create Project",
-                    icon: "plus.circle.fill",
-                    isLoading: viewModel.isPipelineRunning,
-                    isDisabled: !viewModel.canProceed || viewModel.isPipelineRunning
-                ) {
-                    viewModel.enterGeneratingStep()
-                }
-            } else {
-                PrimaryCTAButton(
-                    title: "Next",
-                    icon: "chevron.right",
-                    isDisabled: !viewModel.canProceed
-                ) {
-                    viewModel.nextStep()
-                }
+        } else {
+            HStack(spacing: SpacingTokens.sm) {
+                backButton
+                forwardButton
             }
         }
     }
+
+    @ViewBuilder
+    private var backButton: some View {
+        if viewModel.currentInputStepIndex > 0 {
+            SecondaryButton(title: "Back", icon: "chevron.left") {
+                viewModel.previousStep()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var forwardButton: some View {
+        if viewModel.isLastInputStep {
+            PrimaryCTAButton(
+                title: viewModel.shouldGenerateAI ? "Create with AI" : "Save Project",
+                icon: viewModel.shouldGenerateAI ? "sparkles" : "checkmark",
+                isLoading: viewModel.isPipelineRunning,
+                isDisabled: !viewModel.canProceed || viewModel.isPipelineRunning
+            ) {
+                if viewModel.shouldGenerateAI,
+                   case let .blocked(decision) = featureGate.guardGeneratePreview() {
+                    present(decision)
+                } else {
+                    viewModel.enterGeneratingStep()
+                }
+            }
+        } else {
+            PrimaryCTAButton(
+                title: "Continue",
+                icon: "chevron.right",
+                isDisabled: !viewModel.canProceed
+            ) {
+                viewModel.nextStep()
+            }
+        }
+    }
+    private func present(_ decision: PaywallDecision) {
+        if decision.placement.isUsageLimit { limitNotice = decision }
+        else { activePaywall = decision }
+    }
+
 }
 
 // MARK: - Preview

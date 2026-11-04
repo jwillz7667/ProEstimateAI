@@ -1,0 +1,209 @@
+{
+  "checked_at": "2026-11-03T09:45:16.519Z",
+  "origin": "https://proestimate-api-production-75e5.up.railway.app",
+  "deployment_id": "497b56b0-6ff7-45c9-aed9-72644d7c9842",
+  "source_commit": "7fbc2a5",
+  "scope": "Normal-API disposable Free tenancy; manual estimate editing and sent-quote item immutability",
+  "checks": [
+    {
+      "name": "deployment_health",
+      "http": 200
+    },
+    {
+      "name": "free_signup",
+      "http": 201,
+      "user_id": "vj618ic88eymsys8lx3636l3",
+      "company_id": "m6l6jneevr25vq8c3rhdkfcj"
+    },
+    {
+      "name": "canonical_free_entitlement",
+      "http": 200,
+      "plan_code": "FREE_STARTER",
+      "subscription_state": "FREE"
+    },
+    {
+      "name": "manual_project_free",
+      "http": 201,
+      "project_id": "cmw0i559e0008g8i37ya57iez"
+    },
+    {
+      "name": "manual_estimate_free",
+      "http": 201,
+      "estimate_id": "cmw0i55ew000bg8i30h6hednv"
+    },
+    {
+      "name": "draft_add_material",
+      "http": 201,
+      "line_total": 65.97
+    },
+    {
+      "name": "server_totals_after_first_item",
+      "http": 200,
+      "expected": {
+        "subtotal_materials": 65.97,
+        "subtotal_labor": 0,
+        "subtotal_other": 0,
+        "tax_amount": 5.44,
+        "discount_amount": 0,
+        "total_amount": 71.41
+      },
+      "actual": {
+        "subtotal_materials": 65.97,
+        "subtotal_labor": 0,
+        "subtotal_other": 0,
+        "tax_amount": 5.44,
+        "discount_amount": 0,
+        "total_amount": 71.41
+      }
+    },
+    {
+      "name": "draft_add_labor",
+      "http": 201,
+      "line_total": 90
+    },
+    {
+      "name": "server_totals_after_second_item",
+      "http": 200,
+      "expected": {
+        "subtotal_materials": 65.97,
+        "subtotal_labor": 90,
+        "subtotal_other": 0,
+        "tax_amount": 5.44,
+        "discount_amount": 0,
+        "total_amount": 161.41
+      },
+      "actual": {
+        "subtotal_materials": 65.97,
+        "subtotal_labor": 90,
+        "subtotal_other": 0,
+        "tax_amount": 5.44,
+        "discount_amount": 0,
+        "total_amount": 161.41
+      }
+    },
+    {
+      "name": "draft_edit_item",
+      "http": 200,
+      "line_total": 90
+    },
+    {
+      "name": "server_totals_after_item_edit",
+      "http": 200,
+      "expected": {
+        "subtotal_materials": 90,
+        "subtotal_labor": 90,
+        "subtotal_other": 0,
+        "tax_amount": 9,
+        "discount_amount": 0,
+        "total_amount": 189
+      },
+      "actual": {
+        "subtotal_materials": 90,
+        "subtotal_labor": 90,
+        "subtotal_other": 0,
+        "tax_amount": 9,
+        "discount_amount": 0,
+        "total_amount": 189
+      }
+    },
+    {
+      "name": "draft_remove_item",
+      "http": 200
+    },
+    {
+      "name": "server_totals_after_item_removal",
+      "http": 200,
+      "expected": {
+        "subtotal_materials": 90,
+        "subtotal_labor": 0,
+        "subtotal_other": 0,
+        "tax_amount": 9,
+        "discount_amount": 0,
+        "total_amount": 99
+      },
+      "actual": {
+        "subtotal_materials": 90,
+        "subtotal_labor": 0,
+        "subtotal_other": 0,
+        "tax_amount": 9,
+        "discount_amount": 0,
+        "total_amount": 99
+      }
+    },
+    {
+      "name": "mark_own_estimate_sent",
+      "http": 200,
+      "status": "sent"
+    },
+    {
+      "name": "sent_single_item_create_denied",
+      "http": 409,
+      "error_code": "CONFLICT"
+    },
+    {
+      "name": "sent_batch_item_create_denied",
+      "http": 409,
+      "error_code": "CONFLICT"
+    },
+    {
+      "name": "sent_item_update_denied",
+      "http": 409,
+      "error_code": "CONFLICT"
+    },
+    {
+      "name": "sent_item_delete_denied",
+      "http": 409,
+      "error_code": "CONFLICT"
+    },
+    {
+      "name": "sent_estimate_still_readable_and_totals_unchanged",
+      "http": 200,
+      "expected": {
+        "subtotal_materials": 90,
+        "subtotal_labor": 0,
+        "subtotal_other": 0,
+        "tax_amount": 9,
+        "discount_amount": 0,
+        "total_amount": 99
+      },
+      "actual": {
+        "subtotal_materials": 90,
+        "subtotal_labor": 0,
+        "subtotal_other": 0,
+        "tax_amount": 9,
+        "discount_amount": 0,
+        "total_amount": 99
+      }
+    },
+    {
+      "name": "sent_items_readable_and_unchanged",
+      "http": 200,
+      "count": 1
+    }
+  ],
+  "constraints": {
+    "ai_calls": 0,
+    "apple_purchases": 0,
+    "emails": 0,
+    "admin_grant_changes": 0,
+    "simulator_actions": 0
+  },
+  "result": "PASS",
+  "cleanup": {
+    "performed": true,
+    "ownership_verified": true,
+    "account_delete_http": 200,
+    "entire_sole_owner_tenancy_deleted": true,
+    "access_token_http": 401,
+    "refresh_token_http": 401,
+    "deleted_login_http": 401,
+    "scope": {
+      "user_id": "vj618ic88eymsys8lx3636l3",
+      "company_id": "m6l6jneevr25vq8c3rhdkfcj",
+      "project_id": "cmw0i559e0008g8i37ya57iez",
+      "estimate_id": "cmw0i55ew000bg8i30h6hednv"
+    },
+    "temporary_credential_file_removed": true
+  },
+  "completed_at": "2026-11-03T09:45:20.927Z"
+}

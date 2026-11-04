@@ -12,7 +12,7 @@ export const createAssetSchema = z.object({
     .optional(),
   asset_type: z
     .enum(['original', 'ai_generated', 'document'], {
-      errorMap: () => ({ message: 'asset_type must be one of: original, ai_generated, document' }),
+      error: 'asset_type must be one of: original, ai_generated, document',
     })
     .optional(),
   sort_order: z

@@ -6,12 +6,14 @@ import {
   updateHandler,
   deleteHandler,
   generateHandler,
+  reviseHandler,
 } from './estimates.controller';
 import { validate } from '../../middleware/validate.middleware';
 import {
   createEstimateSchema,
   generateEstimateSchema,
   updateEstimateSchema,
+  reviseEstimateSchema,
 } from './estimates.validators';
 import { convertFromEstimateHandler } from '../invoices/invoices.controller';
 import { convertEstimateToInvoiceSchema } from '../invoices/invoices.validators';
@@ -32,6 +34,7 @@ router.get('/:id', asyncHandler(getByIdHandler));
 router.post('/', validate(createEstimateSchema), asyncHandler(createHandler));
 router.patch('/:id', validate(updateEstimateSchema), asyncHandler(updateHandler));
 router.delete('/:id', asyncHandler(deleteHandler));
+router.post('/:id/revise', validate(reviseEstimateSchema), asyncHandler(reviseHandler));
 
 // Convert an estimate into a DRAFT invoice (Pro-gated). Distinct second path
 // segment from the nested routers below, so no ordering conflict.

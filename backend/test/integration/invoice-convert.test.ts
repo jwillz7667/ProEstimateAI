@@ -54,6 +54,7 @@ async function seedUser(args: {
       companyId: company.id,
       planId: args.planId,
       status: args.status,
+      renewalDate: args.status === "PRO_ACTIVE" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null,
     },
   });
   return { company, user };
@@ -82,6 +83,7 @@ async function seedEstimate(companyId: string, opts: { withClient: boolean }) {
       companyId,
       estimateNumber: "EST-1001",
       title: "Bathroom Estimate",
+      status: "APPROVED",
       subtotalMaterials: 800,
       subtotalLabor: 240,
       subtotalOther: 0,

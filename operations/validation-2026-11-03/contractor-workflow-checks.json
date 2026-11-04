@@ -1,0 +1,51 @@
+{
+  "validated_at": "2026-11-03T21:54:49.938315+00:00",
+  "code_commit": "8cfd29d2ef3d3a05320cac72a8a890294f29c64c",
+  "backend": {
+    "unit_tests": 245,
+    "integration_tests": 270,
+    "integration_files": 32,
+    "migrations": 33,
+    "typechecks": "passed",
+    "build": "passed",
+    "lint_errors": 0,
+    "existing_lint_warnings": 1,
+    "database": "disposable local PostgreSQL only"
+  },
+  "ios": {
+    "foundation_runners": 15,
+    "foundation_checks": 647,
+    "generic_arm64_sdk_build": "passed",
+    "simulators_booted": 0,
+    "app_launches": 0,
+    "runtime_touch_verification": false
+  },
+  "web": {
+    "unit_tests": 26,
+    "headless_browser_tests": 8,
+    "production_build": "passed",
+    "lint_errors": 0,
+    "existing_lint_warnings": 2,
+    "fixtures": "synthetic localhost only"
+  },
+  "stripe": {
+    "business": "Viral Ventures LLC",
+    "connection_verified": true,
+    "collection_enabled": false,
+    "deployable_key_present": false,
+    "proestimate_webhook_present": false,
+    "provider_account_creations": 0,
+    "real_charges": 0,
+    "real_refunds": 0
+  },
+  "delivery": {
+    "railway_deployed": false,
+    "new_ios_binary_uploaded": false,
+    "draft_pr": 56
+  },
+  "excluded_user_work": [
+    "ProEstimate AI/Resources/Localizable.xcstrings",
+    ".playwright-mcp/",
+    "ProEstimate AI.xcodeproj/project.xcworkspace/xcuserdata/"
+  ]
+}

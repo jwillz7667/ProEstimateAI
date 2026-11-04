@@ -162,7 +162,7 @@ Rules:
 export function projectFactsBlock(ctx: PromptContext): string {
   const lines: string[] = [];
 
-  lines.push(`Project: ${ctx.projectTitle}`);
+  if (ctx.projectTitle.trim()) lines.push(`Project: ${ctx.projectTitle}`);
   lines.push(`Type: ${humanizeType(ctx.projectType)}`);
   lines.push(`Quality tier: ${tierLanguage(ctx.qualityTier).label}`);
 
@@ -266,7 +266,7 @@ PHOTOGRAPHIC RULES (apply to every shot)
 - No text, no watermarks, no UI overlays, no decorative borders.
 - No people in the frame unless absolutely necessary for scale.
 - No brand logos visible on products or signage.
-- No before/after split composition. ONE clean "after" image only.
+- The entire canvas is one continuous, full-bleed photograph of the completed space.
 
 QUALITY TIER VISUAL LANGUAGE
 ${tier.visualDescription}
@@ -288,42 +288,30 @@ export function imageEditFrame(ctx: PromptContext): string {
   const tier = tierLanguage(ctx.qualityTier);
 
   return `
-ROLE
-You are a high-end architectural retoucher. You receive a real
-photograph of a property/room and return the SAME photograph with the
-remodel completed in place. The output is an edit, not a new shot.
+PHOTOGRAPHIC DELIVERABLE
+Retouch the SAME photograph to show the completed renovation. Return exactly
+one continuous, full-bleed photograph of the entire finished scene. The room
+or property fills the complete image from the left edge to the right edge
+and from the top edge to the bottom edge, as one coherent camera exposure.
 
-CAMERA LOCK — non-negotiable
-- The output MUST share the input's camera position, focal length,
-  height, tilt, framing, and crop pixel-for-pixel.
-- DO NOT reframe, recompose, zoom in or out, change angle, push in,
-  pull back, switch from eye-level to aerial, or rotate the view.
-- DO NOT swap to a "more flattering" angle — the goal is a true
-  before/after where the divider slider can blend the two on top of
-  each other and the underlying scene aligns perfectly.
-- DO NOT change the time of day, weather, or sun direction. Match the
-  input's exposure, white balance, and shadow direction. If the input
-  is overcast, the output is overcast. If sun is camera-left, sun
-  stays camera-left.
-- DO NOT add or remove neighbors' houses, the sky region, the lot
-  outline, the driveway, the fence line, or any structure outside the
-  scope of the contractor's request.
+CAMERA AND SCENE MATCH
+- Keep the source camera position, lens perspective, camera height, tilt,
+  framing and crop. Corresponding fixed architectural features occupy the
+  same image coordinates throughout the complete photograph.
+- Preserve the source aspect ratio and the visible extent of the scene.
+- Match the source exposure, white balance, weather, time of day and light
+  direction. Keep physically plausible shadows and reflections.
+- Preserve windows, doors, walls, structural edges, neighboring buildings
+  and all other scene content outside the requested renovation scope.
 
-WHAT TO CHANGE
-Only the surfaces, finishes, materials, plantings, and built additions
-called out in the contractor's request. Everything else — including
-the surrounding house, landscape, sky, and unrelated structures —
-must remain as photographed.
+RENOVATION SCOPE
+Apply the contractor's requested changes consistently across the whole
+visible scene. Keep the original appearance of every unrelated surface,
+material, object and surrounding structure. The finished result is a
+natural photograph containing only the completed physical scene.
 
-PHOTOGRAPHIC RULES (apply to the edit)
-- Realistic exposure that matches the source. No HDR halos.
-- Physically-plausible shadows that follow the source sun direction.
-- No text, watermarks, UI overlays, decorative borders.
-- No people unless they were in the source.
-- No brand logos visible.
-- ONE clean "after" image only — no split composition, no diptych.
-
-QUALITY TIER VISUAL LANGUAGE
+MATERIAL QUALITY
 ${tier.visualDescription}
+
 `.trim();
 }

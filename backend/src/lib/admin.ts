@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
+import type { Prisma } from '@prisma/client';
 
 /**
  * Parsed set of admin emails from the ADMIN_EMAILS env var.
@@ -24,13 +25,13 @@ if (adminEmails.size > 0) {
  */
 const adminUserCache = new Map<string, boolean>();
 
-export async function isAdminUser(userId: string): Promise<boolean> {
+export async function isAdminUser(userId: string, database: Pick<Prisma.TransactionClient, 'user'> = prisma): Promise<boolean> {
   if (adminEmails.size === 0) return false;
 
   const cached = adminUserCache.get(userId);
   if (cached !== undefined) return cached;
 
-  const user = await prisma.user.findUnique({
+  const user = await database.user.findUnique({
     where: { id: userId },
     select: { email: true },
   });

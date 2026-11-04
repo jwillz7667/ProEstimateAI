@@ -10,7 +10,8 @@ import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { aspectRatioForProjectType } from "./image-framing";
 import { generatePreviewImagePiAPI } from "./piapi-image-gen";
-import { getImageEditPrompt, getImagePrompt } from "./prompts";
+import { generatePreviewImageFal, ImageSafetyError } from "./fal-image-gen";
+import { getImagePrompt, getProviderImagePrompt } from "./prompts";
 import {
   PromptContext,
   QualityTier,
@@ -114,38 +115,7 @@ function buildFullPrompt(
   context: ImageGenContext,
   hasReferencePhoto: boolean,
 ): string {
-  const promptCtx = toPromptContext(context);
-
-  if (hasReferencePhoto) {
-    const editFrame = getImageEditPrompt(promptCtx);
-    return `${editFrame}
-
-CONTRACTOR'S REQUEST (this is what to build/change in the existing scene)
-"${userPrompt}"
-
-Reinforcement — read before generating:
-- The output is the SAME photograph with the renovation completed in
-  place. It is NOT a new shot.
-- Preserve the input's camera position, focal length, height, and tilt
-  pixel-for-pixel. The before/after slider must blend the two on top of
-  each other.
-- Match the input's exposure, white balance, time of day, and shadow
-  direction.
-- Touch ONLY the surfaces, materials, plantings, and built additions
-  called out above. Leave everything else exactly as it appears in the
-  source photo.
-- Photorealistic. No text, labels, watermarks, or imagined neighbors.`;
-  }
-
-  const systemPrompt = getImagePrompt(promptCtx);
-  return `${systemPrompt}
-
-CONTRACTOR'S REQUEST
-"${userPrompt}"
-
-Photograph this completed project from the most flattering angle that
-satisfies the framing rules above. Make it look so real and aspirational
-that the client will immediately approve.`;
+  return getProviderImagePrompt(userPrompt, toPromptContext(context), hasReferencePhoto);
 }
 
 export interface ReferencePhoto {
@@ -157,11 +127,12 @@ export interface ReferencePhoto {
  * Generate a preview image using the best available provider.
  *
  * Provider strategy:
- *   1. Google GenAI Nano Banana 2.1 when GOOGLE_AI_API_KEY is set.
- *   2. PiAPI Nano Banana 2.1 when PIAPI_API_KEY is set, with Nano Banana 2
+ *   1. Low-cost fal.ai FLUX.2 Flash when FAL_KEY is set.
+ *   2. Google GenAI Nano Banana 2.1 when GOOGLE_AI_API_KEY is set.
+ *   3. PiAPI Nano Banana 2.1 when PIAPI_API_KEY is set, with Nano Banana 2
  *      retained as a last resort if the newer model is unavailable.
  *
- * Both return GeneratedImage with the same shape; the caller is unaware
+ * All return GeneratedImage with the same shape; the caller is unaware
  * of which provider fulfilled the request.
  */
 export async function generatePreviewImage(
@@ -177,11 +148,28 @@ export async function generatePreviewImage(
     return null;
   }
 
+  if (env.FAL_KEY) {
+    try {
+      const result = await generatePreviewImageFal({
+        prompt: buildFullPrompt(userPrompt, context, !!referencePhoto),
+        projectType: context.projectType,
+        referencePhoto,
+      });
+      if (result) return result;
+    } catch (error) {
+      if (error instanceof ImageSafetyError) {
+        logger.warn({ provider: "fal" }, "Image safety rejection; generation stopped");
+        return null;
+      }
+      logger.warn({ provider: "fal" }, "FLUX.2 Flash unavailable; trying fallback provider");
+    }
+  }
+
   if (env.GOOGLE_AI_API_KEY) {
     try {
       logger.info(
         { provider: "google" },
-        "Attempting Google GenAI image generation (primary)",
+        "Attempting Google GenAI image generation",
       );
       const googleResult = await generatePreviewImageGoogle(
         userPrompt,
@@ -239,7 +227,7 @@ export async function generatePreviewImage(
   }
 
   logger.error(
-    "No image generation provider produced an image (need GOOGLE_AI_API_KEY or PIAPI_API_KEY)",
+    "No image generation provider produced an image (need FAL_KEY, GOOGLE_AI_API_KEY or PIAPI_API_KEY)",
   );
   return null;
 }
@@ -281,7 +269,7 @@ async function generatePreviewImageGoogle(
         temperature,
         topP,
       },
-      "Starting Google GenAI image generation (primary)",
+      "Starting Google GenAI image generation",
     );
 
     const contents = referencePhoto

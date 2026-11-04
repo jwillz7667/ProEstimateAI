@@ -6,6 +6,7 @@ import Foundation
 /// that feeds into proposals and invoices.
 struct Estimate: Codable, Identifiable, Hashable, Sendable {
     let id: String
+    var changeOrderId: String? = nil
     let projectId: String
     let companyId: String
     let estimateNumber: String
@@ -41,6 +42,7 @@ struct Estimate: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case changeOrderId = "change_order_id"
         case projectId = "project_id"
         case companyId = "company_id"
         case estimateNumber = "estimate_number"

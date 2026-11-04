@@ -19,6 +19,7 @@ const fixture = {
     tax_amount: 0, discount_amount: 0, total_amount: 200, line_items: [] },
   proposal: { status: 'sent', title: 'Fixture proposal' },
   before_after_images: [],
+  document_hash: 'a'.repeat(64), approval_consent_text: 'I reviewed this exact fixture proposal.', approval_consent_version: 'quote-acceptance-v1',
 };
 before(async () => {
   api = http.createServer((req, res) => {
@@ -32,6 +33,7 @@ before(async () => {
     const data = ['approved', 'declined', 'expired'].includes(token)
       ? { ...fixture, proposal: { ...fixture.proposal, status: token, expires_at: token === 'expired' ? null : '2000-01-01T00:00:00Z' } }
       : token === 'unsafe-website' ? { ...fixture, company: { ...fixture.company, website_url: 'javascript:alert(1)' } }
+      : token === 'change-order' ? { ...fixture, change_order: { id: 'co-1', title: 'Fixture change order', reason: 'Customer requested additional cabinetry.', currency_code: 'USD', base_estimate_number: 'EST-1', base_version: 1, base_document_hash: 'b'.repeat(64), base_total: 100, new_total: 200, change_amount: 100, subtotal_delta: 100, tax_delta: 0, discount_delta: 0, base_scope: { line_items: [{ name: 'Original kitchen scope', description: 'Keep the existing layout', quantity: 1, unit: 'job', line_total: 100 }], assumptions: 'Sound framing', exclusions: 'Permits' }, billing_effect: 'additional_invoice' } }
       : fixture;
     res.end(JSON.stringify({ ok: true, data }));
   });
@@ -85,25 +87,31 @@ for (const decision of ['approved', 'declined']) {
     const opener = page.getByRole('button', { name: decision === 'approved' ? 'Approve Proposal' : 'Decline', exact: true });
     const confirmName = decision === 'approved' ? 'Confirm Approval' : 'Confirm Decline';
     await opener.click();
+    if (decision === 'approved') { await page.getByLabel('Your full name').fill('Jordan Customer'); await page.getByRole('checkbox').check(); }
     await page.getByRole('textbox', { name: 'Message to your contractor' }).fill('Fixture message');
+    if (decision === 'approved') {
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+      await page.screenshot({ path: process.env.SCREENSHOT_DIR ? `${process.env.SCREENSHOT_DIR}/proposal-approval-form.png` : '/tmp/proposal-approval-form.png', fullPage: true });
+    }
     await page.getByRole('button', { name: confirmName }).click();
     const responseError = page.getByRole('alert').filter({ hasText: 'Temporary fixture outage' });
     await responseError.waitFor();
     assert.equal(await responseError.textContent(), 'Temporary fixture outage');
-    assert.equal(await page.getByRole('textbox').inputValue(), 'Fixture message');
+    assert.equal(await page.getByRole('textbox', { name: 'Message to your contractor' }).inputValue(), 'Fixture message');
     await page.getByRole('button', { name: 'Keep Reviewing' }).click();
     await opener.waitFor();
     await opener.click();
-    assert.equal(await page.getByRole('textbox').inputValue(), '');
-    await page.getByRole('textbox').fill('Retry fixture');
+    if (decision === 'approved') { await page.getByLabel('Your full name').fill('Jordan Customer'); await page.getByRole('checkbox').check(); }
+    assert.equal(await page.getByRole('textbox', { name: 'Message to your contractor' }).inputValue(), '');
+    await page.getByRole('textbox', { name: 'Message to your contractor' }).fill('Retry fixture');
     // Dispatch both in one task to cover the pre-render double-click race.
     await page.getByRole('button', { name: confirmName }).evaluate(button => { button.click(); button.click(); });
     await page.getByRole('button', { name: 'Sending response…' }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Keep Reviewing' }).isDisabled(), true);
-    assert.equal(await page.getByRole('textbox').isDisabled(), true);
+    assert.equal(await page.getByRole('textbox', { name: 'Message to your contractor' }).isDisabled(), true);
     await page.waitForTimeout(100);
     assert.equal(posts.length, 2);
-    assert.deepEqual(posts[1], { decision, message: 'Retry fixture' });
+    assert.deepEqual(posts[1], { decision, message: 'Retry fixture', document_hash: 'a'.repeat(64), ...(decision === 'approved' ? { signer_name: 'Jordan Customer', acceptance_consent: true, consent_version: 'quote-acceptance-v1' } : {}) });
     release();
     await page.getByRole('status').filter({ hasText: 'Your response has been recorded.' }).waitFor();
     await page.screenshot({ path: process.env.SCREENSHOT_DIR ? `${process.env.SCREENSHOT_DIR}/proposal-${decision}.png` : `/tmp/proposal-${decision}.png`, fullPage: true });
@@ -134,6 +142,26 @@ test('proposal print opens the native print flow and hides response controls on 
   assert.equal(await page.getByRole('button', { name: 'Approve Proposal', exact: true }).isVisible(), false);
   assert.equal(await page.getByRole('heading', { name: 'Pricing', exact: true }).isVisible(), true);
   await page.screenshot({ path: process.env.SCREENSHOT_DIR ? `${process.env.SCREENSHOT_DIR}/proposal-print.png` : '/tmp/proposal-print.png', fullPage: true });
+  await page.close();
+});
+
+test('change order review keeps the difference clear on a phone and includes previous scope when printing', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.goto(`http://127.0.0.1:${webPort}/proposal/change-order`);
+  await page.getByRole('heading', { name: 'Fixture change order', exact: true }).waitFor();
+  const comparison = page.getByRole('region', { name: 'Fixture change order', exact: true });
+  assert.equal(await comparison.locator('dl').first().getByText('+$100.00', { exact: true }).count(), 1);
+  assert.ok((await page.getByText('This increase will be billed separately after approval.', { exact: false }).textContent()).includes('not a second bill'));
+  const baseline = page.locator('details[data-print-expand]');
+  await baseline.locator('summary').click();
+  assert.equal(await page.getByText('Original kitchen scope', { exact: true }).isVisible(), true);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await page.screenshot({ path: process.env.SCREENSHOT_DIR ? `${process.env.SCREENSHOT_DIR}/change-order-review.png` : '/tmp/change-order-review.png', fullPage: true });
+  await baseline.locator('summary').click();
+  await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+  assert.equal(await baseline.getAttribute('open'), '');
+  await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  assert.equal(await baseline.getAttribute('open'), null);
   await page.close();
 });
 
@@ -171,7 +199,8 @@ test('current plan marketing and upgraded carousel render without browser errors
   const proCard = await page.getByRole('heading', { name: 'Pro', exact: true }).locator('..').elementHandle();
   await page.waitForFunction(card => getComputedStyle(card).opacity === '1', proCard);
   assert.equal(await page.getByRole('heading', { name: 'Premium', exact: true }).count(), 0);
-  assert.equal(await page.getByText('2 AI project creations / month', { exact: true }).count(), 1);
+  assert.equal(await page.getByText('2 AI project creations / month', { exact: true }).count(), 0);
+  assert.equal(await page.getByText('20 AI previews / month', { exact: true }).count(), 1);
   assert.ok(await page.locator('.swiper-slide').count() > 0);
   assert.deepEqual(errors, []);
   await page.locator('#pricing').screenshot({ path: process.env.SCREENSHOT_DIR ? `${process.env.SCREENSHOT_DIR}/pricing.png` : '/tmp/pricing.png' });

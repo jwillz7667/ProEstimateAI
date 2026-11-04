@@ -38,13 +38,11 @@ struct PaywallHostView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     // Hero section with headline and subheadline.
-                    PaywallHeroSection(decision: viewModel.decision)
+                    PaywallHeroSection(decision: viewModel.decision, headline: viewModel.displayHeadline, subheadline: viewModel.displaySubheadline)
 
                     VStack(spacing: SpacingTokens.xl) {
-                        // Free-tier counter — only rendered when the
-                        // paywall fired because starter credits ran out.
-                        // Hidden everywhere else so the rest of the app
-                        // reads as "fully open" until exhaustion.
+                        // Explain the AI subscription boundary while keeping
+                        // free workspace access available outside this action.
                         StarterCreditsExhaustedCard(
                             isVisible: viewModel.decision.placement == .generationLimitHit
                         )
@@ -109,6 +107,14 @@ struct PaywallHostView: View {
         }
         .onChange(of: viewModel.purchaseSucceeded) { _, succeeded in
             if succeeded {
+                onPurchaseComplete?()
+                dismiss()
+            }
+        }
+        .onChange(of: viewModel.hasProAccess) { _, hasAccess in
+            // Ask to Buy and a recovered receipt can complete through the
+            // transaction listener after the initial purchase call returns.
+            if hasAccess {
                 onPurchaseComplete?()
                 dismiss()
             }

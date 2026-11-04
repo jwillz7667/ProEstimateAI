@@ -10,6 +10,7 @@ import {
   markStuckGenerationsFailed,
 } from './lib/generation-cleanup';
 import { shutdownHttpServer } from './lib/shutdown';
+import { startFollowUpWorker } from './modules/follow-ups/follow-ups.worker';
 
 // How often the background reaper re-sweeps generations orphaned by a crash
 // between deploys. Unref'd so it never holds the event loop open at shutdown.
@@ -77,6 +78,7 @@ async function main() {
       void markStuckGenerationsFailed();
     }, REAPER_INTERVAL_MS);
     reaperInterval.unref();
+    const followUpWorker = startFollowUpWorker();
 
     // ─── Graceful Shutdown ─────────────────────────────────
     let isShuttingDown = false;
@@ -89,12 +91,14 @@ async function main() {
 
       // 0. Stop the background reaper so it can't fire mid-drain.
       clearInterval(reaperInterval);
+      followUpWorker.stop();
 
       try {
         // Keep Redis and Prisma available until active requests finish. The
         // shared 30s deadline also bounds a stalled dependency disconnect.
         const completed = await shutdownHttpServer(server, async () => {
           logger.info('HTTP server closed — all in-flight requests finished');
+          await followUpWorker.drain();
           await disconnectRedis();
           await prisma.$disconnect();
         });

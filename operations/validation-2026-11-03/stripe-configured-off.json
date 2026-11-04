@@ -1,0 +1,39 @@
+{
+  "recorded_at_utc": "2026-11-03T22:52:10.912111+00:00",
+  "project_id": "3ed10d99-04a7-4f9b-babb-94a7071024c6",
+  "environment_id": "0117903d-f058-4712-a55e-3407b6d89c01",
+  "service_id": "51b3f663-7ff9-4ea9-b4a8-3861e3d90f4f",
+  "variable_update_method": "Railway CLI5.71 stdin, skip-deploys, exact service/env/project selectors",
+  "configured_variable_names": [
+    "STRIPE_PAYMENTS_ENABLED",
+    "STRIPE_API_KEY",
+    "STRIPE_WEBHOOK_SECRET"
+  ],
+  "credentials_match_private_file": true,
+  "private_file_mode": "0o600",
+  "other_variables_unchanged": true,
+  "payments_enabled": false,
+  "secret_values_in_arguments_or_output": false,
+  "code_sha": "d9aab6feaf6177607eb93bd25ee8f266a017f2b0",
+  "source_upload_performed": false,
+  "source_deployment_id": "c80d1f69-80af-4967-b3f0-32fd03590e5d",
+  "deployment_id": "ddc0ee94-29d5-4d71-8766-509962cd7f58",
+  "deployment_status": "SUCCESS",
+  "root_directory": "/backend",
+  "image_digest_before": "sha256:da16b126095203da5f44a6dbe565bcdf169bfbcb40c2f34d29de9fbd31fca0ef",
+  "image_digest_after": "sha256:607d61a48fb40ca0addaa9611b53849e9d28d564667534dad68dfaf78a06469e",
+  "physical_image_digest_reused": false,
+  "redeploy_note": "CLI default redeploy retained the d9 source marker but Railway rebuilt the retained source and produced a new image digest. No source upload was performed.",
+  "health": {
+    "http_status": 200,
+    "status": "healthy",
+    "database": "connected",
+    "redis": "connected"
+  },
+  "unsigned_webhook": {
+    "http_status": 400,
+    "error_code": "INVALID_WEBHOOK_SIGNATURE"
+  },
+  "signed_webhooks_or_onboarding_or_payment_calls": false,
+  "git_staging_or_commit_performed": false
+}

@@ -33,13 +33,13 @@ enum SubscriptionState: String, Codable, CaseIterable, Sendable {
 
 extension SubscriptionState {
     /// Whether the user currently has full Pro feature access.
-    /// This includes trial, active, grace period, billing retry, canceled-but-active,
+    /// This includes trial, active, grace period, canceled-but-active,
     /// and admin-granted overrides.
     var hasProAccess: Bool {
         switch self {
-        case .trialActive, .proActive, .gracePeriod, .billingRetry, .canceledActive, .adminOverride:
+        case .trialActive, .proActive, .gracePeriod, .canceledActive, .adminOverride:
             return true
-        case .free, .expired, .revoked:
+        case .free, .billingRetry, .expired, .revoked:
             return false
         }
     }

@@ -86,7 +86,7 @@ struct InvoiceListView: View {
     private var invoiceList: some View {
         ScrollView {
             LazyVStack(spacing: SpacingTokens.sm) {
-                if viewModel.totalOutstanding > 0 {
+                if !viewModel.outstandingByCurrency.isEmpty {
                     outstandingSummary
                 }
 
@@ -113,7 +113,12 @@ struct InvoiceListView: View {
                 Text("Outstanding")
                     .font(TypographyTokens.caption)
                     .foregroundStyle(.secondary)
-                CurrencyText(amount: viewModel.totalOutstanding, font: TypographyTokens.moneyLarge)
+                ForEach(viewModel.outstandingByCurrency) { balance in
+                    HStack(alignment: .firstTextBaseline) {
+                        CurrencyText(amount: balance.amount, font: TypographyTokens.moneyLarge, currencyCode: balance.currencyCode)
+                        Text(balance.currencyCode).font(TypographyTokens.caption).foregroundStyle(.secondary)
+                    }
+                }
             }
             Spacer()
             Image(systemName: "banknote")
@@ -152,10 +157,11 @@ struct InvoiceListView: View {
 
             VStack(alignment: .trailing, spacing: SpacingTokens.xxs) {
                 CurrencyText(
-                    amount: invoice.isPaid ? invoice.totalAmount : invoice.amountDue,
-                    font: TypographyTokens.moneyMedium
+                    amount: invoice.isPaid || invoice.status == .draft ? invoice.totalAmount : invoice.amountDue,
+                    font: TypographyTokens.moneyMedium,
+                    currencyCode: CurrencyDisplay.code(invoice.currencyCode)
                 )
-                Text(invoice.isPaid ? "Paid" : "Balance due")
+                Text(invoice.isPaid ? "Settled" : invoice.status == .draft ? "Draft total" : "Balance due")
                     .font(TypographyTokens.caption2)
                     .foregroundStyle(.secondary)
             }

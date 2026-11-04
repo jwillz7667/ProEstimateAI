@@ -1,5 +1,5 @@
 import { prisma } from "../config/database";
-import type { UsageMetricCode, Prisma } from "@prisma/client";
+import type { UsageMetricCode, Prisma, PlanCode } from "@prisma/client";
 
 /**
  * Rolling-window usage gating. We count UsageEvent rows for a metric over the
@@ -17,7 +17,7 @@ import type { UsageMetricCode, Prisma } from "@prisma/client";
  *
  *   - AI_GENERATION:      one image preview generation. Pro caps at 20/mo.
  *   - QUOTE_EXPORT:       one PDF export of an estimate / proposal.
- *   - PROJECT_CREATED:    one new project. Pro caps at 2/mo.
+ *   - PROJECT_CREATED:    retained as a historical metric; manual projects are free.
  *   - ESTIMATE_GENERATED: one AI-generated estimate. Pro caps at 20/mo.
  *
  * Premium plans configure generous caps under the same code path so the
@@ -34,6 +34,18 @@ export interface UsageLimits {
   weekly?: number;
   monthly?: number;
 }
+
+export const PRO_PLAN_LIMITS = {
+  AI_GENERATION: { daily: 5, weekly: 12, monthly: 20 },
+  QUOTE_EXPORT: { daily: 10, weekly: 25, monthly: 50 },
+  ESTIMATE_GENERATED: { daily: 5, weekly: 12, monthly: 20 },
+} satisfies Partial<Record<UsageMetric, UsageLimits>>;
+
+export const LEGACY_PREMIUM_PLAN_LIMITS = {
+  AI_GENERATION: { daily: 200, weekly: 800, monthly: 2_000 },
+  QUOTE_EXPORT: { daily: 200, weekly: 800, monthly: 2_000 },
+  ESTIMATE_GENERATED: { daily: 100, weekly: 400, monthly: 1_000 },
+} satisfies Partial<Record<UsageMetric, UsageLimits>>;
 
 export interface UsageWindow {
   daily: number;
@@ -81,12 +93,25 @@ export function readPlanLimits(
   if (!perMetric || typeof perMetric !== "object") return {};
   const obj = perMetric as Record<string, unknown>;
   const result: UsageLimits = {};
-  if (typeof obj.daily === "number" && obj.daily >= 0) result.daily = obj.daily;
-  if (typeof obj.weekly === "number" && obj.weekly >= 0)
+  if (typeof obj.daily === "number" && Number.isFinite(obj.daily) && obj.daily >= 0) result.daily = obj.daily;
+  if (typeof obj.weekly === "number" && Number.isFinite(obj.weekly) && obj.weekly >= 0)
     result.weekly = obj.weekly;
-  if (typeof obj.monthly === "number" && obj.monthly >= 0)
+  if (typeof obj.monthly === "number" && Number.isFinite(obj.monthly) && obj.monthly >= 0)
     result.monthly = obj.monthly;
   return result;
+}
+
+/** A legacy/missing LIMITS field must not silently grant unbounded paid compute. */
+export function readEffectivePlanLimits(
+  featuresJson: unknown,
+  planCode: PlanCode,
+  metric: UsageMetric,
+): UsageLimits {
+  if (metric === 'PROJECT_CREATED') return {};
+  const defaults = planCode === 'PREMIUM_MONTHLY' || planCode === 'PREMIUM_ANNUAL'
+    ? LEGACY_PREMIUM_PLAN_LIMITS[metric]
+    : PRO_PLAN_LIMITS[metric];
+  return { ...defaults, ...readPlanLimits(featuresJson, metric) };
 }
 
 /**
@@ -109,6 +134,7 @@ export async function checkUsageLimit(
     where: {
       userId,
       metricCode: metric,
+      quantity: { gt: 0 },
       createdAt: { gte: monthStart },
     },
     select: { createdAt: true, quantity: true },

@@ -1,0 +1,37 @@
+{
+  "checkedAt": "2026-10-30T09:52:15.092Z",
+  "health": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "status": "healthy",
+        "database": "connected",
+        "redis": "connected"
+      },
+      "meta": {
+        "request_id": "2a85e3a5-4816-4571-9ad5-a7d0b5e122c2",
+        "timestamp": "2026-10-30T09:52:14.299Z"
+      }
+    }
+  },
+  "invalidReset": {
+    "status": 400,
+    "code": "VALIDATION_ERROR"
+  },
+  "cors": {
+    "status": 204,
+    "allowOrigin": "*"
+  },
+  "scripts": {
+    "count": 8,
+    "hasProductionApi": true,
+    "hasStaleApi": false,
+    "hasFixture": false
+  },
+  "email": {
+    "domainVerified": true,
+    "configured": true,
+    "testEmailSent": false
+  }
+}

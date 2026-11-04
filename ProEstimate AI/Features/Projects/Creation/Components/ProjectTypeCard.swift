@@ -23,6 +23,7 @@ struct ProjectTypeCard: View {
 
     @ScaledMetric(relativeTo: .caption2) private var labelHeight: CGFloat = 26
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
@@ -45,7 +46,7 @@ struct ProjectTypeCard: View {
                 y: isSelected ? 4 : 2
             )
             .scaleEffect(isSelected ? 1.02 : 1.0)
-            .animation(.spring(response: 0.32, dampingFraction: 0.78), value: isSelected)
+            .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78), value: isSelected)
         }
         .buttonStyle(ProjectTypeCardButtonStyle())
         .accessibilityElement(children: .combine)
@@ -118,8 +119,7 @@ struct ProjectTypeCard: View {
         Text(projectType.displayName)
             .font(.system(.caption2, design: .rounded, weight: .semibold))
             .foregroundStyle(labelForeground)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
+            .lineLimit(2)
             .padding(.horizontal, SpacingTokens.xxs)
             .frame(maxWidth: .infinity)
             .frame(minHeight: labelHeight)
@@ -139,10 +139,10 @@ struct ProjectTypeCard: View {
     }
 
     /// Foreground that pairs with `labelBackground` for AA contrast in
-    /// both modes. White on solid orange when selected; warm-dark on
+    /// both modes. Dark ink on solid orange when selected; warm-dark on
     /// peach in light, warm-light on brown in dark.
     private var labelForeground: Color {
-        if isSelected { return .white }
+        if isSelected { return Color(hex: 0x261505) }
         return colorScheme == .dark
             ? Color(hex: 0xFFCD9A)
             : Color(hex: 0x7A3F0E)
@@ -170,7 +170,7 @@ struct ProjectTypeCard: View {
 
                 Image(systemName: "checkmark")
                     .font(.system(size: 11, weight: .heavy))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(hex: 0x261505))
             }
             .padding(SpacingTokens.xxs)
             .transition(.scale.combined(with: .opacity))
@@ -184,11 +184,13 @@ struct ProjectTypeCard: View {
 /// scaling. We dim and shrink slightly on press without fighting the
 /// spring animation that runs on selection toggle.
 private struct ProjectTypeCardButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .opacity(configuration.isPressed ? 0.85 : 1.0)
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../lib/errors';
 import { sendError } from '../lib/envelope';
 import { logger } from '../config/logger';
+import { requestLogUrl } from '../lib/request-log-url';
 
 // Errors that mean "the client hung up", not "the server faulted". The
 // dominant source in production is body-parser throwing while reading a
@@ -42,7 +43,7 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
     logger.debug(
       {
         requestId: req.requestId,
-        path: req.path,
+        path: requestLogUrl(req.originalUrl ?? req.url),
         code: (err as NodeJS.ErrnoException).code,
       },
       'Request aborted by client',

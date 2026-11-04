@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 
 const mocks = vi.hoisted(() => ({
-  env: { GOOGLE_AI_API_KEY: "google-test" as string | undefined, PIAPI_API_KEY: "piapi-test" as string | undefined },
+  env: { FAL_KEY: undefined as string | undefined, GOOGLE_AI_API_KEY: "google-test" as string | undefined, PIAPI_API_KEY: "piapi-test" as string | undefined },
   generateContent: vi.fn(),
 }));
 vi.mock("../config/env", () => ({ env: mocks.env }));
@@ -35,6 +35,7 @@ function mockPiAPISuccess(options: { contentType?: string; singularOutput?: bool
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  mocks.env.FAL_KEY = undefined;
   mocks.env.GOOGLE_AI_API_KEY = "google-test";
   mocks.env.PIAPI_API_KEY = "piapi-test";
   const data = await sharp({ create: { width: 30, height: 40, channels: 3, background: "white" } }).png().toBuffer();
@@ -155,6 +156,56 @@ describe("Google reference framing", () => {
     expect(await generatePreviewImage("Create a concept", context)).toBeNull();
     expect(mocks.generateContent).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("low-cost primary provider", () => {
+  it("uses fal before existing providers and preserves the shared edit prompt", async () => {
+    mocks.env.FAL_KEY = "fal-test";
+    const taskBase = "https://queue.fal.run/fal-ai/flux-2/requests/primary-task";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ request_id: "primary-task", status_url: `${taskBase}/status`, response_url: taskBase, cancel_url: `${taskBase}/cancel` })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "COMPLETED" })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ images: [{ url: "https://v3.fal.media/files/test.png" }], has_nsfw_concepts: [false] })))
+      .mockResolvedValueOnce(new Response(Buffer.from(source.base64Data, "base64")));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await generatePreviewImage("Paint only siding", context, source, sourceUrl)).not.toBeNull();
+    expect(fetchMock.mock.calls[0][0]).toBe("https://queue.fal.run/fal-ai/flux-2/flash/edit");
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.prompt).toContain("SAME photograph");
+    expect(body.prompt).toContain("Paint only siding");
+    expect(mocks.generateContent).not.toHaveBeenCalled();
+  });
+
+  it("generates with fal as the only configured image provider", async () => {
+    mocks.env.FAL_KEY = "fal-test";
+    mocks.env.GOOGLE_AI_API_KEY = undefined;
+    mocks.env.PIAPI_API_KEY = undefined;
+    const taskBase = "https://queue.fal.run/fal-ai/flux-2/requests/only-fal";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ request_id: "only-fal", status_url: `${taskBase}/status`, response_url: taskBase, cancel_url: `${taskBase}/cancel` })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "COMPLETED" })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ images: [{ url: "https://v3.fal.media/files/test.png" }], has_nsfw_concepts: [false] })))
+      .mockResolvedValueOnce(new Response(Buffer.from(source.base64Data, "base64")));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await generatePreviewImage("Paint siding", context, source)).not.toBeNull();
+    expect(mocks.generateContent).not.toHaveBeenCalled();
+  });
+
+  it("falls back to Google after an operational fal failure", async () => {
+    mocks.env.FAL_KEY = "fal-test";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("{}", { status: 503 })));
+    expect((await generatePreviewImage("Repaint", context, source))?.base64Data).toBe("result");
+    expect(mocks.generateContent).toHaveBeenCalledOnce();
+  });
+
+  it("stops on fal moderation rejection without trying Google or PiAPI", async () => {
+    mocks.env.FAL_KEY = "fal-test";
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ detail: [{ type: "content_policy_violation" }] }), { status: 422 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await generatePreviewImage("Repaint", context, source, sourceUrl)).toBeNull();
+    expect(mocks.generateContent).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 });
 

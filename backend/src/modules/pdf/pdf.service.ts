@@ -1,6 +1,12 @@
 import PDFDocument from 'pdfkit';
 import { prisma } from '../../config/database';
 import { NotFoundError, AuthorizationError } from '../../lib/errors';
+import { hasEffectiveProAccess } from '../../lib/entitlement-access';
+import { isAdminUser } from '../../lib/admin';
+import { gateAIAction, runReservedAction } from '../commerce/entitlement-gate';
+import { getForRendering } from '../proposals/proposals.service';
+import { toSharedProposalDto } from '../proposals/proposals.share-dto';
+import { canShowCustomerUnitPrice } from '../proposals/proposal-document-snapshot';
 
 // ─── Typography ──────────────────────────────────────────
 const FONT_TITLE = 20;
@@ -105,6 +111,7 @@ function applyWatermark(doc: PDFKit.PDFDocument): void {
 
 /** Check whether the user's plan allows watermark removal. */
 async function shouldApplyWatermark(userId: string): Promise<boolean> {
+  if (await isAdminUser(userId)) return false;
   const entitlement = await prisma.userEntitlement.findUnique({
     where: { userId },
     include: { plan: { select: { featuresJson: true } } },
@@ -115,17 +122,7 @@ async function shouldApplyWatermark(userId: string): Promise<boolean> {
   const features = entitlement.plan.featuresJson as Record<string, unknown>;
   const canRemove = features.CAN_REMOVE_WATERMARK === true;
 
-  const activeStatuses = [
-    'TRIAL_ACTIVE',
-    'PRO_ACTIVE',
-    'GRACE_PERIOD',
-    'BILLING_RETRY',
-    'CANCELED_ACTIVE',
-    'ADMIN_OVERRIDE',
-  ];
-  const isActive = activeStatuses.includes(entitlement.status);
-
-  return !(canRemove && isActive);
+  return !(canRemove && hasEffectiveProAccess(entitlement));
 }
 
 // ─── Company Header (shared between proposal & invoice) ──
@@ -183,6 +180,7 @@ interface TableLineItem {
   unit: string;
   unitCost: number | string | { toNumber?: () => number };
   lineTotal: number | string | { toNumber?: () => number };
+  hideUnitCost?: boolean;
 }
 
 function drawTableHeader(doc: PDFKit.PDFDocument, y: number): number {
@@ -208,7 +206,7 @@ function drawTableRow(doc: PDFKit.PDFDocument, item: TableLineItem, y: number): 
   doc.text(item.name, TABLE_COL_ITEM + 6, y, { width: 250 });
   doc.text(toNumber(item.quantity).toString(), TABLE_COL_QTY, y, { width: 45, align: 'right' });
   doc.text(item.unit, TABLE_COL_UNIT, y, { width: 45, align: 'center' });
-  doc.text(formatCurrency(item.unitCost), TABLE_COL_RATE, y, { width: 60, align: 'right' });
+  doc.text(item.hideUnitCost ? '—' : formatCurrency(item.unitCost), TABLE_COL_RATE, y, { width: 60, align: 'right' });
   doc.text(formatCurrency(item.lineTotal), TABLE_COL_TOTAL, y, { width: 70, align: 'right' });
 
   let rowHeight = 16;
@@ -283,22 +281,18 @@ export async function generateProposalPDF(
   companyId: string,
   userId: string,
 ): Promise<Buffer> {
-  const proposal = await prisma.proposal.findFirst({
-    where: { id: proposalId },
-    include: {
-      estimate: { include: { lineItems: { orderBy: { sortOrder: 'asc' } } } },
-      project: true,
-      company: true,
-    },
-  });
+  const reservation = await gateAIAction({ userId, companyId, metric: 'QUOTE_EXPORT' });
+  return runReservedAction(reservation, () => renderProposalPDF(proposalId, companyId, userId));
+}
 
-  if (!proposal) {
-    throw new NotFoundError('Proposal', proposalId);
-  }
-
-  if (proposal.companyId !== companyId) {
-    throw new AuthorizationError('You do not have access to this proposal');
-  }
+async function renderProposalPDF(
+  proposalId: string,
+  companyId: string,
+  userId: string,
+): Promise<Buffer> {
+  const source = await getForRendering(proposalId, companyId);
+  const document = toSharedProposalDto(source);
+  const proposal = document.proposal;
 
   const needsWatermark = await shouldApplyWatermark(userId);
 
@@ -310,10 +304,10 @@ export async function generateProposalPDF(
   });
 
   // ── Page 1: Company header + Proposal info ──
-  let y = drawCompanyHeader(doc, proposal.company);
+  let y = drawCompanyHeader(doc, { ...document.company, websiteUrl: document.company.website_url });
 
   // Proposal title
-  const proposalTitle = proposal.title || `Proposal ${proposal.proposalNumber || ''}`;
+  const proposalTitle = proposal.title || `Proposal ${proposal.proposal_number || ''}`;
   doc.fontSize(FONT_TITLE).fillColor(COLOR_TEXT).font('Helvetica-Bold')
     .text(proposalTitle, PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN });
   y += 30;
@@ -321,19 +315,19 @@ export async function generateProposalPDF(
   // Proposal metadata
   doc.fontSize(FONT_BODY).fillColor(COLOR_MUTED).font('Helvetica');
 
-  if (proposal.proposalNumber) {
-    doc.text(`Proposal #: ${proposal.proposalNumber}`, PAGE_MARGIN, y);
+  if (proposal.proposal_number) {
+    doc.text(`Proposal #: ${proposal.proposal_number}`, PAGE_MARGIN, y);
     y += 14;
   }
 
-  doc.text(`Project: ${proposal.project.title}`, PAGE_MARGIN, y);
+  doc.text(`Project: ${document.project.title}`, PAGE_MARGIN, y);
   y += 14;
 
-  doc.text(`Date: ${formatDate(proposal.createdAt)}`, PAGE_MARGIN, y);
+  doc.text(`Date: ${formatDate(source.createdAt)}`, PAGE_MARGIN, y);
   y += 14;
 
-  if (proposal.expiresAt) {
-    doc.text(`Valid Until: ${formatDate(proposal.expiresAt)}`, PAGE_MARGIN, y);
+  if (proposal.expires_at) {
+    doc.text(`Valid Until: ${formatDate(proposal.expires_at ? new Date(proposal.expires_at) : null)}`, PAGE_MARGIN, y);
     y += 14;
   }
 
@@ -342,29 +336,63 @@ export async function generateProposalPDF(
   y += 16;
 
   // ── Intro Text ──
-  if (proposal.introText) {
+  if (proposal.intro_text) {
     y = ensureSpace(doc, 60, y);
     doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold')
       .text('Introduction', PAGE_MARGIN, y);
     y += 20;
 
     doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica')
-      .text(proposal.introText, PAGE_MARGIN, y, {
+      .text(proposal.intro_text, PAGE_MARGIN, y, {
         width: TABLE_RIGHT_EDGE - PAGE_MARGIN,
         lineGap: 3,
       });
     y = doc.y + 16;
   }
 
+  if (document.change_order) {
+    const change = document.change_order;
+    y = ensureSpace(doc, 140, y);
+    doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold').text('Change to Approved Contract', PAGE_MARGIN, y);
+    y += 20;
+    doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica').text(change.reason, PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN, lineGap: 3 });
+    y = doc.y + 12;
+    y = drawSummaryRow(doc, 'Previously Approved Total', formatCurrency(change.base_total), y);
+    y = drawSummaryRow(doc, 'Revised Contract Total', formatCurrency(change.new_total), y);
+    y = drawSummaryRow(doc, change.change_amount < 0 ? 'Contract Reduction' : 'Contract Increase', formatCurrency(change.change_amount), y, { bold: true });
+    const billing = change.billing_effect === 'additional_invoice' ? 'This increase will be billed separately after approval. The revised contract total is not a second bill for the full project.'
+      : change.billing_effect === 'credit_note' ? 'This reduction will be recorded as a contract credit after approval. A credit is not a cash refund.'
+      : change.billing_effect === 'included_in_first_invoice' ? 'This change will be included in the first invoice for the revised contract total. It is not a separate payment request.'
+      : 'This changes the agreed scope without adding a charge.';
+    y = ensureSpace(doc, 60, y + 8);
+    doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica').text(billing, PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN, lineGap: 3 });
+    y = ensureSpace(doc, 60, doc.y + 16);
+    doc.fontSize(FONT_SUBHEADER).font('Helvetica-Bold').text(`Previously Approved Scope: ${change.base_estimate_number} (v${change.base_version})`, PAGE_MARGIN, y);
+    y += 20;
+    y = drawTableHeader(doc, y);
+    for (const item of change.base_scope.line_items) y = drawTableRow(doc, { ...item, unitCost: 0, lineTotal: item.line_total, hideUnitCost: true }, y);
+    for (const [label, text] of [['Previous assumptions', change.base_scope.assumptions], ['Previous exclusions', change.base_scope.exclusions]]) {
+      if (!text) continue;
+      y = ensureSpace(doc, 50, y + 12);
+      doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica').text(`${label}: ${text}`, PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN, lineGap: 3 });
+      y = doc.y;
+    }
+    y = ensureSpace(doc, 100, y + 16);
+    y = drawSummaryRow(doc, 'Subtotal Change', formatCurrency(change.subtotal_delta), y);
+    y = drawSummaryRow(doc, 'Tax Change', formatCurrency(change.tax_delta), y);
+    y = drawSummaryRow(doc, 'Discount Change (Deducted)', formatCurrency(change.discount_delta), y);
+    y += 20;
+  }
+
   // ── Scope of Work ──
-  if (proposal.scopeOfWork) {
+  if (proposal.scope_of_work) {
     y = ensureSpace(doc, 60, y);
     doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold')
       .text('Scope of Work', PAGE_MARGIN, y);
     y += 20;
 
     doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica')
-      .text(proposal.scopeOfWork, PAGE_MARGIN, y, {
+      .text(proposal.scope_of_work, PAGE_MARGIN, y, {
         width: TABLE_RIGHT_EDGE - PAGE_MARGIN,
         lineGap: 3,
       });
@@ -372,14 +400,14 @@ export async function generateProposalPDF(
   }
 
   // ── Timeline ──
-  if (proposal.timelineText) {
+  if (proposal.timeline_text) {
     y = ensureSpace(doc, 60, y);
     doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold')
       .text('Timeline', PAGE_MARGIN, y);
     y += 20;
 
     doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica')
-      .text(proposal.timelineText, PAGE_MARGIN, y, {
+      .text(proposal.timeline_text, PAGE_MARGIN, y, {
         width: TABLE_RIGHT_EDGE - PAGE_MARGIN,
         lineGap: 3,
       });
@@ -387,19 +415,19 @@ export async function generateProposalPDF(
   }
 
   // ── Estimate Table ──
-  if (proposal.estimate) {
+  if (document.estimate) {
     y = ensureSpace(doc, 80, y);
     doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold')
       .text('Cost Estimate', PAGE_MARGIN, y);
     y += 22;
 
-    const lineItems = proposal.estimate.lineItems;
+    const lineItems = document.estimate.line_items;
 
     // Group by category
     const categories: Array<{ label: string; key: string }> = [
-      { label: 'Materials', key: 'MATERIALS' },
-      { label: 'Labor', key: 'LABOR' },
-      { label: 'Other', key: 'OTHER' },
+      { label: 'Materials', key: 'materials' },
+      { label: 'Labor', key: 'labor' },
+      { label: 'Other', key: 'other' },
     ];
 
     for (const cat of categories) {
@@ -419,8 +447,9 @@ export async function generateProposalPDF(
           description: item.description,
           quantity: item.quantity,
           unit: item.unit,
-          unitCost: item.unitCost,
-          lineTotal: item.lineTotal,
+          unitCost: item.unit_cost,
+          lineTotal: item.line_total,
+          hideUnitCost: !canShowCustomerUnitPrice(item.quantity, item.line_total),
         }, y);
       }
 
@@ -433,45 +462,53 @@ export async function generateProposalPDF(
     drawHR(doc, y);
     y += 10;
 
-    const estimate = proposal.estimate;
+    const estimate = document.estimate;
 
-    if (toNumber(estimate.subtotalMaterials) > 0) {
-      y = drawSummaryRow(doc, 'Materials Subtotal', formatCurrency(estimate.subtotalMaterials), y);
+    if (toNumber(estimate.subtotal_materials) > 0) {
+      y = drawSummaryRow(doc, 'Materials Subtotal', formatCurrency(estimate.subtotal_materials), y);
     }
-    if (toNumber(estimate.subtotalLabor) > 0) {
-      y = drawSummaryRow(doc, 'Labor Subtotal', formatCurrency(estimate.subtotalLabor), y);
+    if (toNumber(estimate.subtotal_labor) > 0) {
+      y = drawSummaryRow(doc, 'Labor Subtotal', formatCurrency(estimate.subtotal_labor), y);
     }
-    if (toNumber(estimate.subtotalOther) > 0) {
-      y = drawSummaryRow(doc, 'Other Subtotal', formatCurrency(estimate.subtotalOther), y);
-    }
-
-    if (toNumber(estimate.taxAmount) > 0) {
-      y = drawSummaryRow(doc, 'Tax', formatCurrency(estimate.taxAmount), y);
+    if (toNumber(estimate.subtotal_other) > 0) {
+      y = drawSummaryRow(doc, 'Other Subtotal', formatCurrency(estimate.subtotal_other), y);
     }
 
-    if (toNumber(estimate.discountAmount) > 0) {
-      y = drawSummaryRow(doc, 'Discount', `-${formatCurrency(estimate.discountAmount)}`, y);
+    if (toNumber(estimate.tax_amount) > 0) {
+      y = drawSummaryRow(doc, 'Tax', formatCurrency(estimate.tax_amount), y);
+    }
+
+    if (toNumber(estimate.discount_amount) > 0) {
+      y = drawSummaryRow(doc, 'Discount', `-${formatCurrency(estimate.discount_amount)}`, y);
     }
 
     y += 4;
     drawHR(doc, y);
     y += 8;
 
-    y = drawSummaryRow(doc, 'Total', formatCurrency(estimate.totalAmount), y, {
+    y = drawSummaryRow(doc, document.change_order ? 'Revised Contract Total' : 'Total', formatCurrency(estimate.total_amount), y, {
       bold: true,
       fontSize: FONT_HEADER,
     });
   }
 
   // ── Terms and Conditions ──
-  if (proposal.termsAndConditions) {
+  for (const [heading, text] of [['Assumptions', document.estimate.assumptions], ['Exclusions', document.estimate.exclusions]]) {
+    if (!text) continue;
+    y = ensureSpace(doc, 60, y + 16);
+    doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold').text(heading!, PAGE_MARGIN, y);
+    y += 20;
+    doc.fontSize(FONT_BODY).fillColor(COLOR_TEXT).font('Helvetica').text(text, PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN, lineGap: 3 });
+    y = doc.y + 12;
+  }
+  if (proposal.terms_and_conditions) {
     y = ensureSpace(doc, 60, y + 16);
     doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold')
       .text('Terms & Conditions', PAGE_MARGIN, y);
     y += 20;
 
     doc.fontSize(FONT_SMALL).fillColor(COLOR_MUTED).font('Helvetica')
-      .text(proposal.termsAndConditions, PAGE_MARGIN, y, {
+      .text(proposal.terms_and_conditions, PAGE_MARGIN, y, {
         width: TABLE_RIGHT_EDGE - PAGE_MARGIN,
         lineGap: 2,
       });
@@ -479,7 +516,16 @@ export async function generateProposalPDF(
   }
 
   // ── Footer text ──
-  const footerText = proposal.footerText || undefined;
+  if (document.acceptance) {
+    y = ensureSpace(doc, 105, y + 16);
+    doc.fontSize(FONT_HEADER).fillColor(COLOR_PRIMARY).font('Helvetica-Bold').text('Approval record', PAGE_MARGIN, y);
+    y += 20;
+    doc.fontSize(FONT_SMALL).fillColor(COLOR_TEXT).font('Helvetica').text(
+      `Acknowledged by ${document.acceptance.signer_name} on ${formatDate(new Date(document.acceptance.accepted_at))}.\n${document.acceptance.consent_text}\nThe entered name is self-attested; identity was not independently verified.\nDocument reference: ${document.acceptance.document_hash}`,
+      PAGE_MARGIN, y, { width: TABLE_RIGHT_EDGE - PAGE_MARGIN, lineGap: 3 },
+    );
+  }
+  const footerText = proposal.footer_text || undefined;
 
   // Apply watermark + page footer before finalizing
   if (needsWatermark) {
@@ -494,6 +540,15 @@ export async function generateProposalPDF(
 // ─── Invoice PDF ─────────────────────────────────────────
 
 export async function generateInvoicePDF(
+  invoiceId: string,
+  companyId: string,
+  userId: string,
+): Promise<Buffer> {
+  const reservation = await gateAIAction({ userId, companyId, metric: 'QUOTE_EXPORT' });
+  return runReservedAction(reservation, () => renderInvoicePDF(invoiceId, companyId, userId));
+}
+
+async function renderInvoicePDF(
   invoiceId: string,
   companyId: string,
   userId: string,
@@ -622,8 +677,8 @@ export async function generateInvoicePDF(
     y = drawSummaryRow(doc, 'Tax', formatCurrency(invoice.taxAmount), y);
   }
 
-  if (toNumber(invoice.discountAmount) > 0) {
-    y = drawSummaryRow(doc, 'Discount', `-${formatCurrency(invoice.discountAmount)}`, y);
+  if (toNumber(invoice.discountAmount) !== 0) {
+    y = drawSummaryRow(doc, toNumber(invoice.discountAmount) < 0 ? 'Discount reduction' : 'Discount', formatCurrency(-toNumber(invoice.discountAmount)), y);
   }
 
   y += 2;
@@ -639,6 +694,9 @@ export async function generateInvoicePDF(
 
   if (toNumber(invoice.amountPaid) > 0) {
     y = drawSummaryRow(doc, 'Amount Paid', formatCurrency(invoice.amountPaid), y);
+  }
+  if (toNumber(invoice.creditAmount) > 0) {
+    y = drawSummaryRow(doc, 'Contract Credits Applied', `-${formatCurrency(invoice.creditAmount)}`, y);
   }
 
   const amountDueValue = toNumber(invoice.amountDue);

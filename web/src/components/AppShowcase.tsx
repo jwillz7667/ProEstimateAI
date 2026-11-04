@@ -32,7 +32,7 @@ const APP_SCREENS: AppScreen[] = [
   },
   {
     title: "Project type",
-    caption: "Nine categories with prompt presets tuned for the AI.",
+    caption: "Project categories with prompts tailored to your remodel.",
     screenshot: "/screenshots/category-picker.jpg",
   },
   {

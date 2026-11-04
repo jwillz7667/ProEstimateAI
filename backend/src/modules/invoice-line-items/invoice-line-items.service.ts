@@ -1,33 +1,14 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { NotFoundError, ValidationError } from "../../lib/errors";
+import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors";
+import { assertNoActiveCheckout } from "../invoice-checkout/invoice-checkout.policy";
+import { computeInvoiceTotals } from "../invoice-finance/invoice-balance";
+export { computeInvoiceTotals } from "../invoice-finance/invoice-balance";
+import { lockContractForInvoice } from "../change-orders/change-order-locks";
 import {
   CreateInvoiceLineItemInput,
   UpdateInvoiceLineItemInput,
 } from "./invoice-line-items.validators";
-
-export function computeInvoiceTotals(input: {
-  subtotal: number;
-  taxAmount: number;
-  discountAmount: number;
-  amountPaid: number;
-}): { totalAmount: number; amountDue: number } {
-  const totalAmount = Number(
-    Prisma.Decimal.max(
-      0,
-      new Prisma.Decimal(input.subtotal)
-        .plus(input.taxAmount)
-        .minus(input.discountAmount),
-    ).toDecimalPlaces(2),
-  );
-  const amountDue = Number(
-    Prisma.Decimal.max(
-      0,
-      new Prisma.Decimal(totalAmount).minus(input.amountPaid),
-    ).toDecimalPlaces(2),
-  );
-  return { totalAmount, amountDue };
-}
 
 /** The parent row lock serializes edits so the header always matches its lines. */
 async function lockInvoice(
@@ -35,14 +16,20 @@ async function lockInvoice(
   invoiceId: string,
   companyId: string,
 ) {
+  await lockContractForInvoice(tx, invoiceId, companyId);
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT id FROM "Invoice" WHERE id = ${invoiceId} AND "companyId" = ${companyId} FOR UPDATE
   `;
   if (rows.length === 0) throw new NotFoundError("Invoice", invoiceId);
-  return tx.invoice.findUniqueOrThrow({
+  const invoice = await tx.invoice.findUniqueOrThrow({
     where: { id: invoiceId },
     include: { company: { select: { defaultTaxRate: true } } },
   });
+  await assertNoActiveCheckout(tx, invoiceId);
+  const receipts = await tx.invoicePayment.count({ where: { invoiceId } });
+  if (invoice.status !== 'DRAFT' || !invoice.amountPaid.isZero() || !invoice.creditAmount.isZero() || invoice.financialBasisLocked || receipts > 0)
+    throw new ConflictError('Sent invoices and their saved line items cannot be changed. Create a new invoice for additional work.');
+  return invoice;
 }
 
 export async function recalculateInvoiceTotals(
@@ -70,8 +57,9 @@ export async function recalculateInvoiceTotals(
     taxAmount,
     discountAmount: Number(invoice.discountAmount),
     amountPaid: Number(invoice.amountPaid),
+    creditAmount: Number(invoice.creditAmount),
   });
-  if (Number(invoice.amountPaid) > totalAmount) {
+  if (invoice.amountPaid.plus(invoice.creditAmount).gt(totalAmount)) {
     throw new ValidationError(
       "The invoice total cannot be reduced below its recorded payments",
     );

@@ -1,0 +1,24 @@
+{
+  "startedAt": "2026-10-30T08:27:44.391Z",
+  "checks": [
+    "API health: PostgreSQL and Redis connected",
+    "Signup and fresh catalog",
+    "Login, refresh rotation, and authenticated identity",
+    "Active sale catalog: Pro monthly and annual",
+    "Free entitlement, paid-feature denial, and five starter credits",
+    "Project creation and PostgreSQL image upload/download",
+    "Deployed photo edit, polling, PostgreSQL preview persistence, and public download",
+    "Exactly one starter credit consumed",
+    "Text AI deliberately excluded until funding is confirmed",
+    "Free account quote export is blocked",
+    "Property maps enforce the paid gate on the server",
+    "Disposable QA user/company/project removed"
+  ],
+  "image": {
+    "width": 1182,
+    "height": 886,
+    "durationMs": 6050
+  },
+  "materialCount": 0,
+  "finishedAt": "2026-10-30T08:27:59.415Z"
+}

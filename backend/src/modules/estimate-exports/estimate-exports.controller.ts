@@ -13,6 +13,7 @@ export async function createForEstimateHandler(req: Request, res: Response) {
     param(req.params.estimateId),
     req.companyId!,
     req.body,
+    req.userId!,
   );
   sendSuccess(res, toEstimateExportDto(record), { statusCode: 201 });
 }

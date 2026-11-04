@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { logger } from "../../config/logger";
-import { verifyAndDecodeNotification } from "../../lib/apple-storekit";
+import { AppleJWSVerificationError, verifyAndDecodeNotification } from "../../lib/apple-storekit";
 import { appStoreNotificationSchema } from "./commerce-webhook.validators";
 
 export async function handleAppStoreNotification(
@@ -48,8 +48,6 @@ export async function handleAppStoreNotification(
     // 4. Acknowledge the notification — Apple expects 200 for success
     res.status(200).json({ ok: true });
   } catch (error: unknown) {
-    // Always return 200 to prevent Apple from retrying on our parse/processing errors.
-    // Retries should only happen if our server is genuinely unreachable (non-200).
     const message = error instanceof Error ? error.message : "Unknown error";
 
     logger.error(
@@ -57,6 +55,12 @@ export async function handleAppStoreNotification(
       "App Store webhook processing failed",
     );
 
-    res.status(200).json({ ok: true });
+    // A verified delivery is acknowledged only after its transaction commits.
+    // Let Apple retry transient database/network failures instead of losing it.
+    if (error instanceof AppleJWSVerificationError) {
+      res.status(200).json({ ok: true });
+    } else {
+      res.status(503).json({ ok: false });
+    }
   }
 }

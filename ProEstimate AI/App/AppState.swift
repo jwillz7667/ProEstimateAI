@@ -21,6 +21,10 @@ final class AppState {
         let email: String
         let fullName: String
         let avatarURL: URL?
+        let role: User.Role
+
+        var canEdit: Bool { role != .viewer }
+        var isAdmin: Bool { role == .owner || role == .admin }
     }
 
     /// Lightweight branding snapshot used wherever the full `Company` model
@@ -96,6 +100,12 @@ final class AppState {
         entitlementStore: EntitlementStore? = nil,
         usageMeterStore: UsageMeterStore? = nil
     ) {
+        if let userId = currentUser?.id {
+            Task {
+                try? await EstimateDraftStore.shared.purge(userId: userId)
+                await JobCostReceiptFiles.shared.removeAllPreviews()
+            }
+        }
         let refreshToken = TokenStore.shared.clearTokens()
         if let refreshToken {
             // Revocation is best-effort and uses the captured token. Local
@@ -127,7 +137,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .dashboard: "Dashboard"
+        case .dashboard: "Home"
         case .projects: "Projects"
         case .invoices: "Invoices"
         case .clients: "Clients"
@@ -137,7 +147,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
-        case .dashboard: "square.grid.2x2"
+        case .dashboard: "house"
         case .projects: "folder"
         case .invoices: "doc.plaintext"
         case .clients: "person.2"

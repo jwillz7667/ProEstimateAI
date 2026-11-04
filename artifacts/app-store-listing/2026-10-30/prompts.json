@@ -1,0 +1,24 @@
+{
+  "tool": "Built-in image_gen",
+  "purpose": "Transparent foreground extraction for editable exact-dimension compositions",
+  "jobs": [
+    {
+      "id": "01-preview-device",
+      "file": "01-photo-to-preview.png",
+      "extra": "Keep the phone's before/after kitchen UI and every word, number and control unchanged. Complete only the tiny cropped lower bezel so the complete phone silhouette is available.",
+      "prompt": "Use case: background-extraction. Edit target: the supplied ProEstimate AI App Store concept. Extract ONLY the device mockup in the lower part of this image onto a truly transparent background. Remove the entire orange/charcoal decorative backdrop and all marketing text/brand header above the device. Keep the phone's before/after kitchen UI and every word, number and control unchanged. Complete only the tiny cropped lower bezel so the complete phone silhouette is available. Do not redesign or recreate the app interface. Do not add text. Center the isolated foreground with a small transparent margin. Preserve edge detail. This is a component for an exact-dimension editable App Store composition."
+    },
+    {
+      "id": "02-dashboard-device",
+      "file": "02-project-command-center.png",
+      "extra": "Keep the complete phone dashboard UI, text and black phone silhouette unchanged.",
+      "prompt": "Use case: background-extraction. Edit target: the supplied ProEstimate AI App Store concept. Extract ONLY the device mockup in the lower part of this image onto a truly transparent background. Remove the entire orange/charcoal decorative backdrop and all marketing text/brand header above the device. Keep the complete phone dashboard UI, text and black phone silhouette unchanged. Do not redesign or recreate the app interface. Do not add text. Center the isolated foreground with a small transparent margin. Preserve edge detail. This is a component for an exact-dimension editable App Store composition."
+    },
+    {
+      "id": "03-estimate-device",
+      "file": "03-estimates-to-invoices.png",
+      "extra": "Retain BOTH the black phone and overlapping floating invoice card as one connected foreground group. Keep every word, number, UI element and reflection unchanged. Complete only the tiny cropped lower bezel.",
+      "prompt": "Use case: background-extraction. Edit target: the supplied ProEstimate AI App Store concept. Extract ONLY the device mockup in the lower part of this image onto a truly transparent background. Remove the entire orange/charcoal decorative backdrop and all marketing text/brand header above the device. Retain BOTH the black phone and overlapping floating invoice card as one connected foreground group. Keep every word, number, UI element and reflection unchanged. Complete only the tiny cropped lower bezel. Do not redesign or recreate the app interface. Do not add text. Center the isolated foreground with a small transparent margin. Preserve edge detail. This is a component for an exact-dimension editable App Store composition."
+    }
+  ]
+}

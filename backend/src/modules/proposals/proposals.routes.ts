@@ -10,6 +10,7 @@ import {
 } from './proposals.controller';
 import { validate } from '../../middleware/validate.middleware';
 import { createProposalSchema, updateProposalSchema, sendProposalSchema } from './proposals.validators';
+import { requireApprovalShareAccess } from '../../middleware/feature-access.middleware';
 
 const router = Router();
 
@@ -20,9 +21,9 @@ function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => P
 router.get('/', asyncHandler(listHandler));
 router.get('/:id', asyncHandler(getByIdHandler));
 router.get('/:id/export', asyncHandler(exportPDFHandler));
-router.post('/', validate(createProposalSchema), asyncHandler(createHandler));
+router.post('/', validate(createProposalSchema), requireApprovalShareAccess, asyncHandler(createHandler));
 router.patch('/:id', validate(updateProposalSchema), asyncHandler(updateHandler));
 router.delete('/:id', asyncHandler(deleteHandler));
-router.post('/:id/send', validate(sendProposalSchema), asyncHandler(sendHandler));
+router.post('/:id/send', validate(sendProposalSchema), requireApprovalShareAccess, asyncHandler(sendHandler));
 
 export default router;

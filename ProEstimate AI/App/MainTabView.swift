@@ -8,7 +8,7 @@ struct MainTabView: View {
         @Bindable var router = router
         ZStack(alignment: .top) {
             TabView(selection: $appState.selectedTab) {
-                Tab("Dashboard", systemImage: AppTab.dashboard.systemImage, value: AppTab.dashboard) {
+                Tab("Home", systemImage: AppTab.dashboard.systemImage, value: AppTab.dashboard) {
                     DashboardView()
                 }
 

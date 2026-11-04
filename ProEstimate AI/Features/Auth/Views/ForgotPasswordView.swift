@@ -6,18 +6,17 @@ struct ForgotPasswordView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: SpacingTokens.xl) {
-                Spacer()
-
-                if viewModel.forgotPasswordSuccess {
-                    successContent
-                } else {
-                    formContent
+            ScrollView {
+                VStack(spacing: SpacingTokens.xl) {
+                    if viewModel.forgotPasswordSuccess {
+                        successContent
+                    } else {
+                        formContent
+                    }
                 }
-
-                Spacer()
-                Spacer()
+                .padding(.vertical, SpacingTokens.lg)
             }
+            .scrollDismissesKeyboard(.interactively)
             .padding(.horizontal, SpacingTokens.xl)
             .navigationTitle("Reset Password")
             .navigationBarTitleDisplayMode(.inline)
@@ -39,7 +38,7 @@ struct ForgotPasswordView: View {
                 Text(viewModel.errorMessage ?? "")
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - Form Content
@@ -77,7 +76,7 @@ struct ForgotPasswordView: View {
                 title: "Send Reset Link",
                 icon: "paperplane",
                 isLoading: viewModel.isLoading,
-                isDisabled: viewModel.email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                isDisabled: !viewModel.isEmailValid,
                 action: {
                     Task { await viewModel.forgotPassword() }
                 }

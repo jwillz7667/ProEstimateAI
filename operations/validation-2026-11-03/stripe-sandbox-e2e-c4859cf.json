@@ -1,0 +1,202 @@
+{
+  "recordedAt": "2026-11-04T00:56:23.068858+00:00",
+  "verification": {
+    "capturedAt": "2026-11-04T00:54:17.913Z",
+    "reviewedCodeSha": "c4859cffd5f20d3057d781b75c3f221469d21999",
+    "sandboxPlatformAccountId": "acct_1UXqZxDo45VzCokA",
+    "connectedMerchantAccountId": "acct_1UXrJ2Do457ERhaU",
+    "allProviderOperationsSandboxOnly": true,
+    "liveCredentialsEndpointsFlagsUntouched": true,
+    "localDatabase": "proestimate_stripe_sandbox_20261103",
+    "migrationsApplied": 34,
+    "restrictedRuntimeKeyUnchanged": true,
+    "runtimeRefundPermissionReadOnly": true,
+    "separateOperatorUsedOnlyForSandboxOperations": true,
+    "v2MerchantCreateAndHostedLinkSucceeded": true,
+    "hostedOnboardingCompletedByRoot": true,
+    "cardCapabilityActive": true,
+    "harnessCheckoutRequests": 2,
+    "harnessCheckoutDedupOneAttemptAndSession": true,
+    "actualPublicInvoiceAndHostedTestCardFlowCompletedByRoot": true,
+    "originalSignedReceipt": {
+      "amount": "1.00",
+      "currency": "USD",
+      "recordedAt": "2026-11-04T00:40:01.000Z",
+      "receiptCount": 1,
+      "providerIntent": "succeeded"
+    },
+    "separateUnpaidCancellationVerified": true,
+    "genuineSnapshotVersion": "2026-08-26.dahlia",
+    "actualFreshReadVersion": "2026-10-28.endive",
+    "genuineCompletionSignedDeliveries": 2,
+    "completionCommittedEventRows": 1,
+    "duplicateCompletionDidNotRebill": true,
+    "operatorPartialRefundAmount": "0.25",
+    "genuineRefundSignedEvents": 3,
+    "refundReceiptCount": 1,
+    "refundRecordedAt": "2026-11-04T00:43:37.000Z",
+    "actualRuntimeSessionIntentRefundReadsPassed": true,
+    "reviewHoldBlockedActualCheckout409": true,
+    "reviewHoldExplicitlyClearedByRoot": true,
+    "postReviewMinimumCheckoutRejected400": true,
+    "minimumOnlineUSD": "0.50",
+    "noNewSessionOrReceiptAfterReview": true,
+    "noAutomaticRecharge": true,
+    "proxyRandomPathBits": 256,
+    "proxyRawBodyLimitBytes": 2097152,
+    "fullAppExposed": false,
+    "finalBalances": {
+      "primary": {
+        "invoiceNumber": "SANDBOX-PRIMARY",
+        "status": "PARTIALLY_PAID",
+        "currency": "USD",
+        "total": "1.00",
+        "cashPaid": "0.75",
+        "credits": "0.00",
+        "due": "0.25",
+        "reviewRequired": false,
+        "receiptAmounts": [
+          "1.00",
+          "-0.25"
+        ],
+        "receiptMethods": [
+          "STRIPE",
+          "STRIPE_REFUND"
+        ],
+        "receiptDates": [
+          "2026-11-04T00:40:01.000Z",
+          "2026-11-04T00:43:37.000Z"
+        ],
+        "attemptStates": [
+          "REFUNDED"
+        ]
+      },
+      "cancellation": {
+        "invoiceNumber": "SANDBOX-CANCELLATION",
+        "status": "SENT",
+        "currency": "USD",
+        "total": "1.00",
+        "cashPaid": "0.00",
+        "credits": "0.00",
+        "due": "1.00",
+        "reviewRequired": false,
+        "receiptAmounts": [],
+        "receiptMethods": [],
+        "receiptDates": [],
+        "attemptStates": [
+          "EXPIRED"
+        ]
+      }
+    },
+    "activeCheckoutAttempts": 0,
+    "finalReceiptCount": 2,
+    "cleanup": {
+      "status": "complete",
+      "sandboxDestinationDisabled": true,
+      "providerAuthorizationRevoked": true,
+      "hotRevocationHTTP503Verified": true,
+      "backendProxyTunnelStopped": true,
+      "websiteStoppedByOwner": true,
+      "postgresRetained": true,
+      "privateStateAndMerchantRetained": true
+    },
+    "secretsUrlsTokensOrCompanyIdsIncluded": false,
+    "postReviewMinimumRequestsVerified": 2,
+    "postReviewMinimumBrowserRequestConfirmedByRoot": true,
+    "rootFinalUICaptureComplete": true,
+    "finalCounts": {
+      "companies": 1,
+      "users": 1,
+      "clients": 1,
+      "projects": 1,
+      "invoices": 2,
+      "attempts": 2,
+      "receipts": 2,
+      "processedProviderEvents": 6,
+      "activeAttempts": 0
+    }
+  },
+  "cleanup": {
+    "capturedAt": "2026-11-04T00:53:55.516Z",
+    "sandboxPlatformAccountId": "acct_1UXqZxDo45VzCokA",
+    "connectedMerchantAccountId": "acct_1UXrJ2Do457ERhaU",
+    "destinationId": "we_1UXrIsDo45VzCokAOKlTQlWZ",
+    "destinationStatus": "disabled",
+    "destinationVersion": "2026-08-26.dahlia",
+    "destinationLivemode": false,
+    "destinationDisabledFreshOperatorGETVerified": true,
+    "providerAuthorizationRevoked": true,
+    "hotRevocationHTTP503Verified": true,
+    "processes": {
+      "backend": {
+        "pid": 81778,
+        "running": false
+      },
+      "webhookProxy": {
+        "pid": 81020,
+        "running": false
+      },
+      "quickTunnel": {
+        "pid": 81034,
+        "running": false
+      },
+      "cloudflared": {
+        "pid": 81035,
+        "running": false
+      }
+    },
+    "ports3303And3304And3305Closed": true,
+    "websiteStoppedByOwnerAfterRootCapture": true,
+    "postgres55439Retained": true,
+    "privateCredentialsAndFixtureStateRetained": true,
+    "providerMerchantPreserved": true,
+    "counts": {
+      "companies": 1,
+      "users": 1,
+      "clients": 1,
+      "projects": 1,
+      "invoices": 2,
+      "attempts": 2,
+      "receipts": 2,
+      "processedProviderEvents": 6,
+      "activeAttempts": 0
+    },
+    "primaryFinal": {
+      "status": "PARTIALLY_PAID",
+      "total": "1.00",
+      "cashPaid": "0.75",
+      "credits": "0.00",
+      "due": "0.25",
+      "reviewRequired": false,
+      "receiptAmounts": [
+        "1.00",
+        "-0.25"
+      ]
+    },
+    "rootFinalUICaptureComplete": true,
+    "postReviewMinimumTests": {
+      "harnessHTTP400": true,
+      "rootBrowserHTTP400": true,
+      "newSessions": 0,
+      "newReceipts": 0
+    },
+    "liveCredentialsEndpointsFlagsUntouched": true,
+    "rootReportedProductionFlag": false,
+    "secretsUrlsTokensOrCompanyIdsIncluded": false
+  },
+  "livePlatform": {
+    "accountId": "acct_1QUiSVDLaRoyLG9f",
+    "business": "Viral Ventures LLC",
+    "freshOwnerBrowserCheck": "Review in progress",
+    "liveAccountCreationDisabled": true,
+    "railwayPaymentsEnabled": false,
+    "liveFinancialWrites": 0
+  },
+  "browserProof": {
+    "paidInvoiceCaptured": true,
+    "refundReviewCaptured": true,
+    "belowMinimumErrorCaptured": true,
+    "temporaryTestTabsClosed": true,
+    "liveApprovalTabRetained": true
+  }
+}

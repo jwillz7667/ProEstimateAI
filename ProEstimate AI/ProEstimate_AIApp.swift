@@ -23,6 +23,7 @@ struct ProEstimate_AIApp: App {
     @State private var usageMeterStore = UsageMeterStore.shared
     @State private var featureGateCoordinator = FeatureGateCoordinator.shared
     @State private var paywallPresenter = PaywallPresenter()
+    @State private var isReconcilingPurchases = false
     @State private var appearanceStore = AppearanceStore()
     @State private var onboardingStore = OnboardingStore.shared
     @State private var networkMonitor = NetworkMonitor.shared
@@ -118,6 +119,7 @@ struct ProEstimate_AIApp: App {
                     generationLifecycle.handleScenePhase(newPhase)
                     if newPhase == .active {
                         Task {
+                            await reconcilePurchases()
                             await entitlementStore.refresh()
                             await usageMeterStore.refresh()
                         }
@@ -140,6 +142,7 @@ struct ProEstimate_AIApp: App {
                 .onChange(of: appState.isAuthenticated) { wasAuthed, isAuthed in
                     if !wasAuthed, isAuthed {
                         Task {
+                            await reconcilePurchases()
                             await entitlementStore.refresh()
                             await usageMeterStore.refresh()
                             await featureGateCoordinator.loadProducts()
@@ -177,6 +180,17 @@ struct ProEstimate_AIApp: App {
                             await usageMeterStore.refresh()
                         }
                     }
+                }
+                .alert(
+                    paywallPresenter.activeLimitNotice?.headline ?? "Plan Limit Reached",
+                    isPresented: Binding(
+                        get: { paywallPresenter.activeLimitNotice != nil },
+                        set: { if !$0 { paywallPresenter.activeLimitNotice = nil } }
+                    )
+                ) {
+                    Button("OK", role: .cancel) { paywallPresenter.activeLimitNotice = nil }
+                } message: {
+                    Text(paywallPresenter.activeLimitNotice?.subheadline ?? "Please try again when your allowance resets.")
                 }
         }
         .modelContainer(modelContainer)
@@ -252,6 +266,15 @@ struct ProEstimate_AIApp: App {
                 }
             }
         }
+    }
+
+    private func reconcilePurchases() async {
+        guard appState.isAuthenticated, !isReconcilingPurchases else { return }
+        isReconcilingPurchases = true
+        defer { isReconcilingPurchases = false }
+        let coordinator = StoreKitPurchaseCoordinator(commerceAPI: CommerceAPIClient(), entitlementStore: entitlementStore)
+        await coordinator.reconcileUnfinishedTransactions()
+        await coordinator.reconcileCurrentEntitlements()
     }
 
     /// Translate a generation notification tap into navigation. Routes

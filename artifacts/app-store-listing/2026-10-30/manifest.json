@@ -1,0 +1,83 @@
+{
+  "generatedAt": "2026-10-30T08:43:55.812Z",
+  "language": "en-US",
+  "source": "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications",
+  "note": "Marketing concepts. iPhone device art is AI generated; replace with final approved captures before submission. iPad sources are recorded separately. Background is a single continuous SVG, sliced in order 01→02→03. PNGs use sRGB, RGB without alpha.",
+  "families": [
+    {
+      "id": "iphone-dynamic-island-medium",
+      "width": 1206,
+      "height": 2622,
+      "required": true,
+      "device": "iPhone Dynamic Island, medium display",
+      "files": [
+        "iphone-dynamic-island-medium/01-photo-to-preview_1206x2622.png",
+        "iphone-dynamic-island-medium/02-project-command-center_1206x2622.png",
+        "iphone-dynamic-island-medium/03-estimates-to-invoices_1206x2622.png"
+      ]
+    },
+    {
+      "id": "iphone-dynamic-island-large",
+      "width": 1320,
+      "height": 2868,
+      "required": false,
+      "device": "iPhone Dynamic Island, large display",
+      "files": [
+        "iphone-dynamic-island-large/01-photo-to-preview_1320x2868.png",
+        "iphone-dynamic-island-large/02-project-command-center_1320x2868.png",
+        "iphone-dynamic-island-large/03-estimates-to-invoices_1320x2868.png"
+      ]
+    },
+    {
+      "id": "iphone-face-id-large",
+      "width": 1284,
+      "height": 2778,
+      "required": false,
+      "device": "iPhone Face ID, large display",
+      "files": [
+        "iphone-face-id-large/01-photo-to-preview_1284x2778.png",
+        "iphone-face-id-large/02-project-command-center_1284x2778.png",
+        "iphone-face-id-large/03-estimates-to-invoices_1284x2778.png"
+      ]
+    },
+    {
+      "id": "ipad-13",
+      "width": 2064,
+      "height": 2752,
+      "required": true,
+      "device": "iPad 13 inch",
+      "tablet": true,
+      "files": [
+        "ipad-13/01-photo-to-preview_2064x2752.png",
+        "ipad-13/02-project-command-center_2064x2752.png",
+        "ipad-13/03-project-details_2064x2752.png"
+      ]
+    },
+    {
+      "id": "ipad-12-9",
+      "width": 2048,
+      "height": 2732,
+      "required": false,
+      "device": "iPad 12.9 inch",
+      "tablet": true,
+      "files": [
+        "ipad-12-9/01-photo-to-preview_2048x2732.png",
+        "ipad-12-9/02-project-command-center_2048x2732.png",
+        "ipad-12-9/03-project-details_2048x2732.png"
+      ]
+    },
+    {
+      "id": "ipad-11",
+      "width": 1668,
+      "height": 2420,
+      "required": false,
+      "device": "iPad 11 inch",
+      "tablet": true,
+      "files": [
+        "ipad-11/01-photo-to-preview_1668x2420.png",
+        "ipad-11/02-project-command-center_1668x2420.png",
+        "ipad-11/03-project-details_1668x2420.png"
+      ]
+    }
+  ]
+}

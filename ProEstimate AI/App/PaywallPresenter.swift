@@ -21,6 +21,7 @@ final class PaywallPresenter {
     /// The decision currently driving the paywall sheet, or `nil` when no
     /// paywall is shown.
     var activeDecision: PaywallDecision?
+    var activeLimitNotice: PaywallDecision?
 
     private var entitlementStore: EntitlementStore?
     private let logger = Logger(subsystem: AppConstants.bundleID, category: "PaywallPresenter")
@@ -35,7 +36,11 @@ final class PaywallPresenter {
 
     /// Present a paywall, unless the current user already has Pro access.
     func present(_ decision: PaywallDecision) {
-        if let entitlementStore, entitlementStore.hasProAccess {
+        if decision.placement.isUsageLimit {
+            activeLimitNotice = decision
+            return
+        }
+        if let entitlementStore, entitlementStore.hasProAccess, !decision.blocking {
             let placement = decision.placement.rawValue
             let state = entitlementStore.subscriptionState.rawValue
             logger.info("Paywall suppressed for active subscriber. placement=\(placement) state=\(state)")

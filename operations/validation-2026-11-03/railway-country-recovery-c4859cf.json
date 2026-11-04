@@ -1,0 +1,65 @@
+{
+  "recordedAt": "2026-11-04T00:23:42.023227+00:00",
+  "codeSha": "c4859cffd5f20d3057d781b75c3f221469d21999",
+  "projectId": "3ed10d99-04a7-4f9b-babb-94a7071024c6",
+  "environmentId": "0117903d-f058-4712-a55e-3407b6d89c01",
+  "serviceId": "51b3f663-7ff9-4ea9-b4a8-3861e3d90f4f",
+  "deploymentId": "5f1fd60b-9527-4bf8-990f-bca81002ccc9",
+  "status": "SUCCESS",
+  "priorDeploymentId": "ddc0ee94-29d5-4d71-8766-509962cd7f58",
+  "priorDeploymentStatus": "REMOVED",
+  "source": {
+    "commitOnlyBackendArchive": true,
+    "trackedBackendFiles": 358,
+    "archiveSha256": "0b9e113980780fd72e55a22a13045136f3902ff68ec64ff152e9018ca2d4f7d5",
+    "allFilesMatchGitBlobs": true,
+    "workingTreeFilesIncluded": false,
+    "credentialsIncluded": false
+  },
+  "preservedConfig": {
+    "rootDirectory": "/backend",
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile",
+    "buildStartPredeployOverrides": null,
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 300
+  },
+  "newMigration": "20261103220000_merchant_onboarding_recovery",
+  "migrationsAvailable": 34,
+  "startupConfirmedAllMigrationsApplied": true,
+  "health": {
+    "httpStatus": 200,
+    "status": "healthy",
+    "database": "connected",
+    "redis": "connected"
+  },
+  "negativeProbes": {
+    "unsignedWebhookHttp": 400,
+    "unsignedWebhookCode": "INVALID_WEBHOOK_SIGNATURE",
+    "paymentSettingsWithoutAuthHttp": 401,
+    "invalidInvoiceHttp": 404
+  },
+  "stripePaymentsEnabled": false,
+  "credentialsPresent": true,
+  "environmentVariablesMutated": false,
+  "websiteRedeployed": false,
+  "remoteChecks": {
+    "releaseSafety": {
+      "runId": 41744803330,
+      "conclusion": "success"
+    },
+    "web": {
+      "runId": 41744803195,
+      "conclusion": "success"
+    },
+    "backend": {
+      "runId": 41744803219,
+      "conclusion": "success"
+    },
+    "ios": {
+      "runId": 41744803245,
+      "conclusion": "success"
+    }
+  },
+  "realSandboxCheckoutAndRefundVerification": "in_progress_hosted_onboarding"
+}

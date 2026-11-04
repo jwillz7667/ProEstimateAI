@@ -128,7 +128,8 @@ export async function invalidateCachePattern(pattern: string): Promise<void> {
 export const CacheKeys = {
   entitlement: (userId: string) => `entitlement:${userId}`,
   dashboard: (companyId: string, userId: string) => `dashboard:${companyId}:${userId}`,
-  commerceProducts: () => 'commerce:products',
+  // Versioned when the offer policy changes so a deploy cannot reuse old trial metadata.
+  commerceProducts: () => 'commerce:products:trial3-v2',
   proposalShare: (shareToken: string) => `proposal:share:${shareToken}`,
   materialSearch: (query: string, zip?: string) => `materials:search:${query}:${zip ?? 'all'}`,
   projectMaterials: (type: string, zip?: string) => `materials:project:${type}:${zip ?? 'all'}`,

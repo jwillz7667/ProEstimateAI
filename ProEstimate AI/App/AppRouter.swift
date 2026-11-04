@@ -5,7 +5,8 @@ enum AppDestination: Hashable {
     /// `highlightGenerationId` lets a deep link (notification tap) open the
     /// detail screen focused on a specific generation's before/after preview
     /// instead of defaulting to the newest one.
-    case projectDetail(id: String, autoGenerate: Bool = false, highlightGenerationId: String? = nil)
+    case projectDetail(id: String, autoGenerate: Bool = false, highlightGenerationId: String? = nil,
+                       highlightEstimateId: String? = nil, highlightProposalId: String? = nil)
     case projectCreation
 
     // Invoices

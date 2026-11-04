@@ -1,107 +1,36 @@
 import SwiftUI
 
-/// Step 2 of the simplified creation flow. Project name is the lead;
-/// advanced fields (square footage, lot size, budget) sit below as
-/// optional context the AI uses for material/labor estimates. The
-/// quality-tier picker has moved to the Photos & Vision step (sits
-/// directly under the photo grid) so the contractor sets quality
-/// intent before generation runs.
+/// Optional measurements and budget, embedded in the creation page's
+/// disclosure. These fields do not add another required wizard page.
 struct ProjectDetailsStep: View {
     @Bindable var viewModel: ProjectCreationViewModel
 
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
-        case name, squareFootage, lotSize, budgetMin, budgetMax
+        case squareFootage, lotSize, budgetMin, budgetMax
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SpacingTokens.lg) {
-                nameSection
-
-                advancedHeader
-
-                squareFootageSection
-                lotSizeSection
-                budgetSection
-                if let message = viewModel.detailsValidationMessage {
-                    Label(message, systemImage: "exclamationmark.circle")
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(ColorTokens.error)
-                }
-            }
-            .padding(.horizontal, SpacingTokens.md)
-            .padding(.vertical, SpacingTokens.sm)
+        VStack(alignment: .leading, spacing: SpacingTokens.md) {
+            Text(viewModel.shouldGenerateAI
+                 ? "Add measurements or a budget to help tailor the estimate. You can leave these blank."
+                 : "Save measurements and a budget for reference. You can add these later.")
+                .font(TypographyTokens.caption)
+                .foregroundStyle(.secondary)
+            squareFootageSection
+            lotSizeSection
+            budgetSection
         }
-        .scrollDismissesKeyboard(.interactively)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { focusedField = nil }
-                    .fontWeight(.semibold)
-                    .tint(ColorTokens.primaryOrange)
+                if focusedField != nil {
+                    Spacer()
+                    Button("Done") { focusedField = nil }
+                        .fontWeight(.semibold)
+                        .tint(ColorTokens.primaryOrange)
+                }
             }
-        }
-    }
-
-    // MARK: - Name
-
-    private var nameSection: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            HStack(spacing: SpacingTokens.xxs) {
-                Image(systemName: "pencil.line")
-                    .font(.caption)
-                    .foregroundStyle(ColorTokens.primaryOrange)
-                Text("Project name")
-                    .font(TypographyTokens.headline)
-                Text("Optional")
-                    .font(TypographyTokens.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, SpacingTokens.xs)
-                    .padding(.vertical, 1)
-                    .background(ColorTokens.inputBackground, in: Capsule())
-            }
-
-            TextField(
-                viewModel.generatedTitle,
-                text: $viewModel.customTitle,
-                axis: .vertical
-            )
-            .focused($focusedField, equals: .name)
-            .submitLabel(.next)
-            .lineLimit(1 ... 2)
-            .padding(SpacingTokens.sm)
-            .background(
-                ColorTokens.inputBackground,
-                in: RoundedRectangle(cornerRadius: RadiusTokens.small)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: RadiusTokens.small)
-                    .strokeBorder(ColorTokens.subtleBorder, lineWidth: 1)
-            )
-
-            Text("Leave blank and we'll auto-name this from the category.")
-                .font(TypographyTokens.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: - Advanced Header
-
-    private var advancedHeader: some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-            Divider()
-                .padding(.vertical, SpacingTokens.xxs)
-
-            Text("Advanced (optional)")
-                .font(TypographyTokens.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-
-            Text("These help the AI tailor material quantities and cost estimates. Skip them and we'll use sensible defaults.")
-                .font(TypographyTokens.caption)
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -207,5 +136,8 @@ struct ProjectDetailsStep: View {
 // MARK: - Preview
 
 #Preview {
-    ProjectDetailsStep(viewModel: ProjectCreationViewModel())
+    ScrollView {
+        ProjectDetailsStep(viewModel: ProjectCreationViewModel())
+            .padding()
+    }
 }

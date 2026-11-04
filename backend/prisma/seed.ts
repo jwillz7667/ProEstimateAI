@@ -51,8 +51,8 @@ async function main() {
   // =========================================================================
   console.log("  Plans & products...");
 
-  // Pro tier (monthly + annual): tightened to 2 project gens, 20 image
-  // gens, and 20 generated estimates per month. Stored under
+  // Pro tier (monthly + annual): 20 image previews and 20 generated
+  // estimates per month. Manual project saves are free. Stored under
   // featuresJson.LIMITS and enforced by
   // backend/src/modules/commerce/entitlement-gate.ts via rolling-window
   // checks. The Premium subscription tier has been retired — FREE and PRO
@@ -60,7 +60,6 @@ async function main() {
   const proLimits = {
     AI_GENERATION: { daily: 5, weekly: 12, monthly: 20 },
     QUOTE_EXPORT: { daily: 10, weekly: 25, monthly: 50 },
-    PROJECT_CREATED: { daily: 1, weekly: 2, monthly: 2 },
     ESTIMATE_GENERATED: { daily: 5, weekly: 12, monthly: 20 },
   };
 
@@ -105,7 +104,7 @@ async function main() {
     create: {
       code: PlanCode.PRO_MONTHLY,
       displayName: "Pro Monthly",
-      description: "Unlimited AI within fair-use caps, branding, and invoicing",
+      description: "AI previews and estimates within plan limits, branding, and invoicing",
       featuresJson: proPlanFeatures,
     },
   });
@@ -128,11 +127,11 @@ async function main() {
       planId: proMonthlyPlan.id,
       storeProductId: "proestimate.pro.monthly",
       displayName: "Pro Monthly",
-      description: "Unlimited AI generations, invoicing, and branding",
+      description: "AI previews within plan limits, invoicing, and branding",
       priceDisplay: "$19.99/mo",
       billingPeriodLabel: "month",
       hasIntroOffer: true,
-      introOfferDisplayText: "7-day free trial",
+      introOfferDisplayText: "3-day free trial",
       isFeatured: true,
       sortOrder: 1,
     },
@@ -148,7 +147,8 @@ async function main() {
       description: "Everything in Pro — save 17%",
       priceDisplay: "$199.99/yr",
       billingPeriodLabel: "year",
-      hasIntroOffer: false,
+      hasIntroOffer: true,
+      introOfferDisplayText: "3-day free trial",
       isFeatured: false,
       savingsText: "Save 17%",
       sortOrder: 2,
@@ -389,11 +389,8 @@ async function main() {
     },
   });
 
-  // Starter credits for free users. Quote export stays gated to Pro,
-  // so the only metric we seed is AI_GENERATION at the canonical
-  // FREE_TIER_AI_GENERATION_CREDITS allowance (5 at time of writing).
-  // Jessica gets one consumed so demos can show the counter mid-progress;
-  // Tom is fresh so his bucket reads 5/5.
+  // Empty historical-balance rows mirror signup; new AI requires an
+  // active verified subscription/trial, including in local policy testing.
   for (const u of [jessica, tom]) {
     await prisma.usageBucket.upsert({
       where: {
@@ -409,8 +406,8 @@ async function main() {
         userId: u.id,
         companyId: companyA.id,
         metricCode: UsageMetricCode.AI_GENERATION,
-        includedQuantity: 5,
-        consumedQuantity: u === jessica ? 1 : 0,
+        includedQuantity: 0,
+        consumedQuantity: 0,
         source: "STARTER_CREDITS",
       },
     });

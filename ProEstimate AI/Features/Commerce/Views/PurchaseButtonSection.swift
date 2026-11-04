@@ -64,7 +64,7 @@ struct PurchaseButtonSection: View {
             )
             .foregroundStyle(colorScheme == .light ? Color.black : Color.white)
         }
-        .disabled(isPurchasing || selectedProduct == nil)
+        .disabled(isPurchasing || isRestoring || selectedProduct == nil)
         .opacity(selectedProduct == nil ? 0.5 : 1.0)
     }
 
@@ -97,7 +97,7 @@ struct PurchaseButtonSection: View {
                     .underline()
             }
         }
-        .disabled(isRestoring)
+        .disabled(isRestoring || isPurchasing)
         .padding(.top, SpacingTokens.xxs)
     }
 }

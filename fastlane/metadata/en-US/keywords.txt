@@ -1,1 +1,1 @@
-proposal,construction,contractor,handyman,renovation,kitchen,bathroom,flooring,roof,materials,labor
+contractor,construction,renovation,proposal,bid,material,labor,kitchen,bathroom,roofing,painting,pdf

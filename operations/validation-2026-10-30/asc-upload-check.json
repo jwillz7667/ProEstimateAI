@@ -1,0 +1,117 @@
+{
+  "appId": "6762563132",
+  "versions": [
+    {
+      "id": "9fde07aa-3202-4d9d-91c4-644e9bbee2f1",
+      "version": "1.0.7",
+      "state": "READY_FOR_SALE"
+    },
+    {
+      "id": "e1e2965f-31a5-414b-bbda-fd8354d0dd39",
+      "version": "1.0.5",
+      "state": "READY_FOR_SALE"
+    },
+    {
+      "id": "4d19b204-e0ac-43ed-a19c-68adf629e5a8",
+      "version": "1.0.4",
+      "state": "READY_FOR_SALE"
+    },
+    {
+      "id": "d21805cf-f137-474b-9704-0f5af648d0e7",
+      "version": "1.0.2",
+      "state": "READY_FOR_SALE"
+    },
+    {
+      "id": "ad53318d-d3cc-41c8-ac3c-2205a6ee79ec",
+      "version": "1.0.1",
+      "state": "READY_FOR_SALE"
+    },
+    {
+      "id": "a895e09d-aed8-4708-861f-c13e3cc685f4",
+      "version": "1.0",
+      "state": "READY_FOR_SALE"
+    }
+  ],
+  "builds": [
+    {
+      "id": "b88846cd-4cae-4a63-a2fa-1f94e44d70b7",
+      "build": "10",
+      "state": "VALID",
+      "expired": true,
+      "version": "1.0.7",
+      "uploaded": "2026-06-01T06:43:28-07:00"
+    },
+    {
+      "id": "f9360484-3090-438b-9785-3cc28f552601",
+      "build": "9",
+      "state": "VALID",
+      "expired": true,
+      "version": "1.0.6",
+      "uploaded": "2026-05-31T18:28:25-07:00"
+    },
+    {
+      "id": "73faf18b-ce70-411b-a623-ddfbb068ae75",
+      "build": "8",
+      "state": "VALID",
+      "expired": true,
+      "version": "1.0.5",
+      "uploaded": "2026-05-06T16:05:28-07:00"
+    },
+    {
+      "id": "7b08a4cc-c513-432a-a72b-fcef98843a52",
+      "build": "7",
+      "state": "VALID",
+      "expired": true,
+      "version": "1.0.4",
+      "uploaded": "2026-05-03T11:11:01-07:00"
+    },
+    {
+      "id": "599251ff-95ac-4174-a23a-8aeb3273a027",
+      "build": "6",
+      "state": "VALID",
+      "expired": true,
+      "version": "1.0.3",
+      "uploaded": "2026-04-30T22:34:18-07:00"
+    },
+    {
+      "id": "24c94b1c-444a-44b3-81e0-a55bcf058595",
+      "build": "5",
+      "state": "VALID",
+      "expired": true,
+      "version": "1.0.2",
+      "uploaded": "2026-04-29T19:53:56-07:00"
+    },
+    {
+      "id": "8df63d5c-ea2c-416a-bb9a-f420267d1548",
+      "build": "4",
+      "state": "VALID",
+      "expired": true,
+      "version": "1.0.1",
+      "uploaded": "2026-04-29T16:43:06-07:00"
+    },
+    {
+      "id": "4574a659-b345-4747-b0a1-66dee866ff9a",
+      "build": "3",
+      "state": "VALID",
+      "expired": true,
+      "version": "1.0.0",
+      "uploaded": "2026-04-24T11:24:13-07:00"
+    },
+    {
+      "id": "5fe884c0-cbd0-48b6-8fbc-756ef501bd35",
+      "build": "2",
+      "state": "VALID",
+      "expired": true,
+      "version": "1.0.0",
+      "uploaded": "2026-04-23T13:57:41-07:00"
+    },
+    {
+      "id": "9f19ffd7-4c98-4904-ad42-77ebaa172927",
+      "build": "1",
+      "state": "VALID",
+      "expired": true,
+      "version": "1.0.0",
+      "uploaded": "2026-04-20T15:47:50-07:00"
+    }
+  ]
+}

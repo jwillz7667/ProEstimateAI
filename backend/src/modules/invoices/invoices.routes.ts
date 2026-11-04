@@ -11,6 +11,8 @@ import {
 import { validate } from '../../middleware/validate.middleware';
 import { createInvoiceSchema, updateInvoiceSchema } from './invoices.validators';
 import invoiceLineItemNestedRoutes from '../invoice-line-items/invoice-line-items.nested.routes';
+import { invoiceFinanceRoutes } from '../invoice-finance/invoice-finance.routes';
+import { invoiceCheckoutPrivateRoutes } from '../invoice-checkout/invoice-checkout.routes';
 
 const router = Router();
 
@@ -28,5 +30,7 @@ router.delete('/:id', asyncHandler(deleteHandler));
 
 // Nested line items: /v1/invoices/:invoiceId/line-items
 router.use('/:invoiceId/line-items', invoiceLineItemNestedRoutes);
+router.use('/:invoiceId/finance', invoiceFinanceRoutes);
+router.use('/:invoiceId/checkout', invoiceCheckoutPrivateRoutes);
 
 export default router;

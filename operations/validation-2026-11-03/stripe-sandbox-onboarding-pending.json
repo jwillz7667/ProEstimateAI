@@ -1,0 +1,206 @@
+{
+  "recordedAt": "2026-11-03T23:50:16.619076+00:00",
+  "codeSha": "d9aab6feaf6177607eb93bd25ee8f266a017f2b0",
+  "sandboxAgreementAccepted": true,
+  "productionPaymentsEnabled": false,
+  "livePlatformReview": "in_progress",
+  "verification": {
+    "capturedAt": "2026-11-03T23:48:34.351Z",
+    "sandboxPlatformAccountId": "acct_1UXqZxDo45VzCokA",
+    "connectedMerchantAccountId": "acct_1UXrJ2Do457ERhaU",
+    "liveMode": false,
+    "runtimeKeyClass": "restricted_test",
+    "runtimePermissionsBroadened": false,
+    "runtimeV2AccountCreationSucceeded": true,
+    "runtimeV2AccountLinkCreationSucceeded": true,
+    "runtimeAccountReadSucceeded": true,
+    "runtimeApiVersion": "2026-10-28.endive",
+    "merchantDashboard": "full",
+    "requirementsCollector": "stripe",
+    "cardPaymentsStatus": "restricted",
+    "cardPaymentStatusDetails": [
+      {
+        "code": "requirements_past_due",
+        "resolution": "provide_info"
+      }
+    ],
+    "requirements": [
+      {
+        "field": "configuration.merchant.mcc",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "configuration.merchant.statement_descriptor.descriptor",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "configuration.merchant.support.phone",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "defaults.profile.business_url",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "defaults.profile.product_description",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "external_account",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "identity.attestations.terms_of_service.account.date",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "identity.attestations.terms_of_service.account.ip",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "identity.entity_type",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "representative.date_of_birth.day",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "representative.date_of_birth.month",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "representative.date_of_birth.year",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "representative.email",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "representative.given_name",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      },
+      {
+        "field": "representative.surname",
+        "awaiting": "user",
+        "deadline": "past_due",
+        "errors": []
+      }
+    ],
+    "hostedOnboardingState": "User authentication/password creation pending; agent has not entered a password",
+    "localCheckoutAttempts": 0,
+    "localReceiptCount": 0,
+    "localProcessedStripeEventCount": 0,
+    "providerCardPaymentsInitiatedByAgent": 0,
+    "providerRefundCalls": 0,
+    "destination": {
+      "apiVersion": "2026-08-26.dahlia",
+      "connectedSnapshot": true,
+      "liveMode": false,
+      "statusAtCreation": "enabled",
+      "privateSigningSecretSaved": true
+    },
+    "proxy": {
+      "passed": true,
+      "checkedAt": "2026-11-03T23:28:19.226Z",
+      "randomPathBits": 256,
+      "rawBodyLimitBytes": 2097152,
+      "localOversize413": true,
+      "allOtherPaths404": true,
+      "onlyPost": true,
+      "applicationPortExposed": false
+    },
+    "authorization": {
+      "peerReviewPassed": true,
+      "exactSandboxPinned": true,
+      "credentialFingerprintsBound": true,
+      "perRequestAndGatewayChecks": true,
+      "expiresAt": "2026-11-04T07:39:50.006Z",
+      "leaseSelftestChecks": 9,
+      "leaseSelftestPassed": true,
+      "revocationRejected": true,
+      "rotationRejected": true,
+      "listenerSecretLogsRedacted": true
+    },
+    "noSecretsOrUrlsInReport": true
+  },
+  "cleanup": {
+    "capturedAt": "2026-11-03T23:49:41.535Z",
+    "sandboxPlatformAccountId": "acct_1UXqZxDo45VzCokA",
+    "connectedMerchantAccountId": "acct_1UXrJ2Do457ERhaU",
+    "destinationId": "we_1UXrIsDo45VzCokAOKlTQlWZ",
+    "destinationStatus": "disabled",
+    "destinationVersion": "2026-08-26.dahlia",
+    "destinationLivemode": false,
+    "destinationDisabledVerifiedByOperatorGET": true,
+    "providerAuthorizationRevoked": true,
+    "revocationRejectedWhileServerWasRunningHTTP503": true,
+    "checkoutAttempts": 0,
+    "activeCheckoutAttempts": 0,
+    "receipts": 0,
+    "processedStripeEvents": 0,
+    "processes": {
+      "backend": {
+        "pid": 77859,
+        "running": false
+      },
+      "webhookProxy": {
+        "pid": 76197,
+        "running": false
+      },
+      "quickTunnelSupervisor": {
+        "pid": 76208,
+        "running": false
+      },
+      "cloudflaredChild": {
+        "pid": 76219,
+        "running": false
+      }
+    },
+    "localWebsite3304Retained": false,
+    "localPostgres55439Retained": true,
+    "privateCredentialsAndFixtureStateRetained": true,
+    "merchantUnchanged": true,
+    "hostedPasswordHandoffPending": true,
+    "paymentAndRefundVerificationCompleted": false,
+    "noLiveProviderWrites": true,
+    "noSecretsUrlsTokensOrCompanyIdsInReport": true,
+    "localWebsiteStoppedVerified": true
+  },
+  "pending": [
+    "User completion of Stripe-hosted contractor login and onboarding",
+    "Real sandbox Checkout and cancellation verification",
+    "Genuine Dahlia payment/refund webhook delivery with fresh Endive resource reads",
+    "Stripe live platform approval"
+  ],
+  "scope": "Synthetic isolated sandbox and disposable local database only; no production records or live merchant/payment/refund writes"
+}

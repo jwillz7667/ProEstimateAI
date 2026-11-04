@@ -11,6 +11,8 @@ struct PhotosAndPromptStep: View {
 
     @FocusState private var isInstructionsFocused: Bool
     @State private var isCameraPresented = false
+    @State private var showsSuggestions = false
+    @State private var showsEstimateDetails = false
 
     private let isCameraAvailable = UIImagePickerController.isSourceTypeAvailable(.camera)
 
@@ -23,13 +25,42 @@ struct PhotosAndPromptStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingTokens.lg) {
+                creationModeSection
                 photosSection
-                aiPreviewSection
-                qualityTierSection
-                promptSuggestionsSection
                 customInstructionsSection
+                if viewModel.shouldGenerateAI {
+                    DisclosureGroup(isExpanded: $showsSuggestions) {
+                        promptSuggestionsSection
+                            .padding(.top, SpacingTokens.sm)
+                    } label: {
+                        Label(viewModel.selectedPromptCard == nil ? "Browse design suggestions" : "Change selected suggestion", systemImage: "sparkles")
+                            .font(TypographyTokens.headline)
+                    }
+                    .padding(.horizontal, SpacingTokens.md)
+                }
+                DisclosureGroup(isExpanded: $showsEstimateDetails) {
+                    VStack(spacing: SpacingTokens.lg) {
+                        if viewModel.shouldGenerateAI { aiPreviewSection }
+                        qualityTierSection
+                        ProjectDetailsStep(viewModel: viewModel)
+                            .padding(.horizontal, SpacingTokens.md)
+                    }
+                    .padding(.top, SpacingTokens.sm)
+                } label: {
+                    Label("Estimate details (optional)", systemImage: "slider.horizontal.3")
+                        .font(TypographyTokens.headline)
+                }
+                .padding(.horizontal, SpacingTokens.md)
+                if let message = viewModel.detailsValidationMessage {
+                    Label(message, systemImage: "exclamationmark.circle")
+                        .font(TypographyTokens.caption)
+                        .foregroundStyle(ColorTokens.error)
+                        .padding(.horizontal, SpacingTokens.md)
+                }
             }
+            .frame(maxWidth: 960)
             .padding(.vertical, SpacingTokens.sm)
+            .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
         .fullScreenCover(isPresented: $isCameraPresented) {
@@ -38,6 +69,27 @@ struct PhotosAndPromptStep: View {
             }
             .ignoresSafeArea()
         }
+    }
+
+    // MARK: - Creation Mode
+
+    private var creationModeSection: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            Toggle(isOn: $viewModel.shouldGenerateAI) {
+                Label("Use AI", systemImage: "sparkles")
+                    .font(TypographyTokens.headline)
+            }
+            .tint(ColorTokens.primaryOrange)
+            Text(viewModel.shouldGenerateAI
+                 ? "Create AI suggestions and an optional design preview. An active Pro subscription or trial is required."
+                 : "Save your project, photos and notes for free. Build an estimate manually from the project.")
+                .font(TypographyTokens.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(SpacingTokens.md)
+        .background(ColorTokens.inputBackground, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
+        .padding(.horizontal, SpacingTokens.md)
     }
 
     // MARK: - Photos
@@ -114,10 +166,10 @@ struct PhotosAndPromptStep: View {
     /// captures the lawn polygon on the next step (the load-bearing input);
     /// home-service trades (plumbing, cleaning, repairs) aren't redesigning
     /// anything, so the before-photo is documentation, not a precondition.
-    /// Every visual remodel type still requires at least one before-photo
-    /// for the AI preview. Mirrors `ProjectType.requiresReferencePhoto`.
+    /// Manual projects never require an upload. AI remodel flows follow
+    /// the same reference-photo rule as the view model's Next-button gate.
     private var photosOptional: Bool {
-        !(viewModel.selectedProjectType?.requiresReferencePhoto ?? true)
+        !viewModel.shouldGenerateAI || !(viewModel.selectedProjectType?.requiresReferencePhoto ?? true)
     }
 
     private var isServiceTradeFlow: Bool {
@@ -129,22 +181,32 @@ struct PhotosAndPromptStep: View {
     }
 
     private var photosHeaderSubtitle: String {
+        if !viewModel.shouldGenerateAI {
+            return "Add photos to document the job, or continue without them. You can build estimates manually for free."
+        }
         if viewModel.isLawnCareFlow {
             return "Drop a photo of the property if you have one — otherwise just pick a service style below and we'll measure the lawn next."
         }
         if isServiceTradeFlow {
             return "Photos are optional for service calls. Add one to document the job if it helps — otherwise just describe the work below."
         }
+        if photosOptional {
+            return "Add a photo if it helps describe the work. Photos are optional for this project."
+        }
         return "More photos produce better AI previews. At least one is required."
     }
 
     private var photoEmptyStatusText: String {
+        if !viewModel.shouldGenerateAI {
+            return "Photos are optional for your manual project."
+        }
         if viewModel.isLawnCareFlow {
             return "Photos are optional — we'll measure the lawn on the next step."
         }
         if isServiceTradeFlow {
             return "Photos are optional for this service."
         }
+        if photosOptional { return "Photos are optional for this project." }
         return "At least 1 photo required"
     }
 
@@ -187,27 +249,7 @@ struct PhotosAndPromptStep: View {
             matching: .images,
             photoLibrary: .shared()
         ) {
-            HStack(spacing: SpacingTokens.sm) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.title2)
-                    .foregroundStyle(ColorTokens.primaryOrange)
-
-                VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                    Text("Choose from Library")
-                        .font(TypographyTokens.headline)
-                    Text("Select up to 10 photos")
-                        .font(TypographyTokens.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(SpacingTokens.md)
-            .glassCard(cornerRadius: RadiusTokens.card)
+            PhotoLibraryPickerLabel()
         }
         .buttonStyle(.plain)
         .onChange(of: viewModel.selectedPhotosItems) { _, _ in
@@ -260,6 +302,8 @@ struct PhotosAndPromptStep: View {
                     .font(.title3)
                     .foregroundStyle(.white)
                     .shadow(radius: 2)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .offset(x: 6, y: -6)
             .accessibilityLabel("Remove photo \(index + 1)")
@@ -335,8 +379,8 @@ struct PhotosAndPromptStep: View {
 
     private var aiPreviewToggleSubtitle: String {
         viewModel.aiPreviewEnabled
-            ? "We'll generate a before/after design image with your estimate."
-            : "Skipped — you'll still get an itemized materials and labor estimate, just no design image. Best for repairs and service calls."
+            ? "We'll generate a completed-project design preview with your estimate."
+            : "We'll generate an itemized materials and labor estimate without a design image. Best for repairs and service calls."
     }
 
     // MARK: - Quality Tier
@@ -350,9 +394,11 @@ struct PhotosAndPromptStep: View {
     private var qualityTierSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.sm) {
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                Text("Quality tier")
+                Text(viewModel.shouldGenerateAI ? "Quality tier" : "Finish level (optional)")
                     .font(TypographyTokens.title3)
-                Text("Sets the price band for materials, labor, and the AI design's finish quality. Skip and we'll choose sensible defaults from the project type.")
+                Text(viewModel.shouldGenerateAI
+                     ? "Sets the price band for materials, labor, and the AI design's finish quality. Skip and we'll choose sensible defaults from the project type."
+                     : "Record the intended material and finish quality. You can set prices while building your estimate.")
                     .font(TypographyTokens.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -360,9 +406,9 @@ struct PhotosAndPromptStep: View {
 
             VStack(spacing: SpacingTokens.xs) {
                 tierRow(
-                    title: "Auto",
-                    subtitle: "Let the AI pick tier-neutral defaults from the project type",
-                    icon: "wand.and.stars",
+                    title: viewModel.shouldGenerateAI ? "Auto" : "Not specified",
+                    subtitle: viewModel.shouldGenerateAI ? "Let the AI pick tier-neutral defaults from the project type" : "Choose a finish level later if needed",
+                    icon: viewModel.shouldGenerateAI ? "wand.and.stars" : "circle.dashed",
                     isSelected: viewModel.qualityTier == nil,
                     action: { viewModel.qualityTier = nil }
                 )
@@ -488,16 +534,16 @@ struct PhotosAndPromptStep: View {
     private var customInstructionsSection: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.sm) {
             VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-                Text("Custom instructions")
+                Text(viewModel.shouldGenerateAI ? "Custom instructions" : "Project notes")
                     .font(TypographyTokens.title3)
                 HStack(spacing: SpacingTokens.xxs) {
-                    Text("Optional")
+                    Text(viewModel.shouldGenerateAI && viewModel.selectedPromptCard == nil ? "Required" : "Optional")
                         .font(TypographyTokens.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, SpacingTokens.xs)
                         .padding(.vertical, 1)
                         .background(ColorTokens.inputBackground, in: Capsule())
-                    Text("Layer specifics on top of your selection above.")
+                    Text(viewModel.shouldGenerateAI ? "Describe the work, or choose a design suggestion below." : "Keep the scope of work and job details with this project.")
                         .font(TypographyTokens.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -520,7 +566,9 @@ struct PhotosAndPromptStep: View {
                     )
 
                 if viewModel.customInstructions.isEmpty {
-                    Text("e.g. keep the existing window, swap brass hardware for matte black, add a pot filler over the range")
+                    Text(viewModel.shouldGenerateAI
+                         ? "e.g. keep the existing window, swap brass hardware for matte black, add a pot filler over the range"
+                         : "e.g. replace cabinet hardware, keep the countertops, and check measurements before ordering")
                         .font(TypographyTokens.body)
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, SpacingTokens.sm)
@@ -548,6 +596,38 @@ struct PhotosAndPromptStep: View {
             }
         }
         .padding(.horizontal, SpacingTokens.md)
+    }
+}
+
+// PhotosPicker evaluates its label through a nonisolated Sendable closure.
+// Construct only this stateless value there; its body renders design-system
+// colors, fonts and card styling on the main actor.
+@MainActor
+private struct PhotoLibraryPickerLabel: View {
+    nonisolated init() {}
+
+    var body: some View {
+        HStack(spacing: SpacingTokens.sm) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.title2)
+                .foregroundStyle(ColorTokens.primaryOrange)
+
+            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                Text("Choose from Library")
+                    .font(TypographyTokens.headline)
+                Text("Select up to 10 photos")
+                    .font(TypographyTokens.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(SpacingTokens.md)
+        .glassCard(cornerRadius: RadiusTokens.card)
     }
 }
 

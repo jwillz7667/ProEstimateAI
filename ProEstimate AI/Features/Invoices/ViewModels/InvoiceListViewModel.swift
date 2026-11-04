@@ -28,12 +28,9 @@ final class InvoiceListViewModel {
         !invoices.isEmpty
     }
 
-    /// Sum of every outstanding balance — the headline number a contractor
-    /// cares about. Excludes paid and voided invoices.
-    var totalOutstanding: Decimal {
-        invoices
-            .filter { $0.status != .paid && $0.status != .void }
-            .reduce(Decimal.zero) { $0 + $1.amountDue }
+    /// Keep currencies separate; no exchange rate is inferred from a device locale.
+    var outstandingByCurrency: [InvoiceCurrencyBalance] {
+        InvoiceCurrencyBalance.outstanding(in: invoices)
     }
 
     // MARK: - Dependencies

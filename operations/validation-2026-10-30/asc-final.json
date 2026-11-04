@@ -1,0 +1,301 @@
+{
+  "checkedAt": "2026-10-30T10:36:21.727Z",
+  "readbackRun": 41041691751,
+  "copyRun": 41041330913,
+  "appId": "6762563132",
+  "version": {
+    "id": "b045e36c-4b2a-4806-9eb5-1fc0988dc4dd",
+    "number": "1.0.8",
+    "state": "PREPARE_FOR_SUBMISSION",
+    "releaseType": "MANUAL"
+  },
+  "build": {
+    "id": "552e5d96-27db-44a9-9584-ac784dbc5a4c",
+    "number": "11",
+    "state": "VALID",
+    "expired": false,
+    "attached": true
+  },
+  "categories": {
+    "primary": "BUSINESS",
+    "secondary": "PRODUCTIVITY"
+  },
+  "review": {
+    "demo_account_required": true,
+    "notes_sha256": "756ab172e8d79ea30b629ea12a2a7c833ff8930c7fa87636a71b559826c26b91",
+    "notes_match_source": true
+  },
+  "metadata": [
+    {
+      "locale": "en-US",
+      "checks": {
+        "description": true,
+        "keywords": true,
+        "promotional_text": true,
+        "release_notes": true,
+        "marketing_url": true,
+        "support_url": true,
+        "name": true,
+        "subtitle": true
+      }
+    },
+    {
+      "locale": "en-GB",
+      "checks": {
+        "description": true,
+        "keywords": true,
+        "promotional_text": true,
+        "release_notes": true,
+        "marketing_url": true,
+        "support_url": true,
+        "name": true,
+        "subtitle": true
+      }
+    },
+    {
+      "locale": "es-ES",
+      "checks": {
+        "description": true,
+        "keywords": true,
+        "promotional_text": true,
+        "release_notes": true,
+        "marketing_url": true,
+        "support_url": true,
+        "name": true,
+        "subtitle": true
+      }
+    },
+    {
+      "locale": "en-AU",
+      "checks": {
+        "description": true,
+        "keywords": true,
+        "promotional_text": true,
+        "release_notes": true,
+        "marketing_url": true,
+        "support_url": true,
+        "name": true,
+        "subtitle": true
+      }
+    },
+    {
+      "locale": "es-MX",
+      "checks": {
+        "description": true,
+        "keywords": true,
+        "promotional_text": true,
+        "release_notes": true,
+        "marketing_url": true,
+        "support_url": true,
+        "name": true,
+        "subtitle": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "locale": "en-US",
+      "sets": [
+        {
+          "display": "APP_IPHONE_67",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPAD_PRO_3GEN_129",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_61",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_65",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPAD_PRO_3GEN_11",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        }
+      ]
+    },
+    {
+      "locale": "en-GB",
+      "sets": [
+        {
+          "display": "APP_IPAD_PRO_3GEN_129",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPAD_PRO_3GEN_11",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_65",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_67",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_61",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        }
+      ]
+    },
+    {
+      "locale": "es-ES",
+      "sets": [
+        {
+          "display": "APP_IPHONE_65",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_61",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_67",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPAD_PRO_3GEN_11",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPAD_PRO_3GEN_129",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        }
+      ]
+    },
+    {
+      "locale": "en-AU",
+      "sets": [
+        {
+          "display": "APP_IPAD_PRO_3GEN_129",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_65",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_61",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPAD_PRO_3GEN_11",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_67",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        }
+      ]
+    },
+    {
+      "locale": "es-MX",
+      "sets": [
+        {
+          "display": "APP_IPHONE_67",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_65",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPAD_PRO_3GEN_129",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPHONE_61",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        },
+        {
+          "display": "APP_IPAD_PRO_3GEN_11",
+          "count": 3,
+          "ordered": true,
+          "complete": true,
+          "filesMatch": true
+        }
+      ]
+    }
+  ],
+  "assetCount": 75,
+  "reviewSubmitted": false,
+  "publicReleasePerformed": false,
+  "allChecksPassed": true
+}
