@@ -6,4 +6,4 @@ A clearer Home and a simpler project workflow.
 • Keep estimate review separate from PDF export, proposal sharing and invoicing.
 • More useful layouts on iPhone and iPad, with improved loading and error handling.
 
-Basic project access and manual estimates remain free. AI requires Pro or an active Apple trial; eligible new subscribers can start a three-day trial.
+Every account now includes a seven-day Pro trial, with no payment required. Skip the login offer to explore. Basic project access and manual estimates remain free after the trial.

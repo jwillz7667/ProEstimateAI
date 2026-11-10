@@ -1057,6 +1057,8 @@ model UserEntitlement {
   startsAt              DateTime?
   endsAt                DateTime?
   trialEndsAt           DateTime?
+  accountTrialStartedAt DateTime?
+  accountTrialEndsAt    DateTime?
   gracePeriodEndsAt     DateTime?
   isAutoRenewEnabled    Boolean?
   source                String?

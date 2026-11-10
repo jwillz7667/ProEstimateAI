@@ -1,5 +1,6 @@
 import { Prisma, type EntitlementStatus } from "@prisma/client";
 import { getEntitlementUsageSnapshot } from "../../lib/entitlement-usage";
+import { ensureAccountTrial, readAccessEntitlement } from "../../lib/account-trial";
 import { prisma } from "../../config/database";
 import {
   AccountMismatchError,
@@ -51,29 +52,9 @@ export async function getEffectiveEntitlement(
 ): Promise<EntitlementSnapshotDto> {
   // Rebuild effective status and rolling counters on every read. Caching the
   // final DTO can grant access past a signed deadline or show stale usage.
-  let entitlement = await prisma.userEntitlement.findUnique({
-    where: { userId },
-    include: { plan: true },
-  });
-  if (!entitlement) {
-    // Accounts predating commerce still retain basic app access. Backfill only
-    // a missing Free row; a concurrent signed purchase is never overwritten.
-    const user = await prisma.user.findFirst({
-      where: { id: userId, companyId, isActive: true }, select: { id: true },
-    });
-    if (!user) throw new AuthenticationError("Account is unavailable");
-    const freePlan = await prisma.plan.findUniqueOrThrow({ where: { code: "FREE_STARTER" } });
-    // INSERT ... ON CONFLICT DO NOTHING avoids the find/create race of an
-    // empty-update Prisma upsert, without overwriting a concurrent purchase.
-    await prisma.userEntitlement.createMany({
-      data: [{ userId, companyId, planId: freePlan.id, status: "FREE" }],
-      skipDuplicates: true,
-    });
-    entitlement = await prisma.userEntitlement.findUniqueOrThrow({
-      where: { userId }, include: { plan: true },
-    });
-  }
-  if (entitlement.companyId !== companyId) throw new AuthenticationError("Account is unavailable");
+  await ensureAccountTrial(userId, companyId);
+  const entitlement = await readAccessEntitlement(userId, companyId);
+  if (!entitlement) throw new AuthenticationError("Account is unavailable");
   const buckets = await prisma.usageBucket.findMany({ where: { userId, companyId } });
   return toEntitlementSnapshotDto(
     entitlement, buckets,

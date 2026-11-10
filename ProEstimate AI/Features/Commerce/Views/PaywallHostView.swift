@@ -5,8 +5,7 @@ import SwiftUI
 /// purchase button, and legal disclosure.
 ///
 /// Present as a sheet with `.sheet(item:)` bound to a `PaywallDecision`.
-/// The `isBlocking` flag on the decision determines whether the user
-/// can dismiss the sheet or must subscribe.
+/// Every offer can be dismissed; premium actions remain server-gated.
 struct PaywallHostView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -39,6 +38,17 @@ struct PaywallHostView: View {
                 VStack(spacing: 0) {
                     // Hero section with headline and subheadline.
                     PaywallHeroSection(decision: viewModel.decision, headline: viewModel.displayHeadline, subheadline: viewModel.displaySubheadline)
+
+                    if viewModel.placement == .loginOffer {
+                        Button(viewModel.decision.secondaryCtaTitle ?? "Not now") {
+                            dismiss()
+                        }
+                        .font(TypographyTokens.headline)
+                        .foregroundStyle(ColorTokens.primaryOrange)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .padding(.horizontal, SpacingTokens.lg)
+                        .accessibilityIdentifier("paywall.continue")
+                    }
 
                     VStack(spacing: SpacingTokens.xl) {
                         // Explain the AI subscription boundary while keeping
@@ -76,7 +86,7 @@ struct PaywallHostView: View {
                             primaryTitle: viewModel.primaryCtaTitle,
                             isPurchasing: viewModel.isPurchasing,
                             isRestoring: viewModel.isRestoring,
-                            showContinueFree: viewModel.showContinueFree,
+                            showContinueFree: viewModel.showContinueFree && viewModel.placement != .loginOffer,
                             showRestorePurchases: viewModel.showRestorePurchases,
                             secondaryCtaTitle: viewModel.decision.secondaryCtaTitle,
                             selectedProduct: viewModel.selectedProduct,
@@ -203,7 +213,7 @@ struct PaywallHostView: View {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(ColorTokens.secondaryText)
-                        .frame(width: 30, height: 30)
+                        .frame(width: 44, height: 44)
                         .background(.ultraThinMaterial, in: Circle())
                 }
                 .padding(.trailing, SpacingTokens.md)

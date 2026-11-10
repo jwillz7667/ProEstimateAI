@@ -108,6 +108,12 @@ export async function seedPlansAndProducts() {
 
 // ─── User / company fixtures ───────────────────────────
 
+/** Existing policy fixtures represent users who have already tried Pro. */
+export function completedAccountTrial() {
+  const end = new Date(Date.now() - 86_400_000);
+  return { accountTrialStartedAt: new Date(end.getTime() - 7 * 86_400_000), accountTrialEndsAt: end };
+}
+
 export async function createUserWithFreeEntitlement(args: {
   email?: string;
   freePlanId: string;
@@ -131,6 +137,7 @@ export async function createUserWithFreeEntitlement(args: {
       companyId: company.id,
       planId: args.freePlanId,
       status: "FREE",
+      ...completedAccountTrial(),
     },
   });
 

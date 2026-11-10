@@ -15,6 +15,7 @@ struct EntitlementSnapshot: Codable, Equatable, Sendable {
     let gracePeriodEndsAt: Date?
     let isAutoRenewEnabled: Bool?
     let billingWarning: String?
+    var source: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case subscriptionState = "subscription_state"
@@ -26,6 +27,7 @@ struct EntitlementSnapshot: Codable, Equatable, Sendable {
         case gracePeriodEndsAt = "grace_period_ends_at"
         case isAutoRenewEnabled = "is_auto_renew_enabled"
         case billingWarning = "billing_warning"
+        case source
     }
 }
 
@@ -154,6 +156,7 @@ extension EntitlementSnapshot {
     /// Check whether a specific feature is enabled.
     func hasFeature(_ feature: FeatureCode) -> Bool {
         if !subscriptionState.hasProAccess { return false }
+        if subscriptionState == .trialActive, (trialEndsAt ?? .distantPast) <= Date() { return false }
         return featureFlags[feature.rawValue] ?? false
     }
 
@@ -165,13 +168,12 @@ extension EntitlementSnapshot {
     /// Number of days until trial ends, or nil if not in trial.
     var trialDaysRemaining: Int? {
         guard let trialEndsAt, subscriptionState == .trialActive else { return nil }
-        let days = Calendar.current.dateComponents([.day], from: Date(), to: trialEndsAt).day
-        return max(0, days ?? 0)
+        return max(0, Int(ceil(trialEndsAt.timeIntervalSinceNow / 86_400)))
     }
 
     /// Whether the user has any remaining free generation credits.
     var hasGenerationCredits: Bool {
-        subscriptionState.hasProAccess && (remaining(for: .aiGeneration) ?? 0) > 0
+        hasFeature(.canGeneratePreview) && (remaining(for: .aiGeneration) ?? 0) > 0
     }
 
     /// Whether the user has any remaining free quote export credits.

@@ -162,6 +162,7 @@ struct ProEstimate_AIApp: App {
                             }
                         }
                     } else if wasAuthed, !isAuthed {
+                        paywallPresenter.reset()
                         // Sign-out: drop any pending generations so a
                         // different account on the same device doesn't
                         // see a stranger's in-flight work or get a stale

@@ -223,7 +223,7 @@ final class PaywallHostViewModel {
                 appAccountToken: appAccountToken
             )
 
-            guard entitlementStore.hasProAccess else {
+            guard entitlementStore.hasSubscriptionAccess else {
                 throw PurchaseError.deliveryPending
             }
             purchaseSucceeded = true
@@ -305,7 +305,7 @@ final class PaywallHostViewModel {
             try await purchaseCoordinator.restorePurchases()
 
             // Check if restore resulted in Pro access.
-            if entitlementStore.hasProAccess {
+            if entitlementStore.hasSubscriptionAccess {
                 purchaseSucceeded = true
                 logger.info("Restore successful — Pro access confirmed.")
             } else {
@@ -328,9 +328,10 @@ final class PaywallHostViewModel {
 
     // MARK: - Computed Properties
 
-    var hasProAccess: Bool { entitlementStore.hasProAccess }
+    var hasProAccess: Bool { entitlementStore.hasSubscriptionAccess }
 
     var displayHeadline: String {
+        if placement == .loginOffer { return decision.headline }
         if decision.headline.localizedCaseInsensitiveContains("trial") ||
            decision.headline.localizedCaseInsensitiveContains("free for") {
             if let product = selectedProduct, product.showsTrialBadge,
@@ -343,6 +344,7 @@ final class PaywallHostViewModel {
     }
 
     var displaySubheadline: String {
+        if placement == .loginOffer { return decision.subheadline }
         if decision.subheadline.localizedCaseInsensitiveContains("trial") ||
            decision.subheadline.localizedCaseInsensitiveContains("free for") {
             return "Choose a monthly or annual plan for AI previews, branded proposals, invoicing, and client approvals. Trial eligibility and renewal pricing are shown below."

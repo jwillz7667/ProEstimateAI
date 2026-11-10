@@ -97,7 +97,7 @@ final class FeatureGateCoordinator {
             placement: .generationLimitHit,
             triggerReason: "AI generation requires an active subscription or trial",
             headline: "Unlock AI Remodel Previews",
-            subheadline: "Choose Pro for AI previews and estimates. Eligible Apple Accounts can start with a three-day free trial."
+            subheadline: "Choose Pro for AI previews and estimates. Eligible Apple Accounts can start with a seven-day free trial."
         )
     }
 
@@ -117,7 +117,7 @@ final class FeatureGateCoordinator {
             placement: .quoteLimitHit,
             triggerReason: "Quote export requires a subscription",
             headline: "Send Branded Proposals",
-            subheadline: "Export client-ready PDFs with your logo, colors, and contact details. Start a 3-day free trial."
+            subheadline: "Export client-ready PDFs with your logo, colors, and contact details. Start a 7-day free trial."
         )
     }
 
@@ -145,7 +145,7 @@ final class FeatureGateCoordinator {
             placement: .invoiceLocked,
             triggerReason: "Invoice creation requires a subscription",
             headline: "Bill Clients with Invoices",
-            subheadline: "Turn approved estimates into professional invoices, track payments, and send branded PDFs. Start a 3-day free trial."
+            subheadline: "Turn approved estimates into professional invoices, track payments, and send branded PDFs. Start a 7-day free trial."
         )
     }
 

@@ -126,7 +126,7 @@ extension StoreProductModel {
             priceDisplay: "$19.99",
             billingPeriodLabel: "per month",
             hasIntroOffer: true,
-            introOfferDisplayText: "3-day free trial",
+            introOfferDisplayText: "7-day free trial",
             isEligibleForIntroOffer: nil,
             isFeatured: true,
             savingsText: nil
@@ -145,7 +145,7 @@ extension StoreProductModel {
         priceDisplay: "$19.99",
         billingPeriodLabel: "per month",
         hasIntroOffer: true,
-        introOfferDisplayText: "3-day free trial",
+        introOfferDisplayText: "7-day free trial",
         isEligibleForIntroOffer: true,
         isFeatured: false,
         savingsText: nil
@@ -159,7 +159,7 @@ extension StoreProductModel {
         priceDisplay: "$149.99",
         billingPeriodLabel: "per year",
         hasIntroOffer: true,
-        introOfferDisplayText: "3-day free trial",
+        introOfferDisplayText: "7-day free trial",
         isEligibleForIntroOffer: true,
         isFeatured: false,
         savingsText: "Save 37%"

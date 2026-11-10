@@ -23,7 +23,7 @@ struct StarterCreditsExhaustedCard: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(ColorTokens.primaryText)
 
-                    Text("Start an eligible three-day trial or subscribe. Your basic workspace stays free.")
+                    Text("Start an eligible seven-day trial or subscribe. Your basic workspace stays free.")
                         .font(TypographyTokens.footnote)
                         .foregroundStyle(ColorTokens.secondaryText)
                 }

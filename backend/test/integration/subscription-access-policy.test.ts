@@ -11,7 +11,7 @@ import { bootstrapCatalog } from '../../src/lib/catalog-bootstrap';
 import { signAccessToken } from '../../src/lib/jwt';
 import { gateAIAction } from '../../src/modules/commerce/entitlement-gate';
 import { getEffectiveEntitlement } from '../../src/modules/commerce/commerce.service';
-import { resetCommerceTables } from './helpers';
+import { completedAccountTrial, resetCommerceTables } from './helpers';
 
 const providers = vi.hoisted(() => ({ image: vi.fn(), materials: vi.fn(), labor: vi.fn(), estimate: vi.fn() }));
 vi.mock('../../src/lib/image-gen', async (original) => ({ ...await original<object>(), generatePreviewImage: providers.image }));
@@ -42,7 +42,7 @@ async function account(status: EntitlementStatus = 'FREE', source?: string) {
   const plan = await prisma.plan.findUniqueOrThrow({ where: { code: status === 'FREE' ? 'FREE_STARTER' : 'PRO_MONTHLY' } });
   const end = new Date(Date.now() + 7 * 86_400_000);
   await prisma.userEntitlement.create({ data: {
-    userId: user.id, companyId: company.id, planId: plan.id, status, source,
+    userId: user.id, companyId: company.id, planId: plan.id, ...completedAccountTrial(), status, source,
     endsAt: status === 'FREE' ? null : end, trialEndsAt: status === 'TRIAL_ACTIVE' ? end : null,
   } });
   const project = await prisma.project.create({ data: { companyId: company.id, title: 'Existing project' } });
@@ -89,14 +89,14 @@ describe('subscription-only AI and free basic access', () => {
     },
   );
 
-  it('backfills only missing legacy Free entitlement and does not require upgrade to open basic tools', async () => {
+  it('backfills a missing legacy entitlement with a seven-day trial and retains basic tools', async () => {
     const t = await account();
     await prisma.userEntitlement.delete({ where: { userId: t.user.id } });
     const results = await Promise.all(Array.from({ length: 5 }, () => getEffectiveEntitlement(t.user.id, t.company.id)));
-    expect(results.every((snapshot) => snapshot.subscription_state === 'FREE' && snapshot.usage.length === 0)).toBe(true);
+    expect(results.every((snapshot) => snapshot.subscription_state === 'TRIAL_ACTIVE' && snapshot.source === 'ACCOUNT_TRIAL')).toBe(true);
     expect(await prisma.userEntitlement.count({ where: { userId: t.user.id } })).toBe(1);
     expect((await t.request('/projects', 'POST', { title: 'Legacy manual', ai_preview_enabled: false })).status).toBe(201);
-    expect((await t.request(`/projects/${t.project.id}/generations`, 'POST', { prompt: 'Kitchen update' })).status).toBe(402);
+    await expect(gateAIAction({ userId: t.user.id, companyId: t.company.id, metric: 'AI_GENERATION' })).resolves.toBeDefined();
   });
 
   it('does not grant unlimited billing rights to an allowlisted admin email', async () => {

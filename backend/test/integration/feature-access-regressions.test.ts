@@ -6,7 +6,7 @@ import { createApp } from '../../src/app';
 import { prisma } from '../../src/config/database';
 import { bootstrapCatalog } from '../../src/lib/catalog-bootstrap';
 import { signAccessToken } from '../../src/lib/jwt';
-import { resetCommerceTables } from './helpers';
+import { completedAccountTrial, resetCommerceTables } from './helpers';
 
 let server: Server;
 let origin: string;
@@ -32,7 +32,7 @@ async function account(paid: boolean) {
   } });
   const plan = await prisma.plan.findUniqueOrThrow({ where: { code: paid ? 'PRO_MONTHLY' : 'FREE_STARTER' } });
   await prisma.userEntitlement.create({ data: {
-    userId: user.id, companyId: company.id, planId: plan.id,
+    userId: user.id, companyId: company.id, planId: plan.id, ...completedAccountTrial(),
     status: paid ? 'PRO_ACTIVE' : 'FREE', renewalDate: paid ? new Date(Date.now() + 86_400_000) : null,
   } });
   const token = signAccessToken({ userId: user.id, companyId: company.id });

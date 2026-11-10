@@ -138,6 +138,9 @@ struct SubscriptionStatusView: View {
     }
 
     private func tierSubtitle(for tier: PlanTier) -> String {
+        if entitlementStore.isAccountTrial, let end = entitlementStore.snapshot?.trialEndsAt {
+            return "Complimentary Pro access until \(end.formatted(date: .abbreviated, time: .omitted)). No automatic renewal or charge."
+        }
         if let renewal = entitlementStore.renewalDate {
             let when = renewal.formatted(as: .medium)
             switch tier {

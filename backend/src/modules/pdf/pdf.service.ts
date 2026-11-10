@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import { prisma } from '../../config/database';
 import { NotFoundError, AuthorizationError } from '../../lib/errors';
 import { hasEffectiveProAccess } from '../../lib/entitlement-access';
+import { readAccessEntitlement } from '../../lib/account-trial';
 import { isAdminUser } from '../../lib/admin';
 import { gateAIAction, runReservedAction } from '../commerce/entitlement-gate';
 import { getForRendering } from '../proposals/proposals.service';
@@ -112,10 +113,7 @@ function applyWatermark(doc: PDFKit.PDFDocument): void {
 /** Check whether the user's plan allows watermark removal. */
 async function shouldApplyWatermark(userId: string): Promise<boolean> {
   if (await isAdminUser(userId)) return false;
-  const entitlement = await prisma.userEntitlement.findUnique({
-    where: { userId },
-    include: { plan: { select: { featuresJson: true } } },
-  });
+  const entitlement = await readAccessEntitlement(userId);
 
   if (!entitlement) return true;
 

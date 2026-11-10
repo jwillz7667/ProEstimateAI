@@ -7,6 +7,7 @@ import {
 } from "../../lib/errors";
 import { isAdminUser } from "../../lib/admin";
 import { hasEffectiveProAccess } from "../../lib/entitlement-access";
+import { readAccessEntitlement } from "../../lib/account-trial";
 import {
   PaginationParams,
   paginateResults,
@@ -53,10 +54,7 @@ const INVOICE_LOCKED_PAYWALL = {
 export async function assertCanCreateInvoice(userId: string): Promise<void> {
   if (await isAdminUser(userId)) return;
 
-  const entitlement = await prisma.userEntitlement.findUnique({
-    where: { userId },
-    include: { plan: { select: { featuresJson: true } } },
-  });
+  const entitlement = await readAccessEntitlement(userId);
 
   if (!entitlement) {
     throw new PaywallError(

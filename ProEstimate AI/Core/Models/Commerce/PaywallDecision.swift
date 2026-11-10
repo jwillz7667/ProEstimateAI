@@ -39,6 +39,7 @@ struct PaywallDecision: Codable, Equatable, Sendable {
 /// Each placement maps to a specific user action or screen trigger.
 /// Placements are configurable so copy and experiments can evolve independently.
 enum PaywallPlacement: String, Codable, CaseIterable, Sendable {
+    case loginOffer = "LOGIN_OFFER"
     case onboardingSoftGate = "ONBOARDING_SOFT_GATE"
     case postFirstGeneration = "POST_FIRST_GENERATION"
     case postFirstQuoteExport = "POST_FIRST_QUOTE_EXPORT"
@@ -71,7 +72,7 @@ extension PaywallPlacement {
     /// Whether this placement is a soft gate that allows the user to continue for free.
     var isSoftGate: Bool {
         switch self {
-        case .onboardingSoftGate, .postFirstGeneration, .postFirstQuoteExport, .settingsUpgrade:
+        case .loginOffer, .onboardingSoftGate, .postFirstGeneration, .postFirstQuoteExport, .settingsUpgrade:
             return true
         case .generationLimitHit, .quoteLimitHit, .invoiceLocked,
              .aiEstimateLocked, .brandingLocked, .approvalShareLocked,
@@ -94,6 +95,24 @@ extension PaywallPlacement {
 // MARK: - Sample Data
 
 extension PaywallDecision {
+    static func loginOffer(trialEndsAt: Date?) -> PaywallDecision {
+        PaywallDecision(
+            placement: .loginOffer,
+            triggerReason: "Signed-in account offer",
+            blocking: false,
+            headline: trialEndsAt == nil ? "Keep building with Pro" : "Your 7-day Pro trial is active",
+            subheadline: trialEndsAt.map {
+                "Pro is included until \($0.formatted(date: .abbreviated, time: .shortened)). No payment is required and this account trial won't renew automatically."
+            } ?? "Choose a plan for AI previews, estimates, branded quotes and invoicing. You can continue with basic tools for free.",
+            primaryCtaTitle: "Subscribe Now",
+            secondaryCtaTitle: trialEndsAt == nil ? "Continue with Free Plan" : "Continue to my trial",
+            showContinueFree: true,
+            showRestorePurchases: true,
+            recommendedProductId: AppConstants.monthlyProductID,
+            availableProducts: nil
+        )
+    }
+
     /// Sample soft-gate decision shown after first generation.
     static let sampleSoftGate = PaywallDecision(
         placement: .postFirstGeneration,
@@ -129,8 +148,8 @@ extension PaywallDecision {
         placement: .onboardingSoftGate,
         triggerReason: "Onboarding subscription offer",
         blocking: false,
-        headline: "Try Pro Free for 3 Days",
-        subheadline: "20 AI previews per month, branded proposals, invoicing, and client approvals. Eligible monthly subscribers can try Pro free for 3 days.",
+        headline: "Try Pro Free for 7 Days",
+        subheadline: "20 AI previews per month, branded proposals, invoicing, and client approvals. Eligible monthly subscribers can try Pro free for 7 days.",
         primaryCtaTitle: "Start Free Trial",
         secondaryCtaTitle: "Continue with Free Plan",
         showContinueFree: true,
@@ -145,8 +164,8 @@ extension PaywallDecision {
         triggerReason: "AI preview requires a subscription",
         blocking: true,
         headline: "Unlock AI Remodel Previews",
-        subheadline: "See realistic AI-generated previews of your finished project, instantly. Start a 3-day free trial — cancel anytime.",
-        primaryCtaTitle: "Start 3-Day Free Trial",
+        subheadline: "See realistic AI-generated previews of your finished project, instantly. Start a 7-day free trial — cancel anytime.",
+        primaryCtaTitle: "Start 7-Day Free Trial",
         secondaryCtaTitle: nil,
         showContinueFree: false,
         showRestorePurchases: true,

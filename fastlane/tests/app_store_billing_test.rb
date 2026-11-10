@@ -21,7 +21,7 @@ class AppStoreBillingTest < ReleaseAssertions
         territory = data.dig("relationships", "territory", "data", "id")
         raise "Apple requires an explicit territory" if territory.nil?
         product = @report[:products].find { |item| item[:id] == data.dig("relationships", "subscription", "data", "id") }
-        if data.dig("attributes", "duration") == "THREE_DAYS"
+        if data.dig("attributes", "duration") == "ONE_WEEK"
           raise "Simulated Apple rejection" if @fail_monthly && product == @report[:products].first
           raise "Simulated partial annual failure" if @fail_annual_gbr && product == @report[:products].last && territory == "GBR"
         end
@@ -33,7 +33,7 @@ class AppStoreBillingTest < ReleaseAssertions
           @timeout_after_creation = false
           raise "POST timed out after acceptance"
         end
-        if @timeout_restore && data.dig("attributes", "duration") == "ONE_WEEK"
+        if @timeout_restore && data.dig("attributes", "duration") == "THREE_DAYS"
           raise "Restore timed out after acceptance"
         end
       end
@@ -47,7 +47,7 @@ class AppStoreBillingTest < ReleaseAssertions
     AppStoreBilling.apply_trial(plan: operations, report: snapshot, api: api, readback: -> { snapshot })
   end
 
-  def offer(duration: "ONE_WEEK", territory: "USA", mode: "FREE_TRIAL", id: "old-offer")
+  def offer(duration: "THREE_DAYS", territory: "USA", mode: "FREE_TRIAL", id: "old-offer")
     { id: id, territory: territory, attributes: { "duration" => duration, "offerMode" => mode, "numberOfPeriods" => 1, "startDate" => "2026-04-24", "endDate" => nil } }
   end
 
@@ -74,7 +74,7 @@ class AppStoreBillingTest < ReleaseAssertions
     assert @calls.all? { |method, target| %i[post delete].include?(method) && target.start_with?("subscriptionIntroductoryOffers") }
     @calls.select { |method,| method == :post }.each do |_, _, body|
       data = body.fetch(:data)
-      assert_equal "THREE_DAYS", data[:attributes][:duration]
+      assert_equal "ONE_WEEK", data[:attributes][:duration]
       assert_equal "FREE_TRIAL", data[:attributes][:offerMode]
       assert_equal 1, data[:attributes][:numberOfPeriods]
       refute data[:relationships].key?(:subscriptionPricePoint)
@@ -116,11 +116,11 @@ class AppStoreBillingTest < ReleaseAssertions
   end
 
   def test_configured_scoped_or_historical_global_trial_is_idempotent
-    @report[:products].each { |product| product[:introductory_offers] << offer(duration: "THREE_DAYS", territory: nil) }
+    @report[:products].each { |product| product[:introductory_offers] << offer(duration: "ONE_WEEK", territory: nil) }
     apply
     assert_empty @calls
     @report[:products].each do |product|
-      product[:introductory_offers] = product[:availability][:territories].map { |country| offer(duration: "THREE_DAYS", territory: country, id: country) }
+      product[:introductory_offers] = product[:availability][:territories].map { |country| offer(duration: "ONE_WEEK", territory: country, id: country) }
     end
     apply
     assert_empty @calls
@@ -157,7 +157,7 @@ class AppStoreBillingTest < ReleaseAssertions
   def test_nonfree_promotion_is_rejected_and_duplicate_scoped_trials_retain_one
     @report[:products].first[:introductory_offers] << offer(mode: "PAY_UP_FRONT")
     assert_raises(RuntimeError) { plan }
-    @report[:products].first[:introductory_offers] = [offer(duration: "THREE_DAYS", id: "a"), offer(duration: "THREE_DAYS", id: "z")]
+    @report[:products].first[:introductory_offers] = [offer(duration: "ONE_WEEK", id: "a"), offer(duration: "ONE_WEEK", id: "z")]
     usa = plan.first[:territories].find { |item| item[:territory] == "USA" }
     assert_equal ["z"], usa[:remove_offer_ids]
     refute usa[:create]
@@ -166,14 +166,14 @@ class AppStoreBillingTest < ReleaseAssertions
     assert @report[:products].first[:introductory_offers].any? { |item| item[:id] == "a" }
   end
 
-  def test_monthly_rejection_restores_seven_day_offer_even_with_other_countries_present
-    @report[:products].first[:introductory_offers] = [offer, offer(duration: "THREE_DAYS", territory: "GBR", id: "existing-gbr")]
+  def test_monthly_rejection_restores_three_day_offer_even_with_other_countries_present
+    @report[:products].first[:introductory_offers] = [offer, offer(duration: "ONE_WEEK", territory: "GBR", id: "existing-gbr")]
     @fail_monthly = true
     assert_raises(RuntimeError) { apply }
     monthly = @report[:products].first[:introductory_offers]
     usa = monthly.select { |item| item[:territory] == "USA" }
     assert_equal 1, usa.length
-    assert_equal "ONE_WEEK", usa.first[:attributes]["duration"]
+    assert_equal "THREE_DAYS", usa.first[:attributes]["duration"]
     assert monthly.any? { |item| item[:id] == "existing-gbr" }
     refute plan.last[:create]
   end
@@ -195,7 +195,7 @@ class AppStoreBillingTest < ReleaseAssertions
     assert_raises(RuntimeError) { apply }
     usa = @report[:products].first[:introductory_offers].select { |item| item[:territory] == "USA" }
     assert_equal 1, usa.length
-    assert_equal "ONE_WEEK", usa.first[:attributes]["duration"]
+    assert_equal "THREE_DAYS", usa.first[:attributes]["duration"]
   end
 
   def test_changed_prices_abort_before_existing_monthly_offer_is_deleted
@@ -219,11 +219,13 @@ class AppStoreBillingTest < ReleaseAssertions
     assert_empty @calls
   end
 
-  def test_unexpected_global_or_annual_conflict_fails_without_deleting_existing_offer
+  def test_existing_annual_trial_is_replaced_and_unexpected_global_offer_is_rejected
     @report[:products].last[:introductory_offers] << offer
-    assert_raises(RuntimeError) { apply }
-    assert_empty @calls
+    apply
+    assert_complete_coverage
+    assert @calls.any? { |method,| method == :delete }
     @report[:products].last[:introductory_offers] = [offer(territory: nil)]
+    @calls.clear
     assert_raises(RuntimeError) { plan }
     assert_empty @calls
   end

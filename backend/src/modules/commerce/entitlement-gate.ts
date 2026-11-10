@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { PaywallError, AuthenticationError } from "../../lib/errors";
 import { invalidateCache, CacheKeys } from "../../config/redis";
 import { hasEffectiveProAccess } from "../../lib/entitlement-access";
+import { readAccessEntitlement } from "../../lib/account-trial";
 import {
   checkUsageLimit,
   readEffectivePlanLimits,
@@ -66,8 +67,8 @@ function buildTrialOfferPaywall(metric: UsageMetric) {
     metric,
     trigger_reason: metricTriggerReason(metric, "requires Pro"),
     blocking: true,
-    headline: "Try Pro Free for 3 Days",
-    subheadline: `Eligible subscribers can try ${metricNoun(metric)} and Pro features free for 3 days. Apple confirms trial eligibility before purchase.`,
+    headline: "Try Pro Free for 7 Days",
+    subheadline: `Eligible subscribers can try ${metricNoun(metric)} and Pro features free for 7 days. Apple confirms trial eligibility before purchase.`,
     primary_cta_title: "View Pro Plans",
     // No "Maybe Later" / dismiss path. The contractor has to either
     // start a trial, restore an existing purchase, or stay blocked on
@@ -156,10 +157,7 @@ export async function gateAIAction(
       throw new AuthenticationError("Account is unavailable");
     // A manual save must not depend on subscription state or spend AI capacity.
     if (opts.metric === "PROJECT_CREATED") return undefined;
-    const entitlement = await tx.userEntitlement.findUnique({
-      where: { userId: opts.userId },
-      include: { plan: true },
-    });
+    const entitlement = await readAccessEntitlement(opts.userId, opts.companyId, tx);
     if (!entitlement || entitlement.companyId !== opts.companyId) {
       throw new PaywallError(
         "AI features require an active subscription.",

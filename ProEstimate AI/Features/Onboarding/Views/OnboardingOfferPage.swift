@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Fourth onboarding screen — subscription trial offer. Shown as the last
 /// onboarding step so the user lands on a clear value exchange:
-/// "Try Pro Free for 3 Days" or continue with the free starter plan.
+/// "Try Pro Free for 7 Days" or continue with the free starter plan.
 ///
 /// Tapping "Start Free Trial" presents the full `PaywallHostView` via the
 /// flow's `onStartTrial` callback, where StoreKit handles the actual purchase.
@@ -74,7 +74,7 @@ struct OnboardingOfferPage: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(ColorTokens.onDarkPrimary)
 
-                Text("Explore Pro plans with a three-day trial for eligible Apple Accounts. You can also keep using your basic workspace for free.")
+                Text("Your account includes a 7-day Pro trial. No payment is required. Explore the plans or continue into your workspace.")
                     .font(TypographyTokens.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(ColorTokens.onDarkSecondary)
@@ -105,7 +105,7 @@ struct OnboardingOfferPage: View {
             )
 
             Button(action: onContinueFree) {
-                Text("Continue with Free Plan")
+                Text("Continue")
                     .font(TypographyTokens.subheadline)
                     .foregroundStyle(ColorTokens.onDarkSecondary)
                     .padding(.vertical, SpacingTokens.xs)

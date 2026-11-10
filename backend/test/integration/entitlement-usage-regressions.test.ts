@@ -8,7 +8,7 @@ import { getEffectiveEntitlement, getProducts, createPurchaseAttempt } from '../
 import { checkAndConsume } from '../../src/modules/usage/usage.service';
 import { create as createInvoice } from '../../src/modules/invoices/invoices.service';
 import { generateProposalPDF } from '../../src/modules/pdf/pdf.service';
-import { resetCommerceTables } from './helpers';
+import { completedAccountTrial, resetCommerceTables } from './helpers';
 
 beforeEach(async () => {
   await resetCommerceTables();
@@ -22,7 +22,7 @@ async function account(status: EntitlementStatus = 'PRO_ACTIVE') {
   } });
   const plan = await prisma.plan.findUniqueOrThrow({ where: { code: 'PRO_MONTHLY' } });
   const entitlement = await prisma.userEntitlement.create({ data: {
-    userId: user.id, companyId: company.id, planId: plan.id, status,
+    userId: user.id, companyId: company.id, planId: plan.id, ...completedAccountTrial(), status,
     endsAt: new Date(Date.now() + 86_400_000), renewalDate: new Date(Date.now() + 86_400_000),
   } });
   return { company, user, plan, entitlement };

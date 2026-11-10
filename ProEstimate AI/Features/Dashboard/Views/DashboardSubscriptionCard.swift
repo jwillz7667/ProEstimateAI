@@ -78,6 +78,9 @@ struct DashboardSubscriptionCard: View {
             return "Basic project tools stay free. View Pro plans for AI previews and estimates."
         case .trialActive:
             if let date = entitlementStore.snapshot?.trialEndsAt {
+                if entitlementStore.isAccountTrial {
+                    return "Included until \(date.formatted(date: .abbreviated, time: .omitted)). No automatic charge."
+                }
                 return "Trial ends \(date.formatted(date: .abbreviated, time: .omitted)). View plan details."
             }
             return "View your trial and plan details."

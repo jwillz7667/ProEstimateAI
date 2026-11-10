@@ -47,7 +47,20 @@ final class EntitlementStore {
 
     /// Whether the user currently has Pro-level access (trial, active, grace, canceled-active, or an explicit override).
     var hasProAccess: Bool {
-        snapshot?.subscriptionState.hasProAccess ?? false
+        if snapshot?.subscriptionState == .trialActive {
+            return (snapshot?.trialEndsAt ?? .distantPast) > Date()
+        }
+        return snapshot?.subscriptionState.hasProAccess ?? false
+    }
+
+    /// This complimentary trial never renews or charges an Apple account.
+    var isAccountTrial: Bool {
+        snapshot?.source == "ACCOUNT_TRIAL" && isTrial && hasProAccess
+    }
+
+    /// Complimentary access must never count as a delivered StoreKit purchase.
+    var hasSubscriptionAccess: Bool {
+        hasProAccess && !isAccountTrial
     }
 
     /// Whether the user is in an active free trial.

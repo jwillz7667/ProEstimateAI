@@ -182,8 +182,8 @@ platform :ios do
     UI.message("BILLING_SUMMARY=#{JSON.generate(AppStoreBilling.summary(report: AppStoreBilling.inspect(app_id: app.id, api: api)))}")
   end
 
-  desc "Configure three-day Apple introductory trials on both approved Pro plans"
-  lane :billing_trial3 do
+  desc "Configure seven-day Apple introductory trials on both approved Pro plans"
+  lane :billing_trial7 do
     setup_spaceship_token
     app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
     UI.user_error!("App #{BUNDLE_ID} not found in App Store Connect") unless app
@@ -193,13 +193,13 @@ platform :ios do
     report = AppStoreBilling.inspect(app_id: app.id, api: api)
     plan = AppStoreBilling.trial_plan(report: report, today: Time.now.utc.strftime("%Y-%m-%d"))
     UI.message("TRIAL_PLAN=#{JSON.generate(plan)}")
-    if ENV["APPLY_THREE_DAY_TRIAL"] == "true"
+    if ENV["APPLY_SEVEN_DAY_TRIAL"] == "true"
       AppStoreBilling.apply_trial(plan: plan, report: report, api: api)
       after = AppStoreBilling.inspect(app_id: app.id, api: api)
       remaining = AppStoreBilling.trial_plan(report: after, today: Time.now.utc.strftime("%Y-%m-%d"))
-      UI.user_error!("Three-day trial readback does not match the requested configuration") unless remaining.all? { |item| !item[:create] && item[:remove_offer_ids].empty? }
+      UI.user_error!("Seven-day trial readback does not match the requested configuration") unless remaining.all? { |item| !item[:create] && item[:remove_offer_ids].empty? }
       UI.message("BILLING_SUMMARY=#{JSON.generate(AppStoreBilling.summary(report: after))}")
-      UI.success("Three-day trials verified for both Pro subscriptions")
+      UI.success("Seven-day trials verified for both Pro subscriptions")
     end
   end
 

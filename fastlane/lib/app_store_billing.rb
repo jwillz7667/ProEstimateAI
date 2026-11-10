@@ -82,7 +82,7 @@ module AppStoreBilling
       raise "Availability must contain unique territories including USA" unless territories.uniq == territories && territories.include?("USA")
       current = current_offers(product, today)
       globals = current.select { |offer| offer[:territory].nil? }
-      # Retain an existing global three-day offer if Apple ever returns one,
+      # Retain an existing global seven-day offer if Apple ever returns one,
       # but never create one: the live API requires an explicit territory.
       raise "Unexpected global offer; inspect before changing" unless globals.length <= 1 && globals.all? { |offer| exact_trial?(offer, today) }
       operations = territories.sort.map do |territory|
@@ -100,7 +100,7 @@ module AppStoreBilling
         subscription_id: product[:id], product_id: product[:attributes]["productId"],
         remove_offer_ids: operations.flat_map { |operation| operation[:remove_offer_ids] }.uniq.sort,
         create: operations.any? { |operation| operation[:create] }, start_date: today,
-        offer_mode: "FREE_TRIAL", duration: "THREE_DAYS", number_of_periods: 1,
+        offer_mode: "FREE_TRIAL", duration: "ONE_WEEK", number_of_periods: 1,
         scope: "all_available_territories", territory_count: territories.length,
         territories: operations
       }
@@ -120,7 +120,7 @@ module AppStoreBilling
         {
           id: product[:id], product_id: product[:attributes]["productId"], state: product[:attributes]["state"],
           group_id: product[:group_id], available_countries: territories.length,
-          three_day_countries: territories.length - missing.length, missing_countries: missing,
+          seven_day_countries: territories.length - missing.length, missing_countries: missing,
           offer_count: product[:introductory_offers].length,
           base_price_count: product.fetch(:prices, []).length,
           us_prices: product[:us_prices].map { |price| price[:price_point] && price[:price_point]["customerPrice"] }
@@ -131,7 +131,7 @@ module AppStoreBilling
 
   def self.exact_trial?(offer, today)
     attributes = offer.fetch(:attributes)
-    attributes["duration"] == "THREE_DAYS" && attributes["offerMode"] == "FREE_TRIAL" &&
+    attributes["duration"] == "ONE_WEEK" && attributes["offerMode"] == "FREE_TRIAL" &&
       attributes["numberOfPeriods"] == 1 && attributes["endDate"].nil? &&
       (attributes["startDate"].nil? || attributes["startDate"] <= today)
   end
@@ -160,21 +160,18 @@ module AppStoreBilling
       fresh
     end
 
-    # The annual USA request proves the exact territory-scoped payload and
-    # permissions before any existing monthly offer can be removed.
+    # Verify annual USA first, then read it back before changing other offers.
+    # The per-country compensating restore preserves the prior free offer on failure.
     %w[proestimate.pro.annual proestimate.pro.monthly].each do |product_id|
       item = plan.find { |entry| entry[:product_id] == product_id }
       expected = trial_plan(report: current_report, today: today).find { |entry| entry[:product_id] == product_id }
       raise "Apple introductory offers changed after inspection" unless expected == item
       usa = item.fetch(:territories).find { |operation| operation[:territory] == "USA" }
-      if product_id.end_with?("annual") && !usa[:remove_offer_ids].empty?
-        raise "Annual USA verification must not remove an existing offer"
-      end
       previous = current_report.fetch(:products).find { |product| product[:id] == item[:subscription_id] }
       apply_territory(item: item, operation: usa, previous: previous, today: today, api: api, refresh: checked_refresh)
       current_report = checked_refresh.call
       observed = current_report.fetch(:products).find { |product| product[:id] == item[:subscription_id] }
-      raise "Apple has not confirmed the USA three-day trial" unless territory_configured?(observed, "USA", today)
+      raise "Apple has not confirmed the USA seven-day trial" unless territory_configured?(observed, "USA", today)
 
       # Continue only missing/conflicting countries. Successful country rows
       # survive a partial failure and are retained by the next inspected plan.
@@ -184,7 +181,7 @@ module AppStoreBilling
       end
       current_report = checked_refresh.call
       checked = trial_plan(report: current_report, today: today).find { |entry| entry[:product_id] == product_id }
-      raise "Apple has not confirmed the requested three-day coverage" if checked[:create] || !checked[:remove_offer_ids].empty?
+      raise "Apple has not confirmed the requested seven-day coverage" if checked[:create] || !checked[:remove_offer_ids].empty?
     end
     current_report
   end
@@ -209,7 +206,7 @@ module AppStoreBilling
       operation.fetch(:remove_offer_ids).each { |id| api.call(:delete, "subscriptionIntroductoryOffers/#{id}") }
       if operation.fetch(:create)
         create_offer(subscription_id: item[:subscription_id], territory: territory,
-                     attributes: { duration: "THREE_DAYS", offerMode: "FREE_TRIAL", numberOfPeriods: 1 }, api: api)
+                     attributes: { duration: "ONE_WEEK", offerMode: "FREE_TRIAL", numberOfPeriods: 1 }, api: api)
       end
     rescue StandardError => original_error
       # A timed-out POST may already have succeeded: never blindly create a

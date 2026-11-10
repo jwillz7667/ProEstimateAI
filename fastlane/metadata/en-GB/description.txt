@@ -21,12 +21,12 @@ Use ProEstimate for kitchens, bathrooms, flooring, painting, roofing, landscapin
 AI previews and cost suggestions give you a starting point. Review the design, measurements, quantities and local pricing before sharing an estimate.
 
 BASIC TOOLS STAY FREE
-Create an account to organize projects, view your saved work and build estimates manually. AI previews, AI-generated estimates and suggestions require an active Pro subscription or eligible Apple trial.
+Create an account to organize projects, view your saved work and build estimates manually. Every account includes a one-time seven-day Pro trial with no payment required. After the trial, AI previews, AI-generated estimates and suggestions require an active Pro subscription. The login offer can be skipped; basic tools stay free.
 
 PRO MONTHLY OR ANNUAL
 Pro adds AI-generated estimates, invoicing, custom branding, watermark-free PDF quotes, client approval links and material links in exports.
 
-Pro includes up to 20 AI previews, 20 AI-generated estimates and 50 quote exports per rolling 30-day period. Daily and weekly limits also apply. Eligible new subscribers can start a three-day free trial on Pro monthly or annual. Apple determines eligibility, with one introductory offer per subscription group. Your local App Store price and offer terms are shown before purchase.
+Pro includes up to 20 AI previews, 20 AI-generated estimates and 50 quote exports per rolling 30-day period. Daily and weekly limits also apply. Eligible new subscribers can start a seven-day free trial on Pro monthly or annual. Apple determines eligibility, with one introductory offer per subscription group. Your local App Store price and offer terms are shown before purchase.
 
 Payment is charged to your Apple Account at confirmation. Subscriptions renew automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel in your Apple Account subscription settings.
 

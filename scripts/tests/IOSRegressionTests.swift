@@ -28,6 +28,7 @@ struct IOSRegressionTests {
         try await paymentRecovery()
         try await pagination()
         try commerceContracts()
+        try loginTrialOffer()
         try await transactionDelivery()
         try await paidUsageLimits()
         try await paidFeatureBoundaries()
@@ -160,11 +161,11 @@ struct IOSRegressionTests {
         try expect(unknown == .freeStarter, "An unknown plan must not be represented as a paid plan")
         let metrics = try JSONDecoder().decode([UsageMetricCode].self, from: Data(#"["AI_GENERATION","QUOTE_EXPORT","PROJECT_CREATED","ESTIMATE_GENERATED"]"#.utf8))
         try expect(metrics.count == 4, "All metrics in the canonical backend snapshot must decode")
-        try expect(StoreProductModel.sampleMonthly.purchaseButtonTitle(fallback: "Start Free Trial") == "Start 3-day free trial", "Eligible monthly buyers must see the actual selected offer duration")
-        try expect(StoreProductModel.sampleAnnual.purchaseButtonTitle(fallback: "Start Free Trial") == "Start 3-day free trial", "Eligible annual buyers must see their selected three-day offer")
+        try expect(StoreProductModel.sampleMonthly.purchaseButtonTitle(fallback: "Start Free Trial") == "Start 7-day free trial", "Eligible monthly buyers must see the actual selected offer duration")
+        try expect(StoreProductModel.sampleAnnual.purchaseButtonTitle(fallback: "Start Free Trial") == "Start 7-day free trial", "Eligible annual buyers must see their selected seven-day offer")
         let returningAnnual = StoreProductModel(productId: AppConstants.proAnnualProductID, planCode: .proAnnual,
             displayName: "Pro Annual", description: "Annual", priceDisplay: "$149.99", billingPeriodLabel: "per year",
-            hasIntroOffer: true, introOfferDisplayText: "3-day free trial", isEligibleForIntroOffer: false,
+            hasIntroOffer: true, introOfferDisplayText: "7-day free trial", isEligibleForIntroOffer: false,
             isFeatured: false, savingsText: nil)
         try expect(returningAnnual.purchaseButtonTitle(fallback: "Start 7-Day Free Trial") == "Subscribe Now", "Returning subscribers must never see a reused trial offer")
         try expect(StoreProductModel.canonicalFallback(tier: .pro, isAnnual: false).purchaseButtonTitle(fallback: "Start Free Trial") == "Subscribe Now", "Unknown eligibility must not promise a trial")
@@ -186,6 +187,63 @@ struct IOSRegressionTests {
                 try expect(presenter.activeLimitNotice != nil && presenter.activeDecision == nil, "Paid usage limits must show a notice instead of disappearing or offering a second subscription")
             }
         }
+    }
+
+    static func loginTrialOffer() throws {
+        let session = UUID()
+        let presenter = PaywallPresenter()
+        let store = EntitlementStore()
+        presenter.configure(entitlementStore: store)
+        presenter.presentLoginOffer(sessionID: session)
+        try expect(presenter.activeDecision == nil, "Login offers must wait for authoritative access")
+
+        var trial = EntitlementSnapshot(subscriptionState: .trialActive, currentPlanCode: .proMonthly,
+            featureFlags: EntitlementSnapshot.samplePro.featureFlags, usage: [], renewalDate: nil,
+            trialEndsAt: Date().addingTimeInterval(7 * 86_400), gracePeriodEndsAt: nil,
+            isAutoRenewEnabled: false, billingWarning: nil)
+        trial.source = "ACCOUNT_TRIAL"
+        let trialStore = EntitlementStore.preview(snapshot: trial)
+        presenter.configure(entitlementStore: trialStore)
+        presenter.presentLoginOffer(sessionID: session)
+        try expect(trialStore.hasProAccess && trialStore.isAccountTrial, "Complimentary trial must unlock Pro independently of Apple eligibility")
+        try expect(!trialStore.hasSubscriptionAccess, "A complimentary trial must not falsely complete a purchase or restore")
+        try expect(trial.trialDaysRemaining == 7, "A new seven-day trial must display all seven days")
+        let offer = presenter.activeDecision
+        try expect(offer?.placement == .loginOffer && offer?.blocking == false, "Login offer must be a soft gate")
+        try expect(offer?.showContinueFree == true && offer?.secondaryCtaTitle == "Continue to my trial", "Trial users must have an explicit bypass")
+        try expect(offer?.subheadline.contains("won't renew automatically") == true, "Complimentary access must not imply automatic Apple billing")
+        presenter.dismiss()
+        try expect(trialStore.hasProAccess, "Bypassing the offer must preserve remaining trial access")
+        presenter.presentLoginOffer(sessionID: session)
+        try expect(presenter.activeDecision == nil, "Refreshes and foregrounding must not reopen a dismissed login offer")
+        presenter.presentLoginOffer(sessionID: UUID())
+        try expect(presenter.activeDecision != nil, "A subsequent login may show a fresh dismissible offer")
+        presenter.reset()
+        try expect(presenter.activeDecision == nil && presenter.activeLimitNotice == nil, "Sign-out must clear presentation state")
+        presenter.present(.settingsUpgrade)
+        try expect(presenter.activeDecision != nil, "Account-trial users must be able to choose a subscription in Settings")
+        presenter.reset()
+        presenter.configure(entitlementStore: .preview(snapshot: .samplePro))
+        try expect(EntitlementStore.preview(snapshot: .samplePro).hasSubscriptionAccess, "A paid entitlement must still confirm subscription delivery")
+        presenter.presentLoginOffer(sessionID: UUID())
+        try expect(presenter.activeDecision == nil, "Paid subscribers must not receive a login sales screen")
+        trial.source = "APP_STORE"
+        presenter.configure(entitlementStore: .preview(snapshot: trial))
+        presenter.presentLoginOffer(sessionID: UUID())
+        try expect(presenter.activeDecision == nil, "An existing Apple subscription trial must not be sold again")
+        presenter.configure(entitlementStore: .preview(snapshot: .sampleFree))
+        presenter.presentLoginOffer(sessionID: UUID())
+        try expect(presenter.activeDecision?.secondaryCtaTitle == "Continue with Free Plan", "Lapsed and free users must retain basic access")
+        let encoded = try JSONEncoder().encode(trial)
+        let decoded = try JSONDecoder().decode(EntitlementSnapshot.self, from: encoded)
+        try expect(decoded.source == "APP_STORE", "Entitlement source must survive server decoding")
+        let old = try JSONDecoder().decode(EntitlementSnapshot.self, from: Data(#"{"subscription_state":"FREE","current_plan_code":"FREE_STARTER","feature_flags":{},"usage":[]}"#.utf8))
+        try expect(old.source == nil, "Old servers without a source must remain compatible")
+        var expired = EntitlementSnapshot(subscriptionState: .trialActive, currentPlanCode: .proMonthly,
+            featureFlags: trial.featureFlags, usage: [], renewalDate: nil, trialEndsAt: .distantPast,
+            gracePeriodEndsAt: nil, isAutoRenewEnabled: false, billingWarning: nil)
+        expired.source = "ACCOUNT_TRIAL"
+        try expect(!EntitlementStore.preview(snapshot: expired).hasProAccess && !expired.hasFeature(.canGeneratePreview), "Expired trial snapshots must stop authorizing Pro locally")
     }
 
     static func transactionDelivery() async throws {
@@ -307,7 +365,7 @@ struct IOSRegressionTests {
         for state in [SubscriptionState.trialActive, .proActive, .canceledActive, .gracePeriod, .adminOverride] {
             let snapshot = EntitlementSnapshot(subscriptionState: state, currentPlanCode: .proMonthly,
                 featureFlags: EntitlementSnapshot.samplePro.featureFlags, usage: [], renewalDate: nil,
-                trialEndsAt: nil, gracePeriodEndsAt: nil, isAutoRenewEnabled: true, billingWarning: nil)
+                trialEndsAt: state == .trialActive ? Date().addingTimeInterval(86_400) : nil, gracePeriodEndsAt: nil, isAutoRenewEnabled: true, billingWarning: nil)
             let gate = FeatureGateCoordinator.preview(entitlementStore: .preview(snapshot: snapshot))
             try expect(gate.guardGeneratePreview().isAllowed && gate.guardCreateProject().isAllowed,
                        "Effective paid/trial state \(state) must retain AI and manual access")

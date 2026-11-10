@@ -8,7 +8,7 @@ import { prisma } from '../../src/config/database';
 import { bootstrapCatalog } from '../../src/lib/catalog-bootstrap';
 import { signAccessToken } from '../../src/lib/jwt';
 import { gateAIAction } from '../../src/modules/commerce/entitlement-gate';
-import { resetCommerceTables } from './helpers';
+import { completedAccountTrial, resetCommerceTables } from './helpers';
 
 let server: Server;
 let origin: string;
@@ -40,7 +40,7 @@ async function account(status: 'FREE' | 'PRO_ACTIVE' | 'EXPIRED') {
   const company = await prisma.company.create({ data: { name: 'PDF access audit' } });
   const user = await prisma.user.create({ data: { companyId: company.id, email: `${randomUUID()}@example.test`, fullName: 'PDF access' } });
   const plan = await prisma.plan.findUniqueOrThrow({ where: { code: status === 'FREE' ? 'FREE_STARTER' : 'PRO_MONTHLY' } });
-  await prisma.userEntitlement.create({ data: { userId: user.id, companyId: company.id, planId: plan.id, status, endsAt: new Date(Date.now() + (status === 'EXPIRED' ? -1 : 86_400_000)) } });
+  await prisma.userEntitlement.create({ data: { userId: user.id, companyId: company.id, planId: plan.id, status, ...completedAccountTrial(), endsAt: new Date(Date.now() + (status === 'EXPIRED' ? -1 : 86_400_000)) } });
   const project = await prisma.project.create({ data: { companyId: company.id, title: 'Owned PDF project' } });
   const estimate = await prisma.estimate.create({ data: { companyId: company.id, projectId: project.id, estimateNumber: 'EST-PDF' } });
   const token = signAccessToken({ userId: user.id, companyId: company.id });

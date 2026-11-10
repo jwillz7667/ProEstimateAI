@@ -3,6 +3,7 @@ import { z } from "zod";
 import { env } from "../../config/env";
 import { AuthorizationError, NotFoundError } from "../../lib/errors";
 import { hasEffectiveProAccess } from "../../lib/entitlement-access";
+import { readAccessEntitlement } from "../../lib/account-trial";
 import { readProposalSnapshot } from "../proposals/proposal-document-snapshot";
 import { lockProposalRecipient, proposalRecipientMatches } from "../proposals/proposal-recipient";
 import { lockChangeOrderProposal } from "../change-orders/change-order-proposal";
@@ -22,12 +23,13 @@ export async function assertFollowUpManager(tx: Prisma.TransactionClient, compan
 
 export async function assertFollowUpAccess(tx: Prisma.TransactionClient, companyId: string, userId: string | null, manager = false) {
   const user = userId ? await tx.user.findFirst({
-    where: { id: userId, companyId, isActive: true }, include: { entitlement: { include: { plan: true } } },
+    where: { id: userId, companyId, isActive: true },
   }) : null;
-  if (!user || !user.entitlement || user.entitlement.companyId !== companyId || !hasEffectiveProAccess(user.entitlement)) throw new AuthorizationError("An active Pro account is required to send follow-ups.");
+  const entitlement = user ? await readAccessEntitlement(user.id, companyId, tx) : null;
+  if (!user || !entitlement || !hasEffectiveProAccess(entitlement)) throw new AuthorizationError("An active Pro account is required to send follow-ups.");
   if (user.role === "VIEWER") throw new AuthorizationError("View-only accounts cannot send follow-ups.");
   if (manager && !["OWNER", "ADMIN"].includes(user.role)) throw new AuthorizationError("Only an owner or administrator can change automatic reminders.");
-  const features = user.entitlement.plan.featuresJson as Record<string, unknown>;
+  const features = entitlement.plan.featuresJson as Record<string, unknown>;
   if (features.CAN_SHARE_APPROVAL_LINK !== true && features.CAN_CREATE_INVOICE !== true) throw new AuthorizationError("Follow-ups are not available for this plan.");
 }
 

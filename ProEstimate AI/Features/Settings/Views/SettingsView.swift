@@ -339,7 +339,7 @@ struct SettingsView: View {
 
                     Spacer()
 
-                    if !entitlementStore.hasProAccess {
+                    if !entitlementStore.hasProAccess || entitlementStore.isAccountTrial {
                         Button("Upgrade") {
                             paywallPresenter.present(.settingsUpgrade)
                         }

@@ -11,7 +11,6 @@ import SwiftUI
 /// or after the trial paywall closes.
 struct OnboardingFlowView: View {
     @State private var viewModel = OnboardingViewModel()
-    @State private var trialPaywall: PaywallDecision?
     let onComplete: () -> Void
 
     var body: some View {
@@ -62,15 +61,6 @@ struct OnboardingFlowView: View {
         }
         .preferredColorScheme(.dark)
         .statusBarHidden(false)
-        .sheet(item: $trialPaywall) { decision in
-            // Reuse the production paywall — full StoreKit flow, 3.1.2 disclosures,
-            // and restore-purchases support. On success or dismiss we complete
-            // onboarding either way so the user lands in the app.
-            PaywallHostView(decision: decision) {
-                trialPaywall = nil
-                complete()
-            }
-        }
     }
 
     // MARK: - Actions
@@ -86,7 +76,8 @@ struct OnboardingFlowView: View {
     }
 
     private func presentTrial() {
-        trialPaywall = .onboardingOffer
+        // Completing onboarding lets the central login offer appear once.
+        complete()
     }
 
     // MARK: - Background
