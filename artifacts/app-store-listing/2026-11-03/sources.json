@@ -1,0 +1,114 @@
+{
+  "generatedAt": "2026-11-03T09:43:02.640Z",
+  "simulatorOpened": false,
+  "freshRuntimeCapture": false,
+  "screenshotPalette": "ColorTokens.primaryOrange #FF9230; ColorTokens.brandDark #1C1C1E; ColorTokens.overlayBackground #0B0B0C",
+  "panels": [
+    {
+      "slug": "01-photo-to-preview",
+      "title": [
+        "See the vision.",
+        "Before you build."
+      ],
+      "detail": [
+        "Explore a remodel from a job-site photo.",
+        "Compare the original with your AI preview."
+      ],
+      "subject": "AI remodel comparison",
+      "provenance": "Actual isolated-QA source and completed app generation, composed with an illustrative comparison control and device frame."
+    },
+    {
+      "slug": "02-project-command-center",
+      "title": [
+        "Every job.",
+        "One clear view."
+      ],
+      "detail": [
+        "Projects, clients and next steps",
+        "come together in one place."
+      ],
+      "subject": "Project-first Home",
+      "provenance": "Code-derived illustration of the redesigned Home hierarchy with fictional sample data. Not a simulator/device capture."
+    },
+    {
+      "slug": "03-estimates-to-invoices",
+      "title": [
+        "Clear quotes.",
+        "Confident next steps."
+      ],
+      "detail": [
+        "Build estimates, share proposals",
+        "and track invoices."
+      ],
+      "subject": "Proposals and invoices",
+      "provenance": "Previously selected generated iPhone marketing device art; iPad uses a code-native proposal illustration. Example data, not newly captured UI."
+    },
+    {
+      "slug": "04-price-the-work",
+      "title": [
+        "Price the work.",
+        "Your way."
+      ],
+      "detail": [
+        "Review materials, labor and quantities.",
+        "Adjust the numbers before you share."
+      ],
+      "subject": "Estimate materials and labor",
+      "provenance": "iPhone uses an actual historic materials-list capture crop. iPad is a code-native estimate illustration with fictional sample values, not a fresh runtime capture."
+    },
+    {
+      "slug": "05-projects-in-order",
+      "title": [
+        "Every project.",
+        "Details in order."
+      ],
+      "detail": [
+        "Keep scope, photos and client details",
+        "together as the job moves forward."
+      ],
+      "subject": "Projects and scope",
+      "provenance": "Existing actual project-list / project-detail capture crops. Historic navigation bars and the QA-only description are excluded by cropping. iPad metadata/photo composition and device framing are illustrative."
+    }
+  ],
+  "sourceFiles": [
+    {
+      "file": "operations/validation-2026-10-30/comparison-source.jpg",
+      "sha256": "9517048e09d4c5bbec0fc00fcd4e7372957efe19c6b2620e8718e4ffb1560d04"
+    },
+    {
+      "file": "operations/validation-2026-10-30/comparison-complete-photo.png",
+      "sha256": "12a81013fd82854145ce7783d715728036b207b19877b5e8cf0a8b18865fc9df"
+    },
+    {
+      "file": "web/public/screenshots/projects.jpg",
+      "sha256": "1084c0b5c9fa185f0225ac144d6936267fe52d614a4053270135ff3b3c72210c"
+    },
+    {
+      "file": "web/public/screenshots/materials.jpg",
+      "sha256": "f19ba2851ff8fb3bf2726d752b8fe33318b2dc7e5d645e0f663463b9cb1e40da"
+    },
+    {
+      "file": "artifacts/app-store-listing/2026-10-30/assets/03-ipad-project.png",
+      "sha256": "3a21b866fff10e1b5c53c47d411ed63285868e118229f34317d6da936b3d9db8"
+    },
+    {
+      "file": "artifacts/app-store-listing/2026-10-30/assets/03-estimate-device.png",
+      "sha256": "1080eff7815cafbfad375f3eebd8dd3f8acda25239cbed2c3286519ea625e375"
+    },
+    {
+      "file": "ProEstimate AI/Assets.xcassets/CategoryThumbs/02_luxury_bathroom.imageset/02_luxury_bathroom.jpg",
+      "sha256": "3c6e7cc91bc6db6fd1cf602f3f43b37bf591872279931bb97433e1c6b5a08f29"
+    },
+    {
+      "file": "ProEstimate AI/Assets.xcassets/CategoryThumbs/36_outdoor_patio.imageset/36_outdoor_patio.jpg",
+      "sha256": "480b743e3703cee722cea2fa1c301a8653d0efe1e864567ae5781737209d1eb0"
+    }
+  ],
+  "home": {
+    "representation": "SVG illustration derived from the new Home hierarchy, not a runtime screenshot",
+    "values": "Fictional sample account/projects; DashboardSummary.sample totals: $24,750 revenue, 7 active projects, 2 invoices due",
+    "implementationSource": "Home hierarchy from 9bbcad4; estimate flow from bdb4531",
+    "verification": "Compare final implemented Home against this illustration before representing it as a pixel-accurate capture"
+  },
+  "export": "Deterministic SVG/Sharp layout composition. No provider API calls or Apple writes."
+}

@@ -200,7 +200,7 @@ describe("commerce service — integration", () => {
       expect(refreshedAttempt.transactionId).toBe(txn.transactionId);
     });
 
-    it("starts a 7-day trial when the product has an intro offer", async () => {
+    it("starts a trial only when Apple's signed transaction includes the free-trial offer", async () => {
       const { user, company } = await createUserWithFreeEntitlement({ freePlanId });
 
       const monthlyProduct = await prisma.subscriptionProduct.findFirstOrThrow({
@@ -219,6 +219,9 @@ describe("commerce service — integration", () => {
       const txn = buildAppleTransactionInfo({
         productId: STORE_PRODUCT_IDS.proMonthly,
         appAccountToken: attempt.appAccountToken,
+        offerType: 1,
+        offerDiscountType: "FREE_TRIAL",
+        expiresDate: Date.now() + 7 * 24 * 60 * 60 * 1000,
       });
       verifyJWSMock.mockResolvedValueOnce(txn);
 
@@ -334,7 +337,7 @@ describe("commerce service — integration", () => {
       expect(originalEntitlement.status).toBe("PRO_ACTIVE");
     });
 
-    it("releases the originalTransactionId from a terminal prior owner before claiming", async () => {
+    it("preserves a terminal prior owner instead of reassigning the original transaction", async () => {
       const previous = await createUserWithFreeEntitlement({ freePlanId });
       const newOwner = await createUserWithFreeEntitlement({
         freePlanId,
@@ -343,8 +346,7 @@ describe("commerce service — integration", () => {
 
       const sharedOriginalTxnId = `otxn_${randomUUID()}`;
 
-      // Previous owner is EXPIRED, so the originalTransactionId is up
-      // for grabs but the row still has a stale FK on it.
+      // Expiration ends service but must not transfer purchase ownership.
       await prisma.userEntitlement.update({
         where: { userId: previous.user.id },
         data: {
@@ -374,7 +376,7 @@ describe("commerce service — integration", () => {
       });
       verifyJWSMock.mockResolvedValueOnce(txn);
 
-      await syncTransaction(newOwner.user.id, newOwner.company.id, {
+      await expect(syncTransaction(newOwner.user.id, newOwner.company.id, {
         purchase_attempt_id: attempt.id,
         store_product_id: STORE_PRODUCT_IDS.proMonthly,
         transaction_id: txn.transactionId,
@@ -382,18 +384,18 @@ describe("commerce service — integration", () => {
         app_account_token: attempt.appAccountToken,
         environment: "Sandbox",
         signed_transaction: "stub-jws",
-      });
+      })).rejects.toMatchObject({ code: "SUBSCRIPTION_BOUND_TO_OTHER_USER" });
 
       const previousEnt = await prisma.userEntitlement.findUniqueOrThrow({
         where: { userId: previous.user.id },
       });
-      expect(previousEnt.originalTransactionId).toBeNull();
+      expect(previousEnt.originalTransactionId).toBe(sharedOriginalTxnId);
 
       const newOwnerEnt = await prisma.userEntitlement.findUniqueOrThrow({
         where: { userId: newOwner.user.id },
       });
-      expect(newOwnerEnt.originalTransactionId).toBe(sharedOriginalTxnId);
-      expect(newOwnerEnt.status).toBe("TRIAL_ACTIVE");
+      expect(newOwnerEnt.originalTransactionId).toBeNull();
+      expect(newOwnerEnt.status).toBe("FREE");
     });
 
     it("is idempotent — calling sync twice on the same attempt returns the existing snapshot", async () => {
@@ -669,7 +671,7 @@ describe("commerce service — integration", () => {
       expect(refreshedAttempt.status).toBe("COMPLETED");
     });
 
-    it("does not bootstrap a non-SUBSCRIBED notification with no entitlement", async () => {
+    it("requests a retry instead of losing an unbound non-SUBSCRIBED notification", async () => {
       const { user, company } = await createUserWithFreeEntitlement({ freePlanId });
       const monthlyProduct = await prisma.subscriptionProduct.findFirstOrThrow({
         where: { storeProductId: STORE_PRODUCT_IDS.proMonthly },
@@ -694,10 +696,10 @@ describe("commerce service — integration", () => {
         transactionInfo: txn,
       });
 
-      await handleAppStoreWebhook(decoded);
+      await expect(handleAppStoreWebhook(decoded)).rejects.toMatchObject({ code: "NOT_FOUND" });
 
       // Entitlement should still be FREE — DID_RENEW without a prior
-      // bind warns and returns; bootstrap is SUBSCRIBED-only.
+      // bind remains retryable; bootstrap is SUBSCRIBED-only.
       const ent = await prisma.userEntitlement.findUniqueOrThrow({
         where: { userId: user.id },
       });
@@ -739,7 +741,7 @@ describe("commerce service — integration", () => {
       // Webhook flow: Apple lookup by originalTransactionId hits the
       // *original* owner's entitlement, so the entitlement-found branch
       // runs (not the bootstrap branch). Test that the original owner's
-      // state isn't disturbed and incoming user's attempt stays PENDING.
+      // state isn't disturbed and the mismatched signed token is rejected.
       const txn = buildAppleTransactionInfo({
         productId: STORE_PRODUCT_IDS.proMonthly,
         originalTransactionId: sharedOriginal,
@@ -750,7 +752,7 @@ describe("commerce service — integration", () => {
         transactionInfo: txn,
       });
 
-      await handleAppStoreWebhook(decoded);
+      await expect(handleAppStoreWebhook(decoded)).rejects.toMatchObject({ code: "ACCOUNT_MISMATCH" });
 
       const incomingEnt = await prisma.userEntitlement.findUniqueOrThrow({
         where: { userId: incoming.user.id },

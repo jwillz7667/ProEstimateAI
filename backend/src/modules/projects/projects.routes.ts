@@ -12,6 +12,8 @@ import assetNestedRoutes from '../assets/assets.nested.routes';
 import generationNestedRoutes from '../generations/generations.nested.routes';
 import activityNestedRoutes from '../activity/activity.nested.routes';
 import estimateExportsProjectNestedRoutes from '../estimate-exports/estimate-exports.project-nested.routes';
+import { projectChangeOrderRoutes } from '../change-orders/change-orders.routes';
+import { projectCostRoutes } from '../job-costs/job-costs.routes';
 
 const router = Router();
 
@@ -31,5 +33,7 @@ router.use('/:projectId/assets', assetNestedRoutes);
 router.use('/:projectId/generations', generationNestedRoutes);
 router.use('/:projectId/activity', activityNestedRoutes);
 router.use('/:projectId/estimate-exports', estimateExportsProjectNestedRoutes);
+router.use('/:projectId/costs', projectCostRoutes);
+router.use('/:projectId/change-orders', projectChangeOrderRoutes);
 
 export default router;

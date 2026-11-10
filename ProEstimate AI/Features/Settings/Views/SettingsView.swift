@@ -27,12 +27,16 @@ struct SettingsView: View {
                 switch destination {
                 case .companyBranding:
                     CompanyBrandingView(viewModel: viewModel)
+                        .disabled(appState.currentUser?.canEdit != true)
                 case .taxSettings:
                     TaxSettingsView(viewModel: viewModel)
+                        .disabled(appState.currentUser?.canEdit != true)
                 case .laborSettings:
                     LaborSettingsView(viewModel: viewModel)
+                        .disabled(appState.currentUser?.canEdit != true)
                 case .numberingSettings:
                     NumberingSettingsView(viewModel: viewModel)
+                        .disabled(appState.currentUser?.canEdit != true)
                 case .languageSettings:
                     LanguageSettingsView(viewModel: viewModel)
                 default:
@@ -76,7 +80,7 @@ struct SettingsView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This permanently deletes your account, company, and all related projects, estimates, and invoices. This cannot be undone. Any active subscription must be canceled separately in your Apple ID settings.")
+                Text("This permanently deletes your account. If you are the last member of your company, its projects, estimates, invoices, costs, and receipts are also deleted. Shared company records remain for other members. This cannot be undone. Cancel any active subscription separately in your Apple ID settings.")
             }
         }
     }
@@ -163,6 +167,18 @@ struct SettingsView: View {
 
             // Company Section
             Section("Company") {
+                if appState.currentUser?.isAdmin == true {
+                    NavigationLink {
+                        CustomerPaymentSettingsView()
+                    } label: {
+                        Label("Customer invoice payments", systemImage: "creditcard")
+                    }
+                }
+                NavigationLink {
+                    FollowUpSettingsView()
+                } label: {
+                    Label("Email reminders", systemImage: "bell.badge")
+                }
                 NavigationLink(value: AppDestination.companyBranding) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
@@ -294,6 +310,7 @@ struct SettingsView: View {
                         Text("Generate AI design previews")
                     }
                     .tint(ColorTokens.primaryOrange)
+                    .disabled(appState.currentUser?.canEdit != true)
                 } icon: {
                     Image(systemName: "wand.and.stars")
                         .foregroundStyle(ColorTokens.primaryOrange)
@@ -322,7 +339,7 @@ struct SettingsView: View {
 
                     Spacer()
 
-                    if !entitlementStore.hasProAccess {
+                    if !entitlementStore.hasProAccess || entitlementStore.isAccountTrial {
                         Button("Upgrade") {
                             paywallPresenter.present(.settingsUpgrade)
                         }

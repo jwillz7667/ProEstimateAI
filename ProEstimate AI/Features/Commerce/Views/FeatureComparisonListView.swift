@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Two-column comparison: Free vs Pro.
 ///
-/// Free is everything blocked. Pro carries the monthly caps (2 projects /
-/// 20 image gens / 20 estimates) and unlocks every Pro feature. Each row
+/// Manual projects are free. Pro includes finite AI preview and estimate
+/// allowances and unlocks client-facing document features. Each row
 /// pulls its values from a single `ComparisonFeature` so the table stays
 /// tidy and editing copy is a one-line change.
 struct FeatureComparisonListView: View {
@@ -134,10 +134,10 @@ struct FeatureComparisonListView: View {
     private var features: [ComparisonFeature] {
         [
             ComparisonFeature(
-                name: "Projects",
+                name: "Manual Projects",
                 icon: "folder",
-                freeValue: .cross,
-                proValue: .limited("2/mo")
+                freeValue: .check,
+                proValue: .check
             ),
             ComparisonFeature(
                 name: "AI Image Previews",

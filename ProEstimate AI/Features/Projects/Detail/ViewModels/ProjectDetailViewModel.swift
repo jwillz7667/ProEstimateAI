@@ -277,6 +277,8 @@ final class ProjectDetailViewModel {
 
     // MARK: - AI Generation
 
+    var generationPaywall: PaywallDecision?
+
     func startGeneration(prompt: String? = nil, materials: [MaterialSpec]? = nil) async {
         // Multiple taps can arrive before SwiftUI redraws the loading state.
         guard !isGenerating, let project else { return }
@@ -303,7 +305,7 @@ final class ProjectDetailViewModel {
                 materials: effectiveMaterials,
                 generatePreview: project.aiPreviewEnabled
             )
-            // Backend has consumed one starter credit inside the gate's
+            // The backend has reserved the paid allowance inside the gate's
             // transaction; mirror that locally so the next tap reflects
             // the new remaining count without waiting on entitlement
             // refresh.
@@ -323,6 +325,10 @@ final class ProjectDetailViewModel {
                 projectTitle: project.title
             )
             startObservingLifecycleIfNeeded()
+        } catch let APIError.paywall(decision) {
+            stopProgressSimulation()
+            isGenerating = false
+            generationPaywall = decision
         } catch is CancellationError {
             stopProgressSimulation()
             isGenerating = false
@@ -485,12 +491,12 @@ final class ProjectDetailViewModel {
             // Retain and refresh the confirmed creation for review.
             if let createdEstimate {
                 estimates.insert(createdEstimate, at: 0)
-                await loadEstimates(projectId: project.id)
             }
+            await loadEstimates(projectId: project.id)
             errorMessage = createdEstimate == nil
-                ? error.localizedDescription
+                ? "The estimate couldn't be confirmed. Check the saved estimates before creating another one. \(error.localizedDescription)"
                 : "The estimate was created, but the remaining steps couldn't finish. Review it before creating another estimate. \(error.localizedDescription)"
-            return nil
+            return createdEstimate
         }
     }
 

@@ -58,6 +58,11 @@ struct SignUpView: View {
                             .formField()
                             .textContentType(.name)
                             .textInputAutocapitalization(.words)
+                        if !viewModel.fullName.isEmpty && !AuthFormValidation.isValidFullName(viewModel.fullName) {
+                            Text("Use 2–100 characters for your full name.")
+                                .font(TypographyTokens.caption2)
+                                .foregroundStyle(ColorTokens.error)
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
@@ -88,10 +93,14 @@ struct SignUpView: View {
                             .formField()
                             .textContentType(.newPassword)
 
-                        if !viewModel.password.isEmpty && viewModel.password.count < 8 {
-                            Text("Password must be at least 8 characters")
+                        if !viewModel.password.isEmpty, let message = viewModel.passwordValidationMessage {
+                            Text(message)
                                 .font(TypographyTokens.caption2)
                                 .foregroundStyle(ColorTokens.error)
+                        } else if viewModel.password.isEmpty {
+                            Text("At least 8 characters, with uppercase, lowercase, and a number.")
+                                .font(TypographyTokens.caption2)
+                                .foregroundStyle(ColorTokens.secondaryText)
                         }
                     }
                 }

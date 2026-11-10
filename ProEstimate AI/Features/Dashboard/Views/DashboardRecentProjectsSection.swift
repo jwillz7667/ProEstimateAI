@@ -1,313 +1,175 @@
 import SwiftUI
 
-/// Horizontal, snap-paged carousel of recent projects. Each card is a
-/// large thumbnail (or fallback gradient) with an overlaid title + status
-/// pill. Tapping pushes onto the dashboard navigation stack.
+/// A small, readable preview of saved work. Titles and status stay outside
+/// photographs so every project remains legible while thumbnails load.
 struct DashboardRecentProjectsSection: View {
     let projects: [Project]
-    var thumbnails: [String: URL] = [:]
+    var isLoading = false
+    var hasLoaded = true
+    var errorMessage: String?
     var onSeeAll: (() -> Void)?
-    var onCreateProject: (() -> Void)?
-
-    /// Width fraction of each card relative to the scroll container.
-    /// Tuned so that after the leading content margin (16pt) and the
-    /// trailing inter-card gutter, ~20pt of the next card peeks into
-    /// the viewport on standard iPhone widths.
-    private let cardWidthFraction: CGFloat = 0.82
-    private let cardHeight: CGFloat = 220
-    /// Tight enough to read as a tile group (Apple-standard 16pt gutter)
-    /// while still wider than the card shadow's visible spread so the
-    /// blurs don't visibly merge. Shadow below is radius 6 / y 3 →
-    /// ~9pt spread per side, leaving ~7pt of clear gutter.
-    private let cardSpacing: CGFloat = 16
-    private let edgeMargin: CGFloat = 16
+    var onRetry: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingTokens.sm) {
-            SectionHeaderView(
-                title: "Recent Projects",
-                actionTitle: projects.isEmpty ? nil : "See All",
-                action: projects.isEmpty ? nil : onSeeAll
-            )
-            .padding(.horizontal, SpacingTokens.md)
-
-            if projects.isEmpty {
-                emptyCard
-                    .padding(.horizontal, SpacingTokens.md)
-            } else {
-                carousel
+            HStack(alignment: .firstTextBaseline) {
+                Text("Recent projects")
+                    .font(TypographyTokens.title3)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: SpacingTokens.xs)
+                Button("View all") { onSeeAll?() }
+                    .font(TypographyTokens.subheadline.weight(.semibold))
+                    .foregroundStyle(ColorTokens.primaryText)
+                    .frame(minHeight: 44)
+                    .accessibilityHint("Opens your full project list")
             }
-        }
-    }
 
-    // MARK: - Carousel
-
-    private var carousel: some View {
-        // `.contentMargins(.horizontal, _, for: .scrollContent)` is the
-        // canonical iOS 17+ pattern for snap-paged carousels: the
-        // leading/trailing inset is honored by `.viewAligned`, so the
-        // first card snaps with a clear left margin and the last card
-        // settles flush to the right margin. An equivalent
-        // `.padding(.horizontal, …)` on the inner LazyHStack does NOT
-        // get respected by the snap behavior — items snap to the scroll
-        // container's edge, leaving the first card flush to x=0.
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: cardSpacing) {
-                ForEach(projects.prefix(10)) { project in
-                    NavigationLink(value: AppDestination.projectDetail(id: project.id)) {
-                        projectCard(project)
-                    }
-                    .buttonStyle(.plain)
-                    .containerRelativeFrame(.horizontal) { length, _ in
-                        length * cardWidthFraction
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(accessibilityLabel(for: project))
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityHint("Opens project details")
-                }
+            if let errorMessage {
+                retryNotice(errorMessage)
             }
-            .scrollTargetLayout()
-        }
-        .scrollTargetBehavior(.viewAligned)
-        .contentMargins(.horizontal, edgeMargin, for: .scrollContent)
-        .scrollClipDisabled()
-    }
-
-    // MARK: - Card
-
-    private func projectCard(_ project: Project) -> some View {
-        ZStack(alignment: .bottomLeading) {
-            thumbnailLayer(for: project)
-
-            // Bottom-anchored gradient so light photos still keep the
-            // overlay text legible.
-            LinearGradient(
-                colors: [.black.opacity(0.0), .black.opacity(0.55), .black.opacity(0.78)],
-                startPoint: .center,
-                endPoint: .bottom
-            )
-
-            statusOverlay(for: project)
-            metaOverlay(for: project)
-        }
-        .frame(height: cardHeight)
-        .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: RadiusTokens.card)
-                .strokeBorder(.white.opacity(0.06), lineWidth: 1)
-        )
-        // Tighter shadow so adjacent cards' bleed doesn't visually merge.
-        .shadow(color: .black.opacity(0.16), radius: 6, x: 0, y: 3)
-    }
-
-    /// Top-right status pill, anchored via a VStack so the badge floats
-    /// to the card's top edge regardless of the surrounding ZStack
-    /// alignment (which is bottomLeading for the title block).
-    private func statusOverlay(for project: Project) -> some View {
-        VStack {
-            HStack {
-                Spacer()
-                statusBadge(for: project.status)
-            }
-            Spacer()
-        }
-        .padding(SpacingTokens.sm)
-    }
-
-    /// Bottom-anchored title + description + age stack. Extracted out of
-    /// `projectCard` so the parent view body stays light enough for the
-    /// SwiftUI type checker to resolve in reasonable time.
-    private func metaOverlay(for project: Project) -> some View {
-        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
-            Text(project.title)
-                .font(TypographyTokens.headline)
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-
-            Text(descriptionLine(for: project))
-                .font(TypographyTokens.caption)
-                .foregroundStyle(.white.opacity(0.92))
-                .lineLimit(1)
-                .truncationMode(.tail)
-
-            Text(project.createdAt.formatted(as: .relative))
-                .font(TypographyTokens.caption2)
-                .foregroundStyle(.white.opacity(0.7))
-        }
-        .padding(SpacingTokens.md)
-    }
-
-    // MARK: - Thumbnail
-
-    private func thumbnailLayer(for project: Project) -> some View {
-        // The thumbnail is rendered inside a `Color.clear` overlay host
-        // that owns the card's exact bounds. Two reasons this matters:
-        //   1. AsyncImage with `.aspectRatio(.fill)` resolves its layout
-        //      from the loaded image's intrinsic size; without an
-        //      anchored host, that size can briefly affect the parent
-        //      ZStack's geometry on first decode and bleed past the
-        //      card's rounded corners (which are visible because the
-        //      surrounding ScrollView uses `.scrollClipDisabled()`).
-        //   2. Applying `.clipShape(RoundedRectangle…)` directly to this
-        //      host hard-clips the image content to the card silhouette
-        //      — the outer ZStack's clip is still in place, but this
-        //      defensive inner clip prevents any rendering artifact
-        //      from spilling into a neighboring card.
-        Color.clear
-            .overlay {
-                if let url = resolvedThumbnailURL(for: project) {
-                    // Carousel cards render at ~82% of viewport width.
-                    // 480px is the backend's mid-bucket: high enough for
-                    // crisp Retina rendering on iPhone widths, small
-                    // enough that decode + transfer stays sub-150ms.
-                    AsyncImage(url: url.thumbnail(width: 480)) { phase in
-                        switch phase {
-                        case let .success(image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        case .failure:
-                            fallbackArt(for: project)
-                        default:
-                            placeholder(for: project)
+            if !projects.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(projects) { project in
+                        NavigationLink(value: AppDestination.projectDetail(id: project.id)) {
+                            DashboardProjectRow(project: project)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Continue working on this project")
+                        if project.id != projects.last?.id {
+                            Divider().padding(.leading, SpacingTokens.md)
                         }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    fallbackArt(for: project)
                 }
+                .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
+                .overlay {
+                    RoundedRectangle(cornerRadius: RadiusTokens.card)
+                        .strokeBorder(ColorTokens.border.opacity(0.35), lineWidth: 0.5)
+                }
+            } else if isLoading {
+                HStack(spacing: SpacingTokens.sm) {
+                    ProgressView()
+                    Text("Loading your projects…")
+                        .font(TypographyTokens.subheadline)
+                        .foregroundStyle(ColorTokens.secondaryText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(SpacingTokens.lg)
+                .accessibilityElement(children: .combine)
+            } else if hasLoaded, errorMessage == nil {
+                emptyState
             }
-            .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.card))
-    }
-
-    /// Resolve the thumbnail URL for a project, preferring the locally
-    /// hydrated `thumbnails` dictionary (which the dashboard VM keeps in
-    /// sync with the freshest available preview) but falling back to the
-    /// server-provided URL on the project DTO when the dictionary entry
-    /// hasn't landed yet (e.g. mid-refresh).
-    private func resolvedThumbnailURL(for project: Project) -> URL? {
-        thumbnails[project.id] ?? project.thumbnailURL
-    }
-
-    /// One-line caption that summarizes the project. Prefers the
-    /// contractor's own description when present so the carousel reads
-    /// like a curated portfolio; otherwise surfaces the project type so
-    /// every card carries some context instead of feeling empty.
-    private func descriptionLine(for project: Project) -> String {
-        if let description = project.description?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-            !description.isEmpty
-        {
-            return description
-        }
-        return project.projectType.displayName
-    }
-
-    private func placeholder(for project: Project) -> some View {
-        ZStack {
-            ColorTokens.primaryOrange.opacity(0.08)
-            Image(systemName: project.projectType.iconName)
-                .font(.system(size: 36, weight: .light))
-                .foregroundStyle(ColorTokens.primaryOrange.opacity(0.4))
         }
     }
 
-    private func fallbackArt(for project: Project) -> some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    ColorTokens.primaryOrange.opacity(0.85),
-                    ColorTokens.primaryOrange.opacity(0.55),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Image(systemName: project.projectType.iconName)
-                .font(.system(size: 56, weight: .regular))
-                .foregroundStyle(.white.opacity(0.9))
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.sm) {
+            Image(systemName: "folder")
+                .font(.title2)
+                .foregroundStyle(ColorTokens.secondaryText)
+                .accessibilityHidden(true)
+            Text("A place for every project")
+                .font(TypographyTokens.headline)
+            Text("Start with a name and the type of work. Add photos, build an estimate and keep client details together.")
+                .font(TypographyTokens.subheadline)
+                .foregroundStyle(ColorTokens.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(SpacingTokens.lg)
+        .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
+        .accessibilityElement(children: .combine)
     }
 
-    // MARK: - Empty State
+    private func retryNotice(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xs) {
+            Label(message, systemImage: "wifi.exclamationmark")
+                .font(TypographyTokens.subheadline)
+                .foregroundStyle(ColorTokens.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Try again") { onRetry?() }
+                .font(TypographyTokens.subheadline.weight(.semibold))
+                .foregroundStyle(ColorTokens.primaryText)
+                .frame(minHeight: 44)
+                .disabled(isLoading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(SpacingTokens.md)
+        .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
+    }
+}
 
-    private var emptyCard: some View {
-        Button {
-            onCreateProject?()
-        } label: {
-            VStack(spacing: SpacingTokens.sm) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 30, weight: .light))
-                    .foregroundStyle(ColorTokens.primaryOrange)
+private struct DashboardProjectRow: View {
+    let project: Project
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-                Text("Create your first project")
+    var body: some View {
+        HStack(alignment: .center, spacing: SpacingTokens.sm) {
+            if !dynamicTypeSize.isAccessibilitySize {
+                thumbnail
+            }
+            VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+                Text(project.title)
                     .font(TypographyTokens.headline)
                     .foregroundStyle(ColorTokens.primaryText)
-
-                Text("Upload photos, generate an AI remodel preview, and turn it into an estimate.")
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                Text(project.projectType.displayName)
+                    .font(TypographyTokens.subheadline)
+                    .foregroundStyle(ColorTokens.secondaryText)
+                Text(statusLabel)
+                    .font(TypographyTokens.caption.weight(.medium))
+                    .foregroundStyle(ColorTokens.primaryText)
+                Text(project.updatedAt, format: .dateTime.month(.abbreviated).day())
                     .font(TypographyTokens.caption)
                     .foregroundStyle(ColorTokens.secondaryText)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, SpacingTokens.lg)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, SpacingTokens.xl)
-            .glassCard()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(ColorTokens.secondaryText)
+                .accessibilityHidden(true)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Create your first project")
-        .accessibilityHint("Starts the new project flow")
+        .padding(SpacingTokens.md)
+        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(project.title), \(project.projectType.displayName), \(statusLabel), updated \(project.updatedAt.formatted(date: .abbreviated, time: .omitted))")
     }
 
-    // MARK: - Status Pill
-
-    private func statusBadge(for status: Project.Status) -> some View {
-        let (text, badgeColor): (String, Color) = {
-            switch status {
-            case .draft: ("Draft", ColorTokens.secondaryText)
-            case .photosUploaded: ("Photos", ColorTokens.primaryOrange)
-            case .generating: ("Generating", ColorTokens.warning)
-            case .generationComplete: ("Generated", ColorTokens.success)
-            case .estimateCreated: ("Estimated", ColorTokens.success)
-            case .proposalSent: ("Proposed", ColorTokens.accentBlue)
-            case .approved: ("Approved", ColorTokens.success)
-            case .declined: ("Declined", ColorTokens.error)
-            case .invoiced: ("Invoiced", ColorTokens.accentPurple)
-            case .completed: ("Complete", ColorTokens.success)
-            case .archived: ("Archived", ColorTokens.secondaryText)
+    private var thumbnail: some View {
+        ColorTokens.primaryOrange.opacity(0.1)
+            .overlay {
+                if let url = project.thumbnailURL {
+                    AsyncImage(url: url.thumbnail(width: 240)) { phase in
+                        if case let .success(image) = phase {
+                            image.resizable().scaledToFill()
+                        } else {
+                            placeholder
+                        }
+                    }
+                } else {
+                    placeholder
+                }
             }
-        }()
-
-        return Text(text)
-            .font(TypographyTokens.caption2)
-            .fontWeight(.semibold)
-            .padding(.horizontal, SpacingTokens.xs)
-            .padding(.vertical, 4)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(
-                Capsule().strokeBorder(badgeColor.opacity(0.55), lineWidth: 1)
-            )
-            .foregroundStyle(badgeColor)
+            .frame(width: 72, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: RadiusTokens.button))
+            .accessibilityHidden(true)
     }
 
-    // MARK: - Accessibility
-
-    private func accessibilityLabel(for project: Project) -> String {
-        let status = statusText(for: project.status)
-        let when = project.createdAt.formatted(as: .relative)
-        return "Project \(project.title), \(descriptionLine(for: project)), \(status), created \(when)"
+    private var placeholder: some View {
+        Image(systemName: project.projectType.iconName)
+            .font(.title2)
+            .foregroundStyle(ColorTokens.primaryText)
     }
 
-    private func statusText(for status: Project.Status) -> String {
-        switch status {
+    private var statusLabel: String {
+        switch project.status {
         case .draft: "Draft"
-        case .photosUploaded: "Photos uploaded"
-        case .generating: "Generating preview"
-        case .generationComplete: "Preview generated"
-        case .estimateCreated: "Estimate created"
-        case .proposalSent: "Proposal sent"
+        case .photosUploaded: "Photos added"
+        case .generating: "AI preview in progress"
+        case .generationComplete: "Preview ready"
+        case .estimateCreated: "Estimate ready"
+        case .proposalSent: "Awaiting client approval"
         case .approved: "Approved"
         case .declined: "Declined"
         case .invoiced: "Invoiced"
@@ -315,4 +177,24 @@ struct DashboardRecentProjectsSection: View {
         case .archived: "Archived"
         }
     }
+}
+
+#Preview("Recent work") {
+    NavigationStack {
+        DashboardRecentProjectsSection(projects: [.sample])
+            .padding()
+            .background(ColorTokens.background)
+    }
+}
+
+#Preview("First project") {
+    DashboardRecentProjectsSection(projects: [])
+        .padding()
+        .background(ColorTokens.background)
+}
+
+#Preview("Offline") {
+    DashboardRecentProjectsSection(projects: [], hasLoaded: false, errorMessage: "Your projects couldn't be refreshed. Try again when you're connected.")
+        .padding()
+        .background(ColorTokens.background)
 }

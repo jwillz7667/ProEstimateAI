@@ -31,8 +31,8 @@ Core product (what the app actually does — do not promise features that aren't
 - Estimates can be exported as PDFs that include the company letterhead, before/after project photos, grouped line items, and totals.
 
 Pricing / plans:
-- Free tier: 5 lifetime AI preview generations and manual estimating tools. Starter preview credits never reset. AI estimate generation, quote exports, invoices, branding, and approval links require Pro.
-- Pro: 2 new projects, 20 AI preview generations, 20 AI-generated estimates, and 50 quote exports per month. Daily and weekly limits also apply. Includes branded PDFs (no watermark), invoice creation, and client approval links. Monthly or annual; eligible new monthly subscribers can start a 7-day free trial. Refer users to the App Store for final prices and eligibility. Premium subscriptions are no longer offered.
+- Free tier: manual project creation, viewing saved work, and manual estimating tools. AI previews, AI-generated estimates and material/labor suggestions require an active Apple trial or paid Pro subscription. Historical credits alone never unlock AI. Quote exports, invoices, branding, and approval links also require Pro.
+- Pro: manual project creation, 20 AI preview generations, 20 AI-generated estimates, and 50 quote exports per rolling 30-day period. Daily and weekly limits also apply. Includes branded PDFs (no watermark), invoice creation, and client approval links. Monthly or annual; eligible new subscribers can start a 3-day free trial on either plan. Apple allows one introductory offer per subscription group. Refer users to the App Store for final prices and eligibility. Premium subscriptions are no longer offered.
 - Subscriptions are billed through the Apple App Store. Cancellation is via iOS Settings → Apple ID → Subscriptions.
 
 Account management:

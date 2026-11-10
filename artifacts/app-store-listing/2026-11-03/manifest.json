@@ -1,0 +1,243 @@
+{
+  "generatedAt": "2026-11-03T09:43:02.640Z",
+  "language": "en-US",
+  "panelCount": 5,
+  "source": "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications",
+  "specificationCheckedAt": "2026-11-03",
+  "note": "Five marketing panels. Historic captures and code-derived/previously generated illustrations are identified individually; no new device or simulator capture was made. Captions are English in every staged locale. RGB sRGB PNG without alpha.",
+  "palette": {
+    "orange": "#FF9230",
+    "charcoal": "#1C1C1E",
+    "ink": "#0B0B0C",
+    "white": "#FFFFFF",
+    "secondary": "#C9C9CF"
+  },
+  "background": {
+    "strategy": "Original orange-ribbon panorama sampled around virtual gallery gaps",
+    "referenceGapRatio": 0.07317212599325444,
+    "geometrySource": "Actual Apple App Store public gallery DOM, measured November 3, 2026: iPhone card width 273.328125 CSS px; inter-card gutter 20 CSS px. This is a reference layout, not a universal storefront constant.",
+    "cropOffsetFormula": "index * (panelWidth + virtualGapWidth)",
+    "previewGuttersPx": [
+      8,
+      16,
+      28
+    ],
+    "note": "The reference panorama is aligned for the configured gutter/card-width ratio. Other storefront widths may vary; alternate previews show the expected variation rather than claiming universal alignment."
+  },
+  "panels": [
+    {
+      "slug": "01-photo-to-preview",
+      "title": [
+        "See the vision.",
+        "Before you build."
+      ],
+      "detail": [
+        "Explore a remodel from a job-site photo.",
+        "Compare the original with your AI preview."
+      ],
+      "subject": "AI remodel comparison",
+      "provenance": "Actual isolated-QA source and completed app generation, composed with an illustrative comparison control and device frame."
+    },
+    {
+      "slug": "02-project-command-center",
+      "title": [
+        "Every job.",
+        "One clear view."
+      ],
+      "detail": [
+        "Projects, clients and next steps",
+        "come together in one place."
+      ],
+      "subject": "Project-first Home",
+      "provenance": "Code-derived illustration of the redesigned Home hierarchy with fictional sample data. Not a simulator/device capture."
+    },
+    {
+      "slug": "03-estimates-to-invoices",
+      "title": [
+        "Clear quotes.",
+        "Confident next steps."
+      ],
+      "detail": [
+        "Build estimates, share proposals",
+        "and track invoices."
+      ],
+      "subject": "Proposals and invoices",
+      "provenance": "Previously selected generated iPhone marketing device art; iPad uses a code-native proposal illustration. Example data, not newly captured UI."
+    },
+    {
+      "slug": "04-price-the-work",
+      "title": [
+        "Price the work.",
+        "Your way."
+      ],
+      "detail": [
+        "Review materials, labor and quantities.",
+        "Adjust the numbers before you share."
+      ],
+      "subject": "Estimate materials and labor",
+      "provenance": "iPhone uses an actual historic materials-list capture crop. iPad is a code-native estimate illustration with fictional sample values, not a fresh runtime capture."
+    },
+    {
+      "slug": "05-projects-in-order",
+      "title": [
+        "Every project.",
+        "Details in order."
+      ],
+      "detail": [
+        "Keep scope, photos and client details",
+        "together as the job moves forward."
+      ],
+      "subject": "Projects and scope",
+      "provenance": "Existing actual project-list / project-detail capture crops. Historic navigation bars and the QA-only description are excluded by cropping. iPad metadata/photo composition and device framing are illustrative."
+    }
+  ],
+  "families": [
+    {
+      "id": "iphone-dynamic-island-medium",
+      "width": 1206,
+      "height": 2622,
+      "required": true,
+      "device": "iPhone Dynamic Island, medium display",
+      "gapRatio": 0.07317212599325444,
+      "virtualGapWidth": 88,
+      "virtualPanoramaWidth": 6382,
+      "cropOffsets": [
+        0,
+        1294,
+        2588,
+        3882,
+        5176
+      ],
+      "files": [
+        "iphone-dynamic-island-medium/01-photo-to-preview_1206x2622.png",
+        "iphone-dynamic-island-medium/02-project-command-center_1206x2622.png",
+        "iphone-dynamic-island-medium/03-estimates-to-invoices_1206x2622.png",
+        "iphone-dynamic-island-medium/04-price-the-work_1206x2622.png",
+        "iphone-dynamic-island-medium/05-projects-in-order_1206x2622.png"
+      ]
+    },
+    {
+      "id": "iphone-dynamic-island-large",
+      "width": 1320,
+      "height": 2868,
+      "required": false,
+      "device": "iPhone Dynamic Island, large display",
+      "gapRatio": 0.07317212599325444,
+      "virtualGapWidth": 97,
+      "virtualPanoramaWidth": 6988,
+      "cropOffsets": [
+        0,
+        1417,
+        2834,
+        4251,
+        5668
+      ],
+      "files": [
+        "iphone-dynamic-island-large/01-photo-to-preview_1320x2868.png",
+        "iphone-dynamic-island-large/02-project-command-center_1320x2868.png",
+        "iphone-dynamic-island-large/03-estimates-to-invoices_1320x2868.png",
+        "iphone-dynamic-island-large/04-price-the-work_1320x2868.png",
+        "iphone-dynamic-island-large/05-projects-in-order_1320x2868.png"
+      ]
+    },
+    {
+      "id": "iphone-face-id-large",
+      "width": 1284,
+      "height": 2778,
+      "required": false,
+      "device": "iPhone Face ID, large display",
+      "gapRatio": 0.07317212599325444,
+      "virtualGapWidth": 94,
+      "virtualPanoramaWidth": 6796,
+      "cropOffsets": [
+        0,
+        1378,
+        2756,
+        4134,
+        5512
+      ],
+      "files": [
+        "iphone-face-id-large/01-photo-to-preview_1284x2778.png",
+        "iphone-face-id-large/02-project-command-center_1284x2778.png",
+        "iphone-face-id-large/03-estimates-to-invoices_1284x2778.png",
+        "iphone-face-id-large/04-price-the-work_1284x2778.png",
+        "iphone-face-id-large/05-projects-in-order_1284x2778.png"
+      ]
+    },
+    {
+      "id": "ipad-13",
+      "width": 2064,
+      "height": 2752,
+      "required": true,
+      "device": "iPad 13 inch",
+      "tablet": true,
+      "gapRatio": 0.07317212599325444,
+      "virtualGapWidth": 151,
+      "virtualPanoramaWidth": 10924,
+      "cropOffsets": [
+        0,
+        2215,
+        4430,
+        6645,
+        8860
+      ],
+      "files": [
+        "ipad-13/01-photo-to-preview_2064x2752.png",
+        "ipad-13/02-project-command-center_2064x2752.png",
+        "ipad-13/03-estimates-to-invoices_2064x2752.png",
+        "ipad-13/04-price-the-work_2064x2752.png",
+        "ipad-13/05-projects-in-order_2064x2752.png"
+      ]
+    },
+    {
+      "id": "ipad-12-9",
+      "width": 2048,
+      "height": 2732,
+      "required": false,
+      "device": "iPad 12.9 inch",
+      "tablet": true,
+      "gapRatio": 0.07317212599325444,
+      "virtualGapWidth": 150,
+      "virtualPanoramaWidth": 10840,
+      "cropOffsets": [
+        0,
+        2198,
+        4396,
+        6594,
+        8792
+      ],
+      "files": [
+        "ipad-12-9/01-photo-to-preview_2048x2732.png",
+        "ipad-12-9/02-project-command-center_2048x2732.png",
+        "ipad-12-9/03-estimates-to-invoices_2048x2732.png",
+        "ipad-12-9/04-price-the-work_2048x2732.png",
+        "ipad-12-9/05-projects-in-order_2048x2732.png"
+      ]
+    },
+    {
+      "id": "ipad-11",
+      "width": 1668,
+      "height": 2420,
+      "required": false,
+      "device": "iPad 11 inch",
+      "tablet": true,
+      "gapRatio": 0.07317212599325444,
+      "virtualGapWidth": 122,
+      "virtualPanoramaWidth": 8828,
+      "cropOffsets": [
+        0,
+        1790,
+        3580,
+        5370,
+        7160
+      ],
+      "files": [
+        "ipad-11/01-photo-to-preview_1668x2420.png",
+        "ipad-11/02-project-command-center_1668x2420.png",
+        "ipad-11/03-estimates-to-invoices_1668x2420.png",
+        "ipad-11/04-price-the-work_1668x2420.png",
+        "ipad-11/05-projects-in-order_1668x2420.png"
+      ]
+    }
+  ]
+}

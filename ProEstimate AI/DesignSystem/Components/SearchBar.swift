@@ -8,9 +8,13 @@ struct SearchBar: View {
         HStack(spacing: SpacingTokens.xs) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
 
             if !text.isEmpty {
                 Button {
@@ -18,7 +22,9 @@ struct SearchBar: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
                 }
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, SpacingTokens.sm)

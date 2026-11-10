@@ -39,6 +39,7 @@ enum APIEndpoint: Sendable {
     // MARK: - Clients
 
     case listClients(cursor: String?)
+    case listClientProjects(clientId: String, cursor: String?)
     case getClient(id: String)
     case createClient(body: Encodable & Sendable)
     case updateClient(id: String, body: Encodable & Sendable)
@@ -51,6 +52,11 @@ enum APIEndpoint: Sendable {
     case createProject(body: Encodable & Sendable)
     case updateProject(id: String, body: Encodable & Sendable)
     case deleteProject(id: String)
+    case listJobCosts(projectId: String, cursor: String?, includeVoided: Bool = false)
+    case createJobCost(projectId: String, body: Encodable & Sendable)
+    case voidJobCost(id: String)
+    case uploadJobCostReceipt(id: String, body: Encodable & Sendable)
+    case getJobCostReceipt(id: String)
 
     // MARK: - Assets
 
@@ -78,7 +84,28 @@ enum APIEndpoint: Sendable {
     /// company's branding and defaults. Body: `{ project_id: String }`.
     case generateAIEstimate(body: Encodable & Sendable)
     case updateEstimate(id: String, body: Encodable & Sendable)
+    case reviseEstimate(id: String, body: Encodable & Sendable)
     case deleteEstimate(id: String)
+
+    case listChangeOrders(projectId: String, cursor: String?)
+    case getChangeOrder(id: String)
+    case createChangeOrder(body: Encodable & Sendable)
+    case applyChangeOrder(id: String, body: Encodable & Sendable)
+
+    // MARK: - Estimate Library
+
+    case listEstimateTemplates(query: String?, cursor: String?)
+    case saveEstimateTemplate(body: Encodable & Sendable)
+    case instantiateEstimateTemplate(id: String, body: Encodable & Sendable)
+    case deleteEstimateTemplate(id: String)
+    case duplicateEstimate(id: String, body: Encodable & Sendable)
+    case listSavedEstimateItems(query: String?, cursor: String?)
+    case saveEstimateLibraryItem(body: Encodable & Sendable)
+    case updateEstimateLibraryItem(id: String, body: Encodable & Sendable)
+    case applyEstimateLibraryItem(id: String, body: Encodable & Sendable)
+    case deleteEstimateLibraryItem(id: String)
+    case getMerchantPaymentSettings
+    case startMerchantPaymentOnboarding(body: Encodable & Sendable)
 
     // MARK: - Estimate Line Items
 
@@ -87,6 +114,7 @@ enum APIEndpoint: Sendable {
     case batchCreateEstimateLineItems(estimateId: String, body: Encodable & Sendable)
     case updateEstimateLineItem(id: String, body: Encodable & Sendable)
     case deleteEstimateLineItem(id: String)
+    case reviewEstimatePrice(id: String, body: Encodable & Sendable)
 
     // MARK: - Proposals
 
@@ -98,6 +126,13 @@ enum APIEndpoint: Sendable {
     /// optionally carries a `client_message` override.
     case sendProposal(id: String, body: Encodable & Sendable)
     case deleteProposal(id: String)
+
+    // MARK: - Follow-ups
+
+    case getFollowUpHistory(kind: String, entityId: String)
+    case queueFollowUp(body: Encodable & Sendable)
+    case getFollowUpSettings
+    case updateFollowUpSettings(body: Encodable & Sendable)
 
     // MARK: - Estimate Exports (saved PDFs)
 
@@ -125,6 +160,11 @@ enum APIEndpoint: Sendable {
     /// Server-rendered binary PDF of the invoice. Fetched via `requestData`
     /// since the response is a PDF, not a JSON envelope.
     case exportInvoicePDF(id: String)
+    case getInvoiceFinance(id: String)
+    case recordInvoicePayment(id: String, body: Encodable & Sendable)
+    case updateInvoiceSchedule(id: String, body: Encodable & Sendable)
+    case cancelInvoiceCheckout(id: String, body: Encodable & Sendable)
+    case reviewInvoiceRefund(id: String, body: Encodable & Sendable)
 
     // MARK: - Invoice Line Items
 
@@ -165,6 +205,7 @@ enum APIEndpoint: Sendable {
     // MARK: - Dashboard
 
     case getDashboardSummary
+    case getDashboardAttention
 
     // MARK: - Materials Pricing
 
@@ -209,6 +250,7 @@ extension APIEndpoint {
         case .deleteCompanyLogo: return "/companies/me/logo"
         // Clients
         case .listClients: return "/clients"
+        case let .listClientProjects(clientId, _): return "/clients/\(clientId)/projects"
         case let .getClient(id): return "/clients/\(id)"
         case .createClient: return "/clients"
         case let .updateClient(id, _): return "/clients/\(id)"
@@ -219,6 +261,13 @@ extension APIEndpoint {
         case .createProject: return "/projects"
         case let .updateProject(id, _): return "/projects/\(id)"
         case let .deleteProject(id): return "/projects/\(id)"
+        case let .listChangeOrders(projectId, _): return "/projects/\(projectId)/change-orders"
+        case let .getChangeOrder(id): return "/change-orders/\(id)"
+        case .createChangeOrder: return "/change-orders"
+        case let .applyChangeOrder(id, _): return "/change-orders/\(id)/apply"
+        case let .listJobCosts(projectId, _, _), let .createJobCost(projectId, _): return "/projects/\(projectId)/costs"
+        case let .voidJobCost(id): return "/job-costs/\(id)"
+        case let .uploadJobCostReceipt(id, _), let .getJobCostReceipt(id): return "/job-costs/\(id)/receipt"
         // Assets
         case let .listAssets(projectId): return "/projects/\(projectId)/assets"
         case let .uploadAsset(projectId, _): return "/projects/\(projectId)/assets"
@@ -236,13 +285,25 @@ extension APIEndpoint {
         case .createEstimate: return "/estimates"
         case .generateAIEstimate: return "/estimates/generate"
         case let .updateEstimate(id, _): return "/estimates/\(id)"
+        case let .reviseEstimate(id, _): return "/estimates/\(id)/revise"
         case let .deleteEstimate(id): return "/estimates/\(id)"
+        case .listEstimateTemplates: return "/estimate-library/templates"
+        case .saveEstimateTemplate: return "/estimate-library/templates/from-estimate"
+        case let .instantiateEstimateTemplate(id, _): return "/estimate-library/templates/\(id)/instantiate"
+        case let .deleteEstimateTemplate(id): return "/estimate-library/templates/\(id)"
+        case let .duplicateEstimate(id, _): return "/estimate-library/estimates/\(id)/duplicate"
+        case .listSavedEstimateItems, .saveEstimateLibraryItem: return "/estimate-library/items"
+        case let .updateEstimateLibraryItem(id, _), let .deleteEstimateLibraryItem(id): return "/estimate-library/items/\(id)"
+        case let .applyEstimateLibraryItem(id, _): return "/estimate-library/items/\(id)/apply"
+        case .getMerchantPaymentSettings: return "/payment-settings"
+        case .startMerchantPaymentOnboarding: return "/payment-settings/onboarding"
         // Estimate Line Items
         case let .listEstimateLineItems(estimateId): return "/estimates/\(estimateId)/line-items"
         case let .createEstimateLineItem(estimateId, _): return "/estimates/\(estimateId)/line-items"
         case let .batchCreateEstimateLineItems(estimateId, _): return "/estimates/\(estimateId)/line-items/batch"
         case let .updateEstimateLineItem(id, _): return "/estimate-line-items/\(id)"
         case let .deleteEstimateLineItem(id): return "/estimate-line-items/\(id)"
+        case let .reviewEstimatePrice(id, _): return "/estimate-line-items/\(id)/price-review"
         // Proposals
         case .listProposals: return "/proposals"
         case let .getProposal(id): return "/proposals/\(id)"
@@ -250,6 +311,9 @@ extension APIEndpoint {
         case let .updateProposal(id, _): return "/proposals/\(id)"
         case let .sendProposal(id, _): return "/proposals/\(id)/send"
         case let .deleteProposal(id): return "/proposals/\(id)"
+        case .getFollowUpHistory: return "/follow-ups/history"
+        case .queueFollowUp: return "/follow-ups"
+        case .getFollowUpSettings, .updateFollowUpSettings: return "/follow-ups/settings"
         // Estimate Exports
         case let .listEstimateExports(estimateId): return "/estimates/\(estimateId)/exports"
         case let .listProjectEstimateExports(projectId): return "/projects/\(projectId)/estimate-exports"
@@ -264,6 +328,11 @@ extension APIEndpoint {
         case let .deleteInvoice(id): return "/invoices/\(id)"
         case let .convertEstimateToInvoice(estimateId, _): return "/estimates/\(estimateId)/convert-to-invoice"
         case let .exportInvoicePDF(id): return "/invoices/\(id)/export"
+        case let .getInvoiceFinance(id): return "/invoices/\(id)/finance"
+        case let .recordInvoicePayment(id, _): return "/invoices/\(id)/finance/payments"
+        case let .updateInvoiceSchedule(id, _): return "/invoices/\(id)/finance/schedule"
+        case let .cancelInvoiceCheckout(id, _): return "/invoices/\(id)/checkout/cancel"
+        case let .reviewInvoiceRefund(id, _): return "/invoices/\(id)/checkout/refund-review"
         // Invoice Line Items
         case let .listInvoiceLineItems(invoiceId): return "/invoices/\(invoiceId)/line-items"
         // Pricing Profiles
@@ -290,6 +359,7 @@ extension APIEndpoint {
         case .checkUsage: return "/usage/check"
         // Dashboard
         case .getDashboardSummary: return "/dashboard/summary"
+        case .getDashboardAttention: return "/dashboard/attention"
         // Materials Pricing
         case .searchMaterialsPricing: return "/materials-pricing/search"
         case .projectMaterialsPricing: return "/materials-pricing/project"
@@ -308,11 +378,13 @@ extension APIEndpoint {
              .authForgotPassword,
              .uploadCompanyLogo,
              .registerApnsToken,
-             .createClient, .createProject, .uploadAsset, .createGeneration,
-             .createEstimate, .generateAIEstimate, .createEstimateLineItem, .batchCreateEstimateLineItems,
-             .createEstimateExport,
-             .createProposal, .sendProposal,
-             .sendInvoice, .convertEstimateToInvoice,
+             .createClient, .createProject, .uploadAsset, .createGeneration, .createJobCost, .uploadJobCostReceipt,
+             .createEstimate, .generateAIEstimate, .reviseEstimate, .createEstimateLineItem, .batchCreateEstimateLineItems,
+             .saveEstimateTemplate, .instantiateEstimateTemplate, .duplicateEstimate, .saveEstimateLibraryItem, .applyEstimateLibraryItem,
+             .startMerchantPaymentOnboarding,
+             .createEstimateExport, .reviewEstimatePrice, .createChangeOrder, .applyChangeOrder,
+             .createProposal, .sendProposal, .queueFollowUp,
+             .sendInvoice, .convertEstimateToInvoice, .recordInvoicePayment, .cancelInvoiceCheckout, .reviewInvoiceRefund,
              .createPricingProfile, .createLaborRateRule,
              .createPurchaseAttempt, .syncTransaction, .restorePurchases,
              .checkUsage,
@@ -320,20 +392,25 @@ extension APIEndpoint {
             return .post
 
         case .updateCompany, .updateClient, .updateProject,
+             .updateEstimateLibraryItem,
              .updateMaterialSelection, .updateEstimate, .updateEstimateLineItem,
-             .updateProposal, .updateInvoice,
+             .updateProposal, .updateInvoice, .updateFollowUpSettings,
              .updatePricingProfile, .updateLaborRateRule:
             return .patch
 
         case .deleteMe,
              .deleteCompanyLogo,
              .deregisterApnsToken,
-             .deleteClient, .deleteProject, .deleteAsset,
+             .deleteClient, .deleteProject, .deleteAsset, .voidJobCost,
              .deleteEstimate, .deleteEstimateLineItem,
+             .deleteEstimateTemplate, .deleteEstimateLibraryItem,
              .deleteProposal, .deleteInvoice,
              .deleteEstimateExport,
              .deletePricingProfile, .deleteLaborRateRule:
             return .delete
+
+        case .updateInvoiceSchedule:
+            return .put
 
         default:
             return .get
@@ -354,10 +431,26 @@ extension APIEndpoint {
     /// Optional query parameters appended to the URL.
     var queryItems: [URLQueryItem]? {
         switch self {
+        case let .getFollowUpHistory(kind, entityId):
+            return [URLQueryItem(name: "entity_kind", value: kind), URLQueryItem(name: "entity_id", value: entityId)]
+        case let .listEstimateTemplates(query, cursor), let .listSavedEstimateItems(query, cursor):
+            var items: [URLQueryItem] = []
+            if let query, !query.isEmpty { items.append(URLQueryItem(name: "q", value: query)) }
+            if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }
+            return items.isEmpty ? nil : items
         case let .listClients(cursor):
+            return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
+        case let .listClientProjects(_, cursor):
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
         case let .listProjects(cursor):
             return cursor.map { [URLQueryItem(name: "cursor", value: $0)] }
+        case let .listChangeOrders(_, cursor):
+            return cursor.map { [URLQueryItem(name: "cursor", value: $0)] } ?? []
+        case let .listJobCosts(_, cursor, includeVoided):
+            var items: [URLQueryItem] = []
+            if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }
+            if includeVoided { items.append(URLQueryItem(name: "include_voided", value: "true")) }
+            return items.isEmpty ? nil : items
         case let .listEstimates(projectId, clientId):
             var items: [URLQueryItem] = []
             if let projectId { items.append(URLQueryItem(name: "project_id", value: projectId)) }
@@ -406,15 +499,23 @@ extension APIEndpoint {
              let .uploadCompanyLogo(body),
              let .createClient(body), let .updateClient(_, body),
              let .createProject(body), let .updateProject(_, body),
+             let .createJobCost(_, body), let .uploadJobCostReceipt(_, body),
              let .uploadAsset(_, body),
              let .createGeneration(_, body),
+             let .createChangeOrder(body), let .applyChangeOrder(_, body),
              let .createEstimate(body), let .generateAIEstimate(body),
-             let .updateEstimate(_, body),
+             let .updateEstimate(_, body), let .reviseEstimate(_, body),
+             let .saveEstimateTemplate(body), let .instantiateEstimateTemplate(_, body), let .duplicateEstimate(_, body),
+             let .saveEstimateLibraryItem(body), let .updateEstimateLibraryItem(_, body), let .applyEstimateLibraryItem(_, body),
+             let .startMerchantPaymentOnboarding(body),
              let .createEstimateLineItem(_, body), let .batchCreateEstimateLineItems(_, body), let .updateEstimateLineItem(_, body),
+             let .reviewEstimatePrice(_, body),
              let .createEstimateExport(_, body),
              let .createProposal(body), let .updateProposal(_, body),
-             let .sendProposal(_, body),
+             let .sendProposal(_, body), let .queueFollowUp(body), let .updateFollowUpSettings(body),
              let .updateInvoice(_, body), let .convertEstimateToInvoice(_, body),
+             let .recordInvoicePayment(_, body), let .updateInvoiceSchedule(_, body),
+             let .cancelInvoiceCheckout(_, body), let .reviewInvoiceRefund(_, body),
              let .createPricingProfile(body), let .updatePricingProfile(_, body),
              let .createLaborRateRule(_, body), let .updateLaborRateRule(_, body),
              let .createPurchaseAttempt(body), let .syncTransaction(body),

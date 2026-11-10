@@ -20,6 +20,10 @@ struct LoopingVideoPlayer: UIViewRepresentable {
     let resourceName: String
     let resourceExtension: String
     @Binding var isPlaying: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var shouldPlay: Bool { isPlaying && !reduceMotion && scenePhase == .active }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(resourceName: resourceName, resourceExtension: resourceExtension)
@@ -29,14 +33,14 @@ struct LoopingVideoPlayer: UIViewRepresentable {
         let view = PlayerContainerView()
         view.backgroundColor = .black
         view.attach(coordinator: context.coordinator)
-        if isPlaying {
+        if shouldPlay {
             context.coordinator.play()
         }
         return view
     }
 
     func updateUIView(_ uiView: PlayerContainerView, context: Context) {
-        if isPlaying {
+        if shouldPlay {
             context.coordinator.play()
         } else {
             context.coordinator.pause()

@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+coverage
+test
+.git
+.vercel
+.DS_Store
+*.log
+*.tsbuildinfo
+**/.env*
+**/.npmrc
+**/*.pem
+**/*.key
+**/*.p8
+**/*.p12
+**/*.pfx

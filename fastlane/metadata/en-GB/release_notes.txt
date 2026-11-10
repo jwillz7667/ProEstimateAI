@@ -1,10 +1,9 @@
-This update improves project editing, estimates, invoices, and shared proposals.
+A clearer Home and a simpler project workflow.
 
-• Assign a client to a project before creating an invoice.
-• Record partial invoice payments and track the remaining balance.
-• Clear saved project details and validate budgets and measurements.
-• See useful error messages when an operation fails.
-• Preserve agreed tax rates when updating invoice payments.
-• Print or save shared proposals as PDF from your browser.
+• Start a project from one clear action and return to recent work with readable status.
+• Set up most projects in two steps, with optional details tucked away until you need them.
+• Create manual estimates directly, review saved line items and edit draft quantities, prices, markup and tax.
+• Keep estimate review separate from PDF export, proposal sharing and invoicing.
+• More useful layouts on iPhone and iPad, with improved loading and error handling.
 
-Includes reliability and security fixes.
+Every account now includes a seven-day Pro trial, with no payment required. Skip the login offer to explore. Basic project access and manual estimates remain free after the trial.

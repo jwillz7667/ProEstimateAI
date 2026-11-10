@@ -16,6 +16,6 @@ export const PRICING = {
   proMonthly: {
     price: "$19.99",
     cadence: "/month",
-    trial: "7-day free trial",
+    trial: "3-day free trial",
   },
 } as const;

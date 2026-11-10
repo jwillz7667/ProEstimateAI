@@ -4,8 +4,10 @@ const mocks = vi.hoisted(() => ({
   user: { findUnique: vi.fn(), update: vi.fn() },
   refreshToken: { findUnique: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
   apple: vi.fn(), google: vi.fn(), access: vi.fn(), refresh: vi.fn(), verify: vi.fn(),
+  sendReset: vi.fn(),
+  env: { PUBLIC_WEB_BASE_URL: "https://proestimateai.com", API_BASE_URL: "https://api.example.test" },
 }));
-vi.mock("../../config/env", () => ({ env: {} }));
+vi.mock("../../config/env", () => ({ env: mocks.env }));
 vi.mock("../../config/database", () => ({ prisma: {
   user: mocks.user, refreshToken: mocks.refreshToken,
   $transaction: async (fn: (tx: unknown) => unknown) => fn({ user: mocks.user, refreshToken: mocks.refreshToken }),
@@ -18,7 +20,8 @@ vi.mock("../../lib/google-auth", () => ({
 vi.mock("../../lib/jwt", () => ({
   signAccessToken: mocks.access, signRefreshToken: mocks.refresh, verifyRefreshToken: mocks.verify,
 }));
-import { appleSignIn, googleSignIn, refresh } from "./auth.service";
+vi.mock("../../lib/email", () => ({ sendPasswordResetEmail: mocks.sendReset }));
+import { appleSignIn, forgotPassword, googleSignIn, refresh } from "./auth.service";
 
 const user = { id: "user-1", companyId: "company-current", isActive: true, company: { id: "company-current" } };
 const providers = [
@@ -30,6 +33,48 @@ beforeEach(() => {
   mocks.access.mockReturnValue("access");
   mocks.refresh.mockReturnValue("refresh");
   mocks.user.update.mockResolvedValue(user);
+  mocks.env.PUBLIC_WEB_BASE_URL = "https://proestimateai.com";
+});
+
+describe("password reset website delivery", () => {
+  it("emails a browser-only token matching the stored single-use reset token", async () => {
+    mocks.user.findUnique.mockResolvedValue({ ...user, email: "owner@example.test", passwordHash: "existing-hash" });
+    const started = Date.now();
+    await forgotPassword({ email: "owner@example.test" });
+
+    expect(mocks.sendReset).toHaveBeenCalledTimes(1);
+    const [recipient, link] = mocks.sendReset.mock.calls[0];
+    const url = new URL(link);
+    const token = new URLSearchParams(url.hash.slice(1)).get("token");
+    expect(recipient).toBe("owner@example.test");
+    expect(url.origin).toBe("https://proestimateai.com");
+    expect(url.pathname).toBe("/reset-password");
+    expect(url.search).toBe("");
+    expect(token).toMatch(/^[a-f0-9]{64}$/);
+    const stored = mocks.user.update.mock.calls[0][0].data;
+    expect(stored.passwordResetToken).toBe(token);
+    expect(stored.passwordResetExpiresAt.getTime()).toBeGreaterThanOrEqual(started + 60 * 60 * 1000);
+  });
+
+  it("keeps the reset form on the configured website when its base has a path", async () => {
+    mocks.env.PUBLIC_WEB_BASE_URL = "https://preview.example.test/site/?source=setup";
+    mocks.user.findUnique.mockResolvedValue({ ...user, email: "owner@example.test", passwordHash: "existing-hash" });
+    await forgotPassword({ email: "owner@example.test" });
+    const url = new URL(mocks.sendReset.mock.calls[0][1]);
+    expect(url.origin + url.pathname).toBe("https://preview.example.test/reset-password");
+    expect(url.search).toBe("");
+    expect(url.hostname).not.toBe("api.example.test");
+  });
+
+  it.each([null, { ...user, isActive: false }, { ...user, passwordHash: null }])(
+    "keeps the generic response for unavailable or provider-only accounts: %j",
+    async (record) => {
+      mocks.user.findUnique.mockResolvedValue(record);
+      await expect(forgotPassword({ email: "unknown@example.test" })).resolves.toBeUndefined();
+      expect(mocks.user.update).not.toHaveBeenCalled();
+      expect(mocks.sendReset).not.toHaveBeenCalled();
+    },
+  );
 });
 for (const provider of providers) {
   describe(`${provider.name} identity boundary`, () => {

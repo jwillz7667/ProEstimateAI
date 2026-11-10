@@ -1,0 +1,11 @@
+{
+  "referenceGapRatio": 0.07317212599325444,
+  "measurementSource": "Actual Apple App Store public gallery DOM, measured November 3, 2026: iPhone card width 273.328125 CSS px; inter-card gutter 20 CSS px. This is a reference layout, not a universal storefront constant.",
+  "referenceMeasurement": {
+    "cardWidthCSSpx": 273.328125,
+    "gutterCSSpx": 20,
+    "viewportWidthCSSpx": 1200
+  },
+  "familyOverrides": {},
+  "ipadCalibration": "The same measured iPhone gutter/card ratio is applied to iPad exports as a reference calibration. No native iPad gallery measurement is claimed."
+}

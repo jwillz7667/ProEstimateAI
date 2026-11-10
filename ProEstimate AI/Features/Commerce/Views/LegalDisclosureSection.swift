@@ -36,9 +36,9 @@ struct LegalDisclosureSection: View {
         // (5) cancellation method, (6) Privacy Policy + Terms links.
         Group {
             if product.showsTrialBadge, let introText = product.introOfferDisplayText {
-                Text("After the \(introText), your \(product.displayName) subscription automatically renews at \(product.priceDisplay) unless canceled at least 24 hours before the end of the current period. Your Apple ID will be charged for renewal within 24 hours prior to the end of each billing period.")
+                Text("After the \(introText), your \(product.displayName) subscription automatically renews at \(product.priceDisplay) \(product.billingPeriodLabel) unless canceled at least 24 hours before the end of the current period. Your Apple ID will be charged for renewal within 24 hours prior to the end of each billing period.")
             } else {
-                Text("Your \(product.displayName) subscription automatically renews at \(product.priceDisplay) unless canceled at least 24 hours before the end of the current period. Your Apple ID will be charged for renewal within 24 hours prior to the end of each billing period.")
+                Text("Your \(product.displayName) subscription automatically renews at \(product.priceDisplay) \(product.billingPeriodLabel) unless canceled at least 24 hours before the end of the current period. Your Apple ID will be charged for renewal within 24 hours prior to the end of each billing period.")
             }
         }
         .font(.system(size: 10))

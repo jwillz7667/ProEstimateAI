@@ -1,0 +1,72 @@
+{
+  "domain": "proestimateai.com",
+  "records": [
+    {
+      "id": "rec_9ddf2c7ab29a0fb6085e4c67",
+      "slug": "",
+      "name": "",
+      "type": "CAA",
+      "value": "0 issue \"pki.goog\"",
+      "creator": "system",
+      "created": 1774568746649,
+      "updated": 1774568746649,
+      "createdAt": 1774568746649,
+      "updatedAt": 1774568746649,
+      "ttl": 60
+    },
+    {
+      "id": "rec_d188312218bf4665ec5a0d91",
+      "slug": "",
+      "name": "",
+      "type": "CAA",
+      "value": "0 issue \"sectigo.com\"",
+      "creator": "system",
+      "created": 1774568746648,
+      "updated": 1774568746648,
+      "createdAt": 1774568746648,
+      "updatedAt": 1774568746648,
+      "ttl": 60
+    },
+    {
+      "id": "rec_05134de0afec30366dd8a19e",
+      "slug": "",
+      "name": "",
+      "type": "CAA",
+      "value": "0 issue \"letsencrypt.org\"",
+      "creator": "system",
+      "created": 1774568746647,
+      "updated": 1774568746647,
+      "createdAt": 1774568746647,
+      "updatedAt": 1774568746647,
+      "ttl": 60
+    },
+    {
+      "id": "rec_2944f5c00e267cb4c43c07bf",
+      "slug": "",
+      "name": "*",
+      "type": "ALIAS",
+      "value": "cname.vercel-dns-017.com.",
+      "creator": "system",
+      "created": 1774568746646,
+      "updated": 1774568746646,
+      "createdAt": 1774568746646,
+      "updatedAt": 1774568746646,
+      "ttl": 60,
+      "comment": "Vercel automatically manages this record. It may change without notice."
+    },
+    {
+      "id": "rec_2ee70243c3c06ff055c072d1",
+      "slug": "",
+      "name": "",
+      "type": "ALIAS",
+      "value": "45e002494dc5ccf6.vercel-dns-017.com",
+      "creator": "system",
+      "created": 1774568746645,
+      "updated": 1774571080761,
+      "createdAt": 1774568746645,
+      "updatedAt": 1774571080761,
+      "ttl": 60,
+      "comment": "Vercel automatically manages this record. It may change without notice."
+    }
+  ]
+}

@@ -1,0 +1,1847 @@
+{
+  "verifiedAt": "2026-11-03T10:26:38.863108+00:00",
+  "statusRun": 41619024146,
+  "appId": "6762563132",
+  "versionId": "2845471a-267c-4af8-b52d-140add82ab0f",
+  "version": "1.0.9",
+  "versionState": "WAITING_FOR_REVIEW",
+  "manifestSHA256": "2ba5961f56dcd70f32ae0598d2b8df7360cf13c4c8895906390e5cca84f2344e",
+  "sourceCampaign": "artifacts/app-store-listing/2026-11-03",
+  "assetCount": 125,
+  "localeCount": 5,
+  "bucketsPerLocale": 5,
+  "assetsPerBucket": 5,
+  "checksPassed": true,
+  "note": "Compared Apple upload metadata fileSize and image dimensions to each local PNG; source SHA-256 values identify local files, not CDN recompression hashes.",
+  "appleWrites": false,
+  "locales": [
+    {
+      "locale": "en-AU",
+      "count": 25,
+      "sets": [
+        {
+          "displayType": "APP_IPAD_PRO_3GEN_11",
+          "family": "ipad-11",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "29000019-3148-863c-802b-883d5c73515b",
+              "filename": "ipad-11-01-photo-to-preview_1668x2420.png",
+              "sourceFileBytes": 1476083,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "84ac006f26a6e72e01420efb68d2b9ff4c8791f86ed279b9e72d2e59c2db36f9",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "4fc00019-3148-863c-8013-98fcddc8c525",
+              "filename": "ipad-11-02-project-command-center_1668x2420.png",
+              "sourceFileBytes": 364768,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "50e6ec1df6570e28632beee4d2a6b13e240ab0e7c548c609c412635522943834",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "8f000019-3148-863c-8010-84b7aee89561",
+              "filename": "ipad-11-03-estimates-to-invoices_1668x2420.png",
+              "sourceFileBytes": 292686,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "65e4b9eaae19b9501363ddfe3b885dc0895b74006a73e98b8d4de0bb1e02f023",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "a9800019-3148-863c-8025-a40d28b385e0",
+              "filename": "ipad-11-04-price-the-work_1668x2420.png",
+              "sourceFileBytes": 265734,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "d850c096bfea6841b57c905c2644a2b5836f0faf0251e6c5cbb06077d91ac863",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "d4000019-3148-863c-8019-3e3a38c6d76a",
+              "filename": "ipad-11-05-projects-in-order_1668x2420.png",
+              "sourceFileBytes": 1220175,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "96227e96c4817197d270a298eed6f60634a612f1292ff8bc4c036811c2bf4f94",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPAD_PRO_3GEN_129",
+          "family": "ipad-13",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "97400019-3148-863c-8012-4a0835e5d9fd",
+              "filename": "ipad-13-01-photo-to-preview_2064x2752.png",
+              "sourceFileBytes": 2021271,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "4cefe16443979bed585f2a503b096e0a0a3b529c6a6ff4c1b8a49372d810fc19",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "7b400019-3148-863c-8035-818c9f44c95f",
+              "filename": "ipad-13-02-project-command-center_2064x2752.png",
+              "sourceFileBytes": 446204,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "5c3e8b2a0b35778d07d2f66997ddccfa9fc5d0e6af4e029a8ff8c2aec9b25fe3",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "57800019-3148-863c-803f-5c95b4555cd3",
+              "filename": "ipad-13-03-estimates-to-invoices_2064x2752.png",
+              "sourceFileBytes": 355429,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "346903a3202e6396790c2657bedaa6e6972ebd29601905d35ffbd8a456ff15dd",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "e3400019-3148-863c-8037-22c7c2b7b8f5",
+              "filename": "ipad-13-04-price-the-work_2064x2752.png",
+              "sourceFileBytes": 323174,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "83c4efb0ff52e27f0bd180909090ef1efc74d3049a9b87a74ff88265b6b8ccb6",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "55000019-3148-863c-8036-e4a201b034b9",
+              "filename": "ipad-13-05-projects-in-order_2064x2752.png",
+              "sourceFileBytes": 1490905,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "1bd945bbf81c05a24e36bad08c276105ba94453c1d358000a502a129143bb63f",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_61",
+          "family": "iphone-dynamic-island-medium",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "1ec00019-3148-863c-8002-cf44d17b8fa7",
+              "filename": "iphone-dynamic-island-medium-01-photo-to-preview_1206x2622.png",
+              "sourceFileBytes": 869320,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "12ce38bcb5fa9956fea157a9480e4fedcc19a449ad4dacd752e8720811d5b640",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "8ec00019-3148-863c-8009-f12e1cdddf4a",
+              "filename": "iphone-dynamic-island-medium-02-project-command-center_1206x2622.png",
+              "sourceFileBytes": 344514,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "dba7093ecc256479a439aa3319d311f00e6e2aa9305421fad7ca451f379e5dbc",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "fa800019-3148-863c-800d-4b18695e50fe",
+              "filename": "iphone-dynamic-island-medium-03-estimates-to-invoices_1206x2622.png",
+              "sourceFileBytes": 808171,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "b1e3e7c6f460360a0e1109960919e31206ee1799827c25035062f3732b64b17e",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "47400019-3148-863c-8005-78df195cb5cb",
+              "filename": "iphone-dynamic-island-medium-04-price-the-work_1206x2622.png",
+              "sourceFileBytes": 518162,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "99f1174f4f824698b8beada79b41795bfe385218fb5449f22dfe1676a2d1f604",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "50400019-3148-863c-802c-01633e42d187",
+              "filename": "iphone-dynamic-island-medium-05-projects-in-order_1206x2622.png",
+              "sourceFileBytes": 497241,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "08ab4c0f4fa6239c0d747503079e73562aedec0fdaf05e63670d6bf0a13a18e3",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_65",
+          "family": "iphone-face-id-large",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "0f800019-3148-863c-802d-212aae483084",
+              "filename": "iphone-face-id-large-01-photo-to-preview_1284x2778.png",
+              "sourceFileBytes": 944086,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "b02add8ddb78b3027accad8265337df0b50cf7af2eb599b6139b2707c9afe287",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "95800019-3148-863c-802c-6f80ea19be48",
+              "filename": "iphone-face-id-large-02-project-command-center_1284x2778.png",
+              "sourceFileBytes": 371888,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "cb9d3bfaafcb5d4e8d4a7c6f012974b811c4e5f350390cbfba08ce1c41f3670d",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "ec800019-3148-863c-8021-3737194acb99",
+              "filename": "iphone-face-id-large-03-estimates-to-invoices_1284x2778.png",
+              "sourceFileBytes": 892539,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "701b0a1fbc9f2a92ee3c81421efbd6d00078398e1e9785cdd1c1c7b2f1eb9473",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "cd400019-3148-863c-8007-56dd2ef6b0ca",
+              "filename": "iphone-face-id-large-04-price-the-work_1284x2778.png",
+              "sourceFileBytes": 561136,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "78a713fa6d261fa8c6bf37029cb4bf507b813bb0da12229a81f961f91dbf98de",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "8d000019-3148-863c-8031-d1d9af573877",
+              "filename": "iphone-face-id-large-05-projects-in-order_1284x2778.png",
+              "sourceFileBytes": 538808,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "15824ec0588f897b2cfd1f56414547f01a9854d7ea46e68ac149c30479cd8fd6",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_67",
+          "family": "iphone-dynamic-island-large",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "9d400019-3148-863c-803f-40f003e208a3",
+              "filename": "iphone-dynamic-island-large-01-photo-to-preview_1320x2868.png",
+              "sourceFileBytes": 982795,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "531bda79ffdcbd019d967936f4bd092142017d2112b16948f94c2385272eb6c7",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "d0400019-3148-863c-8027-d48cef9219f1",
+              "filename": "iphone-dynamic-island-large-02-project-command-center_1320x2868.png",
+              "sourceFileBytes": 384425,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "273f044ee8e3561899bbd00b3ce7ca3518e4336b5c919ef7ed595643c86dc073",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "1fc00019-3148-863c-8004-2ecdf66e499a",
+              "filename": "iphone-dynamic-island-large-03-estimates-to-invoices_1320x2868.png",
+              "sourceFileBytes": 927835,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "67328eb93bed6801ad48c2b3ca8c52602c9fe676245bf2dc5b2077d851cd3400",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "f9c00019-3148-863c-8004-9fd9b9573137",
+              "filename": "iphone-dynamic-island-large-04-price-the-work_1320x2868.png",
+              "sourceFileBytes": 582627,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "01ffd1e649a26c7c01fc153013f434f3df66dee18d975cfe82ac4c8fbb2e408d",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "44800019-3148-863c-8023-c5139277d410",
+              "filename": "iphone-dynamic-island-large-05-projects-in-order_1320x2868.png",
+              "sourceFileBytes": 563089,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "50806fc17b1b1b16caab94d73c329257e34b50f9ff73aec3ea904231394227c2",
+              "delivery": "COMPLETE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "locale": "en-GB",
+      "count": 25,
+      "sets": [
+        {
+          "displayType": "APP_IPAD_PRO_3GEN_11",
+          "family": "ipad-11",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "74c00019-3148-863c-801a-d05b57f59cd8",
+              "filename": "ipad-11-01-photo-to-preview_1668x2420.png",
+              "sourceFileBytes": 1476083,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "84ac006f26a6e72e01420efb68d2b9ff4c8791f86ed279b9e72d2e59c2db36f9",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "3e400019-3148-863c-8015-11ca4d17a12e",
+              "filename": "ipad-11-02-project-command-center_1668x2420.png",
+              "sourceFileBytes": 364768,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "50e6ec1df6570e28632beee4d2a6b13e240ab0e7c548c609c412635522943834",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "f2000019-3148-863c-8039-8c43c4ca48ac",
+              "filename": "ipad-11-03-estimates-to-invoices_1668x2420.png",
+              "sourceFileBytes": 292686,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "65e4b9eaae19b9501363ddfe3b885dc0895b74006a73e98b8d4de0bb1e02f023",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "56000019-3148-863c-802f-3534c66bb408",
+              "filename": "ipad-11-04-price-the-work_1668x2420.png",
+              "sourceFileBytes": 265734,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "d850c096bfea6841b57c905c2644a2b5836f0faf0251e6c5cbb06077d91ac863",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "e9c00019-3148-863c-8015-6f7f4e9ec414",
+              "filename": "ipad-11-05-projects-in-order_1668x2420.png",
+              "sourceFileBytes": 1220175,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "96227e96c4817197d270a298eed6f60634a612f1292ff8bc4c036811c2bf4f94",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPAD_PRO_3GEN_129",
+          "family": "ipad-13",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "a1400019-3148-863c-8033-9bc9cae69546",
+              "filename": "ipad-13-01-photo-to-preview_2064x2752.png",
+              "sourceFileBytes": 2021271,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "4cefe16443979bed585f2a503b096e0a0a3b529c6a6ff4c1b8a49372d810fc19",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "38800019-3148-863c-802e-e3614c16dc1d",
+              "filename": "ipad-13-02-project-command-center_2064x2752.png",
+              "sourceFileBytes": 446204,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "5c3e8b2a0b35778d07d2f66997ddccfa9fc5d0e6af4e029a8ff8c2aec9b25fe3",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "c6000019-3148-863c-8014-39992a7c6657",
+              "filename": "ipad-13-03-estimates-to-invoices_2064x2752.png",
+              "sourceFileBytes": 355429,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "346903a3202e6396790c2657bedaa6e6972ebd29601905d35ffbd8a456ff15dd",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "dc000019-3148-863c-800b-cbf963899c33",
+              "filename": "ipad-13-04-price-the-work_2064x2752.png",
+              "sourceFileBytes": 323174,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "83c4efb0ff52e27f0bd180909090ef1efc74d3049a9b87a74ff88265b6b8ccb6",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "60000019-3148-863c-8025-ca8ca1d1fa26",
+              "filename": "ipad-13-05-projects-in-order_2064x2752.png",
+              "sourceFileBytes": 1490905,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "1bd945bbf81c05a24e36bad08c276105ba94453c1d358000a502a129143bb63f",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_61",
+          "family": "iphone-dynamic-island-medium",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "97800019-3148-863c-802f-435453ef1170",
+              "filename": "iphone-dynamic-island-medium-01-photo-to-preview_1206x2622.png",
+              "sourceFileBytes": 869320,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "12ce38bcb5fa9956fea157a9480e4fedcc19a449ad4dacd752e8720811d5b640",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "3fc00019-3148-863c-803b-29d283ed7203",
+              "filename": "iphone-dynamic-island-medium-02-project-command-center_1206x2622.png",
+              "sourceFileBytes": 344514,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "dba7093ecc256479a439aa3319d311f00e6e2aa9305421fad7ca451f379e5dbc",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "fc400019-3148-863c-8021-1624098331dd",
+              "filename": "iphone-dynamic-island-medium-03-estimates-to-invoices_1206x2622.png",
+              "sourceFileBytes": 808171,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "b1e3e7c6f460360a0e1109960919e31206ee1799827c25035062f3732b64b17e",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "e3c00019-3148-863c-8012-565dcb9de88d",
+              "filename": "iphone-dynamic-island-medium-04-price-the-work_1206x2622.png",
+              "sourceFileBytes": 518162,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "99f1174f4f824698b8beada79b41795bfe385218fb5449f22dfe1676a2d1f604",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "01800019-3148-863c-802b-b4f74bd85d94",
+              "filename": "iphone-dynamic-island-medium-05-projects-in-order_1206x2622.png",
+              "sourceFileBytes": 497241,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "08ab4c0f4fa6239c0d747503079e73562aedec0fdaf05e63670d6bf0a13a18e3",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_65",
+          "family": "iphone-face-id-large",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "5e800019-3148-863c-8037-cbd57ad38b7c",
+              "filename": "iphone-face-id-large-01-photo-to-preview_1284x2778.png",
+              "sourceFileBytes": 944086,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "b02add8ddb78b3027accad8265337df0b50cf7af2eb599b6139b2707c9afe287",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "4a000019-3148-863c-8027-74d7acccc419",
+              "filename": "iphone-face-id-large-02-project-command-center_1284x2778.png",
+              "sourceFileBytes": 371888,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "cb9d3bfaafcb5d4e8d4a7c6f012974b811c4e5f350390cbfba08ce1c41f3670d",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "40400019-3148-863c-8010-c07ad1696602",
+              "filename": "iphone-face-id-large-03-estimates-to-invoices_1284x2778.png",
+              "sourceFileBytes": 892539,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "701b0a1fbc9f2a92ee3c81421efbd6d00078398e1e9785cdd1c1c7b2f1eb9473",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "fc400019-3148-863c-8036-9d629fd98311",
+              "filename": "iphone-face-id-large-04-price-the-work_1284x2778.png",
+              "sourceFileBytes": 561136,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "78a713fa6d261fa8c6bf37029cb4bf507b813bb0da12229a81f961f91dbf98de",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "e1800019-3148-863c-800e-5000d6a968fc",
+              "filename": "iphone-face-id-large-05-projects-in-order_1284x2778.png",
+              "sourceFileBytes": 538808,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "15824ec0588f897b2cfd1f56414547f01a9854d7ea46e68ac149c30479cd8fd6",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_67",
+          "family": "iphone-dynamic-island-large",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "c3800019-3148-863c-802b-9cebfdabfc01",
+              "filename": "iphone-dynamic-island-large-01-photo-to-preview_1320x2868.png",
+              "sourceFileBytes": 982795,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "531bda79ffdcbd019d967936f4bd092142017d2112b16948f94c2385272eb6c7",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "8c400019-3148-863c-8020-ecfeb7b9a357",
+              "filename": "iphone-dynamic-island-large-02-project-command-center_1320x2868.png",
+              "sourceFileBytes": 384425,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "273f044ee8e3561899bbd00b3ce7ca3518e4336b5c919ef7ed595643c86dc073",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "03c00019-3148-863c-801a-2c62eb733527",
+              "filename": "iphone-dynamic-island-large-03-estimates-to-invoices_1320x2868.png",
+              "sourceFileBytes": 927835,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "67328eb93bed6801ad48c2b3ca8c52602c9fe676245bf2dc5b2077d851cd3400",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "75000019-3148-863c-8015-8ded4e7b51fa",
+              "filename": "iphone-dynamic-island-large-04-price-the-work_1320x2868.png",
+              "sourceFileBytes": 582627,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "01ffd1e649a26c7c01fc153013f434f3df66dee18d975cfe82ac4c8fbb2e408d",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "97000019-3148-863c-802f-b488313fba74",
+              "filename": "iphone-dynamic-island-large-05-projects-in-order_1320x2868.png",
+              "sourceFileBytes": 563089,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "50806fc17b1b1b16caab94d73c329257e34b50f9ff73aec3ea904231394227c2",
+              "delivery": "COMPLETE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "locale": "en-US",
+      "count": 25,
+      "sets": [
+        {
+          "displayType": "APP_IPAD_PRO_3GEN_11",
+          "family": "ipad-11",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "36800019-3148-863c-800f-b6b537c08c6b",
+              "filename": "ipad-11-01-photo-to-preview_1668x2420.png",
+              "sourceFileBytes": 1476083,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "84ac006f26a6e72e01420efb68d2b9ff4c8791f86ed279b9e72d2e59c2db36f9",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "12800019-3148-863c-8019-6141f7f8f0ad",
+              "filename": "ipad-11-02-project-command-center_1668x2420.png",
+              "sourceFileBytes": 364768,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "50e6ec1df6570e28632beee4d2a6b13e240ab0e7c548c609c412635522943834",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "41c00019-3148-863c-8018-76eaeaa083fe",
+              "filename": "ipad-11-03-estimates-to-invoices_1668x2420.png",
+              "sourceFileBytes": 292686,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "65e4b9eaae19b9501363ddfe3b885dc0895b74006a73e98b8d4de0bb1e02f023",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "85c00019-3148-863c-8008-4fd30696c572",
+              "filename": "ipad-11-04-price-the-work_1668x2420.png",
+              "sourceFileBytes": 265734,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "d850c096bfea6841b57c905c2644a2b5836f0faf0251e6c5cbb06077d91ac863",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "2a400019-3148-863c-8037-851bdce98c9d",
+              "filename": "ipad-11-05-projects-in-order_1668x2420.png",
+              "sourceFileBytes": 1220175,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "96227e96c4817197d270a298eed6f60634a612f1292ff8bc4c036811c2bf4f94",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPAD_PRO_3GEN_129",
+          "family": "ipad-13",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "aa000019-3148-863c-8028-bc8351ed7f22",
+              "filename": "ipad-13-01-photo-to-preview_2064x2752.png",
+              "sourceFileBytes": 2021271,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "4cefe16443979bed585f2a503b096e0a0a3b529c6a6ff4c1b8a49372d810fc19",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "2f000019-3148-863c-8029-efd5947fc02d",
+              "filename": "ipad-13-02-project-command-center_2064x2752.png",
+              "sourceFileBytes": 446204,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "5c3e8b2a0b35778d07d2f66997ddccfa9fc5d0e6af4e029a8ff8c2aec9b25fe3",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "7c800019-3148-863c-800b-2fa6078b18be",
+              "filename": "ipad-13-03-estimates-to-invoices_2064x2752.png",
+              "sourceFileBytes": 355429,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "346903a3202e6396790c2657bedaa6e6972ebd29601905d35ffbd8a456ff15dd",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "f5000019-3148-863c-8007-5a0e887a5c81",
+              "filename": "ipad-13-04-price-the-work_2064x2752.png",
+              "sourceFileBytes": 323174,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "83c4efb0ff52e27f0bd180909090ef1efc74d3049a9b87a74ff88265b6b8ccb6",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "04800019-3148-863c-8016-f608bd93aa91",
+              "filename": "ipad-13-05-projects-in-order_2064x2752.png",
+              "sourceFileBytes": 1490905,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "1bd945bbf81c05a24e36bad08c276105ba94453c1d358000a502a129143bb63f",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_61",
+          "family": "iphone-dynamic-island-medium",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "2b800019-3148-863c-8009-cfd9ac716cdb",
+              "filename": "iphone-dynamic-island-medium-01-photo-to-preview_1206x2622.png",
+              "sourceFileBytes": 869320,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "12ce38bcb5fa9956fea157a9480e4fedcc19a449ad4dacd752e8720811d5b640",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "21400019-3148-863c-8024-3dbe879f88ed",
+              "filename": "iphone-dynamic-island-medium-02-project-command-center_1206x2622.png",
+              "sourceFileBytes": 344514,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "dba7093ecc256479a439aa3319d311f00e6e2aa9305421fad7ca451f379e5dbc",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "ee000019-3148-863c-8027-3ef75aee1bd5",
+              "filename": "iphone-dynamic-island-medium-03-estimates-to-invoices_1206x2622.png",
+              "sourceFileBytes": 808171,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "b1e3e7c6f460360a0e1109960919e31206ee1799827c25035062f3732b64b17e",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "28000019-3148-863c-8032-aca207ceceac",
+              "filename": "iphone-dynamic-island-medium-04-price-the-work_1206x2622.png",
+              "sourceFileBytes": 518162,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "99f1174f4f824698b8beada79b41795bfe385218fb5449f22dfe1676a2d1f604",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "71c00019-3148-863c-802e-57173bb2d250",
+              "filename": "iphone-dynamic-island-medium-05-projects-in-order_1206x2622.png",
+              "sourceFileBytes": 497241,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "08ab4c0f4fa6239c0d747503079e73562aedec0fdaf05e63670d6bf0a13a18e3",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_65",
+          "family": "iphone-face-id-large",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "e6400019-3148-863c-800e-faa937ecb418",
+              "filename": "iphone-face-id-large-01-photo-to-preview_1284x2778.png",
+              "sourceFileBytes": 944086,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "b02add8ddb78b3027accad8265337df0b50cf7af2eb599b6139b2707c9afe287",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "04000019-3148-863c-8032-cfdaba731570",
+              "filename": "iphone-face-id-large-02-project-command-center_1284x2778.png",
+              "sourceFileBytes": 371888,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "cb9d3bfaafcb5d4e8d4a7c6f012974b811c4e5f350390cbfba08ce1c41f3670d",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "3dc00019-3148-863c-8017-13dcc4c10863",
+              "filename": "iphone-face-id-large-03-estimates-to-invoices_1284x2778.png",
+              "sourceFileBytes": 892539,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "701b0a1fbc9f2a92ee3c81421efbd6d00078398e1e9785cdd1c1c7b2f1eb9473",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "f7800019-3148-863c-803c-34032a33f177",
+              "filename": "iphone-face-id-large-04-price-the-work_1284x2778.png",
+              "sourceFileBytes": 561136,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "78a713fa6d261fa8c6bf37029cb4bf507b813bb0da12229a81f961f91dbf98de",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "61800019-3148-863c-8034-b7ecfb61f7fb",
+              "filename": "iphone-face-id-large-05-projects-in-order_1284x2778.png",
+              "sourceFileBytes": 538808,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "15824ec0588f897b2cfd1f56414547f01a9854d7ea46e68ac149c30479cd8fd6",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_67",
+          "family": "iphone-dynamic-island-large",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "6c400019-3148-863c-800f-5d92b78280a5",
+              "filename": "iphone-dynamic-island-large-01-photo-to-preview_1320x2868.png",
+              "sourceFileBytes": 982795,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "531bda79ffdcbd019d967936f4bd092142017d2112b16948f94c2385272eb6c7",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "75c00019-3148-863c-8025-48ee575813da",
+              "filename": "iphone-dynamic-island-large-02-project-command-center_1320x2868.png",
+              "sourceFileBytes": 384425,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "273f044ee8e3561899bbd00b3ce7ca3518e4336b5c919ef7ed595643c86dc073",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "a3000019-3148-863c-801c-33af1716d838",
+              "filename": "iphone-dynamic-island-large-03-estimates-to-invoices_1320x2868.png",
+              "sourceFileBytes": 927835,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "67328eb93bed6801ad48c2b3ca8c52602c9fe676245bf2dc5b2077d851cd3400",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "8c400019-3148-863c-801d-b4504d91032a",
+              "filename": "iphone-dynamic-island-large-04-price-the-work_1320x2868.png",
+              "sourceFileBytes": 582627,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "01ffd1e649a26c7c01fc153013f434f3df66dee18d975cfe82ac4c8fbb2e408d",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "07c00019-3148-863c-803e-5dee2849556d",
+              "filename": "iphone-dynamic-island-large-05-projects-in-order_1320x2868.png",
+              "sourceFileBytes": 563089,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "50806fc17b1b1b16caab94d73c329257e34b50f9ff73aec3ea904231394227c2",
+              "delivery": "COMPLETE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "locale": "es-ES",
+      "count": 25,
+      "sets": [
+        {
+          "displayType": "APP_IPAD_PRO_3GEN_11",
+          "family": "ipad-11",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "cc400019-3148-863c-8001-2a6caca1f55e",
+              "filename": "ipad-11-01-photo-to-preview_1668x2420.png",
+              "sourceFileBytes": 1476083,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "84ac006f26a6e72e01420efb68d2b9ff4c8791f86ed279b9e72d2e59c2db36f9",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "2dc00019-3148-863c-8021-508776c5e7f3",
+              "filename": "ipad-11-02-project-command-center_1668x2420.png",
+              "sourceFileBytes": 364768,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "50e6ec1df6570e28632beee4d2a6b13e240ab0e7c548c609c412635522943834",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "65800019-3148-863c-8005-bf32f1a8e187",
+              "filename": "ipad-11-03-estimates-to-invoices_1668x2420.png",
+              "sourceFileBytes": 292686,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "65e4b9eaae19b9501363ddfe3b885dc0895b74006a73e98b8d4de0bb1e02f023",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "76c00019-3148-863c-8024-a5ce9fedaf21",
+              "filename": "ipad-11-04-price-the-work_1668x2420.png",
+              "sourceFileBytes": 265734,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "d850c096bfea6841b57c905c2644a2b5836f0faf0251e6c5cbb06077d91ac863",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "1d400019-3148-863c-803b-7c9e144a5d5a",
+              "filename": "ipad-11-05-projects-in-order_1668x2420.png",
+              "sourceFileBytes": 1220175,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "96227e96c4817197d270a298eed6f60634a612f1292ff8bc4c036811c2bf4f94",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPAD_PRO_3GEN_129",
+          "family": "ipad-13",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "4e400019-3148-863c-802e-8d17d892b057",
+              "filename": "ipad-13-01-photo-to-preview_2064x2752.png",
+              "sourceFileBytes": 2021271,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "4cefe16443979bed585f2a503b096e0a0a3b529c6a6ff4c1b8a49372d810fc19",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "15400019-3148-863c-8021-bdf2d720f0d6",
+              "filename": "ipad-13-02-project-command-center_2064x2752.png",
+              "sourceFileBytes": 446204,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "5c3e8b2a0b35778d07d2f66997ddccfa9fc5d0e6af4e029a8ff8c2aec9b25fe3",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "ca800019-3148-863c-802f-b789bfe675d4",
+              "filename": "ipad-13-03-estimates-to-invoices_2064x2752.png",
+              "sourceFileBytes": 355429,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "346903a3202e6396790c2657bedaa6e6972ebd29601905d35ffbd8a456ff15dd",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "a3800019-3148-863c-8005-ce43acc96a8e",
+              "filename": "ipad-13-04-price-the-work_2064x2752.png",
+              "sourceFileBytes": 323174,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "83c4efb0ff52e27f0bd180909090ef1efc74d3049a9b87a74ff88265b6b8ccb6",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "01800019-3148-863c-8009-f4ef2d302590",
+              "filename": "ipad-13-05-projects-in-order_2064x2752.png",
+              "sourceFileBytes": 1490905,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "1bd945bbf81c05a24e36bad08c276105ba94453c1d358000a502a129143bb63f",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_61",
+          "family": "iphone-dynamic-island-medium",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "ad800019-3148-863c-801d-586311a8af2d",
+              "filename": "iphone-dynamic-island-medium-01-photo-to-preview_1206x2622.png",
+              "sourceFileBytes": 869320,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "12ce38bcb5fa9956fea157a9480e4fedcc19a449ad4dacd752e8720811d5b640",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "cb800019-3148-863c-802f-393a8567c828",
+              "filename": "iphone-dynamic-island-medium-02-project-command-center_1206x2622.png",
+              "sourceFileBytes": 344514,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "dba7093ecc256479a439aa3319d311f00e6e2aa9305421fad7ca451f379e5dbc",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "fec00019-3148-863c-8018-519f1360b56f",
+              "filename": "iphone-dynamic-island-medium-03-estimates-to-invoices_1206x2622.png",
+              "sourceFileBytes": 808171,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "b1e3e7c6f460360a0e1109960919e31206ee1799827c25035062f3732b64b17e",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "78000019-3148-863c-8022-16402fb47aef",
+              "filename": "iphone-dynamic-island-medium-04-price-the-work_1206x2622.png",
+              "sourceFileBytes": 518162,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "99f1174f4f824698b8beada79b41795bfe385218fb5449f22dfe1676a2d1f604",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "27400019-3148-863c-802b-d52b46def0d6",
+              "filename": "iphone-dynamic-island-medium-05-projects-in-order_1206x2622.png",
+              "sourceFileBytes": 497241,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "08ab4c0f4fa6239c0d747503079e73562aedec0fdaf05e63670d6bf0a13a18e3",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_65",
+          "family": "iphone-face-id-large",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "19c00019-3148-863c-800c-be76b6a0b3cf",
+              "filename": "iphone-face-id-large-01-photo-to-preview_1284x2778.png",
+              "sourceFileBytes": 944086,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "b02add8ddb78b3027accad8265337df0b50cf7af2eb599b6139b2707c9afe287",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "31800019-3148-863c-8039-3108c40597b6",
+              "filename": "iphone-face-id-large-02-project-command-center_1284x2778.png",
+              "sourceFileBytes": 371888,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "cb9d3bfaafcb5d4e8d4a7c6f012974b811c4e5f350390cbfba08ce1c41f3670d",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "30800019-3148-863c-801c-a287c436bd8c",
+              "filename": "iphone-face-id-large-03-estimates-to-invoices_1284x2778.png",
+              "sourceFileBytes": 892539,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "701b0a1fbc9f2a92ee3c81421efbd6d00078398e1e9785cdd1c1c7b2f1eb9473",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "bc000019-3148-863c-8032-b0a23d043b2b",
+              "filename": "iphone-face-id-large-04-price-the-work_1284x2778.png",
+              "sourceFileBytes": 561136,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "78a713fa6d261fa8c6bf37029cb4bf507b813bb0da12229a81f961f91dbf98de",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "89c00019-3148-863c-8018-308586ce0446",
+              "filename": "iphone-face-id-large-05-projects-in-order_1284x2778.png",
+              "sourceFileBytes": 538808,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "15824ec0588f897b2cfd1f56414547f01a9854d7ea46e68ac149c30479cd8fd6",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_67",
+          "family": "iphone-dynamic-island-large",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "7e000019-3148-863c-8001-abbac941e49d",
+              "filename": "iphone-dynamic-island-large-01-photo-to-preview_1320x2868.png",
+              "sourceFileBytes": 982795,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "531bda79ffdcbd019d967936f4bd092142017d2112b16948f94c2385272eb6c7",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "bec00019-3148-863c-8003-17e9d0518644",
+              "filename": "iphone-dynamic-island-large-02-project-command-center_1320x2868.png",
+              "sourceFileBytes": 384425,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "273f044ee8e3561899bbd00b3ce7ca3518e4336b5c919ef7ed595643c86dc073",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "d1000019-3148-863c-8018-617bd23ed548",
+              "filename": "iphone-dynamic-island-large-03-estimates-to-invoices_1320x2868.png",
+              "sourceFileBytes": 927835,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "67328eb93bed6801ad48c2b3ca8c52602c9fe676245bf2dc5b2077d851cd3400",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "70000019-3148-863c-801a-d965219127fc",
+              "filename": "iphone-dynamic-island-large-04-price-the-work_1320x2868.png",
+              "sourceFileBytes": 582627,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "01ffd1e649a26c7c01fc153013f434f3df66dee18d975cfe82ac4c8fbb2e408d",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "6f800019-3148-863c-8011-9746995b64e4",
+              "filename": "iphone-dynamic-island-large-05-projects-in-order_1320x2868.png",
+              "sourceFileBytes": 563089,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "50806fc17b1b1b16caab94d73c329257e34b50f9ff73aec3ea904231394227c2",
+              "delivery": "COMPLETE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "locale": "es-MX",
+      "count": 25,
+      "sets": [
+        {
+          "displayType": "APP_IPAD_PRO_3GEN_11",
+          "family": "ipad-11",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "9c800019-3148-863c-802d-5d799c9e7c0a",
+              "filename": "ipad-11-01-photo-to-preview_1668x2420.png",
+              "sourceFileBytes": 1476083,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "84ac006f26a6e72e01420efb68d2b9ff4c8791f86ed279b9e72d2e59c2db36f9",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "85400019-3148-863c-8015-cecc031ecbde",
+              "filename": "ipad-11-02-project-command-center_1668x2420.png",
+              "sourceFileBytes": 364768,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "50e6ec1df6570e28632beee4d2a6b13e240ab0e7c548c609c412635522943834",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "45800019-3148-863c-8030-63dd11f90d0f",
+              "filename": "ipad-11-03-estimates-to-invoices_1668x2420.png",
+              "sourceFileBytes": 292686,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "65e4b9eaae19b9501363ddfe3b885dc0895b74006a73e98b8d4de0bb1e02f023",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "2e400019-3148-863c-8039-615aca0e78b7",
+              "filename": "ipad-11-04-price-the-work_1668x2420.png",
+              "sourceFileBytes": 265734,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "d850c096bfea6841b57c905c2644a2b5836f0faf0251e6c5cbb06077d91ac863",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "4dc00019-3148-863c-8017-ef7b96212bfa",
+              "filename": "ipad-11-05-projects-in-order_1668x2420.png",
+              "sourceFileBytes": 1220175,
+              "dimensions": [
+                1668,
+                2420
+              ],
+              "sourceSHA256": "96227e96c4817197d270a298eed6f60634a612f1292ff8bc4c036811c2bf4f94",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPAD_PRO_3GEN_129",
+          "family": "ipad-13",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "29c00019-3148-863c-803f-91876fb90541",
+              "filename": "ipad-13-01-photo-to-preview_2064x2752.png",
+              "sourceFileBytes": 2021271,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "4cefe16443979bed585f2a503b096e0a0a3b529c6a6ff4c1b8a49372d810fc19",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "12c00019-3148-863c-8026-65caf830a9c8",
+              "filename": "ipad-13-02-project-command-center_2064x2752.png",
+              "sourceFileBytes": 446204,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "5c3e8b2a0b35778d07d2f66997ddccfa9fc5d0e6af4e029a8ff8c2aec9b25fe3",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "fac00019-3148-863c-803d-2328a56085d4",
+              "filename": "ipad-13-03-estimates-to-invoices_2064x2752.png",
+              "sourceFileBytes": 355429,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "346903a3202e6396790c2657bedaa6e6972ebd29601905d35ffbd8a456ff15dd",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "d3000019-3148-863c-802b-f28e07db9828",
+              "filename": "ipad-13-04-price-the-work_2064x2752.png",
+              "sourceFileBytes": 323174,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "83c4efb0ff52e27f0bd180909090ef1efc74d3049a9b87a74ff88265b6b8ccb6",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "b6c00019-3148-863c-8004-d842c09ac7ca",
+              "filename": "ipad-13-05-projects-in-order_2064x2752.png",
+              "sourceFileBytes": 1490905,
+              "dimensions": [
+                2064,
+                2752
+              ],
+              "sourceSHA256": "1bd945bbf81c05a24e36bad08c276105ba94453c1d358000a502a129143bb63f",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_61",
+          "family": "iphone-dynamic-island-medium",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "90000019-3148-863c-802d-fcb8b1adaee7",
+              "filename": "iphone-dynamic-island-medium-01-photo-to-preview_1206x2622.png",
+              "sourceFileBytes": 869320,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "12ce38bcb5fa9956fea157a9480e4fedcc19a449ad4dacd752e8720811d5b640",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "22800019-3148-863c-8013-7c2ca548af69",
+              "filename": "iphone-dynamic-island-medium-02-project-command-center_1206x2622.png",
+              "sourceFileBytes": 344514,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "dba7093ecc256479a439aa3319d311f00e6e2aa9305421fad7ca451f379e5dbc",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "39000019-3148-863c-801d-358df6142596",
+              "filename": "iphone-dynamic-island-medium-03-estimates-to-invoices_1206x2622.png",
+              "sourceFileBytes": 808171,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "b1e3e7c6f460360a0e1109960919e31206ee1799827c25035062f3732b64b17e",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "7c000019-3148-863c-800d-624e927474eb",
+              "filename": "iphone-dynamic-island-medium-04-price-the-work_1206x2622.png",
+              "sourceFileBytes": 518162,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "99f1174f4f824698b8beada79b41795bfe385218fb5449f22dfe1676a2d1f604",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "5d800019-3148-863c-8005-dfa95370cfda",
+              "filename": "iphone-dynamic-island-medium-05-projects-in-order_1206x2622.png",
+              "sourceFileBytes": 497241,
+              "dimensions": [
+                1206,
+                2622
+              ],
+              "sourceSHA256": "08ab4c0f4fa6239c0d747503079e73562aedec0fdaf05e63670d6bf0a13a18e3",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_65",
+          "family": "iphone-face-id-large",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "bf800019-3148-863c-8000-8d03f5f3a5ba",
+              "filename": "iphone-face-id-large-01-photo-to-preview_1284x2778.png",
+              "sourceFileBytes": 944086,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "b02add8ddb78b3027accad8265337df0b50cf7af2eb599b6139b2707c9afe287",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "66800019-3148-863c-802f-da70e65d6214",
+              "filename": "iphone-face-id-large-02-project-command-center_1284x2778.png",
+              "sourceFileBytes": 371888,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "cb9d3bfaafcb5d4e8d4a7c6f012974b811c4e5f350390cbfba08ce1c41f3670d",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "1f400019-3148-863c-8031-f0ee74d4dd1f",
+              "filename": "iphone-face-id-large-03-estimates-to-invoices_1284x2778.png",
+              "sourceFileBytes": 892539,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "701b0a1fbc9f2a92ee3c81421efbd6d00078398e1e9785cdd1c1c7b2f1eb9473",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "5cc00019-3148-863c-800a-f25315515a25",
+              "filename": "iphone-face-id-large-04-price-the-work_1284x2778.png",
+              "sourceFileBytes": 561136,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "78a713fa6d261fa8c6bf37029cb4bf507b813bb0da12229a81f961f91dbf98de",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "c5400019-3148-863c-8006-cb8655b636ec",
+              "filename": "iphone-face-id-large-05-projects-in-order_1284x2778.png",
+              "sourceFileBytes": 538808,
+              "dimensions": [
+                1284,
+                2778
+              ],
+              "sourceSHA256": "15824ec0588f897b2cfd1f56414547f01a9854d7ea46e68ac149c30479cd8fd6",
+              "delivery": "COMPLETE"
+            }
+          ]
+        },
+        {
+          "displayType": "APP_IPHONE_67",
+          "family": "iphone-dynamic-island-large",
+          "count": 5,
+          "ordered01Through05": true,
+          "reportedFileSizesMatchSources": true,
+          "dimensionsMatchSources": true,
+          "allDeliveryComplete": true,
+          "assets": [
+            {
+              "position": 1,
+              "id": "13000019-3148-863c-800a-132995f21a0c",
+              "filename": "iphone-dynamic-island-large-01-photo-to-preview_1320x2868.png",
+              "sourceFileBytes": 982795,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "531bda79ffdcbd019d967936f4bd092142017d2112b16948f94c2385272eb6c7",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 2,
+              "id": "e2c00019-3148-863c-8022-e7a577c6d8d8",
+              "filename": "iphone-dynamic-island-large-02-project-command-center_1320x2868.png",
+              "sourceFileBytes": 384425,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "273f044ee8e3561899bbd00b3ce7ca3518e4336b5c919ef7ed595643c86dc073",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 3,
+              "id": "d1400019-3148-863c-8037-eb11ca5ec38f",
+              "filename": "iphone-dynamic-island-large-03-estimates-to-invoices_1320x2868.png",
+              "sourceFileBytes": 927835,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "67328eb93bed6801ad48c2b3ca8c52602c9fe676245bf2dc5b2077d851cd3400",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 4,
+              "id": "74400019-3148-863c-800f-c5a28221496d",
+              "filename": "iphone-dynamic-island-large-04-price-the-work_1320x2868.png",
+              "sourceFileBytes": 582627,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "01ffd1e649a26c7c01fc153013f434f3df66dee18d975cfe82ac4c8fbb2e408d",
+              "delivery": "COMPLETE"
+            },
+            {
+              "position": 5,
+              "id": "d3000019-3148-863c-800c-d74ef6f83dd7",
+              "filename": "iphone-dynamic-island-large-05-projects-in-order_1320x2868.png",
+              "sourceFileBytes": 563089,
+              "dimensions": [
+                1320,
+                2868
+              ],
+              "sourceSHA256": "50806fc17b1b1b16caab94d73c329257e34b50f9ff73aec3ea904231394227c2",
+              "delivery": "COMPLETE"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submitRun": 41618791416,
+  "submittedAt": "2026-11-03T10:23:58Z",
+  "copyRun": 41614514981,
+  "screenshotsRun": 41614659361,
+  "attachmentRun": 41616169904,
+  "uploadRun": 41614510245,
+  "cancelledQueuedMacRun": 41618201415,
+  "binarySource": "d10738e76211beadc74e29ea9cdc8d121ca41135",
+  "submissionSource": "9325919400126045beefcd36ef19a52af2150268",
+  "build": {
+    "id": "8d261e8e-578c-4a71-997c-a234ebd88b53",
+    "number": "14",
+    "processingState": "VALID",
+    "attached": true,
+    "expired": false
+  },
+  "releaseType": "MANUAL",
+  "metadataChecksPassed": 40,
+  "reviewNotesMatchSource": true,
+  "reviewNotesSHA256": "60bab84ccc4e208277996fea95e9a0c8e170caffab5fd47357eaf33ea3f215cc",
+  "submittedForReview": true,
+  "publicReleasePerformed": false,
+  "simulatorsOpened": false
+}

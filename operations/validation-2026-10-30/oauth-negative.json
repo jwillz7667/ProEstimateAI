@@ -1,0 +1,14 @@
+[
+  {
+    "provider": "apple",
+    "status": 401,
+    "code": "UNAUTHORIZED",
+    "accepted": false
+  },
+  {
+    "provider": "google",
+    "status": 401,
+    "code": "UNAUTHORIZED",
+    "accepted": false
+  }
+]

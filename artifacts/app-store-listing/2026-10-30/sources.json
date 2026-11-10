@@ -1,0 +1,21 @@
+{
+  "iphone": {
+    "type": "AI-generated marketing concepts with example UI",
+    "generationTool": "Built-in image_gen",
+    "originals": "../../app-store-concepts/2026-10-30",
+    "cutoutPrompts": "prompts.json",
+    "layout": "../../../scripts/render-app-store-listing.cjs"
+  },
+  "ipad": {
+    "type": "Actual app screenshots from isolated QA workflow",
+    "simulator": "iPad Pro 13-inch M4, iPadOS 26.4.1",
+    "rawDimensions": [2752, 2064],
+    "01-ipad-preview.png": "../../../operations/ui-audit-2026-10-30/08-ipad-preview-landscape.png",
+    "02-ipad-dashboard.png": "../../../operations/ui-audit-2026-10-30/06-ipad-dashboard-final-landscape.png",
+    "03-ipad-project.png": "../../../operations/ui-audit-2026-10-30/07-ipad-project-landscape.png",
+    "note": "Third iPad panel shows project scope/details. No dedicated estimate editor capture was obtained. Its copy is adapted accordingly. QA tenancy was removed after capture."
+  },
+  "background": "Single continuous code-native orange and charcoal SVG across 01, 02, 03",
+  "branding": "Actual repository AppIcon with white/orange wordmark on a dark badge",
+  "export": "Deterministic SVG rendering via existing sharp dependency; RGB PNG without alpha; no App Store upload"
+}

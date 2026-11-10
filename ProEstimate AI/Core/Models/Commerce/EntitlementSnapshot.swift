@@ -15,6 +15,7 @@ struct EntitlementSnapshot: Codable, Equatable, Sendable {
     let gracePeriodEndsAt: Date?
     let isAutoRenewEnabled: Bool?
     let billingWarning: String?
+    var source: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case subscriptionState = "subscription_state"
@@ -26,6 +27,7 @@ struct EntitlementSnapshot: Codable, Equatable, Sendable {
         case gracePeriodEndsAt = "grace_period_ends_at"
         case isAutoRenewEnabled = "is_auto_renew_enabled"
         case billingWarning = "billing_warning"
+        case source
     }
 }
 
@@ -33,12 +35,8 @@ struct EntitlementSnapshot: Codable, Equatable, Sendable {
 
 /// Identifies which plan a user is on. Matches the backend `PlanCode` enum.
 ///
-/// The retired `PREMIUM_*` SKUs are intentionally absent. Decoding is
-/// resilient: an unrecognized code (e.g. a grandfathered Premium
-/// entitlement still on the server) maps to `proMonthly` instead of
-/// failing the whole snapshot decode. Feature access is driven by
-/// `subscription_state` + `feature_flags`, never by this code, so a
-/// legacy Premium account keeps full access and simply presents as Pro.
+/// Retired Premium plans retain their billing period and display as Pro.
+/// Unknown plans display as Free; access still comes from the server snapshot.
 enum PlanCode: String, Codable, CaseIterable, Sendable {
     case freeStarter = "FREE_STARTER"
     case proMonthly = "PRO_MONTHLY"
@@ -46,7 +44,11 @@ enum PlanCode: String, Codable, CaseIterable, Sendable {
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
-        self = PlanCode(rawValue: raw) ?? .proMonthly
+        switch raw {
+        case "PREMIUM_MONTHLY": self = .proMonthly
+        case "PREMIUM_ANNUAL": self = .proAnnual
+        default: self = PlanCode(rawValue: raw) ?? .freeStarter
+        }
     }
 }
 
@@ -109,6 +111,8 @@ enum BillingPeriod: String, CaseIterable, Sendable {
 enum UsageMetricCode: String, Codable, CaseIterable, Sendable {
     case aiGeneration = "AI_GENERATION"
     case quoteExport = "QUOTE_EXPORT"
+    case projectCreated = "PROJECT_CREATED"
+    case estimateGenerated = "ESTIMATE_GENERATED"
 }
 
 // MARK: - Usage Bucket
@@ -151,7 +155,9 @@ enum FeatureCode: String, CaseIterable, Sendable {
 extension EntitlementSnapshot {
     /// Check whether a specific feature is enabled.
     func hasFeature(_ feature: FeatureCode) -> Bool {
-        featureFlags[feature.rawValue] ?? false
+        if !subscriptionState.hasProAccess { return false }
+        if subscriptionState == .trialActive, (trialEndsAt ?? .distantPast) <= Date() { return false }
+        return featureFlags[feature.rawValue] ?? false
     }
 
     /// Remaining count for a given usage metric, or nil if not tracked.
@@ -162,13 +168,12 @@ extension EntitlementSnapshot {
     /// Number of days until trial ends, or nil if not in trial.
     var trialDaysRemaining: Int? {
         guard let trialEndsAt, subscriptionState == .trialActive else { return nil }
-        let days = Calendar.current.dateComponents([.day], from: Date(), to: trialEndsAt).day
-        return max(0, days ?? 0)
+        return max(0, Int(ceil(trialEndsAt.timeIntervalSinceNow / 86_400)))
     }
 
     /// Whether the user has any remaining free generation credits.
     var hasGenerationCredits: Bool {
-        (remaining(for: .aiGeneration) ?? 0) > 0
+        hasFeature(.canGeneratePreview) && (remaining(for: .aiGeneration) ?? 0) > 0
     }
 
     /// Whether the user has any remaining free quote export credits.
@@ -180,29 +185,12 @@ extension EntitlementSnapshot {
 // MARK: - Sample Data
 
 extension EntitlementSnapshot {
-    /// Sample free-tier snapshot with starter credits.
+    /// A free workspace has no paid AI or export allowance.
     static let sampleFree = EntitlementSnapshot(
         subscriptionState: .free,
         currentPlanCode: .freeStarter,
-        featureFlags: [
-            FeatureCode.canGeneratePreview.rawValue: true,
-            FeatureCode.canExportQuote.rawValue: true,
-            FeatureCode.canRemoveWatermark.rawValue: false,
-            FeatureCode.canUseBranding.rawValue: false,
-            FeatureCode.canCreateInvoice.rawValue: false,
-            FeatureCode.canShareApprovalLink.rawValue: false,
-            FeatureCode.canExportMaterialLinks.rawValue: false,
-            FeatureCode.canUseHighResPreview.rawValue: false,
-        ],
-        usage: [
-            UsageBucket(
-                metricCode: .aiGeneration,
-                includedQuantity: 5,
-                consumedQuantity: 2,
-                remainingQuantity: 3,
-                source: "STARTER_CREDITS"
-            ),
-        ],
+        featureFlags: [:],
+        usage: [],
         renewalDate: nil,
         trialEndsAt: nil,
         gracePeriodEndsAt: nil,

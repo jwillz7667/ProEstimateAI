@@ -93,3 +93,45 @@ jobs:
 
       - name: Run model and pagination regressions
         run: scripts/tests/run-ios-regressions.sh
+
+      - name: Run Home state regressions
+        run: scripts/tests/run-dashboard-regressions.sh
+
+      - name: Run project setup navigation regressions
+        run: scripts/tests/run-project-creation-navigation.sh
+
+      - name: Run manual estimate editing regressions
+        run: scripts/tests/run-estimate-editor-regressions.sh
+
+      - name: Run direct estimate creation regressions
+        run: scripts/tests/run-estimate-creation-regressions.sh
+
+      - name: Run estimate delivery regressions
+        run: scripts/tests/run-estimate-delivery-regressions.sh
+
+      - name: Run protected draft recovery regressions
+        run: scripts/tests/run-estimate-draft-recovery.sh
+
+      - name: Run invoice finance regressions
+        run: scripts/tests/run-invoice-finance-regressions.sh
+
+      - name: Run invoice currency regressions
+        run: scripts/tests/run-invoice-currency-regressions.sh
+
+      - name: Run customer payment setup regressions
+        run: scripts/tests/run-customer-payment-settings-regressions.sh
+
+      - name: Run saved estimate library regressions
+        run: scripts/tests/run-estimate-library-regressions.sh
+
+      - name: Run contractor price review regressions
+        run: scripts/tests/run-estimate-price-review-regressions.sh
+
+      - name: Run proposal and follow-up regressions
+        run: scripts/tests/run-proposal-followup-regressions.sh
+
+      - name: Run approved change-order regressions
+        run: scripts/tests/run-change-order-regressions.sh
+
+      - name: Run job cost and receipt regressions
+        run: scripts/tests/run-job-cost-regressions.sh

@@ -16,6 +16,12 @@ export interface EstimateLineItemDto {
   tax_rate: number;
   line_total: number;
   sort_order: number;
+  price_origin: string;
+  price_source_label: string | null;
+  price_source_url: string | null;
+  price_checked_at: string | null;
+  quantity_basis: string | null;
+  quantity_checked_at: string | null;
 }
 
 export function toEstimateLineItemDto(item: EstimateLineItem): EstimateLineItemDto {
@@ -35,5 +41,11 @@ export function toEstimateLineItemDto(item: EstimateLineItem): EstimateLineItemD
     tax_rate: Number(item.taxRate),
     line_total: Number(item.lineTotal),
     sort_order: item.sortOrder,
+    price_origin: item.priceOrigin.toLowerCase(),
+    price_source_label: item.priceSourceLabel,
+    price_source_url: item.priceSourceUrl,
+    price_checked_at: item.priceCheckedAt?.toISOString() ?? null,
+    quantity_basis: item.quantityBasis,
+    quantity_checked_at: item.quantityCheckedAt?.toISOString() ?? null,
   };
 }

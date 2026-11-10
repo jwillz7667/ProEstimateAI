@@ -55,6 +55,11 @@ export async function deleteHandler(req: Request, res: Response) {
   sendSuccess(res, {});
 }
 
+export async function reviseHandler(req: Request, res: Response) {
+  const estimate = await estimatesService.revise(param(req.params.id), req.companyId!, req.userId!, req.body.request_id);
+  sendSuccess(res, toEstimateDto(estimate), { statusCode: 201 });
+}
+
 export async function generateHandler(req: Request, res: Response) {
   const projectId = req.body.project_id as string;
   const estimate = await estimatesService.generateAI(

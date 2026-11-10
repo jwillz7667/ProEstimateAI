@@ -9,6 +9,7 @@ const envSchema = z.object({
     .enum(["development", "production", "test"])
     .default("development"),
   CORS_ORIGIN: z.string().default("*"),
+  FAL_KEY: z.string().min(1).optional(),
   GOOGLE_AI_API_KEY: z.string().min(1).optional(),
   DEEPSEEK_API_KEY: z.string().min(1).optional(),
   PIAPI_API_KEY: z.string().min(1).optional(),
@@ -27,12 +28,25 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   SERPAPI_API_KEY: z.string().min(1).optional(),
   REDIS_URL: z.string().url().optional(),
+  STRIPE_API_KEY: z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+  STRIPE_PAYMENTS_ENABLED: z.enum(['true', 'false']).default('false').transform(value => value === 'true'),
   RESEND_FROM_EMAIL: z
     .string()
     .default("ProEstimate AI <noreply@proestimateai.com>"),
   API_BASE_URL: z
     .string()
     .default("https://proestimate-api-production-75e5.up.railway.app"),
+  PUBLIC_WEB_BASE_URL: z
+    .string()
+    .url()
+    .refine((value) => {
+      if (!URL.canParse(value)) return false;
+      const url = new URL(value);
+      return (url.protocol === "https:" || url.protocol === "http:") &&
+        !url.username && !url.password;
+    }, "Public website URL must use HTTP or HTTPS without credentials")
+    .default("https://proestimateai.com"),
   PUBLIC_PROPOSAL_BASE_URL: z
     .string()
     .url()

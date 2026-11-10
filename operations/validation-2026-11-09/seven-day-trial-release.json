@@ -1,0 +1,103 @@
+{
+  "backendSourceCommit": "85f9761b7adf760469874022886357f466adff30",
+  "iosSourceCommit": "7ad17710963f314e535a7839b5998f5dde40c120",
+  "trial": {
+    "days": 7,
+    "singleUse": true,
+    "newAndReturningAccounts": true,
+    "requiresPayment": false,
+    "autoRenews": false,
+    "serverAuthoritative": true,
+    "proUsageLimitsApply": true,
+    "manualToolsRemainFree": true
+  },
+  "validation": {
+    "backendUnitTests": 256,
+    "backendIntegrationTests": 292,
+    "integrationFiles": 34,
+    "newTrialIntegrationTests": 10,
+    "nativeLoginAndCommerceChecks": 153,
+    "genericDeviceSDKBuild": "passed",
+    "simulatorsOpened": false,
+    "allCIWorkflowsPassed": true,
+    "ciRunsAtIOSReleaseSource": {
+      "backend": 42755867808,
+      "ios": 42755867985,
+      "web": 42755867774,
+      "releaseSafety": 42755867782
+    },
+    "isolatedLocalCheckoutRetest": "passed after one local transaction timeout under compilation load"
+  },
+  "railway": {
+    "deploymentId": "bf7805c1-98aa-44a5-bf86-e173f8a038f0",
+    "status": "SUCCESS",
+    "migrations": 35,
+    "migration": "20261109120000_seven_day_account_trial",
+    "apiHealth": 200,
+    "database": "connected",
+    "redis": "connected",
+    "websiteHealth": 200,
+    "unauthenticatedEntitlement": 401,
+    "configurationPreserved": true,
+    "stripeCollectionEnabled": false
+  },
+  "appleIntroductoryOffers": {
+    "app_id": "6762563132",
+    "products": [
+      {
+        "id": "6762564818",
+        "product_id": "proestimate.pro.annual",
+        "state": "APPROVED",
+        "group_id": "22041326",
+        "available_countries": 175,
+        "seven_day_countries": 175,
+        "missing_countries": [],
+        "offer_count": 175,
+        "base_price_count": 175,
+        "us_prices": [
+          "149.99"
+        ]
+      },
+      {
+        "id": "6762563652",
+        "product_id": "proestimate.pro.monthly",
+        "state": "APPROVED",
+        "group_id": "22041326",
+        "available_countries": 175,
+        "seven_day_countries": 175,
+        "missing_countries": [],
+        "offer_count": 175,
+        "base_price_count": 175,
+        "us_prices": [
+          "19.99"
+        ]
+      }
+    ]
+  },
+  "appStore": {
+    "version": "1.0.10",
+    "versionId": "4039d6cb-706e-4dc3-b075-71cb0d6964c7",
+    "reviewState": "WAITING_FOR_REVIEW",
+    "releaseType": "MANUAL",
+    "buildId": "8eae43f9-a46e-43f9-8444-488fedae5e69",
+    "buildNumber": "17",
+    "processingState": "VALID",
+    "locales": 5,
+    "deviceSets": 25,
+    "screenshots": 125,
+    "minimumPerDeviceSet": 5,
+    "allScreenshotsComplete": true,
+    "reviewNotesMatchSource": true
+  },
+  "workflows": {
+    "trialConfiguration": 42754851116,
+    "upload": 42755914149,
+    "listingText": 42756162862,
+    "submission": 42756812029,
+    "finalReadback": 42757076119
+  },
+  "initialUploadRejection": {
+    "run": 42755259717,
+    "reason": "Apple closed the 1.0.9 train; corrected marketing version to 1.0.10 before retrying"
+  }
+}

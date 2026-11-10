@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ProEstimate AI · Five-panel gallery review</title>
+<style>
+:root {color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f7;color:#252528;--card-width:273.328125px;--gallery-gap:20px;--gallery-background:#fff}
+*{box-sizing:border-box}body{margin:0}main{max-width:1280px;margin:0 auto;padding:32px 24px 56px}h1{font-size:clamp(26px,4vw,38px);letter-spacing:-.04em;margin:4px 0 12px}p{max-width:900px;line-height:1.55;color:#55555e}.eyebrow{color:#a54a08;font-size:13px;letter-spacing:.12em;text-transform:uppercase;font-weight:750}.controls{display:flex;align-items:end;flex-wrap:wrap;gap:16px;margin:28px 0 16px;padding:20px;border:1px solid #dddde3;border-radius:16px;background:#fff}label{display:flex;flex-direction:column;gap:8px;font-size:13px;font-weight:650}select,input,button{font:inherit;min-height:42px;border:1px solid #c6c6ce;border-radius:9px;background:#fff;color:#252528;padding:8px 12px}input{width:130px}button{cursor:pointer}button:hover{border-color:#a54a08}button.primary{background:#ff9230;border-color:#ff9230;color:#251a10;font-weight:700}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #0a65c9;outline-offset:3px}.calibration{font-size:13px;padding:12px 0;color:#55555e}.viewport{width:1200px;max-width:100%;border:1px solid #dddde3;border-radius:18px;overflow:hidden;background:var(--gallery-background)}.strip{display:flex;gap:var(--gallery-gap);overflow-x:auto;padding:20px;scroll-snap-type:x proximity;scrollbar-color:#8d8d98 transparent;align-items:start}.strip img{width:var(--card-width);height:auto;flex:0 0 var(--card-width);display:block;border-radius:10px;scroll-snap-align:start}.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:22px}.legend article{padding:16px;border:1px solid #dddde3;border-radius:12px;background:#fff}.legend h2{font-size:14px;margin:0 0 8px}.legend p{font-size:12px;margin:0}.note{font-size:12px;margin-top:24px}.wide{width:1200px}.compact{width:390px}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">ProEstimate AI · Campaign review</div>
+<h1>Five panels. Original ribbon. Space included.</h1>
+<p>The original orange-ribbon panorama is sampled around virtual gaps. Use the measured reference to review its alignment, then adjust the gallery width and gutter to see how a different storefront changes the result.</p>
+<div class="controls">
+<label>Export family<select id="family"></select></label>
+<label>Card width (CSS px)<input id="card" type="number" min="160" max="800" step="0.000001" value="273.328125"></label>
+<label>Gutter (CSS px)<input id="gap" type="number" min="0" max="80" step="1" value="20"></label>
+<button type="button" id="reference" class="primary">1200 px reference</button>
+<button type="button" id="compact">390 px alternative</button>
+<button type="button" id="background">Dark gallery</button>
+</div>
+<div class="calibration" id="calibration" aria-live="polite"></div>
+<div class="viewport wide" id="viewport"><div class="strip" id="gallery" aria-label="Five ordered screenshot panels"></div></div>
+<div class="legend" id="legend"></div>
+<p class="note">Layout review only. Captions remain English. Historic capture crops, code-derived illustrations and previously selected generated device artwork are identified in sources.json. No simulator was opened or captured for this revision. The iPad gutter ratio is a reference calibration inferred from the measured iPhone gallery.</p>
+</main>
+<script>
+const manifest=__CAMPAIGN_MANIFEST__;
+const family=document.querySelector('#family'),gallery=document.querySelector('#gallery'),card=document.querySelector('#card'),gap=document.querySelector('#gap'),viewport=document.querySelector('#viewport'),calibration=document.querySelector('#calibration');
+let compact=false,dark=false;
+manifest.families.forEach(f=>{const o=document.createElement('option');o.value=f.id;o.textContent=`${f.device} · ${f.width} × ${f.height}`;o.selected=f.id==='iphone-dynamic-island-large';family.append(o)});
+function update(){const f=manifest.families.find(f=>f.id===family.value);document.documentElement.style.setProperty('--card-width',`${Number(card.value)}px`);document.documentElement.style.setProperty('--gallery-gap',`${Number(gap.value)}px`);gallery.replaceChildren(...f.files.map((file,i)=>{const img=document.createElement('img');img.src=file;img.alt=`${i+1} of 5: ${manifest.panels[i].title.join(' ')}`;return img}));calibration.textContent=`${compact?'390 px compact alternative (not a measured native storefront)':'1200 px reference gallery viewport'} · cards ${Number(card.value)} px · gap ${Number(gap.value)} px · ${f.tablet?'iPad ratio inferred from iPhone reference':'iPhone measured reference: 273.328125 px card / 20 px gap'}`;}
+family.addEventListener('change',update);card.addEventListener('input',update);gap.addEventListener('input',update);
+document.querySelector('#reference').addEventListener('click',()=>{compact=false;viewport.className='viewport wide';card.value='273.328125';gap.value='20';update()});
+document.querySelector('#compact').addEventListener('click',()=>{compact=true;viewport.className='viewport compact';card.value='260';gap.value='16';update()});
+document.querySelector('#background').addEventListener('click',e=>{dark=!dark;document.documentElement.style.setProperty('--gallery-background',dark?'#111':'#fff');e.target.textContent=dark?'Light gallery':'Dark gallery'});
+const legend=document.querySelector('#legend');manifest.panels.forEach((p,i)=>{const a=document.createElement('article'),h=document.createElement('h2'),d=document.createElement('p');h.textContent=`0${i+1} · ${p.subject}`;d.textContent=p.provenance;a.append(h,d);legend.append(a)});update();
+</script>
+</body></html>

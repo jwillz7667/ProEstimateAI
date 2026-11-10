@@ -40,6 +40,11 @@ export interface AppleTransactionInfo {
   type: string;
   appAccountToken?: string;
   environment: string;
+  signedDate?: number;
+  revocationDate?: number;
+  offerType?: number;
+  offerDiscountType?: string;
+  isUpgraded?: boolean;
 }
 
 export interface AppleRenewalInfo {
@@ -132,7 +137,7 @@ export class AppleJWSVerificationError extends Error {
  * Anything else throws `AppleJWSVerificationError`. The payload is
  * never returned unverified.
  */
-export async function verifyAppleJWS<T>(
+async function verifyAppleJWSInternal<T>(
   jws: string,
   label: string,
 ): Promise<T> {
@@ -201,6 +206,17 @@ export async function verifyAppleJWS<T>(
   return payload as T;
 }
 
+export async function verifyAppleJWS<T>(jws: string, label: string): Promise<T> {
+  try {
+    return await verifyAppleJWSInternal<T>(jws, label);
+  } catch (error) {
+    if (error instanceof AppleJWSVerificationError) throw error;
+    throw new AppleJWSVerificationError(
+      `${label} could not be verified: ${error instanceof Error ? error.message : 'invalid JWS'}`,
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -262,6 +278,9 @@ export async function verifyAndDecodeNotification(
       `Transaction bundle ID mismatch: expected ${EXPECTED_BUNDLE_ID}, got ${transactionInfo.bundleId}`,
     );
   }
+  if (transactionInfo.environment !== payload.data.environment) {
+    throw new AppleJWSVerificationError('Notification and transaction environments do not match');
+  }
 
   let renewalInfo: AppleRenewalInfo | null = null;
   if (payload.data.signedRenewalInfo) {
@@ -269,6 +288,9 @@ export async function verifyAndDecodeNotification(
       payload.data.signedRenewalInfo,
       "signedRenewalInfo",
     );
+    if (renewalInfo.originalTransactionId !== transactionInfo.originalTransactionId) {
+      throw new AppleJWSVerificationError('Renewal info belongs to a different subscription');
+    }
   }
 
   return {

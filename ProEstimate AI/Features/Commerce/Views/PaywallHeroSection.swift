@@ -5,8 +5,11 @@ import SwiftUI
 /// Uses an animated entrance for visual polish.
 struct PaywallHeroSection: View {
     let decision: PaywallDecision
+    var headline: String? = nil
+    var subheadline: String? = nil
 
     @State private var isVisible: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: SpacingTokens.lg) {
@@ -19,14 +22,14 @@ struct PaywallHeroSection: View {
             // Headline — adaptive so it reads as the system label color
             // (near-black in light mode, white in dark) on the paywall's
             // adaptive backdrop.
-            Text(decision.headline)
+            Text(headline ?? decision.headline)
                 .font(TypographyTokens.title)
                 .foregroundStyle(ColorTokens.primaryText)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             // Subheadline.
-            Text(decision.subheadline)
+            Text(subheadline ?? decision.subheadline)
                 .font(TypographyTokens.body)
                 .foregroundStyle(ColorTokens.secondaryText)
                 .multilineTextAlignment(.center)
@@ -37,8 +40,8 @@ struct PaywallHeroSection: View {
         .frame(maxWidth: .infinity)
         .background(heroGradient)
         .opacity(isVisible ? 1 : 0)
-        .offset(y: isVisible ? 0 : 20)
-        .animation(.easeOut(duration: 0.6), value: isVisible)
+        .offset(y: isVisible || reduceMotion ? 0 : 20)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.6), value: isVisible)
         .onAppear {
             isVisible = true
         }

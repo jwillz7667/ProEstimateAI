@@ -1,0 +1,40 @@
+{
+  "verifiedAt": "2026-11-04T00:36:01.448226+00:00",
+  "codeSha": "c4859cffd5f20d3057d781b75c3f221469d21999",
+  "marketingVersion": "1.0.9",
+  "buildNumber": "16",
+  "buildId": "4a5abd9c-a27f-45e5-aa3c-32c4a8eefabc",
+  "processingState": "VALID",
+  "expired": false,
+  "uploadedDate": "2026-11-03T16:28:05-08:00",
+  "uploadState": "COMPLETE",
+  "uploadErrors": [],
+  "uploadWarnings": [],
+  "uploadWorkflow": {
+    "runId": 41746292707,
+    "url": "https://github.com/jwillz7667/ProEstimateAI/actions/runs/41746292707",
+    "conclusion": "success"
+  },
+  "statusWorkflow": {
+    "runId": 41747189797,
+    "url": "https://github.com/jwillz7667/ProEstimateAI/actions/runs/41747189797",
+    "scope": "status",
+    "readOnly": true,
+    "conclusion": "success"
+  },
+  "appStoreVersionState": "PENDING_DEVELOPER_RELEASE",
+  "selectedBuildNumber": "14",
+  "selectedBuildId": "8d261e8e-578c-4a71-997c-a234ebd88b53",
+  "build16SelectedOrSubmittedForReview": false,
+  "olderBuildReleasedOrWithdrawn": false,
+  "screenshots": {
+    "localizations": 5,
+    "deviceSets": 25,
+    "minimumPerDeviceSet": 5,
+    "total": 125,
+    "complete": 125,
+    "assetsOrMetadataMutated": false
+  },
+  "simulatorsBooted": 0,
+  "newSigningCredentialsCreated": false
+}

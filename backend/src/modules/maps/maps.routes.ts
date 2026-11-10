@@ -6,6 +6,7 @@ import {
   staticMapHandler,
 } from "./maps.controller";
 import { validate } from "../../middleware/validate.middleware";
+import { requireMapsAccess } from '../../middleware/feature-access.middleware';
 import {
   geocodeSchema,
   lawnAreaSchema,
@@ -14,6 +15,7 @@ import {
 } from "./maps.validators";
 
 const router = Router();
+router.use(requireMapsAccess);
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,

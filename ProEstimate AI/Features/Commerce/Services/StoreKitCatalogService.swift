@@ -11,6 +11,7 @@ final class StoreKitCatalogService: StoreKitCatalogProviding {
 
     /// Cached products after the first load to avoid redundant App Store calls.
     private var cachedProducts: [Product]?
+    private var loadedAt: Date?
 
     init(productIDs: Set<String>? = nil) {
         self.productIDs = productIDs ?? Set(AppConstants.allSubscriptionProductIDs)
@@ -19,7 +20,8 @@ final class StoreKitCatalogService: StoreKitCatalogProviding {
     // MARK: - StoreKitCatalogProviding
 
     func loadProducts() async throws -> [Product] {
-        if let cached = cachedProducts {
+        if let cached = cachedProducts, !cached.isEmpty,
+           let loadedAt, Date().timeIntervalSince(loadedAt) < 60 {
             return cached
         }
 
@@ -35,7 +37,12 @@ final class StoreKitCatalogService: StoreKitCatalogProviding {
                 logger.info("Loaded \(products.count) products from StoreKit")
             }
 
-            cachedProducts = products
+            // An empty catalog is transient (sign-in, storefront or propagation);
+            // do not poison retries for the lifetime of this paywall.
+            if !products.isEmpty {
+                cachedProducts = products
+                loadedAt = Date()
+            }
             return products
         } catch {
             logger.error("Failed to load StoreKit products: \(error.localizedDescription)")
@@ -48,20 +55,19 @@ final class StoreKitCatalogService: StoreKitCatalogProviding {
         return products.first { $0.id == id }
     }
 
-    func isEligibleForIntroOffer(groupID: String) async -> Bool {
+    func isEligibleForIntroOffer() async -> Bool {
         do {
             let products = try await loadProducts()
 
-            // Find any product in the subscription group and check eligibility.
-            guard let subscriptionProduct = products.first(where: { product in
-                product.subscription?.subscriptionGroupID == groupID
-            }) else {
-                logger.warning("No products found in subscription group: \(groupID)")
+            // App Store Connect assigns the production group identifier.
+            // The local .storekit test group name is not its identifier.
+            guard let subscription = products.first(where: { $0.subscription != nil })?.subscription else {
+                logger.warning("No subscription products available for intro offer eligibility.")
                 return false
             }
 
-            let isEligible = await subscriptionProduct.subscription?.isEligibleForIntroOffer ?? false
-            logger.info("Intro offer eligibility for group \(groupID): \(isEligible)")
+            let isEligible = await subscription.isEligibleForIntroOffer
+            logger.info("Intro offer eligibility for group \(subscription.subscriptionGroupID): \(isEligible)")
             return isEligible
         } catch {
             logger.error("Failed to check intro offer eligibility: \(error.localizedDescription)")
@@ -118,7 +124,15 @@ final class StoreKitCatalogService: StoreKitCatalogProviding {
             }
 
             if introOffer.paymentMode == .freeTrial {
-                return "\(periodValue)-\(unitLabel) free trial"
+                let durationUnit: String
+                switch periodUnit {
+                case .day: durationUnit = "day"
+                case .week: durationUnit = "week"
+                case .month: durationUnit = "month"
+                case .year: durationUnit = "year"
+                @unknown default: durationUnit = "period"
+                }
+                return "\(periodValue)-\(durationUnit) free trial"
             } else {
                 return "Intro: \(introOffer.displayPrice) for \(periodValue) \(unitLabel)"
             }
@@ -131,7 +145,7 @@ final class StoreKitCatalogService: StoreKitCatalogProviding {
             description: product.description,
             priceDisplay: product.displayPrice,
             billingPeriodLabel: billingPeriodLabel,
-            hasIntroOffer: product.subscription?.introductoryOffer != nil,
+            hasIntroOffer: product.subscription?.introductoryOffer?.paymentMode == .freeTrial,
             introOfferDisplayText: introOfferText,
             isEligibleForIntroOffer: isEligibleForIntro,
             isFeatured: isFeatured,

@@ -1,0 +1,157 @@
+{
+  "recorded_at_utc": "2026-11-03T22:30:57.152693+00:00",
+  "code_sha": "d9aab6feaf6177607eb93bd25ee8f266a017f2b0",
+  "project_id": "3ed10d99-04a7-4f9b-babb-94a7071024c6",
+  "environment_id": "0117903d-f058-4712-a55e-3407b6d89c01",
+  "services": {
+    "api": {
+      "service_id": "51b3f663-7ff9-4ea9-b4a8-3861e3d90f4f",
+      "deployment_id": "c80d1f69-80af-4967-b3f0-32fd03590e5d",
+      "status": "SUCCESS",
+      "root_directory": "/backend",
+      "builder": "DOCKERFILE",
+      "dockerfile_path": "Dockerfile",
+      "build_command_override": null,
+      "start_command_override": null,
+      "pre_deploy_command_override": null,
+      "healthcheck_path": "/health",
+      "healthcheck_timeout_seconds": 300,
+      "deployment_message": "workflow-d9aab6feaf6177607eb93bd25ee8f266a017f2b0-api"
+    },
+    "website": {
+      "service_id": "5f67e8f7-ddff-4aab-ab5c-e9a8e2df0f65",
+      "deployment_id": "514e30ab-bd46-4c00-9136-d55398fb41de",
+      "status": "SUCCESS",
+      "root_directory": "/web",
+      "builder": "DOCKERFILE",
+      "dockerfile_path": "Dockerfile",
+      "build_command_override": null,
+      "start_command_override": null,
+      "pre_deploy_command_override": null,
+      "healthcheck_path": "/api/health",
+      "healthcheck_timeout_seconds": 300,
+      "deployment_message": "workflow-d9aab6feaf6177607eb93bd25ee8f266a017f2b0-web"
+    }
+  },
+  "migrations": {
+    "found": 33,
+    "newly_applied": 10,
+    "all_completed_successfully": true,
+    "new_migration_names": [
+      "20261103130000_protect_sent_quote_versions",
+      "20261103140000_invoice_receipts_and_schedule",
+      "20261103150000_estimate_library",
+      "20261103160000_proposal_acceptance_and_followups",
+      "20261103170000_stripe_invoice_checkout",
+      "20261103180000_job_cost_entries",
+      "20261103190000_estimate_price_provenance",
+      "20261103200000_resume_pending_estimate_revisions",
+      "20261103205000_sent_quote_recipients",
+      "20261103210000_change_orders"
+    ]
+  },
+  "health_checks": [
+    {
+      "origin": "https://proestimate-api-production-75e5.up.railway.app",
+      "path": "/health",
+      "http_status": 200,
+      "health": {
+        "status": "healthy",
+        "database": "connected",
+        "redis": "connected"
+      }
+    },
+    {
+      "origin": "https://proestimate-web-production.up.railway.app",
+      "path": "/api/health",
+      "http_status": 200,
+      "health": {
+        "status": "ok"
+      }
+    },
+    {
+      "origin": "https://proestimateai.com",
+      "path": "/api/health",
+      "http_status": 200,
+      "health": {
+        "status": "ok"
+      }
+    },
+    {
+      "origin": "https://www.proestimateai.com",
+      "path": "/api/health",
+      "http_status": 200,
+      "health": {
+        "status": "ok"
+      }
+    }
+  ],
+  "public_missing_token_pages": [
+    {
+      "origin": "https://proestimateai.com",
+      "path": "/invoice/deployment-readiness-d9aab6f-not-a-real-token",
+      "http_status": 404,
+      "server_error": false
+    },
+    {
+      "origin": "https://proestimateai.com",
+      "path": "/reminders/deployment-readiness-d9aab6f-not-a-real-token",
+      "http_status": 404,
+      "server_error": false
+    }
+  ],
+  "public_api_route_checks": [
+    {
+      "path": "/v1/invoice-share/deployment-readiness-d9aab6f-not-a-real-token",
+      "http_status": 404,
+      "error_code": "NOT_FOUND"
+    },
+    {
+      "path": "/v1/follow-up-preferences/deployment-readiness-d9aab6f-not-a-real-token",
+      "http_status": 404,
+      "error_code": "NOT_FOUND"
+    },
+    {
+      "path": "/v1/change-orders/deployment-readiness-d9aab6f-not-a-real-id",
+      "http_status": 401,
+      "error_code": "UNAUTHORIZED"
+    },
+    {
+      "path": "/v1/payment-settings",
+      "http_status": 401,
+      "error_code": "UNAUTHORIZED"
+    }
+  ],
+  "static_assets": {
+    "checked": 23,
+    "matched": 23,
+    "failures": []
+  },
+  "website_package": {
+    "top_level_root": "web",
+    "unchanged_source_files": 87,
+    "public_png_jpg_assets": 23,
+    "local_environment_files_included": false,
+    "repo_root_railwayignore_included": false
+  },
+  "upload_mitigation": {
+    "failed_before_build": "TLS BadRecordMac",
+    "successful_client": "curl SecureTransport",
+    "ipv4": true,
+    "http_version": "1.1",
+    "tls_version": "1.2",
+    "tls_verification_enabled": true,
+    "upload_rate_limit_kib_per_second": 512,
+    "compressed_archive_bytes": 23510049,
+    "compressed_archive_sha256": "88e948478cf885fa2c5c6e3d38a026bb369296359838d7bcff637b0e454611d3",
+    "all_website_source_and_assets_preserved": true,
+    "service_build_start_root_configuration_changed": false
+  },
+  "deployment_scope": {
+    "credential_or_variable_writes": false,
+    "stripe_payments_activated": false,
+    "email_or_payment_actions_triggered": false,
+    "customer_records_read_for_validation": false,
+    "app_store_upload_performed_by_this_task": false
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "checked_at": "2026-11-03T09:52:30.513Z",
+  "scope": "Existing designated App Review account; normal API login and entitlement read",
+  "result": "PASS",
+  "login_http": 200,
+  "entitlement_http": 200,
+  "entitlement": {
+    "subscription_state": "ADMIN_OVERRIDE",
+    "current_plan_code": "PRO_MONTHLY",
+    "source": "APP_REVIEW_DEMO",
+    "all_pro_feature_flags_enabled": true,
+    "starts_at": "2026-10-30T10:11:53.794Z",
+    "ends_at": null,
+    "trial_ends_at": null,
+    "expiration_note": "No expiration is configured in the returned snapshot. This is the explicit finite-usage review grant, not an Apple introductory trial.",
+    "usage": [
+      {
+        "metric_code": "AI_GENERATION",
+        "included_quantity": 20,
+        "consumed_quantity": 2,
+        "remaining_quantity": 18
+      },
+      {
+        "metric_code": "QUOTE_EXPORT",
+        "included_quantity": 50,
+        "consumed_quantity": 0,
+        "remaining_quantity": 50
+      },
+      {
+        "metric_code": "ESTIMATE_GENERATED",
+        "included_quantity": 20,
+        "consumed_quantity": 0,
+        "remaining_quantity": 20
+      }
+    ]
+  },
+  "session_cleanup": {
+    "scope": "Only the refresh session created by this check",
+    "logout_http": 200,
+    "revoked_refresh_reuse_http": 401,
+    "access_token_expires_at": "2026-11-03T10:07:31.000Z",
+    "access_token_note": "Logout revokes the refresh session. The stateless access JWT remains valid until its normal expiration; its value was not printed or retained.",
+    "temporary_files_created": 0,
+    "credential_source_mode": "0600"
+  },
+  "constraints": {
+    "account_or_grant_changes": 0,
+    "ai_calls": 0,
+    "apple_purchases": 0,
+    "emails": 0,
+    "simulator_actions": 0,
+    "secrets_printed_or_committed": false
+  }
+}

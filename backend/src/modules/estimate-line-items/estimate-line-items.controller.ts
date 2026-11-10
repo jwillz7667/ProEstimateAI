@@ -25,6 +25,11 @@ export async function updateHandler(req: Request, res: Response) {
   sendSuccess(res, toEstimateLineItemDto(item));
 }
 
+export async function reviewPriceHandler(req: Request, res: Response) {
+  const item = await estimateLineItemsService.reviewPrice(param(req.params.id), req.companyId!, req.userId!, req.body);
+  sendSuccess(res, toEstimateLineItemDto(item));
+}
+
 export async function deleteHandler(req: Request, res: Response) {
   await estimateLineItemsService.remove(param(req.params.id), req.companyId!);
   sendSuccess(res, {});

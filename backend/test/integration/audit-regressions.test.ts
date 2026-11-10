@@ -53,6 +53,7 @@ async function tenant(
       userId: user.id,
       planId: plan.id,
       status: code === "FREE_STARTER" ? "FREE" : "PRO_ACTIVE",
+      renewalDate: code === "FREE_STARTER" ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     },
   });
   const client = await prisma.client.create({
@@ -120,8 +121,9 @@ const otherLine = (name: string) => ({
 });
 
 describe("invoice money and reference invariants", () => {
-  it("retains agreed tax during payment and discount changes, records payment status", async () => {
+  it("retains the approved discount and tax during invoicing and payment, and locks the agreed price", async () => {
     const t = await tenant();
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED", discountAmount: 100, totalAmount: 1020 } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,
@@ -132,17 +134,16 @@ describe("invoice money and reference invariants", () => {
       where: { id: t.company.id },
       data: { defaultTaxRate: 25 },
     });
-    const partial = await invoices.update(invoice.id, t.company.id, {
-      amount_paid: 500,
-    });
-    expect(Number(partial.taxAmount)).toBe(80);
-    expect(Number(partial.amountDue)).toBe(620);
-    expect(partial.status).toBe("PARTIALLY_PAID");
-    const discounted = await invoices.update(invoice.id, t.company.id, {
-      discount_amount: 100,
-    });
+    await expect(invoices.update(invoice.id, t.company.id, { discount_amount: 200 })).rejects.toMatchObject({ code: "CONFLICT" });
+    const discounted = await prisma.invoice.findUniqueOrThrow({ where: { id: invoice.id } });
     expect(Number(discounted.totalAmount)).toBe(1020);
-    expect(Number(discounted.amountDue)).toBe(520);
+    expect(Number(discounted.amountDue)).toBe(1020);
+    await prisma.invoice.update({ where: { id: invoice.id }, data: { status: "SENT" } });
+    const partial = await invoices.update(invoice.id, t.company.id, { amount_paid: 500 });
+    expect(Number(partial.taxAmount)).toBe(80);
+    expect(Number(partial.amountDue)).toBe(520);
+    expect(partial.status).toBe("PARTIALLY_PAID");
+    await expect(invoices.update(invoice.id, t.company.id, { discount_amount: 200 })).rejects.toMatchObject({ code: "CONFLICT" });
     const paid = await invoices.update(invoice.id, t.company.id, {
       status: "paid",
     });
@@ -152,6 +153,7 @@ describe("invoice money and reference invariants", () => {
   });
   it("snapshots exact converted line taxes and keeps labor untaxed after company rate changes", async () => {
     const t = await tenant();
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED" } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,
@@ -168,22 +170,24 @@ describe("invoice money and reference invariants", () => {
       where: { id: t.company.id },
       data: { defaultTaxRate: 25 },
     });
-    await invoiceLines.update(lines[1].id, t.company.id, { unit_cost: 150 });
+    await expect(invoiceLines.update(lines[1].id, t.company.id, { unit_cost: 150 })).rejects.toMatchObject({ code: "CONFLICT" });
     const fresh = await prisma.invoice.findUniqueOrThrow({
       where: { id: invoice.id },
     });
-    expect(Number(fresh.subtotal)).toBe(1100);
+    expect(Number(fresh.subtotal)).toBe(1040);
     expect(Number(fresh.taxAmount)).toBe(80);
-    expect(Number(fresh.totalAmount)).toBe(1180);
+    expect(Number(fresh.totalAmount)).toBe(1120);
   });
   it("rejects stale concurrent cumulative payments, including an ambiguous equal-sized retry", async () => {
     const t = await tenant();
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED" } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,
       t.estimate.id,
       {},
     );
+    await prisma.invoice.update({ where: { id: invoice.id }, data: { status: "SENT" } });
     const results = await Promise.allSettled([
       invoices.update(invoice.id, t.company.id, {
         amount_paid: 100,
@@ -209,12 +213,14 @@ describe("invoice money and reference invariants", () => {
   });
   it("does not reopen paid/void invoices by sending and keeps partial payments intact", async () => {
     const t = await tenant();
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED" } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,
       t.estimate.id,
       {},
     );
+    await prisma.invoice.update({ where: { id: invoice.id }, data: { status: "SENT" } });
     await invoices.update(invoice.id, t.company.id, { amount_paid: 100 });
     expect(
       (await invoices.send(invoice.id, t.company.id, t.user.id)).status,
@@ -223,9 +229,11 @@ describe("invoice money and reference invariants", () => {
     await expect(
       invoices.send(invoice.id, t.company.id, t.user.id),
     ).rejects.toThrow(/cannot be sent/);
-    await invoices.update(invoice.id, t.company.id, { status: "void" });
+    await expect(invoices.update(invoice.id, t.company.id, { status: "void" })).rejects.toMatchObject({ code: "CONFLICT" });
+    const unpaid = await invoices.create(t.company.id, t.user.id, { project_id: t.project.id, client_id: t.client.id });
+    await invoices.update(unpaid.id, t.company.id, { status: "void" });
     await expect(
-      invoices.send(invoice.id, t.company.id, t.user.id),
+      invoices.send(unpaid.id, t.company.id, t.user.id),
     ).rejects.toThrow(/cannot be sent/);
   });
   it("preserves authoritative converted line totals on metadata-only edits", async () => {
@@ -252,6 +260,7 @@ describe("invoice money and reference invariants", () => {
         totalAmount: 1,
       },
     });
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED" } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,
@@ -261,9 +270,10 @@ describe("invoice money and reference invariants", () => {
     const line = await prisma.invoiceLineItem.findFirstOrThrow({
       where: { invoiceId: invoice.id },
     });
-    const updated = await invoiceLines.update(line.id, t.company.id, {
+    await expect(invoiceLines.update(line.id, t.company.id, {
       description: "Clarified scope", quantity: 3, unit_cost: 0.33,
-    });
+    })).rejects.toMatchObject({ code: "CONFLICT" });
+    const updated = await prisma.invoiceLineItem.findUniqueOrThrow({ where: { id: line.id } });
     expect(Number(updated.lineTotal)).toBe(1);
     expect(
       Number(
@@ -274,24 +284,26 @@ describe("invoice money and reference invariants", () => {
   });
   it("rejects overpayments and reductions below payments without partial writes", async () => {
     const t = await tenant();
+    await prisma.estimate.update({ where: { id: t.estimate.id }, data: { status: "APPROVED" } });
     const invoice = await invoices.createFromEstimate(
       t.company.id,
       t.user.id,
       t.estimate.id,
       {},
     );
+    await prisma.invoice.update({ where: { id: invoice.id }, data: { status: "SENT" } });
     await expect(
       invoices.update(invoice.id, t.company.id, { amount_paid: 1121 }),
     ).rejects.toThrow(/exceed/);
     await invoices.update(invoice.id, t.company.id, { amount_paid: 1000 });
     await expect(
       invoices.update(invoice.id, t.company.id, { discount_amount: 200 }),
-    ).rejects.toThrow(/exceed/);
+    ).rejects.toMatchObject({ code: "CONFLICT" });
     const line = await prisma.invoiceLineItem.findFirstOrThrow({
       where: { invoiceId: invoice.id, name: "Tile" },
     });
     await expect(invoiceLines.remove(line.id, t.company.id)).rejects.toThrow(
-      /below/,
+      /cannot be changed/,
     );
     expect(
       await prisma.invoiceLineItem.count({ where: { invoiceId: invoice.id } }),
@@ -530,7 +542,7 @@ describe("proposal decisions and shared page freshness", () => {
       ).status,
     ).toBe(results[0].status);
   });
-  it("keeps Date values serializable and reflects updates and deletion immediately", async () => {
+  it("keeps Date values serializable and preserves the sent document against edits or deletion", async () => {
     const t = await tenant();
     const proposal = await proposals.create(t.company.id, {
       estimate_id: t.estimate.id,
@@ -550,16 +562,12 @@ describe("proposal decisions and shared page freshness", () => {
         where: { projectId: t.project.id, action: "PROPOSAL_VIEWED" },
       }),
     ).toBe(1);
-    await proposals.update(proposal.id, t.company.id, {
+    await expect(proposals.update(proposal.id, t.company.id, {
       title: "Revised proposal",
-    });
-    expect((await proposals.getByShareToken(proposal.shareToken!)).title).toBe(
-      "Revised proposal",
-    );
-    await proposals.remove(proposal.id, t.company.id);
-    await expect(
-      proposals.getByShareToken(proposal.shareToken!),
-    ).rejects.toThrow(/Proposal/);
+    })).rejects.toMatchObject({ statusCode: 409 });
+    expect((await proposals.getByShareToken(proposal.shareToken!)).title).toBeNull();
+    await expect(proposals.remove(proposal.id, t.company.id)).rejects.toMatchObject({ statusCode: 409 });
+    expect((await proposals.getByShareToken(proposal.shareToken!)).status).toBe("VIEWED");
   });
   it("does not reopen finished projects and rejects resend after a client decision", async () => {
     const t = await tenant();
@@ -593,7 +601,7 @@ describe("proposal decisions and shared page freshness", () => {
 });
 
 describe("usage reservations and selected quality tier", () => {
-  it("allows only one request to consume the final starter credit and records one event", async () => {
+  it("rejects parallel unpaid AI requests without spending historical starter credits", async () => {
     const t = await tenant("FREE_STARTER");
     await prisma.usageBucket.create({
       data: {
@@ -614,20 +622,20 @@ describe("usage reservations and selected quality tier", () => {
         }),
       ),
     );
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(0);
     expect(
       await prisma.usageEvent.count({ where: { userId: t.user.id } }),
-    ).toBe(1);
+    ).toBe(0);
     expect(
       (
         await prisma.usageBucket.findFirstOrThrow({
           where: { userId: t.user.id },
         })
       ).consumedQuantity,
-    ).toBe(5);
+    ).toBe(4);
   });
-  it("refunds failed actions so credits and rolling limits can be retried", async () => {
-    const t = await tenant("FREE_STARTER");
+  it("refunds failed paid actions so rolling limits can be retried", async () => {
+    const t = await tenant("PRO_MONTHLY");
     const opts = {
       userId: t.user.id,
       companyId: t.company.id,
@@ -641,13 +649,6 @@ describe("usage reservations and selected quality tier", () => {
     ).rejects.toThrow(/Database failure/);
     expect(
       await prisma.usageEvent.count({ where: { userId: t.user.id } }),
-    ).toBe(0);
-    expect(
-      (
-        await prisma.usageBucket.findFirstOrThrow({
-          where: { userId: t.user.id },
-        })
-      ).consumedQuantity,
     ).toBe(0);
     await expect(gateAIAction(opts)).resolves.toBeDefined();
   });

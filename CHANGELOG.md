@@ -33,12 +33,23 @@ Dates are in `YYYY-MM-DD` format.
 ## [Unreleased]
 
 ### Fixed
+- Reconcile signed App Store expiry, renewals, revocations and ownership atomically; preserve historical Premium restores without reopening retired sales.
+- Enforce finite server usage and paid feature gates; refund failed asynchronous image generations exactly once while preserving audit history.
+- Keep StoreKit receipts unfinished until backend acknowledgement, recover migrated purchase attempts through verified restore, and align iOS paywalls with server states and actual StoreKit offers.
+- Validate Apple/Google nonce proofs and required token claims; reconcile concurrent first sign-ins without duplicate users or credit grants.
+- Prevent failed line-item reads or PDF rendering from consuming export quota or producing misleading empty estimates.
+- Improve signup validation, keyboard access, search targets, comparison accessibility, reduced motion and tablet dashboard sizing.
+- Patch backend and website dependencies, including Zod collection validation and Next.js security fixes.
 - Bootstrap fresh backend databases before creating online indexes, and resolve indexes in the configured database schema.
 - Make auth UI initialization main-actor isolated and select Xcode 26 for simulator CI.
 - Drain in-flight HTTP requests before disconnecting backend dependencies during shutdown, with a bounded timeout.
 - Replace retired API URLs in iOS, web, backend-generated links, and active setup documentation.
 
 ### Added
+- Cohesive App Store campaign concepts with 18 exact-dimension RGB PNG exports across iPhone and iPad families, editable SVG panoramas and actual tablet captures.
+- Backend billing, OAuth, iOS and migration audit reports with deployment evidence and explicit remaining integration checks.
+- Low-cost fal.ai FLUX.2 Flash previews with reference-photo editing, bounded requests, and existing-provider fallbacks.
+- Production catalog bootstrap and Railway deployment support for the API and website.
 - Backend CI lint, unit tests, and real PostgreSQL integration coverage, including empty-database and repeated bootstrap checks.
 
 ## [1.0.0] - 2026-04-19

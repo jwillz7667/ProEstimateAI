@@ -1,0 +1,55 @@
+{
+  "validatedAt": "2026-10-30T09:35:49.395Z",
+  "locales": [
+    {
+      "locale": "en-US",
+      "name": 30,
+      "subtitle": 30,
+      "promotional_text": 155,
+      "description": 2440,
+      "release_notes": 670,
+      "keywords_utf8_bytes": 100,
+      "keyword_terms": 12
+    },
+    {
+      "locale": "en-GB",
+      "name": 30,
+      "subtitle": 30,
+      "promotional_text": 158,
+      "description": 2444,
+      "release_notes": 670,
+      "keywords_utf8_bytes": 95,
+      "keyword_terms": 11
+    },
+    {
+      "locale": "en-AU",
+      "name": 30,
+      "subtitle": 30,
+      "promotional_text": 158,
+      "description": 2444,
+      "release_notes": 670,
+      "keywords_utf8_bytes": 96,
+      "keyword_terms": 11
+    },
+    {
+      "locale": "es-MX",
+      "name": 28,
+      "subtitle": 28,
+      "promotional_text": 147,
+      "description": 2506,
+      "release_notes": 737,
+      "keywords_utf8_bytes": 95,
+      "keyword_terms": 11
+    },
+    {
+      "locale": "es-ES",
+      "name": 28,
+      "subtitle": 24,
+      "promotional_text": 142,
+      "description": 2534,
+      "release_notes": 747,
+      "keywords_utf8_bytes": 97,
+      "keyword_terms": 11
+    }
+  ]
+}

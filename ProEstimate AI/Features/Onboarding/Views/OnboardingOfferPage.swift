@@ -13,7 +13,7 @@ struct OnboardingOfferPage: View {
     let onContinueFree: () -> Void
 
     private let proBenefits: [ProBenefit] = [
-        ProBenefit(icon: "infinity", title: "Unlimited AI previews", subtitle: "No more 3-a-month cap"),
+        ProBenefit(icon: "photo.fill", title: "20 AI previews per month", subtitle: "Plus 20 AI estimates and manual projects"),
         ProBenefit(icon: "doc.richtext.fill", title: "Branded PDFs", subtitle: "Your logo, colors, no watermark"),
         ProBenefit(icon: "dollarsign.circle.fill", title: "Invoicing", subtitle: "Send and track payments"),
         ProBenefit(icon: "link", title: "Client approval links", subtitle: "One-tap online sign-off"),
@@ -69,12 +69,12 @@ struct OnboardingOfferPage: View {
             }
 
             VStack(spacing: SpacingTokens.xxs) {
-                Text("Try Pro Free for 7 Days")
+                Text("Bring your projects to life")
                     .font(TypographyTokens.largeTitle)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(ColorTokens.onDarkPrimary)
 
-                Text("No commitment. Cancel anytime before the trial ends and you won't be charged.")
+                Text("Your account includes a 7-day Pro trial. No payment is required. Explore the plans or continue into your workspace.")
                     .font(TypographyTokens.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(ColorTokens.onDarkSecondary)
@@ -99,18 +99,18 @@ struct OnboardingOfferPage: View {
     private var ctaStack: some View {
         VStack(spacing: SpacingTokens.sm) {
             PrimaryCTAButton(
-                title: "Start 7-Day Free Trial",
+                title: "View Pro Plans",
                 icon: "crown.fill",
                 action: onStartTrial
             )
 
             Button(action: onContinueFree) {
-                Text("Continue with Free Plan")
+                Text("Continue")
                     .font(TypographyTokens.subheadline)
                     .foregroundStyle(ColorTokens.onDarkSecondary)
                     .padding(.vertical, SpacingTokens.xs)
             }
-            .accessibilityHint("Skip the trial and use the free starter plan")
+            .accessibilityHint("Continue to your free workspace without starting a subscription")
         }
     }
 }

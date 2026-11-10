@@ -1,0 +1,22 @@
+[
+  {
+    "host": "proestimateai.com",
+    "status": 200,
+    "cacheControl": "private, no-store, max-age=0",
+    "referrerPolicy": "no-referrer",
+    "robots": "noindex, nofollow, noarchive",
+    "hasReset": true,
+    "hasFixture": false,
+    "server": "railway-hikari"
+  },
+  {
+    "host": "www.proestimateai.com",
+    "status": 200,
+    "cacheControl": "private, no-store, max-age=0",
+    "referrerPolicy": "no-referrer",
+    "robots": "noindex, nofollow, noarchive",
+    "hasReset": true,
+    "hasFixture": false,
+    "server": "railway-hikari"
+  }
+]

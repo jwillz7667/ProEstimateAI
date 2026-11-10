@@ -1,1 +1,1 @@
-presupuesto,contratista,construcción,cocina,baño,piso,techo,albañil,materiales,obra,jardín,plomero
+presupuesto,contratista,construcción,cocina,baño,piso,techo,materiales,obra,propuesta,cliente

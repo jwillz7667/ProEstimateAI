@@ -1,51 +1,58 @@
 import SwiftUI
 
-/// Top-of-dashboard business snapshot: revenue this month, invoices awaiting
-/// payment, active projects, and pending estimates. Sourced from the backend's
-/// `/v1/dashboard` summary. Reloads whenever a payment event fires (an invoice
-/// is marked paid), so "Revenue this month" reflects the get-paid loop's
-/// outcome without a manual refresh.
+/// Quiet business context beneath the project workflow, using real server
+/// totals rather than inferring counts from Home's small project preview.
 struct DashboardMetricsSection: View {
     let summary: DashboardSummary
-    /// Pre-formatted currency string from the view model so the section stays
-    /// presentation-only and locale handling lives in one place.
     let formattedRevenue: String
-
-    private let columns = [
-        GridItem(.flexible(), spacing: SpacingTokens.sm),
-        GridItem(.flexible(), spacing: SpacingTokens.sm),
-    ]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: SpacingTokens.sm) {
-            MetricCard(
-                label: "Revenue This Month",
-                value: formattedRevenue
-            )
-            MetricCard(
-                label: "Invoices Due",
-                value: "\(summary.invoicesDueCount)",
-                trend: summary.invoicesDueCount > 0
-                    ? .neutral(summary.invoicesDueCount == 1 ? "1 awaiting payment" : "\(summary.invoicesDueCount) awaiting payment")
-                    : nil
-            )
-            MetricCard(
-                label: "Active Projects",
-                value: "\(summary.activeProjectsCount)"
-            )
-            MetricCard(
-                label: "Pending Estimates",
-                value: "\(summary.pendingEstimatesCount)"
-            )
+        VStack(alignment: .leading, spacing: SpacingTokens.md) {
+            Text("At a glance")
+                .font(TypographyTokens.headline)
+                .accessibilityAddTraits(.isHeader)
+
+            metric("Invoices settled this month", value: formattedRevenue)
+            Text("Total value of invoices marked paid. Partial payments are tracked on each invoice.")
+                .font(TypographyTokens.caption)
+                .foregroundStyle(ColorTokens.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            Divider()
+            metricsLayout {
+                metric("Active projects", value: summary.activeProjectsCount.formatted())
+                metric("Invoices due", value: summary.invoicesDueCount.formatted())
+            }
         }
+        .padding(SpacingTokens.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ColorTokens.surface, in: RoundedRectangle(cornerRadius: RadiusTokens.card))
+    }
+
+    private var metricsLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SpacingTokens.md))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: SpacingTokens.lg))
+    }
+
+    private func metric(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: SpacingTokens.xxs) {
+            Text(value)
+                .font(TypographyTokens.moneyMedium)
+                .foregroundStyle(ColorTokens.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(label)
+                .font(TypographyTokens.caption)
+                .foregroundStyle(ColorTokens.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }
 
-// MARK: - Preview
-
 #Preview {
-    ScrollView {
-        DashboardMetricsSection(summary: .sample, formattedRevenue: "$24,750")
-            .padding()
-    }
+    DashboardMetricsSection(summary: .sample, formattedRevenue: "$24,750")
+        .padding()
+        .background(ColorTokens.background)
 }

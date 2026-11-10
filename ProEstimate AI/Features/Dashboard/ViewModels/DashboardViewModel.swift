@@ -1,141 +1,162 @@
 import Foundation
 import Observation
 
+protocol DashboardDataProviding: Sendable {
+    func fetchSummary() async throws -> DashboardSummary
+    func fetchProjects() async throws -> [Project]
+    func fetchAttention() async throws -> DashboardAttention
+}
+
+@MainActor
 @Observable
 final class DashboardViewModel {
-    // MARK: - Published state
+    private(set) var summary: DashboardSummary?
+    private(set) var attention: DashboardAttention?
+    private(set) var recentProjects: [Project] = []
+    private(set) var isLoadingSummary = false
+    private(set) var isLoadingProjects = false
+    private(set) var hasLoadedProjects = false
+    private(set) var summaryErrorMessage: String?
+    private(set) var projectsErrorMessage: String?
+    private(set) var attentionErrorMessage: String?
+    private(set) var isLoadingAttention = false
 
-    var summary: DashboardSummary?
-    var recentProjects: [Project] = []
-    var projectThumbnails: [String: URL] = [:]
-    var isLoading: Bool = false
-    var errorMessage: String?
+    var isLoading: Bool { isLoadingSummary || isLoadingProjects || isLoadingAttention }
 
-    // MARK: - Computed
+    private let service: any DashboardDataProviding
+    private var currentScope: String?
+    private var requestRevision = 0
 
-    /// Greeting based on time of day.
-    func greeting(for name: String) -> String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        let timeGreeting: String
+    init(service: any DashboardDataProviding = DashboardService()) {
+        self.service = service
+    }
+
+    func greeting(for name: String, at date: Date = Date(), calendar: Calendar = .current) -> String {
+        let hour = calendar.component(.hour, from: date)
+        let greeting: String
         switch hour {
-        case 0 ..< 12:
-            timeGreeting = "Good morning"
-        case 12 ..< 17:
-            timeGreeting = "Good afternoon"
-        default:
-            timeGreeting = "Good evening"
+        case 0 ..< 12: greeting = "Good morning"
+        case 12 ..< 17: greeting = "Good afternoon"
+        default: greeting = "Good evening"
         }
-        return "\(timeGreeting), \(name.components(separatedBy: " ").first ?? name)"
+        guard let firstName = name.split(whereSeparator: \.isWhitespace).first else { return greeting }
+        return "\(greeting), \(firstName)"
     }
 
-    /// Formatted revenue string for the metric card.
     var formattedRevenue: String {
-        guard let revenue = summary?.revenueThisMonth else { return "$0" }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: revenue as NSDecimalNumber) ?? "$0"
+        guard let amounts = summary?.settledInvoiceAmounts else { return "—" }
+        return amounts.isEmpty ? DashboardMoney(currencyCode: "USD", amount: 0).formatted
+            : amounts.map(\.formatted).joined(separator: " + ")
     }
 
-    // MARK: - Dependencies
-
-    private let apiClient: APIClientProtocol
-
-    init(apiClient: APIClientProtocol = APIClient.shared) {
-        self.apiClient = apiClient
-    }
-
-    // MARK: - Actions
-
-    func loadDashboard() async {
+    /// Loads each section independently. A slow or failed summary never hides
+    /// projects, and a refresh failure preserves the last successful content.
+    func loadDashboard(scope: String) async {
+        if currentScope != scope {
+            currentScope = scope
+            requestRevision &+= 1
+            summary = nil
+            attention = nil
+            recentProjects = []
+            hasLoadedProjects = false
+            isLoadingSummary = false
+            isLoadingProjects = false
+            isLoadingAttention = false
+            summaryErrorMessage = nil
+            projectsErrorMessage = nil
+            attentionErrorMessage = nil
+        }
         guard !isLoading else { return }
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            async let summaryTask: DashboardSummary = apiClient.request(.getDashboardSummary)
-            async let projectsTask: [Project] = apiClient.request(.listProjects(cursor: nil))
-
-            summary = try await summaryTask
-            recentProjects = try await projectsTask
-            await loadThumbnails(for: recentProjects)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-
-        isLoading = false
-    }
-
-    func refresh() async {
-        await loadDashboard()
-    }
-
-    // MARK: - Thumbnail Loading
-
-    /// Hydrate `projectThumbnails` for every project in the carousel.
-    ///
-    /// Strategy:
-    ///   1. Prefer the server-provided `Project.thumbnailURL` — the backend
-    ///      already resolves the most recent COMPLETED generation preview
-    ///      (or first ORIGINAL asset) and returns it on the project DTO.
-    ///      No extra round-trip required.
-    ///   2. For projects whose payload arrives without a thumbnail (legacy
-    ///      records, or projects whose generation finished after the list
-    ///      query), fall back to `listGenerations` so the carousel still
-    ///      shows the freshest preview rather than a blank placeholder.
-    private func loadThumbnails(for projects: [Project]) async {
-        let visible = Array(projects.prefix(10))
-        var resolved: [String: URL] = [:]
-        var needsLookup: [Project] = []
-
-        for project in visible {
-            if let url = project.thumbnailURL {
-                resolved[project.id] = url
-            } else {
-                needsLookup.append(project)
+        requestRevision &+= 1
+        let revision = requestRevision
+        isLoadingSummary = true
+        isLoadingProjects = true
+        isLoadingAttention = true
+        summaryErrorMessage = nil
+        projectsErrorMessage = nil
+        attentionErrorMessage = nil
+        defer {
+            if revision == requestRevision {
+                isLoadingSummary = false
+                isLoadingProjects = false
+                isLoadingAttention = false
             }
         }
 
-        if !needsLookup.isEmpty {
-            await withTaskGroup(of: (String, URL?).self) { group in
-                for project in needsLookup {
-                    group.addTask { [apiClient] in
-                        do {
-                            let generations: [AIGeneration] = try await apiClient.request(
-                                .listGenerations(projectId: project.id)
-                            )
-                            // Prefer the newest completed generation that
-                            // actually has a servable preview. A generation
-                            // can be COMPLETED yet carry no image (the backend
-                            // now nils preview_url in that case) — picking it
-                            // would blank the tile even when an older, imaged
-                            // generation exists.
-                            let completed = generations.first {
-                                $0.status == .completed && $0.previewURL != nil
-                            }
-                            return (project.id, completed?.previewURL)
-                        } catch {
-                            return (project.id, nil)
-                        }
-                    }
-                }
-
-                for await (projectId, url) in group {
-                    if let url {
-                        resolved[projectId] = url
-                    }
+        let service = service
+        await withTaskGroup(of: SectionResult.self) { group in
+            group.addTask {
+                do { return .summary(.success(try await service.fetchSummary())) }
+                catch { return .summary(.failure(LoadFailure(error))) }
+            }
+            group.addTask {
+                do { return .projects(.success(try await service.fetchProjects())) }
+                catch { return .projects(.failure(LoadFailure(error))) }
+            }
+            group.addTask {
+                do { return .attention(.success(try await service.fetchAttention())) }
+                catch { return .attention(.failure(LoadFailure(error))) }
+            }
+            for await result in group {
+                // An account/workspace change supersedes every earlier result,
+                // even if its transport ignores Swift task cancellation.
+                guard revision == requestRevision, !Task.isCancelled else { continue }
+                switch result {
+                case let .attention(.success(value)):
+                    attention = value
+                    isLoadingAttention = false
+                case .attention(.failure(.cancelled)):
+                    isLoadingAttention = false
+                case .attention(.failure(.unavailable)):
+                    attentionErrorMessage = "Next actions couldn't be refreshed. Refresh before acting on saved information."
+                    isLoadingAttention = false
+                case let .summary(.success(value)):
+                    summary = value
+                    isLoadingSummary = false
+                case .summary(.failure(.cancelled)):
+                    isLoadingSummary = false
+                case .summary(.failure(.unavailable)):
+                    summaryErrorMessage = "Business totals couldn't be refreshed."
+                    isLoadingSummary = false
+                case let .projects(.success(values)):
+                    recentProjects = Self.recentWork(from: values)
+                    hasLoadedProjects = true
+                    isLoadingProjects = false
+                case .projects(.failure(.cancelled)):
+                    isLoadingProjects = false
+                case .projects(.failure(.unavailable)):
+                    projectsErrorMessage = "Your projects couldn't be refreshed. Try again when you're connected."
+                    isLoadingProjects = false
                 }
             }
         }
+    }
 
-        projectThumbnails = resolved
+    /// Keep Home small and predictable. Archived work remains in Projects;
+    /// duplicate API rows cannot create duplicate NavigationLink identities.
+    static func recentWork(from projects: [Project]) -> [Project] {
+        let sorted = projects.filter { $0.status != .archived }.sorted {
+            if $0.updatedAt != $1.updatedAt { return $0.updatedAt > $1.updatedAt }
+            if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
+            return $0.id < $1.id
+        }
+        var seen: Set<String> = []
+        return Array(sorted.filter { seen.insert($0.id).inserted }.prefix(3))
+    }
 
-        // Warm URLCache for the carousel widths the dashboard renders so
-        // AsyncImage resolves from disk on first paint instead of
-        // opening a fresh HTTPS request after the View body materializes.
-        // 480px aligns with the backend's mid-bucket and is already the
-        // size the carousel cards request via `.thumbnail(width: 480)`.
-        let prefetchURLs = resolved.values.map { $0.thumbnail(width: 480) }
-        ThumbnailPrefetcher.shared.prefetch(prefetchURLs)
+    private enum SectionResult: Sendable {
+        case summary(Result<DashboardSummary, LoadFailure>)
+        case projects(Result<[Project], LoadFailure>)
+        case attention(Result<DashboardAttention, LoadFailure>)
+    }
+
+    private enum LoadFailure: Error, Sendable {
+        case cancelled
+        case unavailable
+
+        init(_ error: Error) {
+            self = error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled
+                ? .cancelled : .unavailable
+        }
     }
 }

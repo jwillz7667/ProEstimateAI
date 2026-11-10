@@ -70,39 +70,10 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
             let transaction = try verifyTransaction(verification)
             logger.info("Purchase verified. Transaction ID: \(transaction.id)")
 
-            // Round-trip assertion: the verified transaction MUST carry the
-            // exact appAccountToken we passed in `options`. A mismatch means
-            // the OS-level Apple ID didn't accept our token (typically
-            // because the user is signed into a different Apple ID at the
-            // App Store level than the ProEstimate account they authenticated
-            // as) — the backend would reject the sync anyway, but failing
-            // fast lets us surface a clear, actionable message and avoid
-            // finishing a transaction the backend will refuse to honour.
-            guard let returnedToken = transaction.appAccountToken,
-                  returnedToken == appAccountToken
-            else {
-                logger.error("appAccountToken round-trip failed. expected=\(appAccountToken.uuidString) got=\(transaction.appAccountToken?.uuidString ?? "nil")")
-                // Finish so Apple stops redelivering this exact transaction.
-                // The user resolves the account mismatch and can retry; the
-                // next purchase mints a fresh appAccountToken via the
-                // backend so there's no risk of replaying this one.
-                await transaction.finish()
-                throw PurchaseError.accountMismatch
-            }
-
-            // Sync the transaction to the backend for server-side validation.
-            // The Apple-signed JWS rides along so the backend can re-verify
-            // the chain against Apple Root CA G3 before flipping entitlement.
-            // `syncTransactionToBackend` re-throws unrecoverable errors
-            // (account mismatch) so the caller can render a specific UI.
-            try await syncTransactionToBackend(
-                transaction: transaction,
-                signedJWS: verification.jwsRepresentation,
-                appAccountToken: appAccountToken
-            )
-
-            // Finish the transaction to acknowledge it to the App Store.
-            await transaction.finish()
+            // Existing subscriptions can retain a token from an earlier purchase.
+            // The server validates signed ownership; a new attempt UUID alone
+            // cannot establish that the customer's Apple Account changed.
+            try await deliver(transaction, signedJWS: verification.jwsRepresentation)
             logger.info("Transaction finished: \(transaction.id)")
 
             return transaction
@@ -161,8 +132,26 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
             throw PurchaseError.storeKitError(error.localizedDescription)
         }
 
-        // 2. Iterate every verified current entitlement and post to the backend.
+        try await restoreCurrentEntitlements()
+    }
+
+    /// Current entitlements include finished purchases that an unfinished-only
+    /// retry cannot recover after the backend's purchase records were migrated.
+    func reconcileCurrentEntitlements() async {
+        do {
+            try await restoreCurrentEntitlements()
+        } catch {
+            // A quiet login reconciliation never blocks basic account access.
+            // The explicit Restore Purchases action surfaces recovery errors.
+            logger.warning("Existing subscription reconciliation pending: \(error.localizedDescription)")
+        }
+    }
+
+    private func restoreCurrentEntitlements() async throws {
+        // Iterate verified current receipts without requesting AppStore.sync.
+
         var items: [RestoreTransactionItem] = []
+        var verifiedTransactions: [Transaction] = []
         for await result in Transaction.currentEntitlements {
             do {
                 let transaction = try verifyTransaction(result)
@@ -172,7 +161,7 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
                         signedJWS: result.jwsRepresentation
                     )
                 )
-                await transaction.finish()
+                verifiedTransactions.append(transaction)
             } catch {
                 logger.warning("Skipping unverified transaction in restore: \(error.localizedDescription)")
             }
@@ -181,9 +170,11 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
         // 3. Post every collected transaction to the backend so it can re-bind to this user.
         if !items.isEmpty {
             do {
-                let snapshot = try await commerceAPI.restoreTransactions(items)
-                await entitlementStore.updateFromSnapshot(snapshot)
-                logger.info("Restore synced \(items.count) transaction(s) to backend. New state: \(snapshot.subscriptionState.rawValue)")
+                let delivery = CommerceTransactionDelivery(commerceAPI: commerceAPI, entitlementStore: entitlementStore)
+                try await delivery.restore(items) {
+                    for transaction in verifiedTransactions { await transaction.finish() }
+                }
+                logger.info("Restore synced \(items.count) transaction(s) to backend.")
             } catch let APIError.server(code, message) where code == "SUBSCRIPTION_BOUND_TO_OTHER_USER" {
                 logger.error("Restore rejected — subscription owned by another ProEstimate user: \(message)")
                 await entitlementStore.refresh()
@@ -247,38 +238,45 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
                 let transaction = try verifyTransaction(result)
                 logger.info("Transaction update received: \(transaction.id), product: \(transaction.productID)")
 
-                // Only sync to backend when the transaction carries the
-                // appAccountToken that was minted by our PurchaseAttempt
-                // flow. Renewals and out-of-band transactions (Family
-                // Sharing, restored on a different device) often arrive
-                // with a nil token; sending a random UUID would just make
-                // the backend's `PurchaseAttempt` lookup miss and the
-                // sync silently fail. App Store Server Notifications
-                // remain the authoritative reconciliation path for those
-                // — we just refresh locally so the UI catches up.
-                if let appAccountToken = transaction.appAccountToken {
-                    do {
-                        try await syncTransactionToBackend(
-                            transaction: transaction,
-                            signedJWS: result.jwsRepresentation,
-                            appAccountToken: appAccountToken
-                        )
-                    } catch {
-                        // The listener path can't surface UI; just log so
-                        // ops can investigate. Finishing below stops Apple
-                        // from infinitely redelivering. Eventual webhook
-                        // reconciliation handles legitimate renewals.
-                        logger.error("Listener sync failed: \(error.localizedDescription)")
-                    }
-                }
-
-                await transaction.finish()
+                try await deliver(transaction, signedJWS: result.jwsRepresentation)
                 await entitlementStore.refresh()
             } catch {
-                logger.error("Transaction update verification failed: \(error.localizedDescription)")
+                logger.error("Transaction update could not be delivered: \(error.localizedDescription)")
                 // Even on verification failure, pull a fresh entitlement
                 // so the UI reflects whatever the backend now believes.
                 await entitlementStore.refresh()
+            }
+        }
+    }
+
+    func reconcileUnfinishedTransactions() async {
+        for await result in Transaction.unfinished {
+            do {
+                let transaction = try verifyTransaction(result)
+                try await deliver(transaction, signedJWS: result.jwsRepresentation)
+            } catch {
+                // Keep the receipt unfinished so a later authenticated retry
+                // can deliver it after an outage or an account correction.
+                logger.warning("Unfinished purchase still awaiting delivery: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func deliver(_ transaction: Transaction, signedJWS: String) async throws {
+        if let token = transaction.appAccountToken {
+            try await syncTransactionToBackend(transaction: transaction, signedJWS: signedJWS, appAccountToken: token)
+        } else {
+            let delivery = CommerceTransactionDelivery(commerceAPI: commerceAPI, entitlementStore: entitlementStore)
+            do {
+                try await delivery.restore([makeRestoreItem(from: transaction, signedJWS: signedJWS)]) {
+                    await transaction.finish()
+                }
+            } catch let APIError.server(code, _) where code == "SUBSCRIPTION_BOUND_TO_OTHER_USER" {
+                throw PurchaseError.subscriptionBoundToOtherUser
+            } catch let APIError.server(code, _) where code == "ACCOUNT_MISMATCH" {
+                throw PurchaseError.accountMismatch
+            } catch {
+                throw PurchaseError.deliveryPending
             }
         }
     }
@@ -302,13 +300,8 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
     /// Sync a verified transaction to the backend for server-side
     /// reconciliation.
     ///
-    /// Re-throws ONLY the unrecoverable errors that need explicit user
-    /// action — most prominently `accountMismatch`, where the backend
-    /// has refused to bind this transaction to the authenticated user.
-    /// Transient failures (network blips, idempotency races, server
-    /// hiccups) are absorbed and a fresh entitlement snapshot is pulled
-    /// from the canonical endpoint instead; App Store Server
-    /// Notifications remain the eventual-consistency safety net.
+    /// Failed syncs remain unfinished. Ownership failures request account
+    /// recovery; transport and server failures request receipt delivery retry.
     private func syncTransactionToBackend(
         transaction: Transaction,
         signedJWS: String,
@@ -334,9 +327,9 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
         )
 
         do {
-            let updatedSnapshot = try await commerceAPI.syncTransaction(request: request)
-            await entitlementStore.updateFromSnapshot(updatedSnapshot)
-            logger.info("Transaction synced to backend. New state: \(updatedSnapshot.subscriptionState.rawValue)")
+            let delivery = CommerceTransactionDelivery(commerceAPI: commerceAPI, entitlementStore: entitlementStore)
+            try await delivery.sync(request) { await transaction.finish() }
+            logger.info("Transaction synced to backend.")
         } catch let APIError.server(code, message) where code == "ACCOUNT_MISMATCH" {
             logger.error("Backend rejected transaction with ACCOUNT_MISMATCH: \(message)")
             // Refresh so the UI reflects whatever entitlement the backend
@@ -355,13 +348,11 @@ final class StoreKitPurchaseCoordinator: PurchaseCoordinating {
         } catch let APIError.network(message) {
             logger.warning("Network error syncing transaction: \(message). Falling back to direct entitlement refresh.")
             await entitlementStore.refresh()
-            throw PurchaseError.network(message)
+            throw PurchaseError.deliveryPending
         } catch {
             logger.warning("Failed to sync transaction to backend: \(error.localizedDescription). Falling back to direct entitlement refresh.")
             await entitlementStore.refresh()
-            // Transient — don't re-throw. ASSN + the next launch refresh
-            // will reconcile any drift; failing the purchase here would
-            // confuse a user whose payment Apple already authorized.
+            throw PurchaseError.deliveryPending
         }
     }
 }

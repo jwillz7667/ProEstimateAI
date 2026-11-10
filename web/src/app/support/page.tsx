@@ -41,11 +41,11 @@ const faqs: Array<{ q: string; a: string }> = [
   },
   {
     q: "What's included in the free plan?",
-    a: "Five AI remodel previews for the lifetime of your account and manual estimating tools. AI estimates, quote exports, branded PDFs, invoices, and client approval links require Pro. Pro includes 2 AI project creations, 20 previews, 20 AI estimates, and 50 quote exports per month; daily and weekly limits also apply.",
+    a: "Sign in, create manual projects, view saved work and use manual estimating tools for free. AI previews and suggestions, AI estimates, quote exports, branded PDFs, invoices, and client approval links require an active Pro subscription or Apple trial. Pro includes 20 previews, 20 AI estimates, and 50 quote exports per rolling 30-day period; daily and weekly limits also apply.",
   },
   {
     q: "How much is Pro and how do I subscribe?",
-    a: "Pro is available monthly or annually through the App Store. Check the App Store for current pricing and introductory-offer eligibility. Eligible new monthly subscribers can start a 7-day free trial. Manage or cancel anytime from iOS Settings → Apple ID → Subscriptions.",
+    a: "Pro is available monthly or annually through the App Store. Check the App Store for current pricing and introductory-offer eligibility. Eligible new subscribers can start a 3-day free trial on monthly or annual Pro. Manage or cancel anytime from iOS Settings → Apple ID → Subscriptions.",
   },
   {
     q: "Can I use my own company branding on estimates?",

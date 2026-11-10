@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { AuthenticationError } from './errors';
+import { verifyIdentityNonce } from './identity-nonce';
 
 const APPLE_JWKS_URL = new URL('https://appleid.apple.com/auth/keys');
 const APPLE_ISSUER = 'https://appleid.apple.com';
@@ -20,22 +21,26 @@ export interface AppleTokenClaims {
  */
 export async function verifyAppleIdentityToken(
   identityToken: string,
+  rawNonce?: string,
 ): Promise<AppleTokenClaims> {
   try {
     const { payload } = await jwtVerify(identityToken, appleJWKS, {
       issuer: APPLE_ISSUER,
       audience: APPLE_AUDIENCE,
+      algorithms: ['RS256'],
+      requiredClaims: ['sub', 'iat', 'exp'],
     });
+    verifyIdentityNonce(payload.nonce, rawNonce);
 
     const sub = payload.sub;
-    if (!sub) {
+    if (typeof sub !== 'string' || !sub.trim()) {
       throw new AuthenticationError('Apple identity token missing subject');
     }
 
     return {
       sub,
-      email: payload.email as string | undefined,
-      email_verified: payload.email_verified as string | boolean | undefined,
+      email: typeof payload.email === 'string' ? payload.email : undefined,
+      email_verified: payload.email_verified === true || payload.email_verified === 'true',
     };
   } catch (error) {
     if (error instanceof AuthenticationError) {

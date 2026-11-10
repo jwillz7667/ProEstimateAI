@@ -3,8 +3,8 @@ import StoreKit
 
 /// Mock implementation of `StoreKitCatalogProviding` for SwiftUI previews and tests.
 /// Returns empty product arrays since real `Product` objects cannot be constructed
-/// in tests without a StoreKit configuration. The paywall view model gracefully
-/// falls back to backend-provided `StoreProductModel` data when StoreKit is unavailable.
+/// in tests without a StoreKit configuration. An empty catalog exercises the
+/// retryable unavailable state; it never makes fallback pricing purchasable.
 ///
 /// For integration testing with real StoreKit products, use `StoreKitCatalogService`
 /// with the `ProEstimate.storekit` configuration file in Xcode.
@@ -46,8 +46,7 @@ final class MockStoreKitCatalogService: StoreKitCatalogProviding {
         }
 
         // Real Product objects cannot be constructed manually.
-        // Return an empty array — the PaywallHostViewModel will fall back
-        // to backend-provided StoreProductModel data.
+        // Return an empty catalog to test the retryable unavailable state.
         return []
     }
 
@@ -62,7 +61,7 @@ final class MockStoreKitCatalogService: StoreKitCatalogProviding {
         return nil
     }
 
-    func isEligibleForIntroOffer(groupID: String) async -> Bool {
+    func isEligibleForIntroOffer() async -> Bool {
         introOfferCheckCallCount += 1
         return introOfferEligible
     }

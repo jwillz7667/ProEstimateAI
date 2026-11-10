@@ -1,0 +1,114 @@
+{
+  "checkedAt": "2026-11-03T09:47:39.957Z",
+  "filesChecked": 30,
+  "stagedLocaleCount": 5,
+  "stagedBucketsPerLocale": 5,
+  "stagedFilesExpected": 125,
+  "referenceGapRatio": 0.07317212599325444,
+  "backdrop": "Original curved orange ribbon with virtual gallery-gutter segments",
+  "freshRuntimeCapture": false,
+  "families": [
+    {
+      "family": "iphone-dynamic-island-medium",
+      "count": 5,
+      "dimensions": [
+        1206,
+        2622
+      ],
+      "virtualGapWidth": 88,
+      "cropOffsets": [
+        0,
+        1294,
+        2588,
+        3882,
+        5176
+      ],
+      "rgbWithoutAlpha": true
+    },
+    {
+      "family": "iphone-dynamic-island-large",
+      "count": 5,
+      "dimensions": [
+        1320,
+        2868
+      ],
+      "virtualGapWidth": 97,
+      "cropOffsets": [
+        0,
+        1417,
+        2834,
+        4251,
+        5668
+      ],
+      "rgbWithoutAlpha": true
+    },
+    {
+      "family": "iphone-face-id-large",
+      "count": 5,
+      "dimensions": [
+        1284,
+        2778
+      ],
+      "virtualGapWidth": 94,
+      "cropOffsets": [
+        0,
+        1378,
+        2756,
+        4134,
+        5512
+      ],
+      "rgbWithoutAlpha": true
+    },
+    {
+      "family": "ipad-13",
+      "count": 5,
+      "dimensions": [
+        2064,
+        2752
+      ],
+      "virtualGapWidth": 151,
+      "cropOffsets": [
+        0,
+        2215,
+        4430,
+        6645,
+        8860
+      ],
+      "rgbWithoutAlpha": true
+    },
+    {
+      "family": "ipad-12-9",
+      "count": 5,
+      "dimensions": [
+        2048,
+        2732
+      ],
+      "virtualGapWidth": 150,
+      "cropOffsets": [
+        0,
+        2198,
+        4396,
+        6594,
+        8792
+      ],
+      "rgbWithoutAlpha": true
+    },
+    {
+      "family": "ipad-11",
+      "count": 5,
+      "dimensions": [
+        1668,
+        2420
+      ],
+      "virtualGapWidth": 122,
+      "cropOffsets": [
+        0,
+        1790,
+        3580,
+        5370,
+        7160
+      ],
+      "rgbWithoutAlpha": true
+    }
+  ]
+}

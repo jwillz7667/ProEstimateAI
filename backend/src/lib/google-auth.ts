@@ -1,6 +1,7 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { env } from "../config/env";
 import { AuthenticationError } from "./errors";
+import { verifyIdentityNonce } from './identity-nonce';
 
 /**
  * Verifies Google ID tokens (the JWT iOS receives after a user completes
@@ -62,6 +63,7 @@ function configuredAudiences(): string[] {
  */
 export async function verifyGoogleIdentityToken(
   identityToken: string,
+  rawNonce?: string,
 ): Promise<GoogleTokenClaims> {
   const audiences = configuredAudiences();
   if (audiences.length === 0) {
@@ -73,10 +75,13 @@ export async function verifyGoogleIdentityToken(
       issuer: GOOGLE_ISSUERS,
       // jose accepts an array of acceptable audiences out of the box.
       audience: audiences,
+      algorithms: ['RS256'],
+      requiredClaims: ['sub', 'iat', 'exp'],
     });
+    verifyIdentityNonce(payload.nonce, rawNonce);
 
     const sub = payload.sub;
-    if (!sub) {
+    if (typeof sub !== 'string' || !sub.trim()) {
       throw new AuthenticationError("Google identity token missing subject");
     }
 
@@ -85,19 +90,17 @@ export async function verifyGoogleIdentityToken(
     const rawVerified = payload["email_verified"];
     const emailVerified =
       rawVerified === true ||
-      rawVerified === "true" ||
-      rawVerified === 1 ||
-      rawVerified === "1";
+      rawVerified === "true";
 
     return {
       sub,
-      email: payload["email"] as string | undefined,
+      email: typeof payload['email'] === 'string' ? payload['email'] : undefined,
       emailVerified,
       hostedDomain: typeof payload["hd"] === "string" ? payload["hd"] : undefined,
-      name: payload["name"] as string | undefined,
-      givenName: payload["given_name"] as string | undefined,
-      familyName: payload["family_name"] as string | undefined,
-      picture: payload["picture"] as string | undefined,
+      name: typeof payload['name'] === 'string' ? payload['name'] : undefined,
+      givenName: typeof payload['given_name'] === 'string' ? payload['given_name'] : undefined,
+      familyName: typeof payload['family_name'] === 'string' ? payload['family_name'] : undefined,
+      picture: typeof payload['picture'] === 'string' ? payload['picture'] : undefined,
     };
   } catch (error) {
     if (error instanceof AuthenticationError) throw error;

@@ -22,7 +22,7 @@ const STEPS: Step[] = [
     eyebrow: "Pick the project",
     title: "Choose what you're estimating.",
     description:
-      "Kitchen, bath, roof, siding, painting, landscaping — nine project types, each with prompt presets tuned for the AI so you get a useful preview on the first shot.",
+      "Choose your project type — kitchen, bath, roof, siding, painting, landscaping, and more — then use its prompts to guide your preview.",
     screenshot: "/screenshots/category-picker.jpg",
     alt: "ProEstimate AI category picker with kitchen, bath, roofing, painting, siding, room remodel, exterior, and landscaping",
   },
@@ -40,7 +40,7 @@ const STEPS: Step[] = [
     eyebrow: "Watch it generate",
     title: "Photoreal preview in under 60 seconds.",
     description:
-      "Nano Banana 2.1 produces a before/after preview that holds the layout while showing the renovation. Slide to compare, pinch to zoom, double-tap to reset.",
+      "See a before/after preview that holds the layout while showing your renovation. Slide to compare, pinch to zoom, double-tap to reset.",
     screenshot: "/screenshots/ai-preview.jpg",
     alt: "Before/after AI-generated landscape install with cobble path and retaining wall",
   },

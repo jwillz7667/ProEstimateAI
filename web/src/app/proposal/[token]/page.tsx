@@ -6,6 +6,7 @@ import {
   formatCurrency,
   formatDate,
   formatQuantity,
+  customerUnitPriceLabel,
   getSharedProposal,
   groupLineItems,
   isProposalExpired,
@@ -18,6 +19,7 @@ import { APIError } from "@/lib/api";
 
 import { ProposalActions } from "./ProposalActions";
 import { PrintProposal } from "./PrintProposal";
+import { ChangeOrderReview } from "./ChangeOrderReview";
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -167,6 +169,8 @@ export default async function ProposalPage({ params }: Params) {
           )}
         </section>
 
+        {data.change_order && <ChangeOrderReview comparison={data.change_order} />}
+
         {/* Before/after gallery ------------------------------------------- */}
         {before_after_images.length > 0 && (
           <section className="mb-10">
@@ -203,7 +207,7 @@ export default async function ProposalPage({ params }: Params) {
 
         {/* Line items ------------------------------------------------------ */}
         <section className="mb-10">
-          <SectionHeading>Pricing</SectionHeading>
+          <SectionHeading>{data.change_order ? "Revised scope pricing" : "Pricing"}</SectionHeading>
 
           <div className="overflow-hidden rounded-2xl border border-ink-100 bg-white">
             {groups.materials.length > 0 && (
@@ -256,11 +260,10 @@ export default async function ProposalPage({ params }: Params) {
               )}
               <div className="flex items-baseline justify-between pt-3 border-t border-ink-200">
                 <span className="text-base font-semibold text-ink-950">
-                  Total
+                  {data.change_order ? "Revised contract total" : "Total"}
                 </span>
                 <span
-                  className="text-2xl font-bold tabular-nums"
-                  style={{ color: accent }}
+                  className="text-2xl font-bold tabular-nums text-ink-950"
                 >
                   {formatCurrency(estimate.total_amount)}
                 </span>
@@ -272,7 +275,7 @@ export default async function ProposalPage({ params }: Params) {
         {/* Actions --------------------------------------------------------- */}
         {open && (
           <section className="proposal-response-controls mb-10">
-            <ProposalActions key={token} token={token} primaryColor={accent} />
+            <ProposalActions key={token} token={token} primaryColor={accent} documentHash={data.document_hash} consentText={data.approval_consent_text} consentVersion={data.approval_consent_version} />
             {proposal.expires_at && (
               <p className="mt-3 text-sm text-ink-500 text-center">
                 This proposal expires {formatDate(proposal.expires_at)}.
@@ -280,6 +283,19 @@ export default async function ProposalPage({ params }: Params) {
             )}
           </section>
         )}
+
+        {data.acceptance && (
+          <section className="mb-10 rounded-2xl border border-ink-100 bg-white p-6">
+            <SectionHeading>Approval record</SectionHeading>
+            <p className="text-ink-800">Acknowledged by <strong>{data.acceptance.signer_name}</strong> on {formatDate(data.acceptance.accepted_at)}.</p>
+            <p className="mt-2 text-sm text-ink-600">{data.acceptance.consent_text}</p>
+            <p className="mt-3 text-xs text-ink-500">Version {data.acceptance.estimate_version}. The entered name is self-attested; identity was not independently verified.</p>
+            <details className="mt-3 text-xs text-ink-500"><summary className="cursor-pointer py-2">Document reference</summary><code className="block break-all">{data.acceptance.document_hash}</code></details>
+          </section>
+        )}
+
+        {estimate.assumptions && <section className="mb-10"><SectionHeading>Assumptions</SectionHeading><RichBlock>{estimate.assumptions}</RichBlock></section>}
+        {estimate.exclusions && <section className="mb-10"><SectionHeading>Exclusions</SectionHeading><RichBlock>{estimate.exclusions}</RichBlock></section>}
 
         {/* Terms ----------------------------------------------------------- */}
         {proposal.terms_and_conditions && (
@@ -406,8 +422,8 @@ function LineItemGroup({
                 </div>
               )}
               <div className="mt-1 text-xs text-ink-500 tabular-nums">
-                {formatQuantity(item.quantity)} {item.unit} ·{" "}
-                {formatCurrency(item.unit_cost)} each
+                {formatQuantity(item.quantity)} {item.unit}
+                {customerUnitPriceLabel(item) && <> · {customerUnitPriceLabel(item)} each</>}
               </div>
             </div>
             <div className="text-right text-ink-900 font-medium tabular-nums shrink-0">
@@ -434,6 +450,9 @@ function StatusPill({
   expired: boolean;
 }) {
   const status = expired ? "expired" : proposal.status;
+  if (proposal.changes_requested_at && !expired) {
+    return <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">Changes requested</span>;
+  }
   const { label, bg, fg } = (() => {
     switch (status) {
       case "approved":
@@ -469,6 +488,9 @@ function StatusBanner({
   expired: boolean;
   accent: string;
 }) {
+  if (proposal.changes_requested_at && !expired) {
+    return <Banner tone="neutral" title="Your change request was sent" body={proposal.requested_changes_message || "Your contractor can prepare a new proposal. This version remains available for reference."} />;
+  }
   if (proposal.status === "approved") {
     const date = formatDate(proposal.responded_at);
     return (

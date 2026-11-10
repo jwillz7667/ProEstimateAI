@@ -8,6 +8,7 @@ struct AuthGateView: View {
     @Environment(OnboardingStore.self) private var onboardingStore
     @Environment(EntitlementStore.self) private var entitlementStore
     @Environment(UsageMeterStore.self) private var usageMeterStore
+    @Environment(PaywallPresenter.self) private var paywallPresenter
     @State private var isRestoring = true
     @State private var hasRestoreError = false
 
@@ -58,6 +59,21 @@ struct AuthGateView: View {
         .task {
             await restoreSession()
         }
+        .onChange(of: isLoginOfferReady, initial: true) { _, _ in
+            presentLoginOfferIfReady()
+        }
+        .onChange(of: entitlementStore.snapshot) { _, _ in
+            presentLoginOfferIfReady()
+        }
+    }
+
+    private var isLoginOfferReady: Bool {
+        !isRestoring && appState.isAuthenticated && onboardingStore.hasCompletedOnboarding
+    }
+
+    private func presentLoginOfferIfReady() {
+        guard isLoginOfferReady else { return }
+        paywallPresenter.presentLoginOffer(sessionID: TokenStore.shared.sessionIdentifier)
     }
 
     private var splashView: some View {
@@ -118,7 +134,8 @@ struct AuthGateView: View {
                     id: user.id,
                     email: user.email,
                     fullName: user.fullName,
-                    avatarURL: user.avatarURL
+                    avatarURL: user.avatarURL,
+                    role: user.role
                 )
                 appState.currentCompany = AppState.CurrentCompany.from(company)
                 appState.isAuthenticated = true

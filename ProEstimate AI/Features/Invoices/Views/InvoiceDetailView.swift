@@ -21,10 +21,11 @@ struct InvoiceDetailView: View {
     @State private var viewModel = InvoiceDetailViewModel()
     @State private var exportedPDF: ExportedPDF?
     @State private var showDeleteConfirmation = false
-    @State private var showPaymentSheet = false
-    @State private var paymentAmountText = ""
+    @State private var financeRoute: InvoiceDetailFinanceRoute?
+    @State private var clientInvoiceURL: URL?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
 
     /// Identifiable wrapper so the share sheet can be driven by `.sheet(item:)`
     /// — the file URL is the identity, matching `ProjectDetailView`.
@@ -61,17 +62,27 @@ struct InvoiceDetailView: View {
         }
         .refreshable {
             await viewModel.load(id: invoiceId)
+            await refreshFinanceLink()
         }
         .task {
             if viewModel.invoice == nil {
                 await viewModel.load(id: invoiceId)
             }
+            await refreshFinanceLink()
         }
         .sheet(item: $exportedPDF) { pdf in
             ActivityViewRepresentable(activityItems: [pdf.url])
         }
-        .sheet(isPresented: $showPaymentSheet) {
-            paymentSheet
+        .sheet(item: $financeRoute, onDismiss: financeDismissed) { route in
+            switch route {
+            case .payments: InvoiceFinanceView(invoiceId: invoiceId)
+            case .schedule: InvoiceFinanceView(invoiceId: invoiceId, initialMode: .schedule)
+            case .followUp:
+                NavigationStack {
+                    FollowUpHistoryView(kind: .invoice, entityId: invoiceId)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { financeRoute = nil } } }
+                }
+            }
         }
         .confirmationDialog(
             "Delete Invoice",
@@ -92,7 +103,7 @@ struct InvoiceDetailView: View {
         .alert(
             "Something went wrong",
             isPresented: Binding(
-                get: { viewModel.actionError != nil && !showPaymentSheet },
+                get: { viewModel.actionError != nil },
                 set: { if !$0 { viewModel.actionError = nil } }
             )
         ) {
@@ -174,6 +185,10 @@ struct InvoiceDetailView: View {
                 }
             }
 
+            if invoice.financialBasisLocked == true {
+                Text("The approved financial basis is locked. Use a customer-approved change order for scope or price changes.")
+                    .font(TypographyTokens.footnote).foregroundStyle(ColorTokens.secondaryText)
+            }
             if invoice.isPastDue {
                 Label("Past due", systemImage: "exclamationmark.triangle.fill")
                     .font(TypographyTokens.caption)
@@ -201,17 +216,18 @@ struct InvoiceDetailView: View {
     /// settled total once paid.
     private func amountCard(_ invoice: Invoice) -> some View {
         VStack(alignment: .leading, spacing: SpacingTokens.xs) {
-            Text(invoice.isPaid ? "Total Paid" : "Balance Due")
+            Text(invoice.isPaid ? "Settled invoice" : "Balance Due")
                 .font(TypographyTokens.caption)
                 .foregroundStyle(.secondary)
             CurrencyText(
                 amount: invoice.isPaid ? invoice.totalAmount : invoice.amountDue,
-                font: TypographyTokens.moneyLarge
+                font: TypographyTokens.moneyLarge,
+                currencyCode: invoice.currencyCode ?? "USD"
             )
             .foregroundStyle(invoice.isPastDue ? ColorTokens.error : ColorTokens.primaryText)
 
             if invoice.isPartiallyPaid, !invoice.isPaid {
-                Text("\(currency(invoice.amountPaid)) paid of \(currency(invoice.totalAmount))")
+                Text("\(currency(invoice.amountPaid)) cash received · \(currency(invoice.creditAmount ?? 0)) credit applied")
                     .font(TypographyTokens.caption)
                     .foregroundStyle(.secondary)
             }
@@ -227,8 +243,8 @@ struct InvoiceDetailView: View {
         VStack(spacing: SpacingTokens.xs) {
             totalRow(label: "Subtotal", amount: invoice.subtotal)
 
-            if invoice.discountAmount > 0 {
-                totalRow(label: "Discount", amount: -invoice.discountAmount)
+            if invoice.discountAmount != 0 {
+                totalRow(label: invoice.sourceChangeOrderId == nil ? "Discount" : "Discount change", amount: -invoice.discountAmount)
             }
 
             totalRow(label: "Tax", amount: invoice.taxAmount)
@@ -237,9 +253,12 @@ struct InvoiceDetailView: View {
 
             totalRow(label: "Total", amount: invoice.totalAmount, emphasized: true)
 
+            if (invoice.creditAmount ?? 0) > 0 { totalRow(label: "Credit applied", amount: -(invoice.creditAmount ?? 0)) }
             if invoice.amountPaid > 0 {
-                totalRow(label: "Amount Paid", amount: -invoice.amountPaid)
+                totalRow(label: "Cash received", amount: -invoice.amountPaid)
                 Divider()
+                totalRow(label: "Balance Due", amount: invoice.amountDue, emphasized: true)
+            } else if (invoice.creditAmount ?? 0) > 0 {
                 totalRow(label: "Balance Due", amount: invoice.amountDue, emphasized: true)
             }
         }
@@ -255,7 +274,8 @@ struct InvoiceDetailView: View {
             Spacer()
             CurrencyText(
                 amount: amount,
-                font: emphasized ? TypographyTokens.moneyMedium : TypographyTokens.moneySmall
+                font: emphasized ? TypographyTokens.moneyMedium : TypographyTokens.moneySmall,
+                currencyCode: viewModel.invoice?.currencyCode ?? "USD"
             )
         }
     }
@@ -292,7 +312,7 @@ struct InvoiceDetailView: View {
 
                 HStack(spacing: SpacingTokens.xxs) {
                     Text("\(formattedQuantity(item.quantity)) \(item.unit) ×")
-                    CurrencyText(amount: item.unitCost, font: TypographyTokens.caption)
+                    CurrencyText(amount: item.unitCost, font: TypographyTokens.caption, currencyCode: viewModel.invoice?.currencyCode ?? "USD")
                 }
                 .font(TypographyTokens.caption)
                 .foregroundStyle(.tertiary)
@@ -300,7 +320,7 @@ struct InvoiceDetailView: View {
 
             Spacer(minLength: SpacingTokens.sm)
 
-            CurrencyText(amount: item.lineTotal, font: TypographyTokens.moneySmall)
+            CurrencyText(amount: item.lineTotal, font: TypographyTokens.moneySmall, currencyCode: viewModel.invoice?.currencyCode ?? "USD")
         }
         .padding(SpacingTokens.md)
         .glassCard()
@@ -345,33 +365,35 @@ struct InvoiceDetailView: View {
     private func actions(_ invoice: Invoice) -> some View {
         VStack(spacing: SpacingTokens.sm) {
             if invoice.status == .draft {
+                SecondaryButton(title: "Deposit & payment schedule", icon: "calendar.badge.clock", emphasis: .accent) {
+                    financeRoute = .schedule
+                }
+                .disabled(viewModel.isPerformingAction || viewModel.isExporting || invoice.totalAmount <= 0)
                 PrimaryCTAButton(
                     title: "Send Invoice",
                     icon: "paperplane.fill",
                     isLoading: viewModel.isPerformingAction,
                     isDisabled: viewModel.isPerformingAction || viewModel.isExporting
                 ) {
-                    Task { await viewModel.markAsSent() }
+                    Task { await viewModel.markAsSent(); await refreshFinanceLink() }
                 }
             }
 
-            if canMarkPaid(invoice) {
-                SecondaryButton(title: "Record Payment", icon: "banknote", emphasis: .accent) {
-                    paymentAmountText = ""
-                    viewModel.actionError = nil
-                    showPaymentSheet = true
-                }
-                .disabled(viewModel.isPerformingAction || viewModel.isExporting || viewModel.isLoading)
+            SecondaryButton(title: "Payments & receipts", icon: "banknote", emphasis: .accent) {
+                financeRoute = .payments
+            }
+            .disabled(viewModel.isPerformingAction || viewModel.isExporting || viewModel.isLoading)
 
-                SecondaryButton(
-                    title: "Mark as Paid",
-                    icon: "checkmark.circle.fill",
-                    isLoading: viewModel.isPerformingAction,
-                    emphasis: .accent
-                ) {
-                    Task { await viewModel.markAsPaid() }
+            if let clientInvoiceURL, invoice.status != .draft {
+                ShareLink(item: clientInvoiceURL) {
+                    Label("Share client invoice", systemImage: "square.and.arrow.up")
+                        .font(TypographyTokens.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .disabled(viewModel.isPerformingAction || viewModel.isExporting || viewModel.isLoading)
+            }
+
+            if invoice.status != .draft && invoice.status != .void {
+                SecondaryButton(title: "Follow-ups & delivery history", icon: "paperplane") { financeRoute = .followUp }
             }
 
             SecondaryButton(
@@ -386,92 +408,42 @@ struct InvoiceDetailView: View {
                 }
             }
 
-            Button(role: .destructive) {
-                showDeleteConfirmation = true
-            } label: {
-                Label("Delete Invoice", systemImage: "trash")
-                    .font(TypographyTokens.subheadline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, SpacingTokens.sm)
+            if invoice.status == .draft && invoice.financialBasisLocked != true && (invoice.creditAmount ?? 0) == 0 {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    Label("Delete draft invoice", systemImage: "trash")
+                        .font(TypographyTokens.subheadline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, SpacingTokens.sm)
+                }
+                .foregroundStyle(ColorTokens.error)
+                .disabled(viewModel.isPerformingAction || viewModel.isExporting)
+                .padding(.top, SpacingTokens.xs)
             }
-            .foregroundStyle(ColorTokens.error)
-            .disabled(viewModel.isPerformingAction || viewModel.isExporting)
-            .padding(.top, SpacingTokens.xs)
         }
+    }
+
+    private func refreshFinanceLink() async {
+        do {
+            let snapshot = try await InvoiceFinanceService().getFinance(invoiceId: invoiceId)
+            guard snapshot.invoice.id == invoiceId, snapshot.invoice.companyId == appState.currentCompany?.id else {
+                clientInvoiceURL = nil
+                return
+            }
+            clientInvoiceURL = snapshot.shareURL
+        } catch {
+            // The invoice remains readable during a temporary finance outage.
+            // A share link is shown only after a successful scoped read.
+            clientInvoiceURL = nil
+        }
+    }
+
+    private func financeDismissed() {
+        Task { await viewModel.load(id: invoiceId); await refreshFinanceLink() }
     }
 
     // MARK: - Helpers
-
-    private var paymentValidationMessage: String? {
-        guard let invoice = viewModel.invoice else { return "The invoice is unavailable." }
-        guard let amount = DecimalFormInput.parse(paymentAmountText), amount > 0 else {
-            return "Enter the payment amount received."
-        }
-        if amount > invoice.amountDue { return "The payment exceeds the outstanding balance." }
-        var input = amount
-        var rounded = Decimal()
-        NSDecimalRound(&rounded, &input, 2, .plain)
-        return rounded == amount ? nil : "Use no more than two decimal places."
-    }
-
-    private var paymentSheet: some View {
-        NavigationStack {
-            Form {
-                if let invoice = viewModel.invoice {
-                    Section {
-                        LabeledContent("Already paid", value: currency(invoice.amountPaid))
-                        LabeledContent("Outstanding", value: currency(invoice.amountDue))
-                    }
-                }
-                Section("Payment received") {
-                    TextField("Amount", text: $paymentAmountText)
-                        .keyboardType(.decimalPad)
-                    if !paymentAmountText.isEmpty, let message = paymentValidationMessage {
-                        Text(message).font(TypographyTokens.caption).foregroundStyle(ColorTokens.error)
-                    }
-                }
-                if let actionError = viewModel.actionError {
-                    Text(actionError).foregroundStyle(ColorTokens.error)
-                }
-                if viewModel.paymentNeedsRefresh {
-                    Section {
-                        Text("Refresh and review the current balance before saving another payment.")
-                            .font(TypographyTokens.caption)
-                        Button("Refresh Invoice") {
-                            Task { await viewModel.refreshPaymentState() }
-                        }
-                        .disabled(viewModel.isLoading)
-                    }
-                }
-            }
-            .navigationTitle("Record Payment")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showPaymentSheet = false }
-                        .disabled(viewModel.isPerformingAction)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        guard let amount = DecimalFormInput.parse(paymentAmountText) else { return }
-                        Task {
-                            if await viewModel.recordPayment(amount: amount) { showPaymentSheet = false }
-                        }
-                    }
-                    .disabled(paymentValidationMessage != nil || viewModel.isPerformingAction || viewModel.isLoading || viewModel.paymentNeedsRefresh)
-                }
-            }
-            .overlay { if viewModel.isPerformingAction { ProgressView("Saving payment…") } }
-        }
-        .interactiveDismissDisabled(viewModel.isPerformingAction)
-    }
-
-    /// Payment can be recorded for any non-paid, non-void invoice that still
-    /// carries a balance. Draft invoices are included so a contractor who got
-    /// paid in cash before sending can close the loop in one tap.
-    private func canMarkPaid(_ invoice: Invoice) -> Bool {
-        invoice.status != .paid && invoice.status != .void && invoice.amountDue > 0
-    }
 
     private func hasTerms(_ invoice: Invoice) -> Bool {
         let hasNotes = !(invoice.notes ?? "").isEmpty
@@ -490,9 +462,15 @@ struct InvoiceDetailView: View {
     private func currency(_ value: Decimal) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
+        formatter.currencyCode = viewModel.invoice?.currencyCode ?? "USD"
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "\(value)"
     }
+}
+
+private enum InvoiceDetailFinanceRoute: String, Identifiable {
+    case payments, schedule, followUp
+    var id: String { rawValue }
 }
 
 // MARK: - Preview

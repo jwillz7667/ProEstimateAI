@@ -49,7 +49,7 @@ test('support prompt matches current plans and trims forwarded history', async (
   await post(request({ messages: Array.from({ length: 12 }, (_, index) => ({ role: 'user', content: String(index) })) }));
   assert.equal(payload.messages.length, 11);
   assert.equal(payload.messages[1].content, '2');
-  assert.match(payload.messages[0].content, /5 lifetime AI preview generations/);
+  assert.match(payload.messages[0].content, /suggestions require an active Apple trial or paid Pro subscription/);
   assert.match(payload.messages[0].content, /20 AI preview generations/);
   assert.match(payload.messages[0].content, /Premium subscriptions are no longer offered/);
 });

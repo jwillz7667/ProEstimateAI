@@ -57,7 +57,7 @@ describe("deriveFeatureFlags", () => {
     expect(deriveFeatureFlags("PREMIUM_ANNUAL", [])).toEqual(pro);
   });
 
-  it("grants credit-gated features to Free when starter credits remain", () => {
+  it("does not unlock paid features with historical starter credits", () => {
     const buckets = [
       makeBucket("AI_GENERATION", 3, 1),
       makeBucket("QUOTE_EXPORT", 3, 0),
@@ -65,8 +65,8 @@ describe("deriveFeatureFlags", () => {
 
     const flags = deriveFeatureFlags("FREE_STARTER", buckets);
 
-    expect(flags.CAN_GENERATE_PREVIEW).toBe(true);
-    expect(flags.CAN_EXPORT_QUOTE).toBe(true);
+    expect(flags.CAN_GENERATE_PREVIEW).toBe(false);
+    expect(flags.CAN_EXPORT_QUOTE).toBe(false);
     expect(flags.CAN_REMOVE_WATERMARK).toBe(false);
     expect(flags.CAN_USE_BRANDING).toBe(false);
     expect(flags.CAN_CREATE_INVOICE).toBe(false);

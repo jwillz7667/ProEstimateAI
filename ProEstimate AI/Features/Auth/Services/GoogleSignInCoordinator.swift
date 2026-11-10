@@ -22,6 +22,7 @@ struct GoogleSignInResult: Sendable {
     let identityToken: String
     let email: String?
     let fullName: String?
+    let rawNonce: String
 }
 
 enum GoogleSignInError: Error, LocalizedError {
@@ -80,9 +81,10 @@ final class GoogleSignInCoordinator: NSObject, ASWebAuthenticationPresentationCo
         let redirectURI = "\(reversedClientID):/oauth/callback"
 
         // PKCE pair — Google requires S256 challenges from native apps.
-        let verifier = Self.makeCodeVerifier()
+        let verifier = try OAuthRequestSecurity.randomToken()
         let challenge = Self.codeChallenge(for: verifier)
-        let state = Self.randomState()
+        let state = try OAuthRequestSecurity.randomToken()
+        let rawNonce = try OAuthRequestSecurity.randomToken()
 
         var components = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
         components.queryItems = [
@@ -93,6 +95,7 @@ final class GoogleSignInCoordinator: NSObject, ASWebAuthenticationPresentationCo
             URLQueryItem(name: "code_challenge", value: challenge),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
             URLQueryItem(name: "state", value: state),
+            URLQueryItem(name: "nonce", value: OAuthRequestSecurity.nonceHash(rawNonce)),
             URLQueryItem(name: "prompt", value: "select_account"),
         ]
         guard let authURL = components.url else {
@@ -122,7 +125,8 @@ final class GoogleSignInCoordinator: NSObject, ASWebAuthenticationPresentationCo
         return GoogleSignInResult(
             identityToken: tokens.idToken,
             email: claims["email"] as? String,
-            fullName: claims["name"] as? String
+            fullName: claims["name"] as? String,
+            rawNonce: rawNonce
         )
     }
 
@@ -168,7 +172,14 @@ final class GoogleSignInCoordinator: NSObject, ASWebAuthenticationPresentationCo
             session.presentationContextProvider = self
             session.prefersEphemeralWebBrowserSession = false
             self.session = session
-            session.start()
+            guard session.start() else {
+                self.session = nil
+                cont.resume(throwing: GoogleSignInError.system(NSError(
+                    domain: "GoogleSignIn", code: -2,
+                    userInfo: [NSLocalizedDescriptionKey: "Could not open Google sign-in. Please try again."]
+                )))
+                return
+            }
         }
     }
 
@@ -216,22 +227,10 @@ final class GoogleSignInCoordinator: NSObject, ASWebAuthenticationPresentationCo
 
     // MARK: - PKCE / state helpers
 
-    private static func makeCodeVerifier() -> String {
-        var bytes = [UInt8](repeating: 0, count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        return Data(bytes).base64URLEncodedString()
-    }
-
     private static func codeChallenge(for verifier: String) -> String {
         let data = Data(verifier.utf8)
         let hash = SHA256.hash(data: data)
         return Data(hash).base64URLEncodedString()
-    }
-
-    private static func randomState() -> String {
-        var bytes = [UInt8](repeating: 0, count: 16)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        return Data(bytes).base64URLEncodedString()
     }
 
     private static func percentEncode(_ s: String) -> String {

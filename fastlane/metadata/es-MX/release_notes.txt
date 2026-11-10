@@ -1,10 +1,9 @@
-Esta actualización mejora la edición de proyectos, presupuestos, facturas y propuestas compartidas.
+Una pantalla de inicio más clara y un flujo de proyectos más sencillo.
 
-• Asigna un cliente a un proyecto antes de crear una factura.
-• Registra pagos parciales de facturas y consulta el saldo pendiente.
-• Borra detalles guardados del proyecto y valida presupuestos y medidas.
-• Recibe mensajes claros cuando una operación falla.
-• Conserva los impuestos acordados al actualizar los pagos de facturas.
-• Imprime o guarda propuestas compartidas en PDF desde el navegador.
+• Inicia un proyecto con una acción principal y retoma el trabajo reciente con estados fáciles de leer.
+• Configura la mayoría de los proyectos en dos pasos, con los detalles opcionales disponibles cuando los necesites.
+• Crea presupuestos manuales, revisa sus partidas y edita cantidades, precios, margen e impuestos en los borradores.
+• Revisa los presupuestos por separado de la exportación de PDF, las propuestas y la facturación.
+• Diseño más útil en iPhone y iPad, con mejoras en la carga y la gestión de errores.
 
-Incluye mejoras de fiabilidad y seguridad.
+Cada cuenta incluye una prueba de Pro de siete días, sin pago. Puedes omitir la oferta al iniciar sesión. El acceso básico y los presupuestos manuales siguen gratis al terminar la prueba.

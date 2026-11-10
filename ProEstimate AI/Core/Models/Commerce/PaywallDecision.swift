@@ -39,6 +39,7 @@ struct PaywallDecision: Codable, Equatable, Sendable {
 /// Each placement maps to a specific user action or screen trigger.
 /// Placements are configurable so copy and experiments can evolve independently.
 enum PaywallPlacement: String, Codable, CaseIterable, Sendable {
+    case loginOffer = "LOGIN_OFFER"
     case onboardingSoftGate = "ONBOARDING_SOFT_GATE"
     case postFirstGeneration = "POST_FIRST_GENERATION"
     case postFirstQuoteExport = "POST_FIRST_QUOTE_EXPORT"
@@ -50,6 +51,11 @@ enum PaywallPlacement: String, Codable, CaseIterable, Sendable {
     case approvalShareLocked = "APPROVAL_SHARE_LOCKED"
     case watermarkRemovalLocked = "WATERMARK_REMOVAL_LOCKED"
     case settingsUpgrade = "SETTINGS_UPGRADE"
+    case trialOffer = "TRIAL_OFFER"
+    case subscribeNoTrial = "SUBSCRIBE_NO_TRIAL"
+    case usageLimitDaily = "USAGE_LIMIT_DAILY"
+    case usageLimitWeekly = "USAGE_LIMIT_WEEKLY"
+    case usageLimitMonthly = "USAGE_LIMIT_MONTHLY"
 }
 
 // MARK: - Identifiable
@@ -66,11 +72,12 @@ extension PaywallPlacement {
     /// Whether this placement is a soft gate that allows the user to continue for free.
     var isSoftGate: Bool {
         switch self {
-        case .onboardingSoftGate, .postFirstGeneration, .postFirstQuoteExport, .settingsUpgrade:
+        case .loginOffer, .onboardingSoftGate, .postFirstGeneration, .postFirstQuoteExport, .settingsUpgrade:
             return true
         case .generationLimitHit, .quoteLimitHit, .invoiceLocked,
              .aiEstimateLocked, .brandingLocked, .approvalShareLocked,
-             .watermarkRemovalLocked:
+             .watermarkRemovalLocked, .trialOffer, .subscribeNoTrial,
+             .usageLimitDaily, .usageLimitWeekly, .usageLimitMonthly:
             return false
         }
     }
@@ -79,11 +86,33 @@ extension PaywallPlacement {
     var isHardGate: Bool {
         !isSoftGate
     }
+
+    var isUsageLimit: Bool {
+        self == .usageLimitDaily || self == .usageLimitWeekly || self == .usageLimitMonthly
+    }
 }
 
 // MARK: - Sample Data
 
 extension PaywallDecision {
+    static func loginOffer(trialEndsAt: Date?) -> PaywallDecision {
+        PaywallDecision(
+            placement: .loginOffer,
+            triggerReason: "Signed-in account offer",
+            blocking: false,
+            headline: trialEndsAt == nil ? "Keep building with Pro" : "Your 7-day Pro trial is active",
+            subheadline: trialEndsAt.map {
+                "Pro is included until \($0.formatted(date: .abbreviated, time: .shortened)). No payment is required and this account trial won't renew automatically."
+            } ?? "Choose a plan for AI previews, estimates, branded quotes and invoicing. You can continue with basic tools for free.",
+            primaryCtaTitle: "Subscribe Now",
+            secondaryCtaTitle: trialEndsAt == nil ? "Continue with Free Plan" : "Continue to my trial",
+            showContinueFree: true,
+            showRestorePurchases: true,
+            recommendedProductId: AppConstants.monthlyProductID,
+            availableProducts: nil
+        )
+    }
+
     /// Sample soft-gate decision shown after first generation.
     static let sampleSoftGate = PaywallDecision(
         placement: .postFirstGeneration,
@@ -105,7 +134,7 @@ extension PaywallDecision {
         triggerReason: "User tapped upgrade in settings",
         blocking: false,
         headline: "Unlock the full power of ProEstimate",
-        subheadline: "Get unlimited AI previews, branded proposals, invoicing, and more.",
+        subheadline: "Get 20 AI previews per month, branded proposals, invoicing, and more.",
         primaryCtaTitle: "Start Free Trial",
         secondaryCtaTitle: "Not Now",
         showContinueFree: true,
@@ -120,7 +149,7 @@ extension PaywallDecision {
         triggerReason: "Onboarding subscription offer",
         blocking: false,
         headline: "Try Pro Free for 7 Days",
-        subheadline: "Unlimited AI previews, branded proposals, invoicing, and client approvals — no commitment. Cancel anytime before the trial ends.",
+        subheadline: "20 AI previews per month, branded proposals, invoicing, and client approvals. Eligible monthly subscribers can try Pro free for 7 days.",
         primaryCtaTitle: "Start Free Trial",
         secondaryCtaTitle: "Continue with Free Plan",
         showContinueFree: true,

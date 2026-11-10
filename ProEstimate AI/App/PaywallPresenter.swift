@@ -21,8 +21,10 @@ final class PaywallPresenter {
     /// The decision currently driving the paywall sheet, or `nil` when no
     /// paywall is shown.
     var activeDecision: PaywallDecision?
+    var activeLimitNotice: PaywallDecision?
 
     private var entitlementStore: EntitlementStore?
+    private var offeredLoginSession: UUID?
     private let logger = Logger(subsystem: AppConstants.bundleID, category: "PaywallPresenter")
 
     /// Wire the presenter to the live entitlement store.
@@ -35,7 +37,11 @@ final class PaywallPresenter {
 
     /// Present a paywall, unless the current user already has Pro access.
     func present(_ decision: PaywallDecision) {
-        if let entitlementStore, entitlementStore.hasProAccess {
+        if decision.placement.isUsageLimit {
+            activeLimitNotice = decision
+            return
+        }
+        if let entitlementStore, entitlementStore.hasProAccess, !entitlementStore.isAccountTrial, !decision.blocking {
             let placement = decision.placement.rawValue
             let state = entitlementStore.subscriptionState.rawValue
             logger.info("Paywall suppressed for active subscriber. placement=\(placement) state=\(state)")
@@ -46,5 +52,21 @@ final class PaywallPresenter {
 
     func dismiss() {
         activeDecision = nil
+    }
+
+    /// Once per signed-in session, after authoritative access has loaded.
+    /// Dismissing does not consume the trial or bypass premium action checks.
+    func presentLoginOffer(sessionID: UUID) {
+        guard offeredLoginSession != sessionID, activeDecision == nil,
+              let entitlementStore, entitlementStore.snapshot != nil else { return }
+        offeredLoginSession = sessionID
+        guard !entitlementStore.hasProAccess || entitlementStore.isAccountTrial else { return }
+        present(.loginOffer(trialEndsAt: entitlementStore.isAccountTrial ? entitlementStore.snapshot?.trialEndsAt : nil))
+    }
+
+    func reset() {
+        offeredLoginSession = nil
+        activeDecision = nil
+        activeLimitNotice = nil
     }
 }

@@ -2,18 +2,19 @@ import { ProjectType, ProjectStatus, QualityTier } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
 import { NotFoundError } from "../../lib/errors";
-import { gateAIAction, runReservedAction } from "../commerce/entitlement-gate";
 import {
   readProjectQualityTiers,
   readProjectQualityTier,
 } from "../../lib/project-quality-tier";
-import { recordUsage } from "../../lib/usage-limits";
 import {
   PaginationParams,
   paginateResults,
   buildCursorWhere,
 } from "../../lib/pagination";
 import { CreateProjectInput, UpdateProjectInput } from "./projects.validators";
+import { prepareCheckoutErasure, assertCheckoutErasureSafe } from "../invoice-checkout/invoice-checkout.service";
+import { lockCompanyPaymentErasure } from "../invoice-checkout/payment-erasure-lock";
+import type { InvoicePaymentGateway } from "../invoice-checkout/stripe-gateway";
 
 // Home-service trades bid labor + parts without redesigning anything, so an
 // AI "after" render adds nothing. When the client doesn't specify, these
@@ -47,11 +48,11 @@ async function verifyClientOwnership(
   if (!client) throw new NotFoundError("Client", clientId);
 }
 
-export async function list(companyId: string, pagination: PaginationParams) {
+export async function list(companyId: string, pagination: PaginationParams, clientId?: string) {
   const { cursor, pageSize = 25 } = pagination;
 
   const projects = await prisma.project.findMany({
-    where: { companyId },
+    where: { companyId, ...(clientId ? { clientId } : {}) },
     // Defensive select: avoids decoding `qualityTier` when an environment has
     // DB/client enum nullability mismatch (which can crash Prisma on read).
     select: {
@@ -196,91 +197,73 @@ export async function getById(id: string, companyId: string) {
 
 export async function create(
   companyId: string,
-  userId: string,
+  _userId: string,
   data: CreateProjectInput,
 ) {
-  // Free users hit the paywall here; Pro users hit it after they
-  // exceed 2 projects/month. Premium users have a generous fair-use
-  // ceiling. The gate throws PaywallError(402) which the iOS client
-  // renders as the upgrade sheet.
+  // Manual projects remain available without a subscription. AI is gated
+  // separately when a preview or generated estimate is actually requested.
   await verifyClientOwnership(data.client_id, companyId);
-  const reservation = await gateAIAction({
-    userId,
-    companyId,
-    metric: "PROJECT_CREATED",
-  });
-  return runReservedAction(reservation, async () => {
-    const resolvedType: ProjectType = data.project_type
-      ? (data.project_type.toUpperCase() as ProjectType)
-      : "CUSTOM";
+  const resolvedType: ProjectType = data.project_type
+    ? (data.project_type.toUpperCase() as ProjectType)
+    : "CUSTOM";
 
-    // Resolve the image switch: explicit client value wins; otherwise service
-    // trades default off, and everything else follows the company-wide default
-    // (which itself defaults true). Only hit the company row when we actually
-    // need the fallback.
-    let aiPreviewEnabled: boolean;
-    if (data.ai_preview_enabled !== undefined) {
-      aiPreviewEnabled = data.ai_preview_enabled;
-    } else if (SERVICE_TRADE_TYPES.has(resolvedType)) {
-      aiPreviewEnabled = false;
-    } else {
-      const company = await prisma.company.findUnique({
-        where: { id: companyId },
-        select: { defaultAiPreviewEnabled: true },
-      });
-      aiPreviewEnabled = company?.defaultAiPreviewEnabled ?? true;
-    }
-
-    const project = await prisma.project.create({
-      data: {
-        companyId,
-        title: data.title,
-        clientId: data.client_id ?? null,
-        description: data.description ?? null,
-        aiPreviewEnabled,
-        projectType: data.project_type
-          ? (data.project_type.toUpperCase() as ProjectType)
-          : undefined,
-        status: data.status
-          ? (data.status.toUpperCase() as ProjectStatus)
-          : undefined,
-        budgetMin: data.budget_min ?? null,
-        budgetMax: data.budget_max ?? null,
-        // null = explicit "Auto"; undefined = field omitted, leave default (null).
-        qualityTier:
-          data.quality_tier === null
-            ? null
-            : data.quality_tier
-              ? (data.quality_tier.toUpperCase() as QualityTier)
-              : undefined,
-        squareFootage: data.square_footage ?? null,
-        dimensions: data.dimensions ?? null,
-        language: data.language ?? undefined,
-        lawnAreaSqFt: data.lawn_area_sq_ft ?? null,
-        roofAreaSqFt: data.roof_area_sq_ft ?? null,
-        propertyLatitude: data.property_latitude ?? null,
-        propertyLongitude: data.property_longitude ?? null,
-        isRecurring: data.is_recurring ?? false,
-        recurrenceFrequency: data.recurrence_frequency ?? null,
-        visitsPerMonth: data.visits_per_month ?? null,
-        contractMonths: data.contract_months ?? null,
-        recurrenceStartDate: data.recurrence_start_date
-          ? new Date(data.recurrence_start_date)
-          : null,
-      },
+  // Resolve the image switch: explicit client value wins; otherwise service
+  // trades default off, and everything else follows the company-wide default
+  // (which itself defaults true). Only hit the company row when we actually
+  // need the fallback.
+  let aiPreviewEnabled: boolean;
+  if (data.ai_preview_enabled !== undefined) {
+    aiPreviewEnabled = data.ai_preview_enabled;
+  } else if (SERVICE_TRADE_TYPES.has(resolvedType)) {
+    aiPreviewEnabled = false;
+  } else {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { defaultAiPreviewEnabled: true },
     });
+    aiPreviewEnabled = company?.defaultAiPreviewEnabled ?? true;
+  }
 
-    // Record the usage event so the rolling-window cap reflects this
-    // project. Non-fatal: if it fails the project still exists; the
-    // user's next attempt would just be one closer to the cap edge.
-    try {
-      if (!reservation) await recordUsage(userId, companyId, "PROJECT_CREATED");
-    } catch {
-      // swallowed intentionally — see comment above
-    }
-
-    return project;
+  const project = await prisma.project.create({
+    data: {
+      companyId,
+      title: data.title,
+      clientId: data.client_id ?? null,
+      description: data.description ?? null,
+      aiPreviewEnabled,
+      projectType: data.project_type
+        ? (data.project_type.toUpperCase() as ProjectType)
+        : undefined,
+      status: data.status
+        ? (data.status.toUpperCase() as ProjectStatus)
+        : undefined,
+      budgetMin: data.budget_min ?? null,
+      budgetMax: data.budget_max ?? null,
+      // null = explicit "Auto"; undefined = field omitted, leave default (null).
+      qualityTier:
+        data.quality_tier === null
+          ? null
+          : data.quality_tier
+            ? (data.quality_tier.toUpperCase() as QualityTier)
+            : undefined,
+      squareFootage: data.square_footage ?? null,
+      dimensions: data.dimensions ?? null,
+      language: data.language ?? undefined,
+      lawnAreaSqFt: data.lawn_area_sq_ft ?? null,
+      roofAreaSqFt: data.roof_area_sq_ft ?? null,
+      propertyLatitude: data.property_latitude ?? null,
+      propertyLongitude: data.property_longitude ?? null,
+      isRecurring: data.is_recurring ?? false,
+      recurrenceFrequency: data.recurrence_frequency ?? null,
+      visitsPerMonth: data.visits_per_month ?? null,
+      contractMonths: data.contract_months ?? null,
+      recurrenceStartDate: data.recurrence_start_date
+        ? new Date(data.recurrence_start_date)
+        : null,
+    },
   });
+
+  return project;
 }
 
 export async function update(
@@ -362,7 +345,7 @@ export async function update(
   return project;
 }
 
-export async function remove(id: string, companyId: string) {
+export async function remove(id: string, companyId: string, gateway?: InvoicePaymentGateway) {
   const existing = await prisma.project.findFirst({
     where: { id, companyId },
     select: { id: true },
@@ -371,6 +354,7 @@ export async function remove(id: string, companyId: string) {
   if (!existing) {
     throw new NotFoundError("Project", id);
   }
+  await prepareCheckoutErasure(companyId, id, gateway);
 
   // A project must delete with its full subtree, but the FK constraints on
   // Estimate, Proposal, and Invoice are RESTRICT (not CASCADE) — so a bare
@@ -382,10 +366,12 @@ export async function remove(id: string, companyId: string) {
   // CASCADE (Asset, AIGeneration → MaterialSuggestion, ActivityLogEntry,
   // EstimateExport, *LineItem). Order matters: Proposal FK-references Estimate
   // (also RESTRICT), so proposals must be removed before estimates.
-  await prisma.$transaction([
-    prisma.invoice.deleteMany({ where: { projectId: id } }),
-    prisma.proposal.deleteMany({ where: { projectId: id } }),
-    prisma.estimate.deleteMany({ where: { projectId: id } }),
-    prisma.project.delete({ where: { id } }),
-  ]);
+  await prisma.$transaction(async tx => {
+    await lockCompanyPaymentErasure(tx, companyId);
+    await assertCheckoutErasureSafe(tx, companyId, id);
+    await tx.invoice.deleteMany({ where: { projectId: id, companyId } });
+    await tx.proposal.deleteMany({ where: { projectId: id, companyId } });
+    await tx.estimate.deleteMany({ where: { projectId: id, companyId } });
+    await tx.project.delete({ where: { id } });
+  });
 }

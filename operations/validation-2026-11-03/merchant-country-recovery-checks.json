@@ -1,0 +1,59 @@
+{
+  "validatedAt": "2026-11-04T00:09:55.049591+00:00",
+  "worktreeBaseCommit": "b38cce4a45b62e11ed3d42eab65f5e037422970c",
+  "backend": {
+    "targetedIntegrationTests": 12,
+    "targetedMockedSdkTests": 11,
+    "migrationsAppliedFresh": 34,
+    "disposableDatabase": "proestimate_onboarding_country_20261103",
+    "typecheck": "passed",
+    "productionBuild": "passed",
+    "targetedLint": "passed",
+    "migrationProbe": {
+      "legacyBackfillConservative": true,
+      "oldWriterDefaultTrue": true,
+      "newExplicitFalse": true,
+      "pairedLeaseConstraint": true
+    }
+  },
+  "ios": {
+    "foundationChecks": 18,
+    "genericArm64SdkBuild": "passed",
+    "simulatorsBooted": 0,
+    "runtimeTouchVerification": false,
+    "buildLog": "/tmp/proestimate-merchant-country-ios-build-final.log"
+  },
+  "independentReview": "Backend claims/pagination and native recovery/dismissal reviewed; findings corrected",
+  "providerRequestsDuringFocusedTests": 0,
+  "genuineSandboxCheckoutAndRefundVerification": "pending_user_hosted_onboarding",
+  "filesSha256": {
+    ".github/workflows/ios.yml": "ac46137cf458542f24934f3b7dc54ca1607edc41814fd535a076d0038b2320c0",
+    "ProEstimate AI/Features/CustomerPayments/CustomerPaymentSettingsView.swift": "d05966a1874ca47429d6cd442199d96a2c7486d4234cf893350e1b19fccb2490",
+    "ProEstimate AI/Features/CustomerPayments/CustomerPaymentSettingsService.swift": "00b1eb5ed261b85fc83f392fa838b131255e46b5a9098410ff8a40c857e7d973",
+    "ProEstimate AI/Features/CustomerPayments/CustomerPaymentSettingsViewModel.swift": "3fabe23b20df4773831b4b27c1e5fd133a2317162375ea4edddd88cea463ee5e",
+    "backend/prisma/schema.prisma": "17439f48e0f7a2441c0e861012c0c200a9b7f1c825dce54c60d386a58779ea72",
+    "backend/prisma/migrations/20261103220000_merchant_onboarding_recovery/migration.sql": "9b00aa29093dec8d4b84fe20bfd268e5b821215444a10f24a24c4f13b92e7bbd",
+    "backend/src/modules/invoice-checkout/merchant-country.ts": "b8793a176dfb2cd7fbd219a05715eefd375928ecc09d654ca085bf7df91c60ac",
+    "backend/src/modules/invoice-checkout/merchant-country.test.ts": "3f23ca5a90a39156e8e4cfe2713b340f2fcd57be9ef06b0c97cba4544b40a799",
+    "backend/src/modules/invoice-checkout/invoice-checkout.service.ts": "fa133cbb1e101a08155bc12fcc0777e9db3b16eaac51f95be121cf1a028ddec1",
+    "backend/src/modules/invoice-checkout/stripe-gateway.ts": "0033413f901a9b7f42c25289fd1502fdf9b9d0d4576892abbc44ee98bf24ebc4",
+    "backend/test/integration/merchant-onboarding.test.ts": "82fdf0f16b8740bff3bc4650be187faa1c451f2e5adf749170892ae6397ba69a",
+    "scripts/tests/CustomerPaymentSettingsRegressionTests.swift": "bf3e2903cd86ddb1c0bb953235cd71f4d0b0249539cc11ee02a3a5c0b28ef52e",
+    "scripts/tests/run-customer-payment-settings-regressions.sh": "5ba19410a1a3b522d521c94ce7b041f4f570dd37510c4c2445bcfe81efa196c7"
+  },
+  "excludedUserWork": [
+    "ProEstimate AI/Resources/Localizable.xcstrings",
+    ".playwright-mcp/",
+    "ProEstimate AI.xcodeproj/project.xcworkspace/xcuserdata/"
+  ],
+  "remoteCI": {
+    "codeSha": "c4859cffd5f20d3057d781b75c3f221469d21999",
+    "allFourWorkflows": "success",
+    "backendUnitTests": 256,
+    "backendIntegrationTests": 282,
+    "iosFoundationChecks": 627,
+    "iosFoundationRunners": 15,
+    "integrationTestTypecheck": "passed",
+    "build": "passed"
+  }
+}
