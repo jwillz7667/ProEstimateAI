@@ -12,6 +12,10 @@ import SwiftUI
 struct OnboardingFlowView: View {
     @State private var viewModel = OnboardingViewModel()
     let onComplete: () -> Void
+    /// Called when the user taps "Continue" on the offer page. They have
+    /// already seen the trial/plans pitch, so the host should not follow up
+    /// with the login offer sheet.
+    var onDeclineOffer: (() -> Void)? = nil
 
     var body: some View {
         ZStack {
@@ -41,7 +45,7 @@ struct OnboardingFlowView: View {
 
                 OnboardingOfferPage(
                     onStartTrial: presentTrial,
-                    onContinueFree: complete
+                    onContinueFree: declineOffer
                 )
                 .tag(OnboardingViewModel.Page.offer)
             }
@@ -77,6 +81,11 @@ struct OnboardingFlowView: View {
 
     private func presentTrial() {
         // Completing onboarding lets the central login offer appear once.
+        complete()
+    }
+
+    private func declineOffer() {
+        onDeclineOffer?()
         complete()
     }
 
