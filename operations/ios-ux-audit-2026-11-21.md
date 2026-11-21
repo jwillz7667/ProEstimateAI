@@ -12,7 +12,7 @@ The app builds, its regression suites pass in CI, and the production API is heal
 
 | Check | Result |
 | :-- | :-- |
-| iOS CI on PR #56 (simulator build + 10 regression runners) | Pass |
+| iOS CI on PR #56 (simulator build + 15 regression runners) | Pass |
 | Backend `GET /health` | `healthy`, database and Redis connected |
 | `proestimateai.com/terms`, `/privacy` | 200 |
 | PR #56 mergeability | Mergeable, clean |
