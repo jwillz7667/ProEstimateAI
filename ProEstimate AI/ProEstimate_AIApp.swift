@@ -62,7 +62,10 @@ struct ProEstimate_AIApp: App {
                 for: CachedProject.self, CachedEstimate.self, CachedClient.self
             )
         } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
+            // The SwiftData store only holds disposable cache models, so a
+            // store that fails to open (for example after an incompatible
+            // schema change) must never crash launch. Discard and rebuild.
+            modelContainer = Self.recoverModelContainer()
         }
 
         // Global navigation bar appearance.
@@ -168,9 +171,10 @@ struct ProEstimate_AIApp: App {
                         // see a stranger's in-flight work or get a stale
                         // notification scheduled before sign-out.
                         generationLifecycle.clearAll()
-                        // Reset navigation so a re-login starts at a clean
-                        // dashboard instead of a stranger's pushed detail.
-                        appRouter.dashboardPath = NavigationPath()
+                        // Reset navigation on every tab so a re-login starts
+                        // clean instead of on the previous account's pushed
+                        // project, invoice, or client screens.
+                        appRouter.resetAll()
                     }
                 }
                 .sheet(item: $paywallPresenter.activeDecision) { decision in
@@ -195,6 +199,24 @@ struct ProEstimate_AIApp: App {
                 }
         }
         .modelContainer(modelContainer)
+    }
+
+    private static func recoverModelContainer() -> ModelContainer {
+        let schema = Schema([CachedProject.self, CachedEstimate.self, CachedClient.self])
+        let onDisk = ModelConfiguration(schema: schema)
+        let storePath = onDisk.url.path
+        for suffix in ["", "-shm", "-wal"] {
+            try? FileManager.default.removeItem(atPath: storePath + suffix)
+        }
+        if let rebuilt = try? ModelContainer(for: schema, configurations: [onDisk]) {
+            return rebuilt
+        }
+        let inMemory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        do {
+            return try ModelContainer(for: schema, configurations: [inMemory])
+        } catch {
+            fatalError("Failed to create an in-memory ModelContainer: \(error)")
+        }
     }
 
     private func bootstrap() async {

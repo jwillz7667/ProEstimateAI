@@ -27,14 +27,10 @@ struct DashboardView: View {
                     }
                 }
                 .sheet(isPresented: $showSettings) {
-                    NavigationStack {
-                        SettingsView()
-                            .toolbar {
-                                ToolbarItem(placement: .topBarLeading) {
-                                    Button("Done") { showSettings = false }
-                                }
-                            }
-                    }
+                    // SettingsView owns its NavigationStack; wrapping it in a
+                    // second one nests stacks and breaks the Done button and
+                    // pushed settings screens.
+                    SettingsView(onDone: { showSettings = false })
                 }
                 .sheet(item: $selectedChangeOrder, onDismiss: reload) { route in
                     NavigationStack {

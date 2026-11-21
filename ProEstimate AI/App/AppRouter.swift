@@ -51,6 +51,16 @@ final class AppRouter {
     /// Projects) must append onto the stack actually on screen —
     /// hardcoding a single path would push onto a hidden tab and the
     /// navigation would silently no-op.
+    /// Clear every tab's stack. Used on sign-out so the next account does
+    /// not land on screens pushed by the previous one.
+    func resetAll() {
+        dashboardPath = NavigationPath()
+        projectsPath = NavigationPath()
+        invoicesPath = NavigationPath()
+        clientsPath = NavigationPath()
+        settingsPath = NavigationPath()
+    }
+
     func push(_ destination: AppDestination, on tab: AppTab) {
         switch tab {
         case .dashboard: dashboardPath.append(destination)

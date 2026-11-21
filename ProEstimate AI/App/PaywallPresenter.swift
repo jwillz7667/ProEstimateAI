@@ -27,6 +27,18 @@ final class PaywallPresenter {
     private var offeredLoginSession: UUID?
     private let logger = Logger(subsystem: AppConstants.bundleID, category: "PaywallPresenter")
 
+    /// `TokenStore.sessionIdentifier` is regenerated on every cold launch,
+    /// so the in-memory session check alone re-shows the login offer almost
+    /// every time the app opens. Persist when each user last saw (or
+    /// declined) it and cap it to once per `loginOfferInterval`.
+    private let defaults: UserDefaults
+    static let loginOfferInterval: TimeInterval = 24 * 60 * 60
+    private static let loginOfferKeyPrefix = "paywall.loginOffer.lastHandled."
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
     /// Wire the presenter to the live entitlement store.
     /// Called once during app bootstrap, before any paywall trigger fires.
     /// Until configured, `present(_:)` falls through unconditionally so
@@ -56,12 +68,35 @@ final class PaywallPresenter {
 
     /// Once per signed-in session, after authoritative access has loaded.
     /// Dismissing does not consume the trial or bypass premium action checks.
-    func presentLoginOffer(sessionID: UUID) {
+    func presentLoginOffer(sessionID: UUID, userID: String? = nil, now: Date = Date()) {
         guard offeredLoginSession != sessionID, activeDecision == nil,
               let entitlementStore, entitlementStore.snapshot != nil else { return }
         offeredLoginSession = sessionID
         guard !entitlementStore.hasProAccess || entitlementStore.isAccountTrial else { return }
+        if let userID {
+            if let last = lastLoginOfferDate(for: userID),
+               now.timeIntervalSince(last) < Self.loginOfferInterval {
+                return
+            }
+            recordLoginOffer(for: userID, at: now)
+        }
         present(.loginOffer(trialEndsAt: entitlementStore.isAccountTrial ? entitlementStore.snapshot?.trialEndsAt : nil))
+    }
+
+    /// The user already saw the plans pitch (onboarding offer page) and chose
+    /// to continue. Don't follow that with a second sales sheet.
+    func markLoginOfferHandled(sessionID: UUID, userID: String?, now: Date = Date()) {
+        offeredLoginSession = sessionID
+        if let userID { recordLoginOffer(for: userID, at: now) }
+    }
+
+    private func lastLoginOfferDate(for userID: String) -> Date? {
+        let value = defaults.double(forKey: Self.loginOfferKeyPrefix + userID)
+        return value > 0 ? Date(timeIntervalSince1970: value) : nil
+    }
+
+    private func recordLoginOffer(for userID: String, at date: Date) {
+        defaults.set(date.timeIntervalSince1970, forKey: Self.loginOfferKeyPrefix + userID)
     }
 
     func reset() {

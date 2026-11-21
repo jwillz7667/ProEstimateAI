@@ -12,6 +12,10 @@ struct SettingsView: View {
     @State private var isDeletingAccount = false
     @State private var preferredSupplier: MaterialSupplier? = MaterialSupplier.preferred
     @Environment(\.colorScheme) private var colorScheme
+    /// Set when Settings is presented as a sheet (Home avatar). Renders a
+    /// Done button inside this view's own NavigationStack so the presenter
+    /// does not need to wrap it in a second, nested stack.
+    var onDone: (() -> Void)? = nil
 
     var body: some View {
         NavigationStack {
@@ -23,6 +27,13 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .toolbar {
+                if let onDone {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Done", action: onDone)
+                    }
+                }
+            }
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {
                 case .companyBranding:

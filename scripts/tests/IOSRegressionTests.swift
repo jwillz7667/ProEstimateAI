@@ -29,6 +29,7 @@ struct IOSRegressionTests {
         try await pagination()
         try commerceContracts()
         try loginTrialOffer()
+        try loginOfferFrequency()
         try await transactionDelivery()
         try await paidUsageLimits()
         try await paidFeatureBoundaries()
@@ -187,6 +188,40 @@ struct IOSRegressionTests {
                 try expect(presenter.activeLimitNotice != nil && presenter.activeDecision == nil, "Paid usage limits must show a notice instead of disappearing or offering a second subscription")
             }
         }
+    }
+
+    /// Cold launches mint a new session UUID. The persisted per-user marker
+    /// must keep the login offer from reappearing on every app open, and the
+    /// onboarding "Continue" path must not be followed by a second pitch.
+    static func loginOfferFrequency() throws {
+        let suite = "proestimate.tests.loginOffer.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else { throw Failure(description: "Test defaults suite must open") }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let start = Date()
+
+        let firstLaunch = PaywallPresenter(defaults: defaults)
+        firstLaunch.configure(entitlementStore: .preview(snapshot: .sampleFree))
+        firstLaunch.presentLoginOffer(sessionID: UUID(), userID: "user-1", now: start)
+        try expect(firstLaunch.activeDecision?.placement == .loginOffer, "The first login of the day must show the offer")
+
+        let coldRelaunch = PaywallPresenter(defaults: defaults)
+        coldRelaunch.configure(entitlementStore: .preview(snapshot: .sampleFree))
+        coldRelaunch.presentLoginOffer(sessionID: UUID(), userID: "user-1", now: start.addingTimeInterval(3_600))
+        try expect(coldRelaunch.activeDecision == nil, "A cold relaunch within the interval must not reopen the offer")
+        coldRelaunch.presentLoginOffer(sessionID: UUID(), userID: "user-2", now: start.addingTimeInterval(3_600))
+        try expect(coldRelaunch.activeDecision != nil, "Another account on the device must keep its own allowance")
+
+        let nextDay = PaywallPresenter(defaults: defaults)
+        nextDay.configure(entitlementStore: .preview(snapshot: .sampleFree))
+        nextDay.presentLoginOffer(sessionID: UUID(), userID: "user-1", now: start.addingTimeInterval(PaywallPresenter.loginOfferInterval + 60))
+        try expect(nextDay.activeDecision != nil, "The offer may return once the interval has elapsed")
+
+        let onboarding = PaywallPresenter(defaults: defaults)
+        onboarding.configure(entitlementStore: .preview(snapshot: .sampleFree))
+        let session = UUID()
+        onboarding.markLoginOfferHandled(sessionID: session, userID: "user-3", now: start)
+        onboarding.presentLoginOffer(sessionID: session, userID: "user-3", now: start)
+        try expect(onboarding.activeDecision == nil, "Declining the onboarding offer must not trigger a second sales sheet")
     }
 
     static func loginTrialOffer() throws {

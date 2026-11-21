@@ -21,9 +21,15 @@ struct AuthGateView: View {
                     MainTabView(appState: appState)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 } else {
-                    OnboardingFlowView {
-                        onboardingStore.markCompleted()
-                    }
+                    OnboardingFlowView(
+                        onComplete: { onboardingStore.markCompleted() },
+                        onDeclineOffer: {
+                            paywallPresenter.markLoginOfferHandled(
+                                sessionID: TokenStore.shared.sessionIdentifier,
+                                userID: appState.currentUser?.id
+                            )
+                        }
+                    )
                     .transition(.opacity)
                 }
             } else if hasRestoreError {
@@ -73,7 +79,10 @@ struct AuthGateView: View {
 
     private func presentLoginOfferIfReady() {
         guard isLoginOfferReady else { return }
-        paywallPresenter.presentLoginOffer(sessionID: TokenStore.shared.sessionIdentifier)
+        paywallPresenter.presentLoginOffer(
+            sessionID: TokenStore.shared.sessionIdentifier,
+            userID: appState.currentUser?.id
+        )
     }
 
     private var splashView: some View {
